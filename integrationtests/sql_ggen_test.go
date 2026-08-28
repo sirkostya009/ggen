@@ -3491,13 +3491,13 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *ggen.Stream) (result SQL
 				result.A = sql.Null[SQLAccountID]{}
 				s.Pos += 4
 			} else {
-				var _nvV int64
-				_nvV, err = s.Int64()
+				var namedV int64
+				namedV, err = s.Int64()
 				if err != nil {
 					return result, ggen.NewParseErr("a", s.Offset(), err)
 				}
 
-				result.A = sql.Null[SQLAccountID]{V: SQLAccountID(_nvV), Valid: true}
+				result.A = sql.Null[SQLAccountID]{V: SQLAccountID(namedV), Valid: true}
 			}
 		default:
 			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
@@ -3608,7 +3608,7 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 				result.L = sql.Null[SQLLabel]{}
 				i += 4
 			} else {
-				var _nvV string
+				var namedV string
 				if i >= len(data) || data[i] != '"' {
 					return result, i, ggen.NewParseErr("l", i, ggen.ErrExpectString)
 				}
@@ -3621,16 +3621,16 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
-					_nvV = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					namedV = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					_nvV, i, err = ggen.String(data, i, true)
+					namedV, i, err = ggen.String(data, i, true)
 					if err != nil {
 						return result, i, ggen.NewParseErr("l", i, err)
 					}
 				}
 
-				result.L = sql.Null[SQLLabel]{V: SQLLabel(_nvV), Valid: true}
+				result.L = sql.Null[SQLLabel]{V: SQLLabel(namedV), Valid: true}
 			}
 		default:
 			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -3718,13 +3718,13 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *ggen.Stream) (result SQLNu
 				result.L = sql.Null[SQLLabel]{}
 				s.Pos += 4
 			} else {
-				var _nvV string
-				_nvV, err = s.String(true)
+				var namedV string
+				namedV, err = s.String(true)
 				if err != nil {
 					return result, ggen.NewParseErr("l", s.Offset(), err)
 				}
 
-				result.L = sql.Null[SQLLabel]{V: SQLLabel(_nvV), Valid: true}
+				result.L = sql.Null[SQLLabel]{V: SQLLabel(namedV), Valid: true}
 			}
 		default:
 			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}

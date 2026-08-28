@@ -384,9 +384,9 @@ func (recv Node) DecodeFrom(data []byte) (Node, int, error) {
 	return recv.decodeFromDepth(data, 0)
 }
 
-func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, err error) {
+func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, err error) {
 	result = recv
-	if _depth > 10000 { // runtime maxDepth
+	if depth > 10000 { // runtime maxDepth
 		return result, 0, ggen.ErrMaxDepth
 	}
 	if result.Children != nil {
@@ -502,11 +502,11 @@ func (recv Node) decodeFromDepth(data []byte, _depth int) (result Node, i int, e
 					} else {
 						result.Children = append(result.Children, Node{})
 					}
-					var _n int
-					result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
-					i += _n
+					var consumed int
+					result.Children[len(result.Children)-1], consumed, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], depth+1)
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("children", i, _n, err)
+						return result, i, ggen.NewParseErrShift("children", i, consumed, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -824,9 +824,9 @@ func (recv Node) DecodeFromStream(s *ggen.Stream) (Node, error) {
 	return recv.decodeFromStreamDepth(s, 0)
 }
 
-func (recv Node) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Node, err error) {
+func (recv Node) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Node, err error) {
 	result = recv
-	if _depth > 10000 { // runtime maxDepth
+	if depth > 10000 { // runtime maxDepth
 		return result, ggen.ErrMaxDepth
 	}
 	if result.Children != nil {
@@ -956,7 +956,7 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Node,
 				} else {
 					result.Children = append(result.Children, Node{})
 				}
-				result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].decodeFromStreamDepth(s, _depth+1)
+				result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].decodeFromStreamDepth(s, depth+1)
 				if err != nil {
 					return result, ggen.NewParseErr("children", s.Offset(), err)
 				}

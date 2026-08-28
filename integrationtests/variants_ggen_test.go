@@ -358,7 +358,7 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 				}
 				result.Count = int(n)
 			case '"':
-				var _cv1 string
+				var conv1 string
 				if i >= len(data) || data[i] != '"' {
 					return result, i, ggen.NewParseErr("count", i, ggen.ErrExpectString)
 				}
@@ -371,15 +371,15 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
-					_cv1 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					conv1 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					_cv1, i, err = ggen.String(data, i, true)
+					conv1, i, err = ggen.String(data, i, true)
 					if err != nil {
 						return result, i, ggen.NewParseErr("count", i, err)
 					}
 				}
-				if cv, err := AtoiStrict(_cv1); err != nil {
+				if cv, err := AtoiStrict(conv1); err != nil {
 					return result, i, ggen.NewParseErr("count", i, err)
 				} else {
 					result.Count = cv
@@ -459,7 +459,7 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 				}
 				result.Opt = int(n)
 			case '"':
-				var _cv2 string
+				var conv2 string
 				if i >= len(data) || data[i] != '"' {
 					return result, i, ggen.NewParseErr("opt", i, ggen.ErrExpectString)
 				}
@@ -472,15 +472,15 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
-					_cv2 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					conv2 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					_cv2, i, err = ggen.String(data, i, true)
+					conv2, i, err = ggen.String(data, i, true)
 					if err != nil {
 						return result, i, ggen.NewParseErr("opt", i, err)
 					}
 				}
-				if cv, err := AtoiStrict(_cv2); err != nil {
+				if cv, err := AtoiStrict(conv2); err != nil {
 					return result, i, ggen.NewParseErr("opt", i, err)
 				} else {
 					result.Opt = cv
@@ -551,14 +551,14 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 				}
 				result.Price = int(n)
 			case '{':
-				var _cv1 Money
-				var _n int
-				_cv1, _n, err = _cv1.DecodeFrom(data[i:])
-				i += _n
+				var conv1 Money
+				var consumed int
+				conv1, consumed, err = conv1.DecodeFrom(data[i:])
+				i += consumed
 				if err != nil {
-					return result, i, ggen.NewParseErrShift("price", i, _n, err)
+					return result, i, ggen.NewParseErrShift("price", i, consumed, err)
 				}
-				result.Price = FromMoney(_cv1)
+				result.Price = FromMoney(conv1)
 			default:
 				return result, i, ggen.NewParseErr("price", i, ggen.ErrBadValue)
 			}
@@ -657,12 +657,12 @@ func (recv LooseThing) DecodeFromStream(s *ggen.Stream) (result LooseThing, err 
 				}
 				result.Count = int(iv)
 			case '"':
-				var _cv1 string
-				_cv1, err = s.String(true)
+				var conv1 string
+				conv1, err = s.String(true)
 				if err != nil {
 					return result, ggen.NewParseErr("count", s.Offset(), err)
 				}
-				if cv, err := AtoiStrict(_cv1); err != nil {
+				if cv, err := AtoiStrict(conv1); err != nil {
 					return result, ggen.NewParseErr("count", s.Offset(), err)
 				} else {
 					result.Count = cv
@@ -709,12 +709,12 @@ func (recv LooseThing) DecodeFromStream(s *ggen.Stream) (result LooseThing, err 
 				}
 				result.Opt = int(iv)
 			case '"':
-				var _cv2 string
-				_cv2, err = s.String(true)
+				var conv2 string
+				conv2, err = s.String(true)
 				if err != nil {
 					return result, ggen.NewParseErr("opt", s.Offset(), err)
 				}
-				if cv, err := AtoiStrict(_cv2); err != nil {
+				if cv, err := AtoiStrict(conv2); err != nil {
 					return result, ggen.NewParseErr("opt", s.Offset(), err)
 				} else {
 					result.Opt = cv
@@ -745,12 +745,12 @@ func (recv LooseThing) DecodeFromStream(s *ggen.Stream) (result LooseThing, err 
 				}
 				result.Price = int(iv)
 			case '{':
-				var _cv1 Money
-				_cv1, err = _cv1.DecodeFromStream(s)
+				var conv1 Money
+				conv1, err = conv1.DecodeFromStream(s)
 				if err != nil {
 					return result, ggen.NewParseErr("price", s.Offset(), err)
 				}
-				result.Price = FromMoney(_cv1)
+				result.Price = FromMoney(conv1)
 			default:
 				return result, ggen.NewParseErr("price", s.Offset(), ggen.ErrBadValue)
 			}
@@ -1305,7 +1305,7 @@ func (recv ConvNamed) DecodeFrom(data []byte) (result ConvNamed, i int, err erro
 					(*result.N) = int(n)
 				}
 			case '"':
-				var _cv2 string
+				var conv2 string
 				if i >= len(data) || data[i] != '"' {
 					return result, i, ggen.NewParseErr("n", i, ggen.ErrExpectString)
 				}
@@ -1318,15 +1318,15 @@ func (recv ConvNamed) DecodeFrom(data []byte) (result ConvNamed, i int, err erro
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
-					_cv2 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					conv2 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					_cv2, i, err = ggen.String(data, i, true)
+					conv2, i, err = ggen.String(data, i, true)
 					if err != nil {
 						return result, i, ggen.NewParseErr("n", i, err)
 					}
 				}
-				if cv, err := PtrFromString(_cv2); err != nil {
+				if cv, err := PtrFromString(conv2); err != nil {
 					return result, i, ggen.NewParseErr("n", i, err)
 				} else {
 					result.N = cv
@@ -1397,7 +1397,7 @@ func (recv ConvNamed) DecodeFrom(data []byte) (result ConvNamed, i int, err erro
 				}
 				result.S = Score(int(n))
 			case '"':
-				var _cv1 string
+				var conv1 string
 				if i >= len(data) || data[i] != '"' {
 					return result, i, ggen.NewParseErr("s", i, ggen.ErrExpectString)
 				}
@@ -1410,15 +1410,15 @@ func (recv ConvNamed) DecodeFrom(data []byte) (result ConvNamed, i int, err erro
 					ke++
 				}
 				if ke < len(data) && data[ke] == '"' {
-					_cv1 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					conv1 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 					i = ke + 1
 				} else {
-					_cv1, i, err = ggen.String(data, i, true)
+					conv1, i, err = ggen.String(data, i, true)
 					if err != nil {
 						return result, i, ggen.NewParseErr("s", i, err)
 					}
 				}
-				if cv, err := ScoreFromString(_cv1); err != nil {
+				if cv, err := ScoreFromString(conv1); err != nil {
 					return result, i, ggen.NewParseErr("s", i, err)
 				} else {
 					result.S = cv
@@ -1551,12 +1551,12 @@ func (recv ConvNamed) DecodeFromStream(s *ggen.Stream) (result ConvNamed, err er
 					(*result.N) = int(v)
 				}
 			case '"':
-				var _cv2 string
-				_cv2, err = s.String(true)
+				var conv2 string
+				conv2, err = s.String(true)
 				if err != nil {
 					return result, ggen.NewParseErr("n", s.Offset(), err)
 				}
-				if cv, err := PtrFromString(_cv2); err != nil {
+				if cv, err := PtrFromString(conv2); err != nil {
 					return result, ggen.NewParseErr("n", s.Offset(), err)
 				} else {
 					result.N = cv
@@ -1587,12 +1587,12 @@ func (recv ConvNamed) DecodeFromStream(s *ggen.Stream) (result ConvNamed, err er
 				}
 				result.S = Score(int(iv))
 			case '"':
-				var _cv1 string
-				_cv1, err = s.String(true)
+				var conv1 string
+				conv1, err = s.String(true)
 				if err != nil {
 					return result, ggen.NewParseErr("s", s.Offset(), err)
 				}
-				if cv, err := ScoreFromString(_cv1); err != nil {
+				if cv, err := ScoreFromString(conv1); err != nil {
 					return result, ggen.NewParseErr("s", s.Offset(), err)
 				} else {
 					result.S = cv

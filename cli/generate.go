@@ -133,11 +133,11 @@ func isCyclic(typeName string) bool {
 }
 
 // decodeCallFor renders the bytes-path nested-decode call for a generated
-// callee: cyclic types go through the depth core (uniform `_depth+1` — every
-// decoder has `_depth` in scope, a const 0 in acyclic ones).
+// callee: cyclic types go through the depth core (uniform `depth+1` — every
+// decoder has `depth` in scope, a const 0 in acyclic ones).
 func decodeCallFor(typeName string) string {
 	if isCyclic(typeName) {
-		return "decodeFromDepth(data[%[2]s:], _depth+1)"
+		return "decodeFromDepth(data[%[2]s:], depth+1)"
 	}
 	return "DecodeFrom(data[%[2]s:])"
 }
@@ -145,7 +145,7 @@ func decodeCallFor(typeName string) string {
 // streamDecodeCallFor is decodeCallFor for the stream path.
 func streamDecodeCallFor(typeName string) string {
 	if isCyclic(typeName) {
-		return "decodeFromStreamDepth(s, _depth+1)"
+		return "decodeFromStreamDepth(s, depth+1)"
 	}
 	return "DecodeFromStream(s)"
 }
@@ -996,7 +996,7 @@ func emitScope(scope string) string {
 
 // sanitizeIdent maps an arbitrary type/file string onto identifier chars:
 // alnum kept, `*` spelled Ptr, every other rune becomes exactly one `_` —
-// no collapsing, so distinct keys stay distinct (`[]int` → `__int` vs
+// no collapsing, so distinct keys stay distinct (`[]int` → `_entryConsumedt` vs
 // `int`; a collision would redeclare the const, loud at compile time).
 func sanitizeIdent(s string) string {
 	var b strings.Builder
@@ -1925,7 +1925,7 @@ func renderAppendTime(b *bytes.Buffer, f FieldInfo, ref string) {
 		// Field-suffixed temp: two custom-layout fields share the struct
 		// body's scope (same reason renderAppendMap suffixes its first-entry
 		// flag).
-		tmp := "_tf" + sanitizeIdent(f.GoName)
+		tmp := "tf" + sanitizeIdent(f.GoName)
 		fmt.Fprintf(b, "dst = append(dst, '\"')\n%s := len(dst)\ndst = %s.AppendFormat(dst, %s)\ndst = %s(dst, %s)\n",
 			tmp, ref, layout, closeStrFn(f.HTMLEscape), tmp)
 		return
@@ -2682,6 +2682,72 @@ func mapPreallocCap(f FieldInfo) int {
 	return 0
 }
 
+// ownsAllocations reports whether decoding into a carried value of the named
+// generated struct recycles anything. A struct of plain scalars owns nothing —
+// its decode overwrites every field either way — so reading the old value back
+// would buy nothing while still costing the map swap.
+func ownsAllocations(typeName string, seen map[string]struct{}) bool {
+	fields, ok := generatedFields[typeName]
+	if !ok {
+		return false
+	}
+	if seen == nil {
+		seen = map[string]struct{}{}
+	}
+	if _, cycle := seen[typeName]; cycle {
+		return false // a self-reference proves nothing on its own
+	}
+	seen[typeName] = struct{}{}
+	for _, f := range fields {
+		if f.Pointer {
+			return true
+		}
+		switch f.Kind {
+		case KindSlice, KindMap, KindBytes, KindAny, KindRawJSON:
+			return true
+		case KindStruct:
+			if isGenerated(f.GoType) && ownsAllocations(f.GoType, seen) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// reusesMapValues reports whether f's map decode should read each entry's
+// previous value back as the decode target. The decode fills a NEW map while
+// reading the carried one, which is what drops the keys the payload omitted
+// without tracking which keys it saw — paid for by one map allocation, so it
+// only makes sense when the values actually own something to recycle.
+//
+// Struct values must be ggen-generated: their decoder resets what it is handed
+// (opt #74), while a value reaching encoding/json or an UnmarshalJSON rung
+// would MERGE into it. Slice and map values carry their own backing and are
+// reset at the seed site.
+func reusesMapValues(f FieldInfo) bool {
+	// The catch-all map is filled by unknownKey, not renderMap, so no swap is
+	// emitted for it and its entry clear() has to stand.
+	if f.Kind != KindMap || f.Embed {
+		return false
+	}
+	// A pointer value recycles its pointee: the cascade decodes into the
+	// carried chain instead of allocating a new one per entry.
+	if _, d := elemPtrType(f); d > 0 {
+		return true
+	}
+	switch f.ElemKind {
+	case KindSlice, KindMap, KindBytes:
+		return true
+	case KindRawJSON:
+		// A raw span ALIASES the input unless -copy is on, so without it the
+		// value owns nothing and the swap would be pure cost.
+		return f.Copy
+	case KindStruct:
+		return isGenerated(f.ElemType) && ownsAllocations(f.ElemType, nil)
+	}
+	return false
+}
+
 // preallocCap returns the initial caps for a slice field's two backing
 // allocations, as Go EXPRESSIONS: the field's own slice
 // (`make([]E,0,slice)`; "0" means no prealloc) and, for `[]*T`, the contiguous
@@ -3309,7 +3375,7 @@ if %[5]s < len(data) && data[%[5]s] == '"' {
 // decoder appends over carried-in data. Deliberately UNCONDITIONAL — a blank
 // payload yields a blank slate while keeping capacity. Arrays (strict-length)
 // and pointer fields (handled in renderField) are skipped.
-func emitReceiverReset(b *bytes.Buffer, s StructInfo) {
+func emitReceiverReset(b *bytes.Buffer, s StructInfo, bytesPath bool) {
 	for _, f := range s.Fields {
 		ref := "result." + f.GoName
 		if !f.Pointer {
@@ -3320,6 +3386,12 @@ func emitReceiverReset(b *bytes.Buffer, s StructInfo) {
 				}
 				fmt.Fprintf(b, "if %[1]s != nil { %[1]s = %[1]s[:0] }\n", ref)
 			case KindMap:
+				if bytesPath && reusesMapValues(f) {
+					// The bytes decode reads this map while filling a new one,
+					// so clearing here would destroy the values it reuses. The
+					// stream path does not swap, so it still needs the clear.
+					continue
+				}
 				fmt.Fprintf(b, "if %[1]s != nil { clear(%[1]s) }\n", ref)
 			}
 			continue
@@ -3343,11 +3415,33 @@ func emitReceiverReset(b *bytes.Buffer, s StructInfo) {
 		// The innermost container may still be nil; `nil[:0]` and `clear(nil)`
 		// are both fine, so only the pointer levels need guarding.
 		if leafKind == KindMap {
+			if bytesPath && reusesMapValues(f) {
+				// Same as the non-pointer case: the decode swaps this map for
+				// a fresh one and reads the carried entries, so clearing here
+				// would empty what it reuses.
+				continue
+			}
 			fmt.Fprintf(b, "if %s { clear(%s) }\n", strings.Join(guards, " && "), deref)
 		} else {
 			fmt.Fprintf(b, "if %s { %s = %s[:0] }\n", strings.Join(guards, " && "), deref, deref)
 		}
 	}
+}
+
+// elemPtrReusable reports whether a multi-level pointer ELEMENT can decode
+// into the chain the receiver carried in that slot. A primitive leaf is fully
+// overwritten by its scan and a generated struct leaf resets itself (opt #74),
+// so neither can carry data forward; anything reaching encoding/json or an
+// UnmarshalJSON rung would MERGE into the carried value instead.
+func elemPtrReusable(f FieldInfo) bool {
+	// A multi-level element reports KindStruct with the remaining pointer
+	// levels still in ElemType, so resolve the LEAF before judging it.
+	et, _ := elemPtrType(f)
+	_, leaf := pointerDepth(et)
+	if resolveKind(leaf) == KindStruct {
+		return isGenerated(leaf)
+	}
+	return true
 }
 
 // emitElemGrow pre-grows dst by one slot for in-place element decode. A
@@ -3444,9 +3538,9 @@ func renderDecode(bOut *bytes.Buffer, s StructInfo) {
 		// depth-threaded core; the public method is a thin seed-0 shim so the
 		// surface (and acyclic callers) stay unchanged.
 		fmt.Fprintf(b, "func (recv %s) DecodeFrom(data []byte) (%s, int, error) {\n\treturn recv.decodeFromDepth(data, 0)\n}\n\n", s.Name, s.Name)
-		fmt.Fprintf(b, "func (recv %s) decodeFromDepth(data []byte, _depth int) (result %s, i int, err error) {\n", s.Name, s.Name)
+		fmt.Fprintf(b, "func (recv %s) decodeFromDepth(data []byte, depth int) (result %s, i int, err error) {\n", s.Name, s.Name)
 		b.WriteString("result = recv\n")
-		b.WriteString("if _depth > 10000 { // runtime maxDepth\n\treturn result, 0, ggen.ErrMaxDepth\n}\n")
+		b.WriteString("if depth > 10000 { // runtime maxDepth\n\treturn result, 0, ggen.ErrMaxDepth\n}\n")
 		renderDecodeBody(b, s)
 		return
 	}
@@ -3456,13 +3550,13 @@ func renderDecode(bOut *bytes.Buffer, s StructInfo) {
 		renderDecodeBody(b, s)
 		return
 	}
-	// Only structs that actually call into a cyclic nested type need `_depth`
-	// in scope (decodeCallFor emits `_depth+1` there) — render first and gate
+	// Only structs that actually call into a cyclic nested type need `depth`
+	// in scope (decodeCallFor emits `depth+1` there) — render first and gate
 	// on that, so the common acyclic-package struct doesn't carry a dead const.
 	var rest bytes.Buffer
 	renderDecodeBody(&rest, s)
-	if strings.Contains(rest.String(), "_depth+1") {
-		b.WriteString("const _depth = 0\n")
+	if strings.Contains(rest.String(), "depth+1") {
+		b.WriteString("const depth = 0\n")
 	}
 	b.Write(rest.Bytes())
 }
@@ -3476,7 +3570,7 @@ func renderDecodeBody(b *bytes.Buffer, s StructInfo) {
 		b.WriteString("}\n\n")
 		return
 	}
-	emitReceiverReset(b, s)
+	emitReceiverReset(b, s, true)
 	if s.MultiErr {
 		b.WriteString("var errs ggen.Errors\n")
 	}
@@ -3684,12 +3778,31 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 	// Allocate only when nil; a cleared map reuses its buckets. No `:`-count
 	// prealloc for maps — a colon-laden key would inflate the count (footgun
 	// on well-formed input, unlike the slice comma-count).
-	fmt.Fprintf(b, `	if %[1]s < len(data) && data[%[1]s] == '}' {
+	if reusesMapValues(f) {
+		// Read the carried map, fill a fresh one: each entry's previous value
+		// becomes its decode target, and a key the payload omits is simply
+		// never carried across — no seen-set needed to drop it. The map is
+		// always freshly made here, so the nil guards below are unnecessary.
+		size := "len(carried)"
+		if cap := mapPreallocCap(f); cap > 0 {
+			size = fmt.Sprintf("max(len(carried), %d)", cap)
+		}
+		// `reuse` hoists the decision out of the entry loop: a fresh receiver
+		// carries no map, and a per-entry lookup against a nil one is a real
+		// runtime call, so the common zero-value decode must not pay it.
+		fmt.Fprintf(b, `	carried := %[1]s
+	reuse := len(carried) != 0
+	%[1]s = make(%[2]s, %[3]s)
+`, ref, f.GoType, size)
+	} else {
+		fmt.Fprintf(b, `	if %[1]s < len(data) && data[%[1]s] == '}' {
 		if %[2]s == nil { %[2]s = %[3]s{} }
 	} else {
 		if %[2]s == nil { %[2]s = %[4]s }
 	}
-	if %[1]s < len(data) && data[%[1]s] != '}' {
+`, posVar, ref, f.GoType, makeExpr)
+	}
+	fmt.Fprintf(b, `	if %[1]s < len(data) && data[%[1]s] != '}' {
 	for {
 		var mk string
 `, posVar, ref, f.GoType, makeExpr)
@@ -3707,8 +3820,18 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 		// map slot. TargetNil keeps the emit assignment-only, so the
 		// unaddressable index is fine.
 		pf := elemPtrField(f, f.JSONName+".value")
-		pf.TargetNil = true
-		renderField(b, pf, mapTarget, posVar)
+		if reusesMapValues(f) {
+			// Decode through an addressable local seeded from the carried map,
+			// so the cascade reuses that entry's pointer chain; a map index is
+			// not addressable, which is what TargetNil works around below.
+			et, _ := elemPtrType(f)
+			fmt.Fprintf(b, "{\nvar mv %s\nif reuse { mv = carried[mk] }\n", et)
+			renderField(b, pf, "mv", posVar)
+			fmt.Fprintf(b, "%s = mv\n}\n", mapTarget)
+		} else {
+			pf.TargetNil = true
+			renderField(b, pf, mapTarget, posVar)
+		}
 		inlineSkipWS(b, posVar)
 		fmt.Fprintf(b, `		if %[1]s < len(data) && data[%[1]s] == ',' { %[1]s++; `, posVar)
 		inlineSkipWS(b, posVar)
@@ -3734,7 +3857,7 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 	savedElemType, savedElemKind := f.ElemType, f.ElemKind
 	if prim, kind, ok := inlineNamedPrim(elemAsField(f)); ok {
 		valCast, valTarget = f.ElemType, mapTarget
-		mapTarget = "_nm"
+		mapTarget = "namedVal"
 		fmt.Fprintf(b, "var %s %s\n", mapTarget, prim)
 		f.ElemType, f.ElemKind = prim, kind
 	}
@@ -3773,14 +3896,19 @@ if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 		}
 	case KindStruct:
 		if isGenerated(f.ElemType) {
-			// `var mv` is the value-receiver source and stored value; `_n`
-			// (bytes consumed) advances posVar.
-			fmt.Fprintf(b, `var mv %[1]s
-var _n int
-mv, _n, err = mv.`+decodeCallFor(f.ElemType)+`
-%[2]s += _n
+			// `mv` is the value-receiver source and stored value; `consumed`
+			// (bytes consumed) advances posVar. When the carried map is being
+			// read, seed from IT rather than the map being filled, so repeated
+			// keys in one payload each decode fresh.
+			decl := "var mv " + f.ElemType + "\n"
+			if reusesMapValues(f) {
+				decl += "if reuse { mv = carried[mk] }\n"
+			}
+			fmt.Fprintf(b, decl+`var consumed int
+mv, consumed, err = mv.`+decodeCallFor(f.ElemType)+`
+%[2]s += consumed
 %[4]s%[3]s = mv
-`, f.ElemType, posVar, mapTarget, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "_n"))
+`, f.ElemType, posVar, mapTarget, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "consumed"))
 		} else {
 			// Cross-package value: run the ladder (its own DecodeFrom /
 			// UnmarshalJSON / UnmarshalText, encoding/json only as the last
@@ -3797,7 +3925,22 @@ mv, _n, err = mv.`+decodeCallFor(f.ElemType)+`
 		// and the delegated emitters declare their own.
 		vf := sliceElemField(f)
 		vf.JSONName = f.JSONName + ".value"
-		fmt.Fprintf(b, "{\nvar mv %s\n", f.ElemType)
+		// A container value carries its own backing, so seed it from the
+		// carried map and empty it — the delegated emitter fills it from
+		// there, and only allocates when it came back nil.
+		switch {
+		case reusesMapValues(f) && (f.ElemKind == KindSlice || f.ElemKind == KindBytes):
+			// []byte decodes with AppendDecode, so the seed must be emptied or
+			// the decoded bytes land after the carried ones.
+			fmt.Fprintf(b, "{\nvar mv %s\nif reuse { mv = carried[mk][:0] }\n", f.ElemType)
+		case reusesMapValues(f) && f.ElemKind == KindRawJSON:
+			// renderRawJSON appends over mv[:0] itself under -copy.
+			fmt.Fprintf(b, "{\nvar mv %s\nif reuse { mv = carried[mk] }\n", f.ElemType)
+		case reusesMapValues(f) && f.ElemKind == KindMap:
+			fmt.Fprintf(b, "{\nvar mv %s\nif reuse { mv = carried[mk]; clear(mv) }\n", f.ElemType)
+		default:
+			fmt.Fprintf(b, "{\nvar mv %s\n", f.ElemType)
+		}
 		renderField(b, vf, "mv", posVar)
 		fmt.Fprintf(b, "%s = mv\n}\n", mapTarget)
 	}
@@ -3909,7 +4052,7 @@ if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, ggen.NewPars
 		if enc == "" {
 			dec = "hex.AppendDecode"
 		}
-		tmp := "_ba" + sanitizeIdent(f.GoName)
+		tmp := "buf" + sanitizeIdent(f.GoName)
 		b.WriteString("var s string\n")
 		inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 		fmt.Fprintf(b, `var %[1]s [%[2]d]byte
@@ -4118,10 +4261,10 @@ func renderCrossPkgStructDecode(f FieldInfo, ref, posVar string) string {
 		switch {
 		case f.Iface.ByteDecoder:
 			// ggen-generated in another package — call DecodeFrom directly.
-			return fmt.Sprintf(`var _n int
-%[1]s, _n, err = %[1]s.DecodeFrom(data[%[2]s:])
-%[2]s += _n
-%[3]s`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "_n"))
+			return fmt.Sprintf(`var consumed int
+%[1]s, consumed, err = %[1]s.DecodeFrom(data[%[2]s:])
+%[2]s += consumed
+%[3]s`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "consumed"))
 
 		case f.Iface.JSONUnmarshaler:
 			chk := bytesErrCheck(fieldLit(f), posVar)
@@ -4572,28 +4715,28 @@ func unknownKey(s StructInfo, posVar string) string {
 				// tier func + ggen.Detach: reuse the tier locate, clone the value
 				// only when it aliases data (an owned stringSlow escape result
 				// skips the clone — no double-copy). Key stays cloned (keyExpr).
-				return initMap + fmt.Sprintf(`var _sv string
-_sv, %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(embedded)+`)
-%[3]sresult.%[2]s[%[4]s] = ggen.Detach(_sv, data)
+				return initMap + fmt.Sprintf(`var strVal string
+strVal, %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(embedded)+`)
+%[3]sresult.%[2]s[%[4]s] = ggen.Detach(strVal, data)
 `, posVar, embedded.GoName, chk, keyExpr)
 			}
 			return initMap + fmt.Sprintf(`result.%[2]s[key], %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(embedded)+`)
 %[3]s`, posVar, embedded.GoName, chk)
 		case KindStruct:
 			if isGenerated(embedded.ElemType) {
-				return initMap + fmt.Sprintf(`var _iv %[1]s
-var _in int
-_iv, _in, err = _iv.`+decodeCallFor(embedded.ElemType)+`
-%[2]s += _in
-%[4]sresult.%[3]s[%[5]s] = _iv
-`, embedded.ElemType, posVar, embedded.GoName, nestedDecodeErrCheck(keyExpr, embedded.ElemType, s.MultiErr, true, "_in"), keyExpr)
+				return initMap + fmt.Sprintf(`var entry %[1]s
+var entryConsumed int
+entry, entryConsumed, err = entry.`+decodeCallFor(embedded.ElemType)+`
+%[2]s += entryConsumed
+%[4]sresult.%[3]s[%[5]s] = entry
+`, embedded.ElemType, posVar, embedded.GoName, nestedDecodeErrCheck(keyExpr, embedded.ElemType, s.MultiErr, true, "entryConsumed"), keyExpr)
 			}
 		}
-		return initMap + fmt.Sprintf(`_vstart := %[1]s
+		return initMap + fmt.Sprintf(`spanStart := %[1]s
 %[1]s, err = ggen.SkipValue(data, %[1]s)
-%[4]svar _iv %[2]s
-if err = json.Unmarshal(data[_vstart:%[1]s], &_iv); err != nil { return result, %[1]s, ggen.NewParseErr(%[5]s, %[1]s, err) }
-result.%[3]s[%[5]s] = _iv
+%[4]svar entry %[2]s
+if err = json.Unmarshal(data[spanStart:%[1]s], &entry); err != nil { return result, %[1]s, ggen.NewParseErr(%[5]s, %[1]s, err) }
+result.%[3]s[%[5]s] = entry
 `, posVar, embedded.ElemType, embedded.GoName, chk, keyExpr)
 	}
 	if s.IgnoreUnknown {
@@ -4939,7 +5082,7 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 				b.WriteString("} else {\n")
 			}
 		}
-		tmp := "_nv" + f.GoName
+		tmp := "named" + f.GoName
 		var nb bytes.Buffer
 		renderField(&nb, namedPrimInner(f, prim, kind), tmp, posVar)
 		if rest, expr, ok := foldTailAssign(nb.String(), tmp); ok {
@@ -5103,12 +5246,12 @@ if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 	case KindStruct:
 		if isGenerated(f.GoType) {
 			// Value-receiver DecodeFrom merges the field's current value;
-			// `_n` (bytes consumed) advances posVar. Cyclic types route to the
+			// `consumed` (bytes consumed) advances posVar. Cyclic types route to the
 			// depth core so payload nesting stays bounded.
-			fmt.Fprintf(b, `var _n int
-%[1]s, _n, err = %[1]s.`+decodeCallFor(f.GoType)+`
-%[2]s += _n
-%[3]s`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "_n"))
+			fmt.Fprintf(b, `var consumed int
+%[1]s, consumed, err = %[1]s.`+decodeCallFor(f.GoType)+`
+%[2]s += consumed
+%[3]s`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "consumed"))
 		} else {
 			b.WriteString(renderCrossPkgStructDecode(f, ref, posVar))
 		}
@@ -5387,8 +5530,13 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	case isArray && mptr:
 		target = fmt.Sprintf("%s[%s]", dst, ivar)
 	case mptr:
-		// Pointer cascade assigns the chain head directly; pre-grow with nil.
-		fmt.Fprintf(b, "%s = append(%s, nil)\n", dst, dst)
+		// Reslice within cap so the carried pointer chain survives into the
+		// slot and the cascade can reuse it; a past-cap grow starts nil.
+		if elemPtrReusable(f) {
+			fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, nil) }\n", dst)
+		} else {
+			fmt.Fprintf(b, "%s = append(%s, nil)\n", dst, dst)
+		}
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	case isArray && f.ElemPointer:
 		target = fmt.Sprintf("%s[%s]", slabVar, ivar)
@@ -5423,7 +5571,9 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 		// the carried chain merged `[2]**Inner` where `[]**Inner` and
 		// `[2]*Inner` both decoded fresh.
 		pf := elemPtrField(f, f.JSONName+"[]")
-		pf.TargetNil = true
+		// An ARRAY slot keeps the assignment-only cascade: its contract is
+		// "every slot overwritten", pinned by TestMerge_ArraySlotsOverwrite.
+		pf.TargetNil = isArray || !elemPtrReusable(f)
 		renderField(b, pf, target, kvar)
 	} else {
 		// Named-primitive ELEMENT (`[]Priority`): scan the underlying into a
@@ -5433,7 +5583,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 		savedElemType, savedElemKind := f.ElemType, f.ElemKind
 		if prim, kind, ok := inlineNamedPrim(elemAsField(f)); ok {
 			elemCast, elemTarget = f.ElemType, target
-			target = fmt.Sprintf("_ne%d", depth)
+			target = fmt.Sprintf("namedElem%d", depth)
 			fmt.Fprintf(b, "var %s %s\n", target, prim)
 			f.ElemType, f.ElemKind = prim, kind
 		}
@@ -5469,11 +5619,11 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 			}
 		case KindStruct:
 			if directStruct {
-				fmt.Fprintf(b, `var _n int
-%[1]s, _n, err = %[1]s.`+decodeCallFor(f.ElemType)+`
-%[2]s += _n
+				fmt.Fprintf(b, `var consumed int
+%[1]s, consumed, err = %[1]s.`+decodeCallFor(f.ElemType)+`
+%[2]s += consumed
 `, target, kvar)
-				b.WriteString(nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "_n"))
+				b.WriteString(nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "consumed"))
 			} else {
 				// Cross-package / method-carrying element: same ladder the
 				// field level uses. This used to be a bare SkipValue, which
@@ -5570,13 +5720,13 @@ func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
 	var body bytes.Buffer
 	if isCyclic(s.Name) {
 		fmt.Fprintf(&body, "func (recv %s) DecodeFromStream(s *ggen.Stream) (%s, error) {\n\treturn recv.decodeFromStreamDepth(s, 0)\n}\n\n", s.Name, s.Name)
-		fmt.Fprintf(&body, "func (recv %s) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result %s, err error) {\n", s.Name, s.Name)
+		fmt.Fprintf(&body, "func (recv %s) decodeFromStreamDepth(s *ggen.Stream, depth int) (result %s, err error) {\n", s.Name, s.Name)
 	} else {
 		fmt.Fprintf(&body, "func (recv %s) DecodeFromStream(s *ggen.Stream) (result %s, err error) {\n", s.Name, s.Name)
 	}
 	body.WriteString("result = recv\n")
 	if isCyclic(s.Name) {
-		body.WriteString("if _depth > 10000 { // runtime maxDepth\n\treturn result, ggen.ErrMaxDepth\n}\n")
+		body.WriteString("if depth > 10000 { // runtime maxDepth\n\treturn result, ggen.ErrMaxDepth\n}\n")
 		if s.IsAlias {
 			renderAliasStreamDecode(&body, s)
 		} else {
@@ -5584,7 +5734,7 @@ func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
 		}
 	} else {
 		// Only structs that actually call into a cyclic nested type need
-		// `_depth` in scope (decodeCallFor emits `_depth+1` there) — render
+		// `depth` in scope (decodeCallFor emits `depth+1` there) — render
 		// first and gate on that, so the common acyclic-package struct
 		// doesn't carry a dead const.
 		var rest bytes.Buffer
@@ -5593,8 +5743,8 @@ func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
 		} else {
 			renderStreamDecodeStruct(&rest, s)
 		}
-		if strings.Contains(rest.String(), "_depth+1") {
-			body.WriteString("const _depth = 0\n")
+		if strings.Contains(rest.String(), "depth+1") {
+			body.WriteString("const depth = 0\n")
 		}
 		body.Write(rest.Bytes())
 	}
@@ -5627,7 +5777,7 @@ func tierStreamStringCalls(body string, s StructInfo) string {
 }
 
 func renderStreamDecodeStruct(b *bytes.Buffer, s StructInfo) {
-	emitReceiverReset(b, s)
+	emitReceiverReset(b, s, false)
 	if s.MultiErr {
 		b.WriteString("var errs ggen.Errors\n")
 	}
@@ -5810,7 +5960,7 @@ func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	savedElemType, savedElemKind := f.ElemType, f.ElemKind
 	if prim, kind, ok := inlineNamedPrim(elemAsField(f)); ok {
 		valCast, valTarget = f.ElemType, mapTarget
-		mapTarget = "_nm"
+		mapTarget = "namedVal"
 		fmt.Fprintf(b, "var %s %s\n", mapTarget, prim)
 		f.ElemType, f.ElemKind = prim, kind
 	}
@@ -5948,7 +6098,7 @@ func truncSentinel(k TypeKind) string {
 // *ParseError's path is prepended ("addr" + "street" → "addr.street"). In
 // multierr mode validation failures merge via Errors.Append; parse errors
 // return early. bytesPath selects the 3-tuple vs 2-tuple shape.
-// nVar names the bytes-path consumed-count local (`_n`/`_in`) — the cursor
+// nVar names the bytes-path consumed-count local (`consumed`/`entryConsumed`) — the cursor
 // was advanced by it BEFORE this check, so the nested value STARTED at
 // i-nVar and the callee's sub-slice-relative error positions rebase by that
 // (NewParseErrShift / ShiftPos). Stream positions are already global.
@@ -6079,7 +6229,7 @@ s.Pos++
 		if enc == "" {
 			dec = "hex.AppendDecode"
 		}
-		tmp := "_ba" + sanitizeIdent(f.GoName)
+		tmp := "buf" + sanitizeIdent(f.GoName)
 		fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
 %[2]svar %[1]s [%[3]d]byte
@@ -6403,16 +6553,16 @@ err = s.ConsumeColon()
 %[2]s`, embedded.GoName, chk)
 		case KindStruct:
 			if isGenerated(embedded.ElemType) {
-				return prelude + fmt.Sprintf(`var _iv %[1]s
-_iv, err = _iv.`+streamDecodeCallFor(embedded.ElemType)+`
-%[3]sresult.%[2]s[ownKey] = _iv
+				return prelude + fmt.Sprintf(`var entry %[1]s
+entry, err = entry.`+streamDecodeCallFor(embedded.ElemType)+`
+%[3]sresult.%[2]s[ownKey] = entry
 `, embedded.ElemType, embedded.GoName, nestedDecodeErrCheck("ownKey", embedded.ElemType, s.MultiErr, false, ""))
 			}
 		}
 		return prelude + fmt.Sprintf(`span, err := s.CaptureValue()
-%[3]svar _iv %[1]s
-if err = json.Unmarshal(span, &_iv); err != nil { return result, ggen.NewParseErr(ownKey, s.Offset(), err) }
-result.%[2]s[ownKey] = _iv
+%[3]svar entry %[1]s
+if err = json.Unmarshal(span, &entry); err != nil { return result, ggen.NewParseErr(ownKey, s.Offset(), err) }
+result.%[2]s[ownKey] = entry
 `, embedded.ElemType, embedded.GoName, chk)
 	}
 	if s.IgnoreUnknown {
@@ -6507,7 +6657,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 			emitStreamNullZero(&nb, ref, zeroLit(f.GoType, f.Kind), fieldLit(f), flat, truncSentinel(effectiveKind(f.GoType, f.Kind)))
 			out = nb.String()
 		}
-		tmp := "_nv" + f.GoName
+		tmp := "named" + f.GoName
 		if rest, expr, ok := foldTailAssign(renderStreamField(namedPrimInner(f, prim, kind), tmp, posVar), tmp); ok {
 			// Write-once temp folds straight into the conversion.
 			out += rest
@@ -6805,7 +6955,13 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 	case isArray && mptr:
 		target = fmt.Sprintf("%s[%s]", dst, ivar)
 	case mptr:
-		fmt.Fprintf(b, "%s = append(%s, nil)\n", dst, dst)
+		// Reslice within cap so the carried pointer chain survives into the
+		// slot and the cascade can reuse it; a past-cap grow starts nil.
+		if elemPtrReusable(f) {
+			fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, nil) }\n", dst)
+		} else {
+			fmt.Fprintf(b, "%s = append(%s, nil)\n", dst, dst)
+		}
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	case isArray && f.ElemPointer:
 		target = fmt.Sprintf("%s[%s]", slabVar, ivar)
@@ -6833,7 +6989,9 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 		// the carried chain merged `[2]**Inner` where `[]**Inner` and
 		// `[2]*Inner` both decoded fresh.
 		pf := elemPtrField(f, f.JSONName+"[]")
-		pf.TargetNil = true
+		// An ARRAY slot keeps the assignment-only cascade: its contract is
+		// "every slot overwritten", pinned by TestMerge_ArraySlotsOverwrite.
+		pf.TargetNil = isArray || !elemPtrReusable(f)
 		b.WriteString(renderStreamField(pf, target, "s.Pos"))
 	} else {
 		// Named-primitive ELEMENT — see emitByteSliceRead.
@@ -6841,7 +6999,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 		savedElemType, savedElemKind := f.ElemType, f.ElemKind
 		if prim, kind, ok := inlineNamedPrim(elemAsField(f)); ok {
 			elemCast, elemTarget = f.ElemType, target
-			target = fmt.Sprintf("_ne%d", depth)
+			target = fmt.Sprintf("namedElem%d", depth)
 			fmt.Fprintf(b, "var %s %s\n", target, prim)
 			f.ElemType, f.ElemKind = prim, kind
 		}

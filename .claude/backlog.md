@@ -409,34 +409,30 @@ surface pinned by `Decoder[T]`).
 - **`nullzero` follow-up.** Extend the per-field `nullzero` decode variant to
   top-level alias types (needs a non-dispatch null branch in the alias renderers).
 
-- **Map values still discard their buffers on decode (2026-08).** Slice and
-  array elements now grow into the carried slot, so an element keeps its inner
-  backings, and omitted keys are zeroed at the end of the object (opt #74). Map
-  VALUES got neither: `renderMap` decodes each entry into a fresh `var mv V`,
-  so a `map[string]Heavy` throws away every value's slices and maps on each
-  decode, and the map itself is `clear()`ed at entry rather than reconciled.
-  The blocker is real, not an oversight: a slice can drop what the payload
-  omitted for free (the final len IS the payload count), while a map has no
-  such ordering — deleting absent keys means knowing which keys were present.
-  Two coherent shapes:
-    - `old := m; m = make(map[K]V, len(old))`, seeding each value from
-      `old[mk]`. One map alloc per decode, but every V's containers are reused
-      and absent keys vanish with the old map. Wins when V is heavy, loses when
-      V is scalar-ish (where the `clear()` bucket reuse is the better trade).
-    - Allocate a seen-set ONLY when the map is non-empty at entry, so a fresh
-      decode pays nothing and the cost lands exactly on the reuse case that
-      benefits.
-  Note the seeding trap that shaped opt #74: `mv := m[mk]` buys buffer reuse in
-  one lookup but ALSO makes it a keyed merge, where an entry that omits a field
-  inherits the old value. That is only safe because a generated decoder now
-  fully resets its receiver — so a ggen-generated struct value is fine, while a
-  value decoded through `encoding/json` / `UnmarshalJSON` / `UnmarshalText`
-  must still get a zeroed slot (the same gate the element reuse uses).
-  UNMEASURED and workload-dependent; deterministically testable via allocs/op
-  and backing identity, the way `TestMerge_sliceElementAllocationsReused` and
-  `TestMerge_leanRedecodeLeavesNoStaleData` pin the slice half. Also price the
-  residency footgun before landing: retained value buffers keep memory for
-  entries no longer present — the trap that killed `maxlen`-as-prealloc-hint.
+- **Map value reuse: scalar-valued and stream-path maps still rebuild (2026-08).**
+  Bytes-path maps whose values own allocations now read the carried map and
+  fill a new one (opt #76) — heavy values measured −57% wall clock, 92% less
+  garbage, GC eliminated. Two gaps remain, both deliberate:
+    - **Nested maps do not compile at all (PRE-EXISTING, unrelated to #76).**
+      `map[string]map[string]V` emits colliding `mk`/`mv` locals for the inner
+      and outer levels, so the generated file fails to build ("cannot index mv
+      (variable of struct type …)"). Verified identical before and after #76 by
+      generating the same fixture with both emitters, so it is an old
+      accepted-annotation-emits-broken-code bug, not a regression. Fix is
+      depth-suffixed locals, the way the nested SLICE emitter already does it.
+    - **The stream path does not swap.** `emitReceiverReset` keeps its
+      `clear()` there, so stream decode still allocates every map value fresh.
+      The swap needs the same shape plus a check that nothing holds a
+      buffer-relative alias across the entry loop; worth doing only if a
+      stream consumer shows map values as a hotspot.
+    - **Light values trade bytes for allocation count.** With small values the
+      swap is flat on time, collapses allocs (513 → 9), but roughly DOUBLES
+      B/op — a fresh map where `clear()` recycled buckets. Which side wins is
+      decided by the size of the values at runtime, which the generator cannot
+      see, so the gate (`reusesMapValues` + `ownsAllocations`) can only ask
+      whether a value owns anything at all. A per-field opt-out (or opt-in)
+      would let a caller who knows their values are tiny keep the old shape;
+      no one has asked yet.
 
 - **Consolidate the per-field behaviour knobs into one concept.** Today a field's
   shape is steered by four unrelated mechanisms with four different syntaxes and

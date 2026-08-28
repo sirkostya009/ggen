@@ -1266,11 +1266,11 @@ func (recv OpaqueParent) DecodeFrom(data []byte) (result OpaqueParent, i int, er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"o"}}
 			}
 			seenO = true
-			var _n int
-			result.O, _n, err = result.O.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result.O, consumed, err = result.O.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("o", i, _n, err)
+				return result, i, ggen.NewParseErrShift("o", i, consumed, err)
 			}
 		default:
 			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -2120,7 +2120,7 @@ func (recv AliasFieldExample) DecodeFrom(data []byte) (result AliasFieldExample,
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"body"}}
 			}
 			seenBody = true
-			var _nvBody string
+			var namedBody string
 			if i >= len(data) || data[i] != '"' {
 				return result, i, ggen.NewParseErr("body", i, ggen.ErrExpectString)
 			}
@@ -2133,15 +2133,15 @@ func (recv AliasFieldExample) DecodeFrom(data []byte) (result AliasFieldExample,
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
-				_nvBody = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				namedBody = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				_nvBody, i, err = ggen.String(data, i, true)
+				namedBody, i, err = ggen.String(data, i, true)
 				if err != nil {
 					return result, i, ggen.NewParseErr("body", i, err)
 				}
 			}
-			result.Body = AliasString(_nvBody)
+			result.Body = AliasString(namedBody)
 			result.Body = AliasString(strings.TrimSpace(string(result.Body)))
 			result.Body = AliasString(strings.ToLower(string(result.Body)))
 			if len(result.Body) < 2 {
@@ -2296,12 +2296,12 @@ func (recv AliasFieldExample) DecodeFromStream(s *ggen.Stream) (result AliasFiel
 				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"body"}}
 			}
 			seenBody = true
-			var _nvBody string
-			_nvBody, err = s.String(true)
+			var namedBody string
+			namedBody, err = s.String(true)
 			if err != nil {
 				return result, ggen.NewParseErr("body", s.Offset(), err)
 			}
-			result.Body = AliasString(_nvBody)
+			result.Body = AliasString(namedBody)
 			result.Body = AliasString(strings.TrimSpace(string(result.Body)))
 			result.Body = AliasString(strings.ToLower(string(result.Body)))
 			if len(result.Body) < 2 {
@@ -2502,7 +2502,7 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"eq"}}
 			}
 			seenEq = true
-			var _nvEq string
+			var namedEq string
 			if i >= len(data) || data[i] != '"' {
 				return result, i, ggen.NewParseErr("eq", i, ggen.ErrExpectString)
 			}
@@ -2515,15 +2515,15 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
-				_nvEq = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				namedEq = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				_nvEq, i, err = ggen.String(data, i, true)
+				namedEq, i, err = ggen.String(data, i, true)
 				if err != nil {
 					return result, i, ggen.NewParseErr("eq", i, err)
 				}
 			}
-			result.Eq = NPPriority(_nvEq)
+			result.Eq = NPPriority(namedEq)
 			if result.Eq != "low" {
 				return result, i, &ggen.EqError{Pos: i, Path: []string{"eq"}, Want: "low", Value: result.Eq}
 			}
@@ -2532,7 +2532,7 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"neq"}}
 			}
 			seenNeq = true
-			var _nvNeq string
+			var namedNeq string
 			if i >= len(data) || data[i] != '"' {
 				return result, i, ggen.NewParseErr("neq", i, ggen.ErrExpectString)
 			}
@@ -2545,15 +2545,15 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
-				_nvNeq = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				namedNeq = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				_nvNeq, i, err = ggen.String(data, i, true)
+				namedNeq, i, err = ggen.String(data, i, true)
 				if err != nil {
 					return result, i, ggen.NewParseErr("neq", i, err)
 				}
 			}
-			result.Neq = NPPriority(_nvNeq)
+			result.Neq = NPPriority(namedNeq)
 			if result.Neq == "low" {
 				return result, i, &ggen.NeqError{Pos: i, Path: []string{"neq"}, Want: "low", Value: result.Neq}
 			}
@@ -2562,7 +2562,7 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"pri"}}
 			}
 			seenPri = true
-			var _nvPri string
+			var namedPri string
 			if i >= len(data) || data[i] != '"' {
 				return result, i, ggen.NewParseErr("pri", i, ggen.ErrExpectString)
 			}
@@ -2575,15 +2575,15 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
-				_nvPri = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				namedPri = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				_nvPri, i, err = ggen.String(data, i, true)
+				namedPri, i, err = ggen.String(data, i, true)
 				if err != nil {
 					return result, i, ggen.NewParseErr("pri", i, err)
 				}
 			}
-			result.Pri = NPPriority(_nvPri)
+			result.Pri = NPPriority(namedPri)
 			switch result.Pri {
 			case "low", "medium", "high":
 			default:
@@ -2594,7 +2594,7 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"tag"}}
 			}
 			seenTag = true
-			var _nvTag string
+			var namedTag string
 			if i >= len(data) || data[i] != '"' {
 				return result, i, ggen.NewParseErr("tag", i, ggen.ErrExpectString)
 			}
@@ -2607,15 +2607,15 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
-				_nvTag = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				namedTag = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				_nvTag, i, err = ggen.String(data, i, true)
+				namedTag, i, err = ggen.String(data, i, true)
 				if err != nil {
 					return result, i, ggen.NewParseErr("tag", i, err)
 				}
 			}
-			result.Tag = NPTag(_nvTag)
+			result.Tag = NPTag(namedTag)
 			result.Tag = NPTag(strings.TrimSpace(string(result.Tag)))
 			result.Tag = NPTag(strings.ToLower(string(result.Tag)))
 			if len(result.Tag) > 32 {
@@ -2638,7 +2638,7 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 				result.Zero = NPPriority("")
 				break
 			}
-			var _nvZero string
+			var namedZero string
 			if i >= len(data) || data[i] != '"' {
 				return result, i, ggen.NewParseErr("zero", i, ggen.ErrExpectString)
 			}
@@ -2651,15 +2651,15 @@ func (recv NamedPrims) DecodeFrom(data []byte) (result NamedPrims, i int, err er
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
-				_nvZero = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				namedZero = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				_nvZero, i, err = ggen.String(data, i, true)
+				namedZero, i, err = ggen.String(data, i, true)
 				if err != nil {
 					return result, i, ggen.NewParseErr("zero", i, err)
 				}
 			}
-			result.Zero = NPPriority(_nvZero)
+			result.Zero = NPPriority(namedZero)
 		default:
 			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
@@ -2755,12 +2755,12 @@ func (recv NamedPrims) DecodeFromStream(s *ggen.Stream) (result NamedPrims, err 
 				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"eq"}}
 			}
 			seenEq = true
-			var _nvEq string
-			_nvEq, err = s.String(true)
+			var namedEq string
+			namedEq, err = s.String(true)
 			if err != nil {
 				return result, ggen.NewParseErr("eq", s.Offset(), err)
 			}
-			result.Eq = NPPriority(_nvEq)
+			result.Eq = NPPriority(namedEq)
 			if result.Eq != "low" {
 				return result, &ggen.EqError{Pos: s.Offset(), Path: []string{"eq"}, Want: "low", Value: result.Eq}
 			}
@@ -2773,12 +2773,12 @@ func (recv NamedPrims) DecodeFromStream(s *ggen.Stream) (result NamedPrims, err 
 				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"neq"}}
 			}
 			seenNeq = true
-			var _nvNeq string
-			_nvNeq, err = s.String(true)
+			var namedNeq string
+			namedNeq, err = s.String(true)
 			if err != nil {
 				return result, ggen.NewParseErr("neq", s.Offset(), err)
 			}
-			result.Neq = NPPriority(_nvNeq)
+			result.Neq = NPPriority(namedNeq)
 			if result.Neq == "low" {
 				return result, &ggen.NeqError{Pos: s.Offset(), Path: []string{"neq"}, Want: "low", Value: result.Neq}
 			}
@@ -2791,12 +2791,12 @@ func (recv NamedPrims) DecodeFromStream(s *ggen.Stream) (result NamedPrims, err 
 				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"pri"}}
 			}
 			seenPri = true
-			var _nvPri string
-			_nvPri, err = s.String(true)
+			var namedPri string
+			namedPri, err = s.String(true)
 			if err != nil {
 				return result, ggen.NewParseErr("pri", s.Offset(), err)
 			}
-			result.Pri = NPPriority(_nvPri)
+			result.Pri = NPPriority(namedPri)
 			switch result.Pri {
 			case "low", "medium", "high":
 			default:
@@ -2811,12 +2811,12 @@ func (recv NamedPrims) DecodeFromStream(s *ggen.Stream) (result NamedPrims, err 
 				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tag"}}
 			}
 			seenTag = true
-			var _nvTag string
-			_nvTag, err = s.String(true)
+			var namedTag string
+			namedTag, err = s.String(true)
 			if err != nil {
 				return result, ggen.NewParseErr("tag", s.Offset(), err)
 			}
-			result.Tag = NPTag(_nvTag)
+			result.Tag = NPTag(namedTag)
 			result.Tag = NPTag(strings.TrimSpace(string(result.Tag)))
 			result.Tag = NPTag(strings.ToLower(string(result.Tag)))
 			if len(result.Tag) > 32 {
@@ -2858,12 +2858,12 @@ func (recv NamedPrims) DecodeFromStream(s *ggen.Stream) (result NamedPrims, err 
 				result.Zero = NPPriority("")
 				break
 			}
-			var _nvZero string
-			_nvZero, err = s.String(true)
+			var namedZero string
+			namedZero, err = s.String(true)
 			if err != nil {
 				return result, ggen.NewParseErr("zero", s.Offset(), err)
 			}
-			result.Zero = NPPriority(_nvZero)
+			result.Zero = NPPriority(namedZero)
 		default:
 			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
@@ -3109,7 +3109,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 					if idx0 >= 2 {
 						return result, i, &ggen.LenError{Pos: i, Path: []string{"a"}, Want: 2, Got: idx0}
 					}
-					var _ne0 string
+					var namedElem0 string
 					if i >= len(data) || data[i] != '"' {
 						return result, i, ggen.NewParseErr("a", i, ggen.ErrExpectString)
 					}
@@ -3122,15 +3122,15 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 						ke++
 					}
 					if ke < len(data) && data[ke] == '"' {
-						_ne0 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						namedElem0 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						_ne0, i, err = ggen.String(data, i, true)
+						namedElem0, i, err = ggen.String(data, i, true)
 						if err != nil {
 							return result, i, ggen.NewParseErr("a", i, err)
 						}
 					}
-					result.A[idx0] = NPPlain(_ne0)
+					result.A[idx0] = NPPlain(namedElem0)
 					idx0++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -3214,11 +3214,11 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"e"}}
 			}
 			seenE = true
-			var _n int
-			result.E, _n, err = result.E.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result.E, consumed, err = result.E.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("e", i, _n, err)
+				return result, i, ggen.NewParseErrShift("e", i, consumed, err)
 			}
 		case "m":
 			if seenM {
@@ -3279,7 +3279,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					var _nm string
+					var namedVal string
 					if i >= len(data) || data[i] != '"' {
 						return result, i, ggen.NewParseErr("m", i, ggen.ErrExpectString)
 					}
@@ -3292,15 +3292,15 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 						ve++
 					}
 					if ve < len(data) && data[ve] == '"' {
-						_nm = unsafe.String(unsafe.SliceData(data[i+1:]), ve-i-1)
+						namedVal = unsafe.String(unsafe.SliceData(data[i+1:]), ve-i-1)
 						i = ve + 1
 					} else {
-						_nm, i, err = ggen.String(data, i, true)
+						namedVal, i, err = ggen.String(data, i, true)
 						if err != nil {
 							return result, i, ggen.NewParseErr("m", i, err)
 						}
 					}
-					result.M[mk] = NPPlain(_nm)
+					result.M[mk] = NPPlain(namedVal)
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -3335,7 +3335,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 			if result.P != nil {
 				v = (*result.P)
 			}
-			var _nvP string
+			var namedP string
 			if i >= len(data) || data[i] != '"' {
 				return result, i, ggen.NewParseErr("p", i, ggen.ErrExpectString)
 			}
@@ -3348,15 +3348,15 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
-				_nvP = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				namedP = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				_nvP, i, err = ggen.String(data, i, true)
+				namedP, i, err = ggen.String(data, i, true)
 				if err != nil {
 					return result, i, ggen.NewParseErr("p", i, err)
 				}
 			}
-			v = NPPlain(_nvP)
+			v = NPPlain(namedP)
 			if result.P == nil {
 				result.P = new(v)
 			} else {
@@ -3395,7 +3395,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 					} else {
 						result.S = append(result.S, NPPlain(""))
 					}
-					var _ne0 string
+					var namedElem0 string
 					if i >= len(data) || data[i] != '"' {
 						return result, i, ggen.NewParseErr("s", i, ggen.ErrExpectString)
 					}
@@ -3408,15 +3408,15 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 						ke++
 					}
 					if ke < len(data) && data[ke] == '"' {
-						_ne0 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						namedElem0 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 						i = ke + 1
 					} else {
-						_ne0, i, err = ggen.String(data, i, true)
+						namedElem0, i, err = ggen.String(data, i, true)
 						if err != nil {
 							return result, i, ggen.NewParseErr("s", i, err)
 						}
 					}
-					result.S[len(result.S)-1] = NPPlain(_ne0)
+					result.S[len(result.S)-1] = NPPlain(namedElem0)
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -3442,7 +3442,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u"}}
 			}
 			seenU = true
-			var _nvU string
+			var namedU string
 			if i >= len(data) || data[i] != '"' {
 				return result, i, ggen.NewParseErr("u", i, ggen.ErrExpectString)
 			}
@@ -3455,21 +3455,21 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
-				_nvU = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				namedU = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				_nvU, i, err = ggen.String(data, i, true)
+				namedU, i, err = ggen.String(data, i, true)
 				if err != nil {
 					return result, i, ggen.NewParseErr("u", i, err)
 				}
 			}
-			result.U = NPUnannotated(_nvU)
+			result.U = NPUnannotated(namedU)
 		case "v":
 			if seenV {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"v"}}
 			}
 			seenV = true
-			var _nvV string
+			var namedV string
 			if i >= len(data) || data[i] != '"' {
 				return result, i, ggen.NewParseErr("v", i, ggen.ErrExpectString)
 			}
@@ -3482,15 +3482,15 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 				ke++
 			}
 			if ke < len(data) && data[ke] == '"' {
-				_nvV = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				namedV = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
 				i = ke + 1
 			} else {
-				_nvV, i, err = ggen.String(data, i, true)
+				namedV, i, err = ggen.String(data, i, true)
 				if err != nil {
 					return result, i, ggen.NewParseErr("v", i, err)
 				}
 			}
-			result.V = NPPlain(_nvV)
+			result.V = NPPlain(namedV)
 		default:
 			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
@@ -3619,12 +3619,12 @@ func (recv NPPositions) DecodeFromStream(s *ggen.Stream) (result NPPositions, er
 				if idx0 >= 2 {
 					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"a"}, Want: 2, Got: idx0}
 				}
-				var _ne0 string
-				_ne0, err = s.String(true)
+				var namedElem0 string
+				namedElem0, err = s.String(true)
 				if err != nil {
 					return result, ggen.NewParseErr("a", s.Offset(), err)
 				}
-				result.A[idx0] = NPPlain(_ne0)
+				result.A[idx0] = NPPlain(namedElem0)
 				idx0++
 				err = s.SkipSpace()
 				if err != nil {
@@ -3761,12 +3761,12 @@ func (recv NPPositions) DecodeFromStream(s *ggen.Stream) (result NPPositions, er
 				if err != nil {
 					return result, ggen.NewParseErr("m", s.Offset(), err)
 				}
-				var _nm string
-				_nm, err = s.String(true)
+				var namedVal string
+				namedVal, err = s.String(true)
 				if err != nil {
 					return result, ggen.NewParseErr("m", s.Offset(), err)
 				}
-				result.M[mk] = NPPlain(_nm)
+				result.M[mk] = NPPlain(namedVal)
 				err = s.SkipSpace()
 				if err != nil {
 					return result, ggen.NewParseErr("m", s.Offset(), err)
@@ -3826,12 +3826,12 @@ func (recv NPPositions) DecodeFromStream(s *ggen.Stream) (result NPPositions, er
 			if result.P != nil {
 				v = (*result.P)
 			}
-			var _nvP string
-			_nvP, err = s.String(true)
+			var namedP string
+			namedP, err = s.String(true)
 			if err != nil {
 				return result, ggen.NewParseErr("p", s.Offset(), err)
 			}
-			v = NPPlain(_nvP)
+			v = NPPlain(namedP)
 			if result.P == nil {
 				result.P = new(v)
 			} else {
@@ -3898,12 +3898,12 @@ func (recv NPPositions) DecodeFromStream(s *ggen.Stream) (result NPPositions, er
 				} else {
 					result.S = append(result.S, NPPlain(""))
 				}
-				var _ne0 string
-				_ne0, err = s.String(true)
+				var namedElem0 string
+				namedElem0, err = s.String(true)
 				if err != nil {
 					return result, ggen.NewParseErr("s", s.Offset(), err)
 				}
-				result.S[len(result.S)-1] = NPPlain(_ne0)
+				result.S[len(result.S)-1] = NPPlain(namedElem0)
 				err = s.SkipSpace()
 				if err != nil {
 					return result, ggen.NewParseErr("s", s.Offset(), err)
@@ -3939,12 +3939,12 @@ func (recv NPPositions) DecodeFromStream(s *ggen.Stream) (result NPPositions, er
 				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u"}}
 			}
 			seenU = true
-			var _nvU string
-			_nvU, err = s.String(true)
+			var namedU string
+			namedU, err = s.String(true)
 			if err != nil {
 				return result, ggen.NewParseErr("u", s.Offset(), err)
 			}
-			result.U = NPUnannotated(_nvU)
+			result.U = NPUnannotated(namedU)
 		case "v":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -3954,12 +3954,12 @@ func (recv NPPositions) DecodeFromStream(s *ggen.Stream) (result NPPositions, er
 				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"v"}}
 			}
 			seenV = true
-			var _nvV string
-			_nvV, err = s.String(true)
+			var namedV string
+			namedV, err = s.String(true)
 			if err != nil {
 				return result, ggen.NewParseErr("v", s.Offset(), err)
 			}
-			result.V = NPPlain(_nvV)
+			result.V = NPPlain(namedV)
 		default:
 			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}
@@ -4587,11 +4587,11 @@ func (recv BitItems) DecodeFrom(data []byte) (result BitItems, i int, err error)
 			} else {
 				result = append(result, InnerBit{})
 			}
-			var _n int
-			result[len(result)-1], _n, err = result[len(result)-1].DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result[len(result)-1], consumed, err = result[len(result)-1].DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("", i, _n, err)
+				return result, i, ggen.NewParseErrShift("", i, consumed, err)
 			}
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
@@ -4803,11 +4803,11 @@ func (recv BitLookup) DecodeFrom(data []byte) (result BitLookup, i int, err erro
 				i++
 			}
 			var mv InnerBit
-			var _n int
-			mv, _n, err = mv.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			mv, consumed, err = mv.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("", i, _n, err)
+				return result, i, ggen.NewParseErrShift("", i, consumed, err)
 			}
 			result[mk] = mv
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5603,16 +5603,16 @@ func (recv AliasDigest) DecodeFrom(data []byte) (result AliasDigest, i int, err 
 			return result, i, ggen.NewParseErr("", i, err)
 		}
 	}
-	var _ba [4]byte
-	var _bad []byte
-	_bad, err = base64.StdEncoding.AppendDecode(_ba[:0], unsafe.Slice(unsafe.StringData(s), len(s)))
+	var buf [4]byte
+	var bufd []byte
+	bufd, err = base64.StdEncoding.AppendDecode(buf[:0], unsafe.Slice(unsafe.StringData(s), len(s)))
 	if err != nil {
 		return result, i, ggen.NewParseErr("", i, err)
 	}
-	if len(_bad) != 4 {
-		return result, i, &ggen.LenError{Pos: i, Path: []string{""}, Want: 4, Got: len(_bad)}
+	if len(bufd) != 4 {
+		return result, i, &ggen.LenError{Pos: i, Path: []string{""}, Want: 4, Got: len(bufd)}
 	}
-	copy(result[:], _bad)
+	copy(result[:], bufd)
 	return result, i, nil
 }
 
@@ -5626,16 +5626,16 @@ func (recv AliasDigest) DecodeFromStream(s *ggen.Stream) (result AliasDigest, er
 	if err != nil {
 		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
-	var _ba [4]byte
-	var _bad []byte
-	_bad, err = base64.StdEncoding.AppendDecode(_ba[:0], unsafe.Slice(unsafe.StringData(sv), len(sv)))
+	var buf [4]byte
+	var bufd []byte
+	bufd, err = base64.StdEncoding.AppendDecode(buf[:0], unsafe.Slice(unsafe.StringData(sv), len(sv)))
 	if err != nil {
 		return result, ggen.NewParseErr("", s.Offset(), err)
 	}
-	if len(_bad) != 4 {
-		return result, &ggen.LenError{Pos: s.Offset(), Path: []string{""}, Want: 4, Got: len(_bad)}
+	if len(bufd) != 4 {
+		return result, &ggen.LenError{Pos: s.Offset(), Path: []string{""}, Want: 4, Got: len(bufd)}
 	}
-	copy(result[:], _bad)
+	copy(result[:], bufd)
 	return result, nil
 }
 
@@ -5682,11 +5682,11 @@ func (recv SoloList) DecodeFrom(data []byte) (result SoloList, i int, err error)
 			} else {
 				result = append(result, SoloInner{})
 			}
-			var _n int
-			result[len(result)-1], _n, err = result[len(result)-1].DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result[len(result)-1], consumed, err = result[len(result)-1].DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("", i, _n, err)
+				return result, i, ggen.NewParseErrShift("", i, consumed, err)
 			}
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++

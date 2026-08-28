@@ -3,6 +3,7 @@
 package integrationtests
 
 import (
+	"encoding/json"
 	"net"
 	"net/url"
 	"strings"
@@ -27,9 +28,9 @@ func (recv CopyDoc) DecodeFrom(data []byte) (CopyDoc, int, error) {
 	return recv.decodeFromDepth(data, 0)
 }
 
-func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i int, err error) {
+func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i int, err error) {
 	result = recv
-	if _depth > 10000 { // runtime maxDepth
+	if depth > 10000 { // runtime maxDepth
 		return result, 0, ggen.ErrMaxDepth
 	}
 	if result.Children != nil {
@@ -49,6 +50,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 	seenName := false
 	seenProps := false
 	seenRaw := false
+	seenRawMap := false
 	seenRefs := false
 	seenTags := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -136,11 +138,11 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 					} else {
 						result.Children = append(result.Children, CopyDoc{})
 					}
-					var _n int
-					result.Children[len(result.Children)-1], _n, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], _depth+1)
-					i += _n
+					var consumed int
+					result.Children[len(result.Children)-1], consumed, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], depth+1)
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("children", i, _n, err)
+						return result, i, ggen.NewParseErrShift("children", i, consumed, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -313,6 +315,97 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 				return result, i, ggen.NewParseErr("raw", i, err)
 			}
 			result.Raw = append(result.Raw[:0], data[start:i]...)
+		case "rawMap":
+			if seenRawMap {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rawMap"}}
+			}
+			seenRawMap = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.RawMap = nil
+				break
+			}
+			if i >= len(data) || data[i] != '{' {
+				return result, i, ggen.NewParseErr("rawMap", i, ggen.ErrBadObject)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			carried := result.RawMap
+			reuse := len(carried) != 0
+			result.RawMap = make(map[string]json.RawMessage, len(carried))
+			if i < len(data) && data[i] != '}' {
+				for {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("rawMap", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						mk = string(data[i+1 : ke])
+						i = ke + 1
+					} else {
+						mk, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("rawMap", i, err)
+						}
+						mk = ggen.Detach(mk, data)
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, ggen.NewParseErr("rawMap", i, ggen.ErrBadObject)
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					{
+						var mv json.RawMessage
+						if reuse {
+							mv = carried[mk]
+						}
+						start := i
+						i, err = ggen.SkipValue(data, start)
+						if err != nil {
+							return result, i, ggen.NewParseErr("rawMap.value", i, err)
+						}
+						err = ggen.CheckUTF8(data[start:i])
+						if err != nil {
+							return result, i, ggen.NewParseErr("rawMap.value", i, err)
+						}
+						mv = append(mv[:0], data[start:i]...)
+						result.RawMap[mk] = mv
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, ggen.NewParseErr("rawMap", i, ggen.ErrBadObject)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != '}' {
+				return result, i, ggen.NewParseErr("rawMap", i, ggen.ErrBadObject)
+			}
+			i++
 		case "refs":
 			if seenRefs {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"refs"}}
@@ -366,11 +459,11 @@ func (recv CopyDoc) decodeFromDepth(data []byte, _depth int) (result CopyDoc, i 
 					} else {
 						slab0 = append(slab0, CopyRef{})
 					}
-					var _n int
-					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					slab0[len(slab0)-1], consumed, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("refs", i, _n, err)
+						return result, i, ggen.NewParseErrShift("refs", i, consumed, err)
 					}
 					result.Refs = append(result.Refs, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -500,9 +593,9 @@ func (recv CopyDoc) DecodeFromStream(s *ggen.Stream) (CopyDoc, error) {
 	return recv.decodeFromStreamDepth(s, 0)
 }
 
-func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result CopyDoc, err error) {
+func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result CopyDoc, err error) {
 	result = recv
-	if _depth > 10000 { // runtime maxDepth
+	if depth > 10000 { // runtime maxDepth
 		return result, ggen.ErrMaxDepth
 	}
 	if result.Children != nil {
@@ -510,6 +603,9 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Co
 	}
 	if result.Props != nil {
 		clear(result.Props)
+	}
+	if result.RawMap != nil {
+		clear(result.RawMap)
 	}
 	if result.Refs != nil {
 		result.Refs = result.Refs[:0]
@@ -522,6 +618,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Co
 	seenName := false
 	seenProps := false
 	seenRaw := false
+	seenRawMap := false
 	seenRefs := false
 	seenTags := false
 	err = s.ObjectOpen()
@@ -619,7 +716,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Co
 				} else {
 					result.Children = append(result.Children, CopyDoc{})
 				}
-				result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].decodeFromStreamDepth(s, _depth+1)
+				result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].decodeFromStreamDepth(s, depth+1)
 				if err != nil {
 					return result, ggen.NewParseErr("children", s.Offset(), err)
 				}
@@ -801,6 +898,123 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Co
 				return result, ggen.NewParseErr("raw", s.Offset(), err)
 			}
 			result.Raw = append(result.Raw[:0], span...)
+		case "rawMap":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("rawMap", s.Offset(), err)
+			}
+			if seenRawMap {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rawMap"}}
+			}
+			seenRawMap = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("rawMap", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("rawMap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("rawMap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("rawMap", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.RawMap = nil
+				break
+			}
+			err = s.ObjectOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("rawMap", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("rawMap", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("rawMap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == '}' {
+				if result.RawMap == nil {
+					result.RawMap = map[string]json.RawMessage{}
+				}
+			} else {
+				if result.RawMap == nil {
+					result.RawMap = make(map[string]json.RawMessage)
+				}
+			}
+			for s.Bytes()[s.Pos] != '}' {
+				var mk string
+				mk, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("rawMap", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("rawMap", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("rawMap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] != ':' {
+					return result, ggen.NewParseErr("rawMap", s.Offset(), ggen.ErrBadObject)
+				}
+				s.Pos++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("rawMap", s.Offset(), err)
+				}
+				{
+					var mv json.RawMessage
+					span, err := s.CaptureValue()
+					if err != nil {
+						return result, ggen.NewParseErr("rawMap.value", s.Offset(), err)
+					}
+					err = ggen.CheckUTF8(span)
+					if err != nil {
+						return result, ggen.NewParseErr("rawMap.value", s.Offset(), err)
+					}
+					mv = append(mv[:0], span...)
+					result.RawMap[mk] = mv
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("rawMap", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("rawMap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("rawMap", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, ggen.NewParseErr("rawMap", s.Offset(), ggen.ErrBadObject)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != '}' {
+				return result, ggen.NewParseErr("rawMap", s.Offset(), ggen.ErrBadObject)
+			}
+			s.Pos++
 		case "refs":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -1063,7 +1277,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, _depth int) (result Co
 }
 
 func (s CopyDoc) JSONSize() int {
-	size := 336
+	size := 350
 	if n := len(s.Children); n > 0 {
 		size += n - 1
 	}
@@ -1081,6 +1295,15 @@ func (s CopyDoc) JSONSize() int {
 		size += n
 	} else {
 		size += 4
+	}
+	size += len(s.RawMap) * 4
+	for k, v := range s.RawMap {
+		size += len(k) * 2
+		if n := len(v); n > 0 {
+			size += n
+		} else {
+			size += 4
+		}
 	}
 	if n := len(s.Refs); n > 0 {
 		size += n - 1
@@ -1152,6 +1375,29 @@ func (s CopyDoc) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, "null"...)
 	} else {
 		dst = append(dst, s.Raw...)
+	}
+	dst = append(dst, ",\"rawMap\":"...)
+	if s.RawMap == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '{')
+		firstRawMap := true
+		for k, v := range s.RawMap {
+			if firstRawMap {
+				firstRawMap = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
+			}
+			dst = ggen.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			if len(v) == 0 {
+				dst = append(dst, "null"...)
+			} else {
+				dst = append(dst, v...)
+			}
+		}
+		dst = append(dst, '}')
 	}
 	dst = append(dst, ",\"refs\":"...)
 	if s.Refs == nil {

@@ -1461,9 +1461,9 @@ func (s TimeCustomTiny) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"customTiny\":\""...)
-	_tfCustomTiny := len(dst)
+	tfCustomTiny := len(dst)
 	dst = s.CustomTiny.AppendFormat(dst, "2")
-	dst = ggen.CloseJSONString(dst, _tfCustomTiny)
+	dst = ggen.CloseJSONString(dst, tfCustomTiny)
 	return append(dst, '}'), nil
 }
 
@@ -1727,13 +1727,13 @@ func (s TimeEscapingLayout) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"quote\":\""...)
-	_tfQuote := len(dst)
+	tfQuote := len(dst)
 	dst = s.Quote.AppendFormat(dst, "x\"y 2006")
-	dst = ggen.CloseJSONString(dst, _tfQuote)
+	dst = ggen.CloseJSONString(dst, tfQuote)
 	dst = append(dst, ",\"slash\":\""...)
-	_tfSlash := len(dst)
+	tfSlash := len(dst)
 	dst = s.Slash.AppendFormat(dst, "a\\b 2006")
-	dst = ggen.CloseJSONString(dst, _tfSlash)
+	dst = ggen.CloseJSONString(dst, tfSlash)
 	return append(dst, '}'), nil
 }
 
@@ -3466,17 +3466,17 @@ func (s TimeFormatsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "{\"ansic\":\""...)
 	dst = s.ANSIC.AppendFormat(dst, time.ANSIC)
 	dst = append(dst, "\",\"customComma\":\""...)
-	_tfCustomComma := len(dst)
+	tfCustomComma := len(dst)
 	dst = s.CustomComma.AppendFormat(dst, "Jan 2, 2006")
-	dst = ggen.CloseJSONString(dst, _tfCustomComma)
+	dst = ggen.CloseJSONString(dst, tfCustomComma)
 	dst = append(dst, ",\"customLong\":\""...)
-	_tfCustomLong := len(dst)
+	tfCustomLong := len(dst)
 	dst = s.CustomLong.AppendFormat(dst, "2006-Jan-02T15:04:05.000000000_Mon_-0700")
-	dst = ggen.CloseJSONString(dst, _tfCustomLong)
+	dst = ggen.CloseJSONString(dst, tfCustomLong)
 	dst = append(dst, ",\"customTiny\":\""...)
-	_tfCustomTiny := len(dst)
+	tfCustomTiny := len(dst)
 	dst = s.CustomTiny.AppendFormat(dst, "2")
-	dst = ggen.CloseJSONString(dst, _tfCustomTiny)
+	dst = ggen.CloseJSONString(dst, tfCustomTiny)
 	dst = append(dst, ",\"dateOnly\":\""...)
 	dst = s.DateOnly.AppendFormat(dst, time.DateOnly)
 	dst = append(dst, "\",\"dateTime\":\""...)

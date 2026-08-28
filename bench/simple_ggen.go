@@ -176,11 +176,11 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"address"}}
 			}
 			seen |= 1 << 1
-			var _n int
-			result.Address, _n, err = result.Address.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result.Address, consumed, err = result.Address.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("address", i, _n, err)
+				return result, i, ggen.NewParseErrShift("address", i, consumed, err)
 			}
 		case "age":
 			if seen&(1<<2) != 0 {
@@ -309,11 +309,11 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"company"}}
 			}
 			seen |= 1 << 7
-			var _n int
-			result.Company, _n, err = result.Company.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result.Company, consumed, err = result.Company.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("company", i, _n, err)
+				return result, i, ggen.NewParseErrShift("company", i, consumed, err)
 			}
 		case "createdAt":
 			if seen&(1<<8) != 0 {
@@ -885,11 +885,11 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"preferences"}}
 			}
 			seen |= 1 << 24
-			var _n int
-			result.Preferences, _n, err = result.Preferences.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result.Preferences, consumed, err = result.Preferences.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("preferences", i, _n, err)
+				return result, i, ggen.NewParseErrShift("preferences", i, consumed, err)
 			}
 		case "premium":
 			if seen&(1<<25) != 0 {
@@ -2292,11 +2292,11 @@ func (recv PostalAddress) DecodeFrom(data []byte) (result PostalAddress, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"geo"}}
 			}
 			seenGeo = true
-			var _n int
-			result.Geo, _n, err = result.Geo.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result.Geo, consumed, err = result.Geo.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("geo", i, _n, err)
+				return result, i, ggen.NewParseErrShift("geo", i, consumed, err)
 			}
 		case "line1":
 			if seenLine1 {
@@ -4340,11 +4340,11 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"address"}}
 			}
 			seen |= 1 << 1
-			var _n int
-			result.Address, _n, err = result.Address.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result.Address, consumed, err = result.Address.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("address", i, _n, err)
+				return result, i, ggen.NewParseErrShift("address", i, consumed, err)
 			}
 		case "age":
 			if seen&(1<<2) != 0 {
@@ -4476,11 +4476,11 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"company"}}
 			}
 			seen |= 1 << 7
-			var _n int
-			result.Company, _n, err = result.Company.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result.Company, consumed, err = result.Company.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("company", i, _n, err)
+				return result, i, ggen.NewParseErrShift("company", i, consumed, err)
 			}
 		case "createdAt":
 			if seen&(1<<8) != 0 {
@@ -5059,11 +5059,11 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"preferences"}}
 			}
 			seen |= 1 << 24
-			var _n int
-			result.Preferences, _n, err = result.Preferences.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result.Preferences, consumed, err = result.Preferences.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("preferences", i, _n, err)
+				return result, i, ggen.NewParseErrShift("preferences", i, consumed, err)
 			}
 		case "premium":
 			if seen&(1<<25) != 0 {
@@ -6469,11 +6469,11 @@ func (recv CopyPostalAddress) DecodeFrom(data []byte) (result CopyPostalAddress,
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"geo"}}
 			}
 			seenGeo = true
-			var _n int
-			result.Geo, _n, err = result.Geo.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result.Geo, consumed, err = result.Geo.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("geo", i, _n, err)
+				return result, i, ggen.NewParseErrShift("geo", i, consumed, err)
 			}
 		case "line1":
 			if seenLine1 {

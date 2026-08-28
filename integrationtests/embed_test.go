@@ -344,3 +344,23 @@ func TestEmbed_EmptyRawMessageMarshalsNull(t *testing.T) {
 		t.Fatalf("decode: %+v %v", back, err)
 	}
 }
+
+// The catch-all map is emptied at decode entry like any other container: keys
+// from a previous decode must not survive into the next one.
+func TestEmbed_carriedMapDropsStaleKeys(t *testing.T) {
+	t.Parallel()
+	first, _, err := EmbedStructsStruct{}.DecodeFrom([]byte(`{"name":"n","a":{"name":"A"},"b":{"name":"B"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.Extra) != 2 {
+		t.Fatalf("first decode: %v", first.Extra)
+	}
+	got, _, err := first.DecodeFrom([]byte(`{"name":"n","a":{"name":"A2"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Extra) != 1 || got.Extra["a"].Name != "A2" {
+		t.Errorf("stale catch-all keys survived: %v", got.Extra)
+	}
+}

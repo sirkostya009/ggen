@@ -177,7 +177,7 @@ func TestNamedPrimitive_InlineDecode(t *testing.T) {
 
 	t.Run("scans_underlying_and_converts", func(t *testing.T) {
 		s := gen(aliasPri, FieldInfo{GoType: "Pri", Kind: KindStruct, NamedPrims: map[string]TypeKind{"Pri": KindString}})
-		for _, want := range []string{"var _nvS string", "result.S = Pri(_nvS)"} {
+		for _, want := range []string{"var namedS string", "result.S = Pri(namedS)"} {
 			if !strings.Contains(s, want) {
 				t.Errorf("missing %q:\n%s", want, s)
 			}
@@ -197,7 +197,7 @@ func TestNamedPrimitive_InlineDecode(t *testing.T) {
 		if strings.Contains(s, "json.Unmarshal") || strings.Contains(s, "json.Marshal") {
 			t.Errorf("unannotated named primitive still routes through encoding/json:\n%s", s)
 		}
-		if !strings.Contains(s, "result.S = Tag(_nvS)") {
+		if !strings.Contains(s, "result.S = Tag(namedS)") {
 			t.Errorf("missing inline conversion:\n%s", s)
 		}
 	})

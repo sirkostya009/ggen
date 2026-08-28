@@ -1696,8 +1696,17 @@ benchmarks under `bench/`.
     fallback or an `UnmarshalJSON`/`UnmarshalText` rung MERGES into a non-zero
     value, which would resurrect stale data, and a cross-package generated type
     (not in the current pass) stays on the blanking shape too. Primitive
-    elements are fully overwritten by their scan and were left alone. Pinned by
-    `TestMerge_sliceElementAllocationsReused` + `TestMerge_ArraySlotsOverwrite`.
+    elements are fully overwritten by their scan and were left alone.
+    A multi-level POINTER element (`[]**T`) reuses too: the slot is resliced
+    within cap so the carried chain survives, and its cascade drops
+    `TargetNil` so it decodes THROUGH that chain instead of building a new one
+    (`elemPtrReusable`). Note a multi-level element reports `KindStruct` with
+    the remaining pointer levels still spelled in `ElemType`, so the gate
+    resolves the LEAF before asking whether it self-resets — testing
+    `ElemType` directly asks `isGenerated("*int")` and always answers no.
+    ARRAY slots keep the assignment-only cascade: their contract is "every
+    slot overwritten". Pinned by `TestMerge_sliceElementAllocationsReused`,
+    `TestMerge_slicePointerChainReused` + `TestMerge_ArraySlotsOverwrite`.
 
 75. **The catch-all map is `json:",embed"`.** Go 1.27's stable
     `encoding/json/v2` spells the tag option `embed`, not `inline`, so ggen
@@ -1713,3 +1722,43 @@ benchmarks under `bench/`.
     `,inline`/`,embed` row of the 1.27 parity gaps: `TestStdCompat_EmbedStruct`
     now agrees with jsonv2 byte-for-byte, where before jsonv2 nested the map
     under `"Extra"` while ggen flattened it.
+
+76. **Map decode reads the carried map, fills a new one.** A `map[string]V`
+    whose V owns allocations hoists `_mold := ref` and builds a
+    fresh map, so each entry decodes into its PREVIOUS value — the allocations
+    come back, the data does not (the value decoder resets what it is handed,
+    opt #74). Keys the payload omits are never carried across, which is what
+    makes this work without a seen-set: there is nothing to reconcile, because
+    the new map only ever holds what the payload named.
+    Three things the shape depends on:
+    - **Seed from `_mold`, never from the map being filled** — otherwise a
+      repeated key in one payload would merge into its own earlier occurrence
+      instead of decoding fresh (`TestMerge_mapRepeatedKeyDecodesFresh`).
+    - **`_reuse := len(_mold) != 0` is hoisted out of the entry loop.** A
+      per-entry lookup against a nil map is a real `mapaccess` CALL, and
+      without the hoist the common zero-value decode paid it on every entry:
+      measured **+6.5…+9.6%** on fresh decode before the hoist, −1.1% after.
+    - **The skip must track where the swap is actually emitted.** The
+      `clear()` is suppressed in `emitReceiverReset` while `renderMap` emits
+      the swap, so anything decoding a map OUTSIDE `renderMap` still needs its
+      clear: the stream emitter (`bytesPath` param —
+      `TestMerge_mapStreamDropsOmittedKeys`) and the `json:",embed"` catch-all,
+      which `unknownKey` fills (`TestEmbed_carriedMapDropsStaleKeys`, and why
+      `reusesMapValues` excludes `f.Embed`). A pointer-to-map DOES swap, so its
+      deref clear is skipped too (`TestPtrMap_valueReuseDropsOmittedKeys`) —
+      otherwise it cleared the map the swap was about to read and allocated a
+      replacement for nothing.
+    What `reusesMapValues` accepts, i.e. what owns something worth recycling:
+    a generated struct value that `ownsAllocations`; a slice or map value
+    (seeded `_mold[mk][:0]` / `clear`); a `[]byte` value (seeded `[:0]` — its
+    `AppendDecode` would otherwise land after the carried bytes); a
+    `json.RawMessage` value ONLY under `-copy`, since a raw span otherwise
+    ALIASES the input and owns nothing; and a POINTER value at any depth,
+    which recycles the pointee — that one decodes through an addressable local
+    seeded from `_mold` and assigns the map index afterwards, because the
+    `TargetNil` cascade the map slot otherwise uses cannot read a carried
+    chain out of an unaddressable index.
+    Value types reaching `encoding/json` or an `UnmarshalJSON` rung are
+    excluded — unmarshalling into a non-zero value MERGES. Scalar-valued maps
+    (`map[string]string`) are excluded too: they own nothing to recycle, so the
+    swap would be pure cost. Numbers in bench/CLAUDE.md.

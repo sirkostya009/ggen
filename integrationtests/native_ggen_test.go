@@ -1368,16 +1368,16 @@ func (recv ByteArrays) DecodeFrom(data []byte) (result ByteArrays, i int, err er
 					return result, i, ggen.NewParseErr("b", i, err)
 				}
 			}
-			var _baB [4]byte
-			var _baBd []byte
-			_baBd, err = base64.StdEncoding.AppendDecode(_baB[:0], unsafe.Slice(unsafe.StringData(s), len(s)))
+			var bufB [4]byte
+			var bufBd []byte
+			bufBd, err = base64.StdEncoding.AppendDecode(bufB[:0], unsafe.Slice(unsafe.StringData(s), len(s)))
 			if err != nil {
 				return result, i, ggen.NewParseErr("b", i, err)
 			}
-			if len(_baBd) != 4 {
-				return result, i, &ggen.LenError{Pos: i, Path: []string{"b"}, Want: 4, Got: len(_baBd)}
+			if len(bufBd) != 4 {
+				return result, i, &ggen.LenError{Pos: i, Path: []string{"b"}, Want: 4, Got: len(bufBd)}
 			}
-			copy(result.B[:], _baBd)
+			copy(result.B[:], bufBd)
 		case "hex":
 			if seenHex {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"hex"}}
@@ -1404,16 +1404,16 @@ func (recv ByteArrays) DecodeFrom(data []byte) (result ByteArrays, i int, err er
 					return result, i, ggen.NewParseErr("hex", i, err)
 				}
 			}
-			var _baHex [3]byte
-			var _baHexd []byte
-			_baHexd, err = hex.AppendDecode(_baHex[:0], unsafe.Slice(unsafe.StringData(s), len(s)))
+			var bufHex [3]byte
+			var bufHexd []byte
+			bufHexd, err = hex.AppendDecode(bufHex[:0], unsafe.Slice(unsafe.StringData(s), len(s)))
 			if err != nil {
 				return result, i, ggen.NewParseErr("hex", i, err)
 			}
-			if len(_baHexd) != 3 {
-				return result, i, &ggen.LenError{Pos: i, Path: []string{"hex"}, Want: 3, Got: len(_baHexd)}
+			if len(bufHexd) != 3 {
+				return result, i, &ggen.LenError{Pos: i, Path: []string{"hex"}, Want: 3, Got: len(bufHexd)}
 			}
-			copy(result.Hex[:], _baHexd)
+			copy(result.Hex[:], bufHexd)
 		default:
 			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
@@ -1563,16 +1563,16 @@ func (recv ByteArrays) DecodeFromStream(s *ggen.Stream) (result ByteArrays, err 
 			if err != nil {
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
-			var _baB [4]byte
-			var _baBd []byte
-			_baBd, err = base64.StdEncoding.AppendDecode(_baB[:0], unsafe.Slice(unsafe.StringData(sv), len(sv)))
+			var bufB [4]byte
+			var bufBd []byte
+			bufBd, err = base64.StdEncoding.AppendDecode(bufB[:0], unsafe.Slice(unsafe.StringData(sv), len(sv)))
 			if err != nil {
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
-			if len(_baBd) != 4 {
-				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"b"}, Want: 4, Got: len(_baBd)}
+			if len(bufBd) != 4 {
+				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"b"}, Want: 4, Got: len(bufBd)}
 			}
-			copy(result.B[:], _baBd)
+			copy(result.B[:], bufBd)
 		case "hex":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -1587,16 +1587,16 @@ func (recv ByteArrays) DecodeFromStream(s *ggen.Stream) (result ByteArrays, err 
 			if err != nil {
 				return result, ggen.NewParseErr("hex", s.Offset(), err)
 			}
-			var _baHex [3]byte
-			var _baHexd []byte
-			_baHexd, err = hex.AppendDecode(_baHex[:0], unsafe.Slice(unsafe.StringData(sv), len(sv)))
+			var bufHex [3]byte
+			var bufHexd []byte
+			bufHexd, err = hex.AppendDecode(bufHex[:0], unsafe.Slice(unsafe.StringData(sv), len(sv)))
 			if err != nil {
 				return result, ggen.NewParseErr("hex", s.Offset(), err)
 			}
-			if len(_baHexd) != 3 {
-				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"hex"}, Want: 3, Got: len(_baHexd)}
+			if len(bufHexd) != 3 {
+				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"hex"}, Want: 3, Got: len(bufHexd)}
 			}
-			copy(result.Hex[:], _baHexd)
+			copy(result.Hex[:], bufHexd)
 		default:
 			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
 		}

@@ -21,13 +21,14 @@ import (
 
 //ggen:generate copy
 type CopyDoc struct {
-	Name     string            `json:"name"`
-	Tags     []string          `json:"tags"`
-	Props    map[string]string `json:"props"`
-	Extra    any               `json:"extra"`
-	Raw      json.RawMessage   `json:"raw"`
-	Refs     []*CopyRef        `json:"refs"`
-	Children []CopyDoc         `json:"children"`
+	RawMap   map[string]json.RawMessage `json:"rawMap"`
+	Name     string                     `json:"name"`
+	Tags     []string                   `json:"tags"`
+	Props    map[string]string          `json:"props"`
+	Extra    any                        `json:"extra"`
+	Raw      json.RawMessage            `json:"raw"`
+	Refs     []*CopyRef                 `json:"refs"`
+	Children []CopyDoc                  `json:"children"`
 }
 
 //ggen:generate copy

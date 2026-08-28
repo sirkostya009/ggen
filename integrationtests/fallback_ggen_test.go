@@ -323,11 +323,11 @@ func (recv FastFallbackStruct) DecodeFrom(data []byte) (result FastFallbackStruc
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"extra"}}
 			}
 			seenExtra = true
-			var _n int
-			result.Extra, _n, err = result.Extra.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result.Extra, consumed, err = result.Extra.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("extra", i, _n, err)
+				return result, i, ggen.NewParseErrShift("extra", i, consumed, err)
 			}
 		case "id":
 			if seenID {
@@ -840,11 +840,11 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 						return result, i, &ggen.LenError{Pos: i, Path: []string{"arr"}, Want: 2, Got: idx0}
 					}
 					result.Arr[idx0] = thirdparty2.External2{}
-					var _n int
-					result.Arr[idx0], _n, err = result.Arr[idx0].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					result.Arr[idx0], consumed, err = result.Arr[idx0].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("arr", i, _n, err)
+						return result, i, ggen.NewParseErrShift("arr", i, consumed, err)
 					}
 					idx0++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -930,11 +930,11 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 						i++
 					}
 					var mv thirdparty2.External2
-					var _n int
-					mv, _n, err = mv.DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					mv, consumed, err = mv.DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("dict", i, _n, err)
+						return result, i, ggen.NewParseErrShift("dict", i, consumed, err)
 					}
 					result.Dict[mk] = mv
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -986,11 +986,11 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 			if i < len(data) && data[i] != ']' {
 				for {
 					result.Many = append(result.Many, thirdparty2.External2{})
-					var _n int
-					result.Many[len(result.Many)-1], _n, err = result.Many[len(result.Many)-1].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					result.Many[len(result.Many)-1], consumed, err = result.Many[len(result.Many)-1].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("many", i, _n, err)
+						return result, i, ggen.NewParseErrShift("many", i, consumed, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -1017,11 +1017,11 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"one"}}
 			}
 			seenOne = true
-			var _n int
-			result.One, _n, err = result.One.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result.One, consumed, err = result.One.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("one", i, _n, err)
+				return result, i, ggen.NewParseErrShift("one", i, consumed, err)
 			}
 		case "pptr":
 			if seenPPtr {
@@ -1037,11 +1037,11 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 			if result.PPtr != nil && (*result.PPtr) != nil {
 				v = (*(*result.PPtr))
 			}
-			var _n int
-			v, _n, err = v.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			v, consumed, err = v.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("pptr", i, _n, err)
+				return result, i, ggen.NewParseErrShift("pptr", i, consumed, err)
 			}
 			if result.PPtr == nil {
 				result.PPtr = new(new(v))
@@ -1064,11 +1064,11 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 			if result.Ptr != nil {
 				v = (*result.Ptr)
 			}
-			var _n int
-			v, _n, err = v.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			v, consumed, err = v.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("ptr", i, _n, err)
+				return result, i, ggen.NewParseErrShift("ptr", i, consumed, err)
 			}
 			if result.Ptr == nil {
 				result.Ptr = new(v)
@@ -1124,11 +1124,11 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 						break
 					}
 					slab0 = append(slab0, thirdparty2.External2{})
-					var _n int
-					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					slab0[len(slab0)-1], consumed, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("slab", i, _n, err)
+						return result, i, ggen.NewParseErrShift("slab", i, consumed, err)
 					}
 					result.Slab = append(result.Slab, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {

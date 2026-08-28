@@ -558,3 +558,180 @@ func TestMerge_leanRedecodeLeavesNoStaleData(t *testing.T) {
 		t.Errorf("stream element stale: %+v", sv.Children)
 	}
 }
+
+// MapReuse carries the two map shapes whose values own an allocation: a
+// generated struct with containers, and a slice.
+//
+//ggen:generate
+type MapReuse struct {
+	Nodes map[string]Node  `json:"nodes"`
+	Lists map[string][]int `json:"lists"`
+}
+
+// A map value's allocations are recycled across decodes, while the entries the
+// payload drops disappear and nothing stale survives in the ones it keeps.
+func TestMerge_mapValueAllocationsReused(t *testing.T) {
+	t.Parallel()
+	fat := []byte(`{"nodes":{"a":{"id":1,"name":"x","tags":["t1","t2"]},"b":{"id":2}},` +
+		`"lists":{"a":[1,2,3],"b":[4]}}`)
+	first, _, err := MapReuse{}.DecodeFrom(fat)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tagsA := unsafe.SliceData(first.Nodes["a"].Tags)
+	listA := unsafe.SliceData(first.Lists["a"])
+
+	// Second payload keeps "a", drops "b", and omits fields "a" had set.
+	lean := []byte(`{"nodes":{"a":{"id":9}},"lists":{"a":[7]}}`)
+	got, _, err := first.DecodeFrom(lean)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Nodes) != 1 || len(got.Lists) != 1 {
+		t.Fatalf("dropped keys survived: nodes=%v lists=%v", got.Nodes, got.Lists)
+	}
+	if n := got.Nodes["a"]; n.ID != 9 || n.Name != "" || len(n.Tags) != 0 {
+		t.Errorf("stale data in reused value: %+v", n)
+	}
+	if !reflect.DeepEqual(got.Lists["a"], []int{7}) {
+		t.Errorf("lists[a] = %v, want [7]", got.Lists["a"])
+	}
+	if cap(got.Nodes["a"].Tags) == 0 || unsafe.SliceData(got.Nodes["a"].Tags[:cap(got.Nodes["a"].Tags)]) != tagsA {
+		t.Error("struct value's slice backing reallocated — carried value was not reused")
+	}
+	if unsafe.SliceData(got.Lists["a"][:cap(got.Lists["a"])]) != listA {
+		t.Error("slice value's backing reallocated — carried value was not reused")
+	}
+}
+
+// A key repeated inside ONE payload decodes fresh each time; seeding comes
+// from the carried map, never from the map being filled.
+func TestMerge_mapRepeatedKeyDecodesFresh(t *testing.T) {
+	t.Parallel()
+	first, _, err := MapReuse{}.DecodeFrom([]byte(`{"nodes":{"a":{"id":1,"name":"carried"}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := first.DecodeFrom([]byte(`{"nodes":{"a":{"id":2,"name":"first"},"a":{"id":3}}}`))
+	if err != nil {
+		return // duplicate-key rejection is also a correct answer here
+	}
+	if n := got.Nodes["a"]; n.Name != "" || n.ID != 3 {
+		t.Errorf("repeated key merged instead of decoding fresh: %+v", n)
+	}
+}
+
+// The stream path must drop omitted keys exactly like the bytes path.
+func TestMerge_mapStreamDropsOmittedKeys(t *testing.T) {
+	t.Parallel()
+	var s ggen.Stream
+	s.Reset(bytes.NewReader([]byte(`{"nodes":{"a":{"id":1},"b":{"id":2}}}`)), make([]byte, 0, 64))
+	first, err := MapReuse{}.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Reset(bytes.NewReader([]byte(`{"nodes":{"a":{"id":9}}}`)), make([]byte, 0, 64))
+	got, err := first.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Nodes) != 1 {
+		t.Errorf("stream kept dropped keys: %v", got.Nodes)
+	}
+}
+
+// A map whose values own a backing recycles it: []byte decodes through
+// AppendDecode into the carried buffer, and a pointer value keeps its pointee
+// rather than allocating one per entry.
+func TestMerge_mapByteAndPointerValuesReused(t *testing.T) {
+	t.Parallel()
+	first, _, err := MapVals{}.DecodeFrom([]byte(`{"blobs":{"a":"aGVsbG8=","b":"d29ybGQ="}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	blobA := unsafe.SliceData(first.Blobs["a"])
+	got, _, err := first.DecodeFrom([]byte(`{"blobs":{"a":"aGk="}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Blobs) != 1 {
+		t.Errorf("dropped []byte key survived: %v", got.Blobs)
+	}
+	if string(got.Blobs["a"]) != "hi" {
+		t.Errorf("blobs[a] = %q, want %q", got.Blobs["a"], "hi")
+	}
+	if unsafe.SliceData(got.Blobs["a"]) != blobA {
+		t.Error("[]byte value backing reallocated — carried buffer was not reused")
+	}
+
+	pFirst, _, err := NPtrContainersStruct{}.DecodeFrom([]byte(`{"mp":{"a":1,"b":2}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ptrA := pFirst.MP["a"]
+	pGot, _, err := pFirst.DecodeFrom([]byte(`{"mp":{"a":9}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pGot.MP) != 1 {
+		t.Errorf("dropped pointer key survived: %v", pGot.MP)
+	}
+	if pGot.MP["a"] != ptrA {
+		t.Error("pointer value reallocated — carried pointee was not reused")
+	}
+	if *pGot.MP["a"] != 9 {
+		t.Errorf("*mp[a] = %d, want 9", *pGot.MP["a"])
+	}
+}
+
+// Under -copy a raw span is copied out of the input, so its backing is worth
+// recycling too; without -copy it aliases and there is nothing to reuse.
+func TestMerge_copyModeRawMapValueReused(t *testing.T) {
+	t.Parallel()
+	first, _, err := CopyDoc{}.DecodeFrom([]byte(`{"rawMap":{"a":{"x":1},"b":2}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	rawA := unsafe.SliceData(first.RawMap["a"])
+	got, _, err := first.DecodeFrom([]byte(`{"rawMap":{"a":{"y":2}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.RawMap) != 1 {
+		t.Errorf("dropped raw key survived: %v", got.RawMap)
+	}
+	if string(got.RawMap["a"]) != `{"y":2}` {
+		t.Errorf("rawMap[a] = %s", got.RawMap["a"])
+	}
+	if unsafe.SliceData(got.RawMap["a"]) != rawA {
+		t.Error("raw value backing reallocated — carried buffer was not reused")
+	}
+}
+
+// A slice of multi-level pointers reuses each slot's carried chain instead of
+// allocating a fresh one per element.
+func TestMerge_slicePointerChainReused(t *testing.T) {
+	t.Parallel()
+	first, _, err := NPtrContainersStruct{}.DecodeFrom([]byte(`{"spp":[1,2,3]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(first.SPP) != 3 {
+		t.Fatalf("first decode: %v", first.SPP)
+	}
+	outer, inner := first.SPP[0], *first.SPP[0]
+
+	got, _, err := first.DecodeFrom([]byte(`{"spp":[9,8]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.SPP) != 2 || **got.SPP[0] != 9 || **got.SPP[1] != 8 {
+		t.Fatalf("second decode: %v", got.SPP)
+	}
+	if got.SPP[0] != outer {
+		t.Error("outer pointer reallocated — carried chain was not reused")
+	}
+	if *got.SPP[0] != inner {
+		t.Error("inner pointer reallocated — carried chain was not reused")
+	}
+}

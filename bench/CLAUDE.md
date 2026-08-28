@@ -13,7 +13,8 @@ The numbers below are for science only.
 ## Files
 
 - Types + payload builders live in per-family non-test files, each paired with
-  its `_test.go`: `bench/mega.go` (Node family + DeepNested + MapHeavy),
+  its `_test.go`: `bench/mega.go` (Node family + DeepNested + MapHeavy +
+  MapValues/MapValuesHeavy),
   `bench/small.go` (Validated + Claim + ValidationHeavy + RuneGated + HTML),
   `bench/simple.go` (Account family), `bench/skip.go`, `bench/escape.go`;
   `bench/doc.go` holds the package doc + the deterministic `gen` counter
@@ -400,3 +401,29 @@ under the same pin — **NEVER loop alternating old/new pairs** (no
 `for i in …; do old; new; done` marathons; they waste minutes for numbers that
 are a compass either way). One pass per side, full output, compare directly.
 `./...` from root does NOT cross module boundaries — `cd` into `bench/` first.
+
+## Map value reuse (opt #76, 2026-08)
+
+`MapValues` (256 entries, values = a struct with a 3-element slice, and a
+4-element slice) and `MapValuesHeavy` (256 entries, values = a struct with a
+24-element slice and an 8-entry map) exist because no bench covered a map whose
+VALUES own allocations — every other fixture map is `map[string]string`, which
+the optimization deliberately skips. Each family carries a `ggen_reuse` row
+decoding into a carried receiver, which is the only shape the swap can help;
+the plain `ggen` row starts from a zero value, where it can only cost.
+
+Core-pinned, 300x, count=1, one pass per binary, controls within ±1.6%:
+
+| row | before | after |
+| --- | --- | --- |
+| MapValuesHeavy/ggen_reuse | 288194 ns · 411 KB · 1541 allocs · 2 gc | **123174 ns · 34 KB · 9 allocs · 0 gc** |
+| MapValuesHeavy/ggen (fresh) | 295321 ns | 291963 ns |
+| MapValues/ggen_reuse | 44461 ns · 29 KB · 513 allocs | 43551 ns · 63 KB · 9 allocs |
+| MapValues/ggen (fresh) | 101326 ns | 97350 ns |
+
+Heavy values are where it pays: **−57%** wall clock, 92% less garbage, GC
+gone. Light values come out flat on time with the allocation COUNT collapsed
+(513 → 9) but roughly double the BYTES, since a fresh map is allocated where
+`clear()` used to recycle buckets — the size of the values decides which of
+those two matters, and the generator cannot know it, so both are accepted.
+Fresh decode is flat, which it was NOT before the `_reuse` hoist (+6.5…+9.6%).

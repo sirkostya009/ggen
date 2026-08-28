@@ -405,7 +405,7 @@ func (s *structSet) resolveFiltered(wanted []string, allowExpand func(string) bo
 // used in single-file mode to seed generatedTypes so a cross-file reference
 // routes to a direct DecodeFrom before sibling _ggen files exist. Nil in the
 // AST-only degraded mode (siblings unknown).
-func parseFile(filename string, wanted []string) ([]StructInfo, string, map[string]struct{}, map[string]struct{}, map[string]struct{}, error) {
+func parseFile(filename string, wanted []string) ([]StructInfo, string, map[string]struct{}, map[string]struct{}, map[string]struct{}, map[string][]FieldInfo, error) {
 	dir := filepath.Dir(filename)
 	set, err := loadDirWithTypes(dir)
 	degraded := false
@@ -414,7 +414,7 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 	if err != nil || (len(set.structs) == 0 && len(set.aliases) == 0) {
 		set, err = loadStructs([]string{filename})
 		if err != nil {
-			return nil, "", nil, nil, nil, err
+			return nil, "", nil, nil, nil, nil, err
 		}
 		degraded = true
 	}
@@ -445,7 +445,7 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 			// No name filter and no annotated struct in this file. Error
 			// loudly. richError so the pretty logger shows the escape hatch;
 			// no source position — this is file-level.
-			return nil, set.pkgName, nil, nil, nil, &richError{
+			return nil, set.pkgName, nil, nil, nil, nil, &richError{
 				Msg:      fmt.Sprintf("%s: no //ggen:generate-annotated struct found in file", relPath(filename)),
 				BotHint:  "missing //ggen:generate directive",
 				UserHint: fmt.Sprintf("Add `//ggen:generate` above each struct you want generated, or pass struct names explicitly: `ggen %s Name1 Name2 ...`.", filepath.Base(filename)),
@@ -459,12 +459,13 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 		// Position-carrying errors already prefix the filename; don't
 		// double-prefix. Only prefix bare errors lacking location info.
 		if _, ok := errors.AsType[*richError](err); ok {
-			return nil, "", nil, nil, nil, err
+			return nil, "", nil, nil, nil, nil, err
 		}
-		return nil, "", nil, nil, nil, fmt.Errorf("%s: %w", filename, err)
+		return nil, "", nil, nil, nil, nil, fmt.Errorf("%s: %w", filename, err)
 	}
 	var siblings map[string]struct{}
 	var pkgCyclic, pkgMultiErr map[string]struct{}
+	var pkgFields map[string][]FieldInfo
 	if !degraded {
 		siblings = make(map[string]struct{}, len(set.annotations))
 		all := make([]string, 0, len(set.annotations))
@@ -481,9 +482,15 @@ func parseFile(filename string, wanted []string) ([]StructInfo, string, map[stri
 		if allStructs, aerr := set.resolveFiltered(all, func(string) bool { return true }); aerr == nil {
 			pkgCyclic = computeCyclicTypes(allStructs)
 			pkgMultiErr = seedMultiErrTypes(allStructs)
+			// Package-wide field sets, so a container emitter can ask what a
+			// value type declared in ANOTHER file owns.
+			pkgFields = make(map[string][]FieldInfo, len(allStructs))
+			for _, st := range allStructs {
+				pkgFields[st.Name] = st.Fields
+			}
 		}
 	}
-	return structs, set.pkgName, siblings, pkgCyclic, pkgMultiErr, nil
+	return structs, set.pkgName, siblings, pkgCyclic, pkgMultiErr, pkgFields, nil
 }
 
 // parsePackage loads every eligible .go file in dir and generates only for

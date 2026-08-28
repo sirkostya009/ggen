@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/sirkostya009/ggen"
 )
@@ -451,5 +452,42 @@ func TestPtrContainer_DeepDecodes(t *testing.T) {
 	}
 	if !reflect.DeepEqual(***back.Deep, ***v.Deep) {
 		t.Errorf("round-trip mismatch: %v vs %v", ***back.Deep, ***v.Deep)
+	}
+}
+
+// PtrMapHeavy covers a pointer-to-map whose VALUES own allocations: the bytes
+// decode swaps the map instead of clearing it, so the reset has to come from
+// the swap. PtrContainers' own element type is scalar-only and takes the
+// clear() path, so it cannot cover this.
+//
+//ggen:generate
+type PtrMapHeavy struct {
+	M *map[string]Node `json:"m"`
+}
+
+func TestPtrMap_valueReuseDropsOmittedKeys(t *testing.T) {
+	t.Parallel()
+	first, _, err := PtrMapHeavy{}.DecodeFrom([]byte(`{"m":{"a":{"id":1,"tags":["x","y"]},"b":{"id":2}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*first.M) != 2 {
+		t.Fatalf("first decode: %v", *first.M)
+	}
+	tags := unsafe.SliceData((*first.M)["a"].Tags)
+
+	got, _, err := first.DecodeFrom([]byte(`{"m":{"a":{"id":9}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(*got.M) != 1 {
+		t.Errorf("dropped key survived: %v", *got.M)
+	}
+	a := (*got.M)["a"]
+	if a.ID != 9 || len(a.Tags) != 0 {
+		t.Errorf("stale value data: %+v", a)
+	}
+	if cap(a.Tags) == 0 || unsafe.SliceData(a.Tags[:cap(a.Tags)]) != tags {
+		t.Error("value backing reallocated — carried value was not reused")
 	}
 }

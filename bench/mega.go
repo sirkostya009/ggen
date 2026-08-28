@@ -143,6 +143,38 @@ func nodeToPlain(n Node) NodePlain {
 	return p
 }
 
+// MapValues holds maps whose VALUES own allocations — a struct carrying a
+// slice, and a slice — the shapes whose decode reads the carried map so each
+// entry's previous value becomes the decode target.
+//
+//ggen:generate
+type MapValues struct {
+	Entries map[string]MapEntry `json:"entries"`
+	Lists   map[string][]int    `json:"lists"`
+}
+
+// MapHeavyEntry is the same shape with much more per-value memory, testing
+// whether recycling a bigger allocation outweighs rebuilding the map.
+//
+//ggen:generate
+type MapHeavyEntry struct {
+	ID   int64             `json:"id"`
+	Tags []string          `json:"tags"`
+	Meta map[string]string `json:"meta"`
+}
+
+//ggen:generate
+type MapValuesHeavy struct {
+	Entries map[string]MapHeavyEntry `json:"entries"`
+}
+
+//ggen:generate
+type MapEntry struct {
+	ID   int64    `json:"id"`
+	Name string   `json:"name"`
+	Tags []string `json:"tags"`
+}
+
 // MapHeavy holds one big string-keyed map (1K+ entries) where map alloc,
 // hash fill, and iteration dominate — a different bottleneck from mega.
 //
@@ -161,6 +193,12 @@ var (
 
 	// MapHeavyPayload — 1024-entry string→string map.
 	MapHeavyPayload []byte
+
+	// MapValuesPayload — 256 entries per map, values owning allocations.
+	MapValuesPayload []byte
+
+	// MapValuesHeavyPayload — 256 entries whose values own much more memory.
+	MapValuesHeavyPayload []byte
 )
 
 func init() {
@@ -190,6 +228,34 @@ func init() {
 		m["key"+strconv.Itoa(i)] = "value" + strconv.Itoa(i)
 	}
 	MapHeavyPayload = canonicalize(mustMarshal(MapHeavy{Labels: m}))
+
+	// Maps whose values own allocations: 256 entries each.
+	entries := make(map[string]MapEntry, 256)
+	lists := make(map[string][]int, 256)
+	for i := range 256 {
+		k := "key" + strconv.Itoa(i)
+		entries[k] = MapEntry{
+			ID:   int64(i),
+			Name: "name" + strconv.Itoa(i),
+			Tags: []string{"a" + strconv.Itoa(i), "b" + strconv.Itoa(i), "c"},
+		}
+		lists[k] = []int{i, i + 1, i + 2, i + 3}
+	}
+	MapValuesPayload = canonicalize(mustMarshal(MapValues{Entries: entries, Lists: lists}))
+
+	heavy := make(map[string]MapHeavyEntry, 256)
+	for i := range 256 {
+		tags := make([]string, 24)
+		for j := range tags {
+			tags[j] = "tag" + strconv.Itoa(i) + "-" + strconv.Itoa(j)
+		}
+		meta := make(map[string]string, 8)
+		for j := range 8 {
+			meta["m"+strconv.Itoa(j)] = "v" + strconv.Itoa(i*8+j)
+		}
+		heavy["key"+strconv.Itoa(i)] = MapHeavyEntry{ID: int64(i), Tags: tags, Meta: meta}
+	}
+	MapValuesHeavyPayload = canonicalize(mustMarshal(MapValuesHeavy{Entries: heavy}))
 }
 
 func buildNode(g *gen, depth int, fanout []int) Node {

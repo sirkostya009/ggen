@@ -210,9 +210,9 @@ func (s TimeCustomComma) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"customComma\":\""...)
-	_tfCustomComma := len(dst)
+	tfCustomComma := len(dst)
 	dst = s.CustomComma.AppendFormat(dst, "Jan 2, 2006")
-	dst = ggen.CloseJSONString(dst, _tfCustomComma)
+	dst = ggen.CloseJSONString(dst, tfCustomComma)
 	return append(dst, '}'), nil
 }
 
@@ -414,9 +414,9 @@ func (s TimeCustomLong) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
 	dst = append(dst, "{\"customLong\":\""...)
-	_tfCustomLong := len(dst)
+	tfCustomLong := len(dst)
 	dst = s.CustomLong.AppendFormat(dst, "2006-Jan-02T15:04:05.000000000_Mon_-0700")
-	dst = ggen.CloseJSONString(dst, _tfCustomLong)
+	dst = ggen.CloseJSONString(dst, tfCustomLong)
 	return append(dst, '}'), nil
 }
 
@@ -5532,13 +5532,13 @@ func (s TimeFormatsStdCompat) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "{\"ansic\":\""...)
 	dst = s.ANSIC.AppendFormat(dst, time.ANSIC)
 	dst = append(dst, "\",\"customComma\":\""...)
-	_tfCustomComma := len(dst)
+	tfCustomComma := len(dst)
 	dst = s.CustomComma.AppendFormat(dst, "Jan 2, 2006")
-	dst = ggen.CloseJSONString(dst, _tfCustomComma)
+	dst = ggen.CloseJSONString(dst, tfCustomComma)
 	dst = append(dst, ",\"customLong\":\""...)
-	_tfCustomLong := len(dst)
+	tfCustomLong := len(dst)
 	dst = s.CustomLong.AppendFormat(dst, "2006-Jan-02T15:04:05.000000000_Mon_-0700")
-	dst = ggen.CloseJSONString(dst, _tfCustomLong)
+	dst = ggen.CloseJSONString(dst, tfCustomLong)
 	dst = append(dst, ",\"dateOnly\":\""...)
 	dst = s.DateOnly.AppendFormat(dst, time.DateOnly)
 	dst = append(dst, "\",\"dateTime\":\""...)

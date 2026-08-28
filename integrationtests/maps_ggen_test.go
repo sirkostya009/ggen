@@ -128,11 +128,11 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 						i++
 					}
 					var mv Address
-					var _n int
-					mv, _n, err = mv.DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					mv, consumed, err = mv.DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("addresses", i, _n, err)
+						return result, i, ggen.NewParseErrShift("addresses", i, consumed, err)
 					}
 					result.Addresses[mk] = mv
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -2320,12 +2320,12 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					var _nm bool
-					_nm, i, err = ggen.Bool(data, i)
+					var namedVal bool
+					namedVal, i, err = ggen.Bool(data, i)
 					if err != nil {
 						return result, i, ggen.NewParseErr("b", i, err)
 					}
-					result.B[mk] = NVBool(_nm)
+					result.B[mk] = NVBool(namedVal)
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -2405,12 +2405,12 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					var _nm float64
-					_nm, i, err = ggen.Float64(data, i)
+					var namedVal float64
+					namedVal, i, err = ggen.Float64(data, i)
 					if err != nil {
 						return result, i, ggen.NewParseErr("f", i, err)
 					}
-					result.F[mk] = NVFloat64(_nm)
+					result.F[mk] = NVFloat64(namedVal)
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -2490,7 +2490,7 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					var _nm int64
+					var namedVal int64
 					neg := false
 					if i < len(data) && data[i] == '-' {
 						neg = true
@@ -2539,8 +2539,8 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 					} else {
 						n = int64(u)
 					}
-					_nm = n
-					result.I[mk] = NVInt64(_nm)
+					namedVal = n
+					result.I[mk] = NVInt64(namedVal)
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -2620,7 +2620,7 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					var _nm uint64
+					var namedVal uint64
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
 						return result, i, ggen.NewParseErr("u", i, ggen.ErrBadNumber)
 					}
@@ -2650,8 +2650,8 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 							return result, i, ggen.NewParseErr("u", i, ggen.ErrBadNumber)
 						}
 					}
-					_nm = n
-					result.U[mk] = NVUint64(_nm)
+					namedVal = n
+					result.U[mk] = NVUint64(namedVal)
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -2817,12 +2817,12 @@ func (recv NamedValMaps) DecodeFromStream(s *ggen.Stream) (result NamedValMaps, 
 				if err != nil {
 					return result, ggen.NewParseErr("b", s.Offset(), err)
 				}
-				var _nm bool
-				_nm, err = s.Bool()
+				var namedVal bool
+				namedVal, err = s.Bool()
 				if err != nil {
 					return result, ggen.NewParseErr("b", s.Offset(), err)
 				}
-				result.B[mk] = NVBool(_nm)
+				result.B[mk] = NVBool(namedVal)
 				err = s.SkipSpace()
 				if err != nil {
 					return result, ggen.NewParseErr("b", s.Offset(), err)
@@ -2927,12 +2927,12 @@ func (recv NamedValMaps) DecodeFromStream(s *ggen.Stream) (result NamedValMaps, 
 				if err != nil {
 					return result, ggen.NewParseErr("f", s.Offset(), err)
 				}
-				var _nm float64
-				_nm, err = s.Float64()
+				var namedVal float64
+				namedVal, err = s.Float64()
 				if err != nil {
 					return result, ggen.NewParseErr("f", s.Offset(), err)
 				}
-				result.F[mk] = NVFloat64(_nm)
+				result.F[mk] = NVFloat64(namedVal)
 				err = s.SkipSpace()
 				if err != nil {
 					return result, ggen.NewParseErr("f", s.Offset(), err)
@@ -3037,12 +3037,12 @@ func (recv NamedValMaps) DecodeFromStream(s *ggen.Stream) (result NamedValMaps, 
 				if err != nil {
 					return result, ggen.NewParseErr("i", s.Offset(), err)
 				}
-				var _nm int64
-				_nm, err = s.Int64()
+				var namedVal int64
+				namedVal, err = s.Int64()
 				if err != nil {
 					return result, ggen.NewParseErr("i", s.Offset(), err)
 				}
-				result.I[mk] = NVInt64(_nm)
+				result.I[mk] = NVInt64(namedVal)
 				err = s.SkipSpace()
 				if err != nil {
 					return result, ggen.NewParseErr("i", s.Offset(), err)
@@ -3147,12 +3147,12 @@ func (recv NamedValMaps) DecodeFromStream(s *ggen.Stream) (result NamedValMaps, 
 				if err != nil {
 					return result, ggen.NewParseErr("u", s.Offset(), err)
 				}
-				var _nm uint64
-				_nm, err = s.Uint64()
+				var namedVal uint64
+				namedVal, err = s.Uint64()
 				if err != nil {
 					return result, ggen.NewParseErr("u", s.Offset(), err)
 				}
-				result.U[mk] = NVUint64(_nm)
+				result.U[mk] = NVUint64(namedVal)
 				err = s.SkipSpace()
 				if err != nil {
 					return result, ggen.NewParseErr("u", s.Offset(), err)

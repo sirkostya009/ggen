@@ -3,6 +3,7 @@
 package integrationtests
 
 import (
+	"bytes"
 	"math"
 	"strconv"
 	"strings"
@@ -16,6 +17,9 @@ const ggenCap_ArrMerge_SI_MergeInner = (min((80/max(int(unsafe.Sizeof(*new(Merge
 
 // Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
 const ggenCap_OmitZeroed_Tags_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_MapReuse_Lists_int = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
 
 func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error) {
 	result = recv
@@ -96,11 +100,11 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 					if idx0 >= 2 {
 						return result, i, &ggen.LenError{Pos: i, Path: []string{"ai"}, Want: 2, Got: idx0}
 					}
-					var _n int
-					result.AI[idx0], _n, err = result.AI[idx0].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					result.AI[idx0], consumed, err = result.AI[idx0].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("ai", i, _n, err)
+						return result, i, ggen.NewParseErrShift("ai", i, consumed, err)
 					}
 					idx0++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -149,11 +153,11 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 						result.AM[idx0] = nil
 					} else {
 						var v MergeInner
-						var _n int
-						v, _n, err = v.DecodeFrom(data[i:])
-						i += _n
+						var consumed int
+						v, consumed, err = v.DecodeFrom(data[i:])
+						i += consumed
 						if err != nil {
-							return result, i, ggen.NewParseErrShift("am[]", i, _n, err)
+							return result, i, ggen.NewParseErrShift("am[]", i, consumed, err)
 						}
 						result.AM[idx0] = new(new(v))
 					}
@@ -219,11 +223,11 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 						}
 						break
 					}
-					var _n int
-					slab0[idx0], _n, err = slab0[idx0].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					slab0[idx0], consumed, err = slab0[idx0].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("ap", i, _n, err)
+						return result, i, ggen.NewParseErrShift("ap", i, consumed, err)
 					}
 					result.AP[idx0] = &slab0[idx0]
 					idx0++
@@ -283,11 +287,11 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 					} else {
 						result.SI = append(result.SI, MergeInner{})
 					}
-					var _n int
-					result.SI[len(result.SI)-1], _n, err = result.SI[len(result.SI)-1].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					result.SI[len(result.SI)-1], consumed, err = result.SI[len(result.SI)-1].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("si", i, _n, err)
+						return result, i, ggen.NewParseErrShift("si", i, consumed, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -1326,11 +1330,11 @@ func (recv OmitZeroed) DecodeFrom(data []byte) (result OmitZeroed, i int, err er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"in"}}
 			}
 			seenIn = true
-			var _n int
-			result.In, _n, err = result.In.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			result.In, consumed, err = result.In.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("in", i, _n, err)
+				return result, i, ggen.NewParseErrShift("in", i, consumed, err)
 			}
 		case "n":
 			if seenN {
@@ -1400,11 +1404,11 @@ func (recv OmitZeroed) DecodeFrom(data []byte) (result OmitZeroed, i int, err er
 			if result.P != nil {
 				v = (*result.P)
 			}
-			var _n int
-			v, _n, err = v.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			v, consumed, err = v.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("p", i, _n, err)
+				return result, i, ggen.NewParseErrShift("p", i, consumed, err)
 			}
 			if result.P == nil {
 				result.P = new(v)
@@ -1937,6 +1941,781 @@ func (s OmitZeroed) AppendJSON(dst []byte) ([]byte, error) {
 			}
 		}
 		dst = append(dst, ']')
+	}
+	return append(dst, '}'), nil
+}
+
+func (recv MapReuse) DecodeFrom(data []byte) (result MapReuse, i int, err error) {
+	result = recv
+	const depth = 0
+	seenLists := false
+	seenNodes := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "lists":
+			if seenLists {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"lists"}}
+			}
+			seenLists = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.Lists = nil
+				break
+			}
+			if i >= len(data) || data[i] != '{' {
+				return result, i, ggen.NewParseErr("lists", i, ggen.ErrBadObject)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			carried := result.Lists
+			reuse := len(carried) != 0
+			result.Lists = make(map[string][]int, len(carried))
+			if i < len(data) && data[i] != '}' {
+				for {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("lists", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("lists", i, err)
+						}
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, ggen.NewParseErr("lists", i, ggen.ErrBadObject)
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					{
+						var mv []int
+						if reuse {
+							mv = carried[mk][:0]
+						}
+						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+							i += 4
+							mv = nil
+						} else {
+							if i >= len(data) || data[i] != '[' {
+								return result, i, ggen.NewParseErr("lists.value", i, ggen.ErrBadArray)
+							}
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ']' {
+								if mv == nil {
+									mv = []int{}
+								}
+							} else {
+								if mv == nil {
+									cnt0 := 1
+									if e := bytes.IndexByte(data[i:], ']'); e >= 0 {
+										cnt0 = bytes.Count(data[i:i+e], []byte{','}) + 1
+									}
+									mv = make([]int, 0, cnt0)
+								}
+							}
+							if i < len(data) && data[i] != ']' {
+								for {
+									mv = append(mv, 0)
+									neg := false
+									if i < len(data) && data[i] == '-' {
+										neg = true
+										i++
+									}
+									if i >= len(data) || data[i] < '0' || data[i] > '9' {
+										return result, i, ggen.NewParseErr("lists.value", i, ggen.ErrBadNumber)
+									}
+									if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+										return result, i, ggen.NewParseErr("lists.value", i, ggen.ErrBadNumber)
+									}
+									limit := uint64(math.MaxInt64)
+									if neg {
+										limit = ggen.SignedNeg
+									}
+									var u uint64
+									de := i + 18
+									if de > len(data) {
+										de = len(data)
+									}
+									for i < de && data[i] >= '0' && data[i] <= '9' {
+										u = u*10 + uint64(data[i]-'0')
+										i++
+									}
+									for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+										d := uint64(data[i] - '0')
+										if u > limit/10 || (u == limit/10 && d > limit%10) {
+											return result, i, ggen.NewParseErr("lists.value", i, ggen.ErrNumberOverflow)
+										}
+										u = u*10 + d
+										i++
+									}
+									if i < len(data) {
+										c := data[i]
+										if c == '.' || c == 'e' || c == 'E' {
+											return result, i, ggen.NewParseErr("lists.value", i, ggen.ErrBadNumber)
+										}
+									}
+									var n int64
+									if neg {
+										if u == ggen.SignedNeg {
+											n = math.MinInt64
+										} else {
+											n = -int64(u)
+										}
+									} else {
+										n = int64(u)
+									}
+									mv[len(mv)-1] = int(n)
+									for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+										i++
+									}
+									if i < len(data) && data[i] == ',' {
+										i++
+										for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+											i++
+										}
+										if i >= len(data) || data[i] == ']' {
+											return result, i, ggen.NewParseErr("lists.value", i, ggen.ErrBadArray)
+										}
+										continue
+									}
+									break
+								}
+							}
+							if i >= len(data) || data[i] != ']' {
+								return result, i, ggen.NewParseErr("lists.value", i, ggen.ErrBadArray)
+							}
+							i++
+						}
+						result.Lists[mk] = mv
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, ggen.NewParseErr("lists", i, ggen.ErrBadObject)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != '}' {
+				return result, i, ggen.NewParseErr("lists", i, ggen.ErrBadObject)
+			}
+			i++
+		case "nodes":
+			if seenNodes {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"nodes"}}
+			}
+			seenNodes = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.Nodes = nil
+				break
+			}
+			if i >= len(data) || data[i] != '{' {
+				return result, i, ggen.NewParseErr("nodes", i, ggen.ErrBadObject)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			carried := result.Nodes
+			reuse := len(carried) != 0
+			result.Nodes = make(map[string]Node, len(carried))
+			if i < len(data) && data[i] != '}' {
+				for {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("nodes", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("nodes", i, err)
+						}
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, ggen.NewParseErr("nodes", i, ggen.ErrBadObject)
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					var mv Node
+					if reuse {
+						mv = carried[mk]
+					}
+					var consumed int
+					mv, consumed, err = mv.decodeFromDepth(data[i:], depth+1)
+					i += consumed
+					if err != nil {
+						return result, i, ggen.NewParseErrShift("nodes", i, consumed, err)
+					}
+					result.Nodes[mk] = mv
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, ggen.NewParseErr("nodes", i, ggen.ErrBadObject)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != '}' {
+				return result, i, ggen.NewParseErr("nodes", i, ggen.ErrBadObject)
+			}
+			i++
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv MapReuse) DecodeFromStream(s *ggen.Stream) (result MapReuse, err error) {
+	result = recv
+	const depth = 0
+	if result.Lists != nil {
+		clear(result.Lists)
+	}
+	if result.Nodes != nil {
+		clear(result.Nodes)
+	}
+	seenLists := false
+	seenNodes := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "lists":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("lists", s.Offset(), err)
+			}
+			if seenLists {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lists"}}
+			}
+			seenLists = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("lists", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("lists", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("lists", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("lists", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Lists = nil
+				break
+			}
+			err = s.ObjectOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("lists", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("lists", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("lists", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == '}' {
+				if result.Lists == nil {
+					result.Lists = map[string][]int{}
+				}
+			} else {
+				if result.Lists == nil {
+					result.Lists = make(map[string][]int)
+				}
+			}
+			for s.Bytes()[s.Pos] != '}' {
+				var mk string
+				mk, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("lists", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("lists", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("lists", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] != ':' {
+					return result, ggen.NewParseErr("lists", s.Offset(), ggen.ErrBadObject)
+				}
+				s.Pos++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("lists", s.Offset(), err)
+				}
+				{
+					var mv []int
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("lists.value", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("lists.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, ggen.NewParseErr("lists.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, ggen.NewParseErr("lists.value", s.Offset(), ggen.ErrBadLiteral)
+							}
+						}
+						s.Pos += 4
+						mv = nil
+					} else {
+						err = s.ArrayOpen()
+						if err != nil {
+							return result, ggen.NewParseErr("lists.value", s.Offset(), err)
+						}
+						err = s.SkipSpace()
+						if err != nil {
+							return result, ggen.NewParseErr("lists.value", s.Offset(), err)
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("lists.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+							}
+						}
+						if s.Bytes()[s.Pos] == ']' {
+							if mv == nil {
+								mv = []int{}
+							}
+						} else {
+							if mv == nil {
+								mv = make([]int, 0, ggenCap_MapReuse_Lists_int)
+							}
+						}
+						for s.Bytes()[s.Pos] != ']' {
+							mv = append(mv, 0)
+							var iv int64
+							iv, err = s.Int64()
+							if err != nil {
+								return result, ggen.NewParseErr("lists.value", s.Offset(), err)
+							}
+							mv[len(mv)-1] = int(iv)
+							err = s.SkipSpace()
+							if err != nil {
+								return result, ggen.NewParseErr("lists.value", s.Offset(), err)
+							}
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, ggen.NewParseErr("lists.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+								}
+							}
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
+								if err != nil {
+									return result, ggen.NewParseErr("lists.value", s.Offset(), err)
+								}
+								if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+									return result, ggen.NewParseErr("lists.value", s.Offset(), ggen.ErrBadArray)
+								}
+								continue
+							}
+							break
+						}
+						if s.Bytes()[s.Pos] != ']' {
+							return result, ggen.NewParseErr("lists.value", s.Offset(), ggen.ErrBadArray)
+						}
+						s.Pos++
+					}
+					result.Lists[mk] = mv
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("lists", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("lists", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("lists", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, ggen.NewParseErr("lists", s.Offset(), ggen.ErrBadObject)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != '}' {
+				return result, ggen.NewParseErr("lists", s.Offset(), ggen.ErrBadObject)
+			}
+			s.Pos++
+		case "nodes":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("nodes", s.Offset(), err)
+			}
+			if seenNodes {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nodes"}}
+			}
+			seenNodes = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("nodes", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("nodes", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("nodes", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("nodes", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Nodes = nil
+				break
+			}
+			err = s.ObjectOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("nodes", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("nodes", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("nodes", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == '}' {
+				if result.Nodes == nil {
+					result.Nodes = map[string]Node{}
+				}
+			} else {
+				if result.Nodes == nil {
+					result.Nodes = make(map[string]Node)
+				}
+			}
+			for s.Bytes()[s.Pos] != '}' {
+				var mk string
+				mk, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("nodes", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("nodes", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("nodes", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] != ':' {
+					return result, ggen.NewParseErr("nodes", s.Offset(), ggen.ErrBadObject)
+				}
+				s.Pos++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("nodes", s.Offset(), err)
+				}
+				var mv Node
+				mv, err = mv.decodeFromStreamDepth(s, depth+1)
+				if err != nil {
+					return result, ggen.NewParseErr("nodes", s.Offset(), err)
+				}
+				result.Nodes[mk] = mv
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("nodes", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("nodes", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("nodes", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, ggen.NewParseErr("nodes", s.Offset(), ggen.ErrBadObject)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != '}' {
+				return result, ggen.NewParseErr("nodes", s.Offset(), ggen.ErrBadObject)
+			}
+			s.Pos++
+		default:
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s MapReuse) JSONSize() int {
+	size := 27
+	size += len(s.Lists) * 4
+	for k, v := range s.Lists {
+		size += len(k) * 2
+		size += 4
+		if n := len(v); n > 0 {
+			size += n - 1
+		}
+		size += len(v) * 20
+	}
+	size += len(s.Nodes) * 4
+	for k, v := range s.Nodes {
+		size += len(k) * 2
+		size += v.JSONSize()
+	}
+	return size
+}
+
+func (s MapReuse) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"lists\":"...)
+	if s.Lists == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '{')
+		firstLists := true
+		for k, v := range s.Lists {
+			if firstLists {
+				firstLists = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
+			}
+			dst = ggen.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			if v == nil {
+				dst = append(dst, "null"...)
+			} else {
+				dst = append(dst, '[')
+				if len(v) > 0 {
+					dst = strconv.AppendInt(dst, int64(v[0]), 10)
+					for _, v0 := range v[1:] {
+						dst = append(dst, ',')
+						dst = strconv.AppendInt(dst, int64(v0), 10)
+					}
+				}
+				dst = append(dst, ']')
+			}
+		}
+		dst = append(dst, '}')
+	}
+	dst = append(dst, ",\"nodes\":"...)
+	if s.Nodes == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '{')
+		firstNodes := true
+		for k, v := range s.Nodes {
+			if firstNodes {
+				firstNodes = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
+			}
+			dst = ggen.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			if dst, err = v.AppendJSON(dst); err != nil {
+				return dst, err
+			}
+		}
+		dst = append(dst, '}')
 	}
 	return append(dst, '}'), nil
 }

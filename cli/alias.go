@@ -159,19 +159,19 @@ func renderAliasStructDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 		// alias hop inside a type cycle would reset the budget.
 		call := "DecodeFrom(data[i:])"
 		if isCyclic(s.AliasUnderlying) {
-			call = "decodeFromDepth(data[i:], _depth+1)"
+			call = "decodeFromDepth(data[i:], depth+1)"
 		}
 		fmt.Fprintf(b, `var u %[1]s
-v, _n, err := u.`+call+`
-i += _n
-if err != nil { return result, i, ggen.NewParseErrShift("", i, _n, err) }
+v, consumed, err := u.`+call+`
+i += consumed
+if err != nil { return result, i, ggen.NewParseErrShift("", i, consumed, err) }
 result = %[2]s(v)
 return result, i, nil
 `, s.AliasUnderlying, s.Name)
 	case s.AliasIface.StreamDecoder && stream:
 		call := "DecodeFromStream(s)"
 		if isCyclic(s.AliasUnderlying) {
-			call = "decodeFromStreamDepth(s, _depth+1)"
+			call = "decodeFromStreamDepth(s, depth+1)"
 		}
 		fmt.Fprintf(b, `var u %[1]s
 v, err := u.`+call+`

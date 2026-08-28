@@ -563,14 +563,14 @@ func (recv EmbedStructsStruct) DecodeFrom(data []byte) (result EmbedStructsStruc
 			if result.Extra == nil {
 				result.Extra = make(map[string]EmbedStruct)
 			}
-			var _iv EmbedStruct
-			var _in int
-			_iv, _in, err = _iv.DecodeFrom(data[i:])
-			i += _in
+			var entry EmbedStruct
+			var entryConsumed int
+			entry, entryConsumed, err = entry.DecodeFrom(data[i:])
+			i += entryConsumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift(key, i, _in, err)
+				return result, i, ggen.NewParseErrShift(key, i, entryConsumed, err)
 			}
-			result.Extra[key] = _iv
+			result.Extra[key] = entry
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -652,12 +652,12 @@ func (recv EmbedStructsStruct) DecodeFromStream(s *ggen.Stream) (result EmbedStr
 			if result.Extra == nil {
 				result.Extra = make(map[string]EmbedStruct)
 			}
-			var _iv EmbedStruct
-			_iv, err = _iv.DecodeFromStream(s)
+			var entry EmbedStruct
+			entry, err = entry.DecodeFromStream(s)
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			result.Extra[ownKey] = _iv
+			result.Extra[ownKey] = entry
 		}
 
 		err = s.SkipSpace()
@@ -806,16 +806,16 @@ func (recv EmbedRawStruct) DecodeFrom(data []byte) (result EmbedRawStruct, i int
 			if result.Extra == nil {
 				result.Extra = make(map[string]json.RawMessage)
 			}
-			_vstart := i
+			spanStart := i
 			i, err = ggen.SkipValue(data, i)
 			if err != nil {
 				return result, i, ggen.NewParseErr(key, i, err)
 			}
-			var _iv json.RawMessage
-			if err = json.Unmarshal(data[_vstart:i], &_iv); err != nil {
+			var entry json.RawMessage
+			if err = json.Unmarshal(data[spanStart:i], &entry); err != nil {
 				return result, i, ggen.NewParseErr(key, i, err)
 			}
-			result.Extra[key] = _iv
+			result.Extra[key] = entry
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -901,11 +901,11 @@ func (recv EmbedRawStruct) DecodeFromStream(s *ggen.Stream) (result EmbedRawStru
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			var _iv json.RawMessage
-			if err = json.Unmarshal(span, &_iv); err != nil {
+			var entry json.RawMessage
+			if err = json.Unmarshal(span, &entry); err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			result.Extra[ownKey] = _iv
+			result.Extra[ownKey] = entry
 		}
 
 		err = s.SkipSpace()

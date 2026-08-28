@@ -345,15 +345,18 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 	genGlobalsMu.Lock()
 	defer genGlobalsMu.Unlock()
 	generatedTypes = make(map[string]struct{}, len(structs))
+	generatedFields = make(map[string][]FieldInfo, len(structs))
 	namedKinds = make(map[string]TypeKind)
 	for _, s := range structs {
 		generatedTypes[s.Name] = struct{}{}
+		generatedFields[s.Name] = s.Fields
 	}
 	seedNamedKinds(structs)
 	multiErrTypes = seedMultiErrTypes(structs)
 	cyclicTypes = computeCyclicTypes(structs)
 	defer func() {
 		generatedTypes = nil
+		generatedFields = nil
 		namedKinds = nil
 		multiErrTypes = nil
 		cyclicTypes = nil
@@ -441,7 +444,7 @@ func packageFileName(dir, tag string, testFile bool) string {
 
 // slugifyTag makes a build-constraint expression filename-safe: non-alnum runs
 // collapse to single underscores, trimmed (`goexperiment.simd` →
-// `goexperiment_simd`, `foo && bar` → `foo_bar`).
+// `goexperiment_simd`, `foo && bar` → `foobufr`).
 func slugifyTag(tag string) string {
 	var b strings.Builder
 	last := byte(0)
@@ -462,7 +465,7 @@ func slugifyTag(tag string) string {
 }
 
 func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) error {
-	structs, pkgName, siblings, pkgCyclic, pkgMultiErr, err := parseFile(file, wanted)
+	structs, pkgName, siblings, pkgCyclic, pkgMultiErr, pkgFields, err := parseFile(file, wanted)
 	if err != nil {
 		return err
 	}
@@ -489,12 +492,17 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 	genGlobalsMu.Lock()
 	defer genGlobalsMu.Unlock()
 	generatedTypes = make(map[string]struct{}, len(siblings)+len(structs))
+	// Package-wide, so a value type declared in a sibling file is judged by
+	// what it owns rather than falling back to "unknown".
+	generatedFields = make(map[string][]FieldInfo, len(pkgFields)+len(structs))
+	maps.Copy(generatedFields, pkgFields)
 	namedKinds = make(map[string]TypeKind)
 	for n := range siblings {
 		generatedTypes[n] = struct{}{}
 	}
 	for _, s := range structs {
 		generatedTypes[s.Name] = struct{}{}
+		generatedFields[s.Name] = s.Fields
 	}
 	seedNamedKinds(structs)
 	// Union with the package-wide multierr set — a cross-file multierr
@@ -509,6 +517,7 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 	cyclicTypes = pkgCyclic
 	defer func() {
 		generatedTypes = nil
+		generatedFields = nil
 		namedKinds = nil
 		multiErrTypes = nil
 		cyclicTypes = nil

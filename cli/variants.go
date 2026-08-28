@@ -196,7 +196,7 @@ func renderVariantDispatch(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		case VariantNative:
 			renderField(b, nativeVariantField(f), ref, posVar)
 		case VariantConvert:
-			tmp := fmt.Sprintf("_cv%d", idx)
+			tmp := fmt.Sprintf("conv%d", idx)
 			fmt.Fprintf(b, "var %s %s\n", tmp, v.InType)
 			renderField(b, converterInputField(f, v), tmp, posVar)
 			emitConvAssign(b, v, field, ref, tmp, posVar)
@@ -223,7 +223,7 @@ func renderVariantDispatchStream(f FieldInfo, ref, posVar string) string {
 		case VariantNative:
 			b.WriteString(renderStreamField(nativeVariantField(f), ref, posVar))
 		case VariantConvert:
-			tmp := fmt.Sprintf("_cv%d", idx)
+			tmp := fmt.Sprintf("conv%d", idx)
 			fmt.Fprintf(b, "var %s %s\n", tmp, v.InType)
 			b.WriteString(renderStreamField(converterInputField(f, v), tmp, posVar))
 			emitConvAssignStream(b, v, field, ref, tmp)

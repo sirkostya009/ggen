@@ -858,11 +858,11 @@ func (recv PtrAddrStruct) DecodeFrom(data []byte) (result PtrAddrStruct, i int, 
 			if result.Addr != nil {
 				v = (*result.Addr)
 			}
-			var _n int
-			v, _n, err = v.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			v, consumed, err = v.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("addr", i, _n, err)
+				return result, i, ggen.NewParseErrShift("addr", i, consumed, err)
 			}
 			if result.Addr == nil {
 				result.Addr = new(v)
@@ -1566,11 +1566,11 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 			if result.Addr != nil {
 				v = (*result.Addr)
 			}
-			var _n int
-			v, _n, err = v.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			v, consumed, err = v.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("addr", i, _n, err)
+				return result, i, ggen.NewParseErrShift("addr", i, consumed, err)
 			}
 			if result.Addr == nil {
 				result.Addr = new(v)
@@ -3093,11 +3093,11 @@ func (recv PtrAddr2Struct) DecodeFrom(data []byte) (result PtrAddr2Struct, i int
 			if result.Addr != nil && (*result.Addr) != nil {
 				v = (*(*result.Addr))
 			}
-			var _n int
-			v, _n, err = v.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			v, consumed, err = v.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("addr", i, _n, err)
+				return result, i, ggen.NewParseErrShift("addr", i, consumed, err)
 			}
 			if result.Addr == nil {
 				result.Addr = new(new(v))
@@ -3345,11 +3345,11 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err er
 			if result.Addr != nil && (*result.Addr) != nil {
 				v = (*(*result.Addr))
 			}
-			var _n int
-			v, _n, err = v.DecodeFrom(data[i:])
-			i += _n
+			var consumed int
+			v, consumed, err = v.DecodeFrom(data[i:])
+			i += consumed
 			if err != nil {
-				return result, i, ggen.NewParseErrShift("addr", i, _n, err)
+				return result, i, ggen.NewParseErrShift("addr", i, consumed, err)
 			}
 			if result.Addr == nil {
 				result.Addr = new(new(v))
@@ -4016,11 +4016,11 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 					} else {
 						slab0 = append(slab0, Address{})
 					}
-					var _n int
-					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					slab0[len(slab0)-1], consumed, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("items", i, _n, err)
+						return result, i, ggen.NewParseErrShift("items", i, consumed, err)
 					}
 					result.Items = append(result.Items, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4397,11 +4397,11 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 						}
 						break
 					}
-					var _n int
-					slab0[idx0], _n, err = slab0[idx0].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					slab0[idx0], consumed, err = slab0[idx0].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("tuple", i, _n, err)
+						return result, i, ggen.NewParseErrShift("tuple", i, consumed, err)
 					}
 					result.Tuple[idx0] = &slab0[idx0]
 					idx0++
@@ -4667,7 +4667,7 @@ func (s PtrSliceTupleStruct) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStruct, i int, err error) {
 	result = recv
-	const _depth = 0
+	const depth = 0
 	if result.Nodes != nil {
 		result.Nodes = result.Nodes[:0]
 	}
@@ -4768,11 +4768,11 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 					} else {
 						slab0 = append(slab0, Node{})
 					}
-					var _n int
-					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].decodeFromDepth(data[i:], _depth+1)
-					i += _n
+					var consumed int
+					slab0[len(slab0)-1], consumed, err = slab0[len(slab0)-1].decodeFromDepth(data[i:], depth+1)
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("nodes", i, _n, err)
+						return result, i, ggen.NewParseErrShift("nodes", i, consumed, err)
 					}
 					result.Nodes = append(result.Nodes, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4821,7 +4821,7 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 
 func (recv PtrSliceNodesStruct) DecodeFromStream(s *ggen.Stream) (result PtrSliceNodesStruct, err error) {
 	result = recv
-	const _depth = 0
+	const depth = 0
 	if result.Nodes != nil {
 		result.Nodes = result.Nodes[:0]
 	}
@@ -4954,7 +4954,7 @@ func (recv PtrSliceNodesStruct) DecodeFromStream(s *ggen.Stream) (result PtrSlic
 				} else {
 					slab0 = append(slab0, Node{})
 				}
-				slab0[len(slab0)-1], err = slab0[len(slab0)-1].decodeFromStreamDepth(s, _depth+1)
+				slab0[len(slab0)-1], err = slab0[len(slab0)-1].decodeFromStreamDepth(s, depth+1)
 				if err != nil {
 					return result, ggen.NewParseErr("nodes", s.Offset(), err)
 				}
@@ -5065,7 +5065,7 @@ func (s PtrSliceNodesStruct) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int, err error) {
 	result = recv
-	const _depth = 0
+	const depth = 0
 	if result.Items != nil {
 		result.Items = result.Items[:0]
 	}
@@ -5174,11 +5174,11 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 					} else {
 						slab0 = append(slab0, Address{})
 					}
-					var _n int
-					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					slab0[len(slab0)-1], consumed, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("items", i, _n, err)
+						return result, i, ggen.NewParseErrShift("items", i, consumed, err)
 					}
 					result.Items = append(result.Items, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5254,11 +5254,11 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 					} else {
 						slab0 = append(slab0, Node{})
 					}
-					var _n int
-					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].decodeFromDepth(data[i:], _depth+1)
-					i += _n
+					var consumed int
+					slab0[len(slab0)-1], consumed, err = slab0[len(slab0)-1].decodeFromDepth(data[i:], depth+1)
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("nodes", i, _n, err)
+						return result, i, ggen.NewParseErrShift("nodes", i, consumed, err)
 					}
 					result.Nodes = append(result.Nodes, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5319,11 +5319,11 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 						}
 						break
 					}
-					var _n int
-					slab0[idx0], _n, err = slab0[idx0].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					slab0[idx0], consumed, err = slab0[idx0].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("tuple", i, _n, err)
+						return result, i, ggen.NewParseErrShift("tuple", i, consumed, err)
 					}
 					result.Tuple[idx0] = &slab0[idx0]
 					idx0++
@@ -5379,7 +5379,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 
 func (recv PtrSliceStruct) DecodeFromStream(s *ggen.Stream) (result PtrSliceStruct, err error) {
 	result = recv
-	const _depth = 0
+	const depth = 0
 	if result.Items != nil {
 		result.Items = result.Items[:0]
 	}
@@ -5654,7 +5654,7 @@ func (recv PtrSliceStruct) DecodeFromStream(s *ggen.Stream) (result PtrSliceStru
 				} else {
 					slab0 = append(slab0, Node{})
 				}
-				slab0[len(slab0)-1], err = slab0[len(slab0)-1].decodeFromStreamDepth(s, _depth+1)
+				slab0[len(slab0)-1], err = slab0[len(slab0)-1].decodeFromStreamDepth(s, depth+1)
 				if err != nil {
 					return result, ggen.NewParseErr("nodes", s.Offset(), err)
 				}
@@ -5938,15 +5938,6 @@ func (s PtrSliceStruct) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersStruct, i int, err error) {
 	result = recv
-	if result.MP != nil {
-		clear(result.MP)
-	}
-	if result.MPA != nil {
-		clear(result.MPA)
-	}
-	if result.MPP != nil {
-		clear(result.MPP)
-	}
 	if result.NSPP != nil {
 		result.NSPP = result.NSPP[:0]
 	}
@@ -6118,15 +6109,9 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
-			if i < len(data) && data[i] == '}' {
-				if result.MP == nil {
-					result.MP = map[string]*int{}
-				}
-			} else {
-				if result.MP == nil {
-					result.MP = make(map[string]*int)
-				}
-			}
+			carried := result.MP
+			reuse := len(carried) != 0
+			result.MP = make(map[string]*int, len(carried))
 			if i < len(data) && data[i] != '}' {
 				for {
 					var mk string
@@ -6160,59 +6145,70 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						i += 4
-						result.MP[mk] = nil
-					} else {
-						neg := false
-						if i < len(data) && data[i] == '-' {
-							neg = true
-							i++
+					{
+						var mv *int
+						if reuse {
+							mv = carried[mk]
 						}
-						if i >= len(data) || data[i] < '0' || data[i] > '9' {
-							return result, i, ggen.NewParseErr("mp.value", i, ggen.ErrBadNumber)
-						}
-						if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-							return result, i, ggen.NewParseErr("mp.value", i, ggen.ErrBadNumber)
-						}
-						limit := uint64(math.MaxInt64)
-						if neg {
-							limit = ggen.SignedNeg
-						}
-						var u uint64
-						de := i + 18
-						if de > len(data) {
-							de = len(data)
-						}
-						for i < de && data[i] >= '0' && data[i] <= '9' {
-							u = u*10 + uint64(data[i]-'0')
-							i++
-						}
-						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-							d := uint64(data[i] - '0')
-							if u > limit/10 || (u == limit/10 && d > limit%10) {
-								return result, i, ggen.NewParseErr("mp.value", i, ggen.ErrNumberOverflow)
+						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+							i += 4
+							mv = nil
+						} else {
+							neg := false
+							if i < len(data) && data[i] == '-' {
+								neg = true
+								i++
 							}
-							u = u*10 + d
-							i++
-						}
-						if i < len(data) {
-							c := data[i]
-							if c == '.' || c == 'e' || c == 'E' {
+							if i >= len(data) || data[i] < '0' || data[i] > '9' {
 								return result, i, ggen.NewParseErr("mp.value", i, ggen.ErrBadNumber)
 							}
-						}
-						var n int64
-						if neg {
-							if u == ggen.SignedNeg {
-								n = math.MinInt64
-							} else {
-								n = -int64(u)
+							if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+								return result, i, ggen.NewParseErr("mp.value", i, ggen.ErrBadNumber)
 							}
-						} else {
-							n = int64(u)
+							limit := uint64(math.MaxInt64)
+							if neg {
+								limit = ggen.SignedNeg
+							}
+							var u uint64
+							de := i + 18
+							if de > len(data) {
+								de = len(data)
+							}
+							for i < de && data[i] >= '0' && data[i] <= '9' {
+								u = u*10 + uint64(data[i]-'0')
+								i++
+							}
+							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+								d := uint64(data[i] - '0')
+								if u > limit/10 || (u == limit/10 && d > limit%10) {
+									return result, i, ggen.NewParseErr("mp.value", i, ggen.ErrNumberOverflow)
+								}
+								u = u*10 + d
+								i++
+							}
+							if i < len(data) {
+								c := data[i]
+								if c == '.' || c == 'e' || c == 'E' {
+									return result, i, ggen.NewParseErr("mp.value", i, ggen.ErrBadNumber)
+								}
+							}
+							var n int64
+							if neg {
+								if u == ggen.SignedNeg {
+									n = math.MinInt64
+								} else {
+									n = -int64(u)
+								}
+							} else {
+								n = int64(u)
+							}
+							if mv == nil {
+								mv = new(int(n))
+							} else {
+								(*mv) = int(n)
+							}
 						}
-						result.MP[mk] = new(int(n))
+						result.MP[mk] = mv
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -6251,15 +6247,9 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
-			if i < len(data) && data[i] == '}' {
-				if result.MPA == nil {
-					result.MPA = map[string]*Address{}
-				}
-			} else {
-				if result.MPA == nil {
-					result.MPA = make(map[string]*Address)
-				}
-			}
+			carried := result.MPA
+			reuse := len(carried) != 0
+			result.MPA = make(map[string]*Address, len(carried))
 			if i < len(data) && data[i] != '}' {
 				for {
 					var mk string
@@ -6293,18 +6283,32 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						i += 4
-						result.MPA[mk] = nil
-					} else {
-						var v Address
-						var _n int
-						v, _n, err = v.DecodeFrom(data[i:])
-						i += _n
-						if err != nil {
-							return result, i, ggen.NewParseErrShift("mpa.value", i, _n, err)
+					{
+						var mv *Address
+						if reuse {
+							mv = carried[mk]
 						}
-						result.MPA[mk] = new(v)
+						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+							i += 4
+							mv = nil
+						} else {
+							var v Address
+							if mv != nil {
+								v = (*mv)
+							}
+							var consumed int
+							v, consumed, err = v.DecodeFrom(data[i:])
+							i += consumed
+							if err != nil {
+								return result, i, ggen.NewParseErrShift("mpa.value", i, consumed, err)
+							}
+							if mv == nil {
+								mv = new(v)
+							} else {
+								(*mv) = v
+							}
+						}
+						result.MPA[mk] = mv
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -6343,15 +6347,9 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
-			if i < len(data) && data[i] == '}' {
-				if result.MPP == nil {
-					result.MPP = map[string]**int{}
-				}
-			} else {
-				if result.MPP == nil {
-					result.MPP = make(map[string]**int)
-				}
-			}
+			carried := result.MPP
+			reuse := len(carried) != 0
+			result.MPP = make(map[string]**int, len(carried))
 			if i < len(data) && data[i] != '}' {
 				for {
 					var mk string
@@ -6385,59 +6383,72 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
-						i += 4
-						result.MPP[mk] = nil
-					} else {
-						neg := false
-						if i < len(data) && data[i] == '-' {
-							neg = true
-							i++
+					{
+						var mv **int
+						if reuse {
+							mv = carried[mk]
 						}
-						if i >= len(data) || data[i] < '0' || data[i] > '9' {
-							return result, i, ggen.NewParseErr("mpp.value", i, ggen.ErrBadNumber)
-						}
-						if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
-							return result, i, ggen.NewParseErr("mpp.value", i, ggen.ErrBadNumber)
-						}
-						limit := uint64(math.MaxInt64)
-						if neg {
-							limit = ggen.SignedNeg
-						}
-						var u uint64
-						de := i + 18
-						if de > len(data) {
-							de = len(data)
-						}
-						for i < de && data[i] >= '0' && data[i] <= '9' {
-							u = u*10 + uint64(data[i]-'0')
-							i++
-						}
-						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
-							d := uint64(data[i] - '0')
-							if u > limit/10 || (u == limit/10 && d > limit%10) {
-								return result, i, ggen.NewParseErr("mpp.value", i, ggen.ErrNumberOverflow)
+						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+							i += 4
+							mv = nil
+						} else {
+							neg := false
+							if i < len(data) && data[i] == '-' {
+								neg = true
+								i++
 							}
-							u = u*10 + d
-							i++
-						}
-						if i < len(data) {
-							c := data[i]
-							if c == '.' || c == 'e' || c == 'E' {
+							if i >= len(data) || data[i] < '0' || data[i] > '9' {
 								return result, i, ggen.NewParseErr("mpp.value", i, ggen.ErrBadNumber)
 							}
-						}
-						var n int64
-						if neg {
-							if u == ggen.SignedNeg {
-								n = math.MinInt64
-							} else {
-								n = -int64(u)
+							if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+								return result, i, ggen.NewParseErr("mpp.value", i, ggen.ErrBadNumber)
 							}
-						} else {
-							n = int64(u)
+							limit := uint64(math.MaxInt64)
+							if neg {
+								limit = ggen.SignedNeg
+							}
+							var u uint64
+							de := i + 18
+							if de > len(data) {
+								de = len(data)
+							}
+							for i < de && data[i] >= '0' && data[i] <= '9' {
+								u = u*10 + uint64(data[i]-'0')
+								i++
+							}
+							for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+								d := uint64(data[i] - '0')
+								if u > limit/10 || (u == limit/10 && d > limit%10) {
+									return result, i, ggen.NewParseErr("mpp.value", i, ggen.ErrNumberOverflow)
+								}
+								u = u*10 + d
+								i++
+							}
+							if i < len(data) {
+								c := data[i]
+								if c == '.' || c == 'e' || c == 'E' {
+									return result, i, ggen.NewParseErr("mpp.value", i, ggen.ErrBadNumber)
+								}
+							}
+							var n int64
+							if neg {
+								if u == ggen.SignedNeg {
+									n = math.MinInt64
+								} else {
+									n = -int64(u)
+								}
+							} else {
+								n = int64(u)
+							}
+							if mv == nil {
+								mv = new(new(int(n)))
+							} else if (*mv) == nil {
+								(*mv) = new(int(n))
+							} else {
+								(*(*mv)) = int(n)
+							}
 						}
-						result.MPP[mk] = new(new(int(n)))
+						result.MPP[mk] = mv
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -6532,7 +6543,11 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					}
 					if i < len(data) && data[i] != ']' {
 						for {
-							row0 = append(row0, nil)
+							if len(row0) < cap(row0) {
+								row0 = row0[:len(row0)+1]
+							} else {
+								row0 = append(row0, nil)
+							}
 							if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 								i += 4
 								row0[len(row0)-1] = nil
@@ -6585,7 +6600,13 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 								} else {
 									n = int64(u)
 								}
-								row0[len(row0)-1] = new(new(int(n)))
+								if row0[len(row0)-1] == nil {
+									row0[len(row0)-1] = new(new(int(n)))
+								} else if (*row0[len(row0)-1]) == nil {
+									(*row0[len(row0)-1]) = new(int(n))
+								} else {
+									(*(*row0[len(row0)-1])) = int(n)
+								}
 							}
 							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 								i++
@@ -6656,7 +6677,11 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					result.SPP = append(result.SPP, nil)
+					if len(result.SPP) < cap(result.SPP) {
+						result.SPP = result.SPP[:len(result.SPP)+1]
+					} else {
+						result.SPP = append(result.SPP, nil)
+					}
 					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 						i += 4
 						result.SPP[len(result.SPP)-1] = nil
@@ -6709,7 +6734,13 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						} else {
 							n = int64(u)
 						}
-						result.SPP[len(result.SPP)-1] = new(new(int(n)))
+						if result.SPP[len(result.SPP)-1] == nil {
+							result.SPP[len(result.SPP)-1] = new(new(int(n)))
+						} else if (*result.SPP[len(result.SPP)-1]) == nil {
+							(*result.SPP[len(result.SPP)-1]) = new(int(n))
+						} else {
+							(*(*result.SPP[len(result.SPP)-1])) = int(n)
+						}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -7410,7 +7441,11 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *ggen.Stream) (result NPtrCo
 					}
 				}
 				for s.Bytes()[s.Pos] != ']' {
-					row0 = append(row0, nil)
+					if len(row0) < cap(row0) {
+						row0 = row0[:len(row0)+1]
+					} else {
+						row0 = append(row0, nil)
+					}
 					if s.Pos >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
 							return result, ggen.NewParseErr("nspp[][]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadNumber))
@@ -7435,7 +7470,13 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *ggen.Stream) (result NPtrCo
 						if err != nil {
 							return result, ggen.NewParseErr("nspp[][]", s.Offset(), err)
 						}
-						row0[len(row0)-1] = new(new(int(v)))
+						if row0[len(row0)-1] == nil {
+							row0[len(row0)-1] = new(new(int(v)))
+						} else if (*row0[len(row0)-1]) == nil {
+							(*row0[len(row0)-1]) = new(int(v))
+						} else {
+							(*(*row0[len(row0)-1])) = int(v)
+						}
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -7546,7 +7587,11 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *ggen.Stream) (result NPtrCo
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				result.SPP = append(result.SPP, nil)
+				if len(result.SPP) < cap(result.SPP) {
+					result.SPP = result.SPP[:len(result.SPP)+1]
+				} else {
+					result.SPP = append(result.SPP, nil)
+				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
 						return result, ggen.NewParseErr("spp[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadNumber))
@@ -7571,7 +7616,13 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *ggen.Stream) (result NPtrCo
 					if err != nil {
 						return result, ggen.NewParseErr("spp[]", s.Offset(), err)
 					}
-					result.SPP[len(result.SPP)-1] = new(new(int(v)))
+					if result.SPP[len(result.SPP)-1] == nil {
+						result.SPP[len(result.SPP)-1] = new(new(int(v)))
+					} else if (*result.SPP[len(result.SPP)-1]) == nil {
+						(*result.SPP[len(result.SPP)-1]) = new(int(v))
+					} else {
+						(*(*result.SPP[len(result.SPP)-1])) = int(v)
+					}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -8148,11 +8199,11 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 						} else {
 							v = append(v, PtrContainerElem{})
 						}
-						var _n int
-						v[len(v)-1], _n, err = v[len(v)-1].DecodeFrom(data[i:])
-						i += _n
+						var consumed int
+						v[len(v)-1], consumed, err = v[len(v)-1].DecodeFrom(data[i:])
+						i += consumed
 						if err != nil {
-							return result, i, ggen.NewParseErrShift("elems", i, _n, err)
+							return result, i, ggen.NewParseErrShift("elems", i, consumed, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -8536,11 +8587,11 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 							i++
 						}
 						var mv PtrContainerElem
-						var _n int
-						mv, _n, err = mv.DecodeFrom(data[i:])
-						i += _n
+						var consumed int
+						mv, consumed, err = mv.DecodeFrom(data[i:])
+						i += consumed
 						if err != nil {
-							return result, i, ggen.NewParseErrShift("melem", i, _n, err)
+							return result, i, ggen.NewParseErrShift("melem", i, consumed, err)
 						}
 						v[mk] = mv
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -10250,5 +10301,434 @@ func (s PtrContainerElem) AppendJSON(dst []byte) ([]byte, error) {
 	_ = err
 	dst = append(dst, "{\"k\":\""...)
 	dst = ggen.AppendStringNoHTML(dst, s.K)
+	return append(dst, '}'), nil
+}
+
+func (recv PtrMapHeavy) DecodeFrom(data []byte) (result PtrMapHeavy, i int, err error) {
+	result = recv
+	const depth = 0
+	seenM := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenM {
+			result.M = nil
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "m":
+			if seenM {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"m"}}
+			}
+			seenM = true
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				result.M = nil
+				break
+			}
+			var v map[string]Node
+			if result.M != nil {
+				v = (*result.M)
+			}
+			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				i += 4
+				v = nil
+			} else {
+				if i >= len(data) || data[i] != '{' {
+					return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+				}
+				i++
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				carried := v
+				reuse := len(carried) != 0
+				v = make(map[string]Node, len(carried))
+				if i < len(data) && data[i] != '}' {
+					for {
+						var mk string
+						if i >= len(data) || data[i] != '"' {
+							return result, i, ggen.NewParseErr("m", i, ggen.ErrExpectString)
+						}
+						ke := i + 1
+						kew := ke + 32
+						if kew > len(data) {
+							kew = len(data)
+						}
+						for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+							ke++
+						}
+						if ke < len(data) && data[ke] == '"' {
+							mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							mk, i, err = ggen.String(data, i, true)
+							if err != nil {
+								return result, i, ggen.NewParseErr("m", i, err)
+							}
+						}
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] != ':' {
+							return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+						}
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						var mv Node
+						if reuse {
+							mv = carried[mk]
+						}
+						var consumed int
+						mv, consumed, err = mv.decodeFromDepth(data[i:], depth+1)
+						i += consumed
+						if err != nil {
+							return result, i, ggen.NewParseErrShift("m", i, consumed, err)
+						}
+						v[mk] = mv
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == '}' {
+								return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+							}
+							continue
+						}
+						break
+					}
+				}
+				if i >= len(data) || data[i] != '}' {
+					return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+				}
+				i++
+			}
+			if result.M == nil {
+				result.M = new(v)
+			} else {
+				(*result.M) = v
+			}
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenM {
+				result.M = nil
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv PtrMapHeavy) DecodeFromStream(s *ggen.Stream) (result PtrMapHeavy, err error) {
+	result = recv
+	const depth = 0
+	if result.M != nil {
+		clear((*result.M))
+	}
+	seenM := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenM {
+			result.M = nil
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "m":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			if seenM {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"m"}}
+			}
+			seenM = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.M = nil
+				break
+			}
+			var v map[string]Node
+			if result.M != nil {
+				v = (*result.M)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				v = nil
+			} else {
+				err = s.ObjectOpen()
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] == '}' {
+					if v == nil {
+						v = map[string]Node{}
+					}
+				} else {
+					if v == nil {
+						v = make(map[string]Node)
+					}
+				}
+				for s.Bytes()[s.Pos] != '}' {
+					var mk string
+					mk, err = s.String(true)
+					if err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), err)
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+						}
+					}
+					if s.Bytes()[s.Pos] != ':' {
+						return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadObject)
+					}
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), err)
+					}
+					var mv Node
+					mv, err = mv.decodeFromStreamDepth(s, depth+1)
+					if err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), err)
+					}
+					v[mk] = mv
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, ggen.NewParseErr("m", s.Offset(), err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+							return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadObject)
+						}
+						continue
+					}
+					break
+				}
+				if s.Bytes()[s.Pos] != '}' {
+					return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadObject)
+				}
+				s.Pos++
+			}
+			if result.M == nil {
+				result.M = new(v)
+			} else {
+				(*result.M) = v
+			}
+		default:
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenM {
+				result.M = nil
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s PtrMapHeavy) JSONSize() int {
+	size := 6
+	if s.M == nil {
+		size += 4
+	} else {
+		size += 4
+		size += len((*s.M)) * 4
+		for k, v := range *s.M {
+			size += len(k) * 2
+			size += v.JSONSize()
+		}
+	}
+	return size
+}
+
+func (s PtrMapHeavy) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"m\":"...)
+	if s.M == nil {
+		dst = append(dst, "null"...)
+	} else {
+		if (*s.M) == nil {
+			dst = append(dst, "null"...)
+		} else {
+			dst = append(dst, '{')
+			firstM := true
+			for k, v := range *s.M {
+				if firstM {
+					firstM = false
+					dst = append(dst, '"')
+				} else {
+					dst = append(dst, ",\""...)
+				}
+				dst = ggen.AppendStringNoHTML(dst, k)
+				dst = append(dst, ':')
+				if dst, err = v.AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+			dst = append(dst, '}')
+		}
+	}
 	return append(dst, '}'), nil
 }

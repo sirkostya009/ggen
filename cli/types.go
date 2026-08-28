@@ -244,6 +244,12 @@ func SQLNullSpec(goType string) (SQLNullKind, bool) {
 // (for cross-package / unannotated types).
 var generatedTypes map[string]struct{}
 
+// generatedFields carries each generated struct's fields alongside
+// generatedTypes, so a container emitter can ask what a value type OWNS —
+// whether decoding into a carried value would recycle any allocation, or
+// only overwrite scalars. Same lifetime as generatedTypes.
+var generatedFields map[string][]FieldInfo
+
 // TypeImport is one foreign package a field's type names, with the qualifier
 // the generated code uses for it (the package's declared name, which a plain
 // unaliased import binds).

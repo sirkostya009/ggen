@@ -3663,11 +3663,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					} else {
 						result.Hinted = append(result.Hinted, PreallocWide{})
 					}
-					var _n int
-					result.Hinted[len(result.Hinted)-1], _n, err = result.Hinted[len(result.Hinted)-1].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					result.Hinted[len(result.Hinted)-1], consumed, err = result.Hinted[len(result.Hinted)-1].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("hinted", i, _n, err)
+						return result, i, ggen.NewParseErrShift("hinted", i, consumed, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -3823,11 +3823,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						} else {
 							result.Lened = append(result.Lened, PreallocWide{})
 						}
-						var _n int
-						result.Lened[len(result.Lened)-1], _n, err = result.Lened[len(result.Lened)-1].DecodeFrom(data[i:])
-						i += _n
+						var consumed int
+						result.Lened[len(result.Lened)-1], consumed, err = result.Lened[len(result.Lened)-1].DecodeFrom(data[i:])
+						i += consumed
 						if err != nil {
-							return result, i, ggen.NewParseErrShift("lened", i, _n, err)
+							return result, i, ggen.NewParseErrShift("lened", i, consumed, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -3885,11 +3885,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						} else {
 							result.MaxFits = append(result.MaxFits, PreallocRow{})
 						}
-						var _n int
-						result.MaxFits[len(result.MaxFits)-1], _n, err = result.MaxFits[len(result.MaxFits)-1].DecodeFrom(data[i:])
-						i += _n
+						var consumed int
+						result.MaxFits[len(result.MaxFits)-1], consumed, err = result.MaxFits[len(result.MaxFits)-1].DecodeFrom(data[i:])
+						i += consumed
 						if err != nil {
-							return result, i, ggen.NewParseErrShift("maxFits", i, _n, err)
+							return result, i, ggen.NewParseErrShift("maxFits", i, consumed, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -3947,11 +3947,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						} else {
 							result.MaxTooBig = append(result.MaxTooBig, PreallocWide{})
 						}
-						var _n int
-						result.MaxTooBig[len(result.MaxTooBig)-1], _n, err = result.MaxTooBig[len(result.MaxTooBig)-1].DecodeFrom(data[i:])
-						i += _n
+						var consumed int
+						result.MaxTooBig[len(result.MaxTooBig)-1], consumed, err = result.MaxTooBig[len(result.MaxTooBig)-1].DecodeFrom(data[i:])
+						i += consumed
 						if err != nil {
-							return result, i, ggen.NewParseErrShift("maxTooBig", i, _n, err)
+							return result, i, ggen.NewParseErrShift("maxTooBig", i, consumed, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -4009,11 +4009,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 						} else {
 							result.Minned = append(result.Minned, PreallocWide{})
 						}
-						var _n int
-						result.Minned[len(result.Minned)-1], _n, err = result.Minned[len(result.Minned)-1].DecodeFrom(data[i:])
-						i += _n
+						var consumed int
+						result.Minned[len(result.Minned)-1], consumed, err = result.Minned[len(result.Minned)-1].DecodeFrom(data[i:])
+						i += consumed
 						if err != nil {
-							return result, i, ggen.NewParseErrShift("minned", i, _n, err)
+							return result, i, ggen.NewParseErrShift("minned", i, consumed, err)
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -4260,11 +4260,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					} else {
 						slab0 = append(slab0, PreallocRow{})
 					}
-					var _n int
-					slab0[len(slab0)-1], _n, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					slab0[len(slab0)-1], consumed, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("ptrs", i, _n, err)
+						return result, i, ggen.NewParseErrShift("ptrs", i, consumed, err)
 					}
 					result.Ptrs = append(result.Ptrs, &slab0[len(slab0)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4320,11 +4320,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					} else {
 						result.Rows = append(result.Rows, PreallocRow{})
 					}
-					var _n int
-					result.Rows[len(result.Rows)-1], _n, err = result.Rows[len(result.Rows)-1].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					result.Rows[len(result.Rows)-1], consumed, err = result.Rows[len(result.Rows)-1].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("rows", i, _n, err)
+						return result, i, ggen.NewParseErrShift("rows", i, consumed, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -4448,11 +4448,11 @@ func (recv PreallocWidths) DecodeFrom(data []byte) (result PreallocWidths, i int
 					} else {
 						result.Wide = append(result.Wide, PreallocWide{})
 					}
-					var _n int
-					result.Wide[len(result.Wide)-1], _n, err = result.Wide[len(result.Wide)-1].DecodeFrom(data[i:])
-					i += _n
+					var consumed int
+					result.Wide[len(result.Wide)-1], consumed, err = result.Wide[len(result.Wide)-1].DecodeFrom(data[i:])
+					i += consumed
 					if err != nil {
-						return result, i, ggen.NewParseErrShift("wide", i, _n, err)
+						return result, i, ggen.NewParseErrShift("wide", i, consumed, err)
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -7993,14 +7993,8 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 	if result.Anys != nil {
 		clear(result.Anys)
 	}
-	if result.Blobs != nil {
-		clear(result.Blobs)
-	}
 	if result.Durs != nil {
 		clear(result.Durs)
-	}
-	if result.Ints != nil {
-		clear(result.Ints)
 	}
 	if result.Raws != nil {
 		clear(result.Raws)
@@ -8161,15 +8155,9 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
-			if i < len(data) && data[i] == '}' {
-				if result.Blobs == nil {
-					result.Blobs = map[string][]byte{}
-				}
-			} else {
-				if result.Blobs == nil {
-					result.Blobs = make(map[string][]byte)
-				}
-			}
+			carried := result.Blobs
+			reuse := len(carried) != 0
+			result.Blobs = make(map[string][]byte, len(carried))
 			if i < len(data) && data[i] != '}' {
 				for {
 					var mk string
@@ -8205,6 +8193,9 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 					}
 					{
 						var mv []byte
+						if reuse {
+							mv = carried[mk][:0]
+						}
 						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 							i += 4
 							mv = nil
@@ -8388,15 +8379,9 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
-			if i < len(data) && data[i] == '}' {
-				if result.Ints == nil {
-					result.Ints = map[string][]int{}
-				}
-			} else {
-				if result.Ints == nil {
-					result.Ints = make(map[string][]int)
-				}
-			}
+			carried := result.Ints
+			reuse := len(carried) != 0
+			result.Ints = make(map[string][]int, len(carried))
 			if i < len(data) && data[i] != '}' {
 				for {
 					var mk string
@@ -8432,6 +8417,9 @@ func (recv MapVals) DecodeFrom(data []byte) (result MapVals, i int, err error) {
 					}
 					{
 						var mv []int
+						if reuse {
+							mv = carried[mk][:0]
+						}
 						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
 							i += 4
 							mv = nil

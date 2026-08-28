@@ -239,3 +239,89 @@ func BenchmarkMapHeavy_Unmarshal(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkMapValues_Unmarshal — maps whose VALUES own allocations (a struct
+// carrying a slice, and a slice). The ggen_reuse row decodes into a carried
+// receiver, where each entry's previous value becomes the decode target; the
+// plain ggen row starts from a zero value, where that machinery can only cost.
+func BenchmarkMapValues_Unmarshal(b *testing.B) {
+	var codecs = []struct {
+		name string
+		fn   func([]byte) error
+	}{
+		{"jsonv2", func(p []byte) error { var v MapValues; return jsonv2.Unmarshal(p, &v) }},
+		{"sonic", func(p []byte) error { var v MapValues; return sonic.Unmarshal(p, &v) }},
+		{"ggen", func(p []byte) error { _, _, err := MapValues{}.DecodeFrom(p); return err }},
+	}
+	for _, c := range codecs {
+		b.Run(c.name, func(b *testing.B) {
+			runBench(b, int64(len(MapValuesPayload)),
+				func() struct{} { return struct{}{} },
+				func(_ *struct{}) {
+					if err := c.fn(MapValuesPayload); err != nil {
+						b.Fatal(err)
+					}
+				},
+			)
+		})
+	}
+	b.Run("ggen_reuse", func(b *testing.B) {
+		runBench(b, int64(len(MapValuesPayload)),
+			func() MapValues {
+				v, _, err := MapValues{}.DecodeFrom(MapValuesPayload)
+				if err != nil {
+					b.Fatal(err)
+				}
+				return v
+			},
+			func(prev *MapValues) {
+				v, _, err := prev.DecodeFrom(MapValuesPayload)
+				if err != nil {
+					b.Fatal(err)
+				}
+				*prev = v
+			},
+		)
+	})
+}
+
+// BenchmarkMapValuesHeavy_Unmarshal — same shape as MapValues but with much
+// more memory per value, where recycling has the most to win.
+func BenchmarkMapValuesHeavy_Unmarshal(b *testing.B) {
+	b.Run("jsonv2", func(b *testing.B) {
+		runBench(b, int64(len(MapValuesHeavyPayload)),
+			func() struct{} { return struct{}{} },
+			func(_ *struct{}) {
+				var v MapValuesHeavy
+				if err := jsonv2.Unmarshal(MapValuesHeavyPayload, &v); err != nil {
+					b.Fatal(err)
+				}
+			})
+	})
+	b.Run("ggen", func(b *testing.B) {
+		runBench(b, int64(len(MapValuesHeavyPayload)),
+			func() struct{} { return struct{}{} },
+			func(_ *struct{}) {
+				if _, _, err := (MapValuesHeavy{}).DecodeFrom(MapValuesHeavyPayload); err != nil {
+					b.Fatal(err)
+				}
+			})
+	})
+	b.Run("ggen_reuse", func(b *testing.B) {
+		runBench(b, int64(len(MapValuesHeavyPayload)),
+			func() MapValuesHeavy {
+				v, _, err := MapValuesHeavy{}.DecodeFrom(MapValuesHeavyPayload)
+				if err != nil {
+					b.Fatal(err)
+				}
+				return v
+			},
+			func(prev *MapValuesHeavy) {
+				v, _, err := prev.DecodeFrom(MapValuesHeavyPayload)
+				if err != nil {
+					b.Fatal(err)
+				}
+				*prev = v
+			})
+	})
+}

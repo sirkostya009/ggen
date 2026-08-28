@@ -1411,14 +1411,14 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 				}
 			} else {
 				seenInner = true
-				var _n int
-				result.Inner, _n, err = result.Inner.DecodeFrom(data[i:])
-				i += _n
+				var consumed int
+				result.Inner, consumed, err = result.Inner.DecodeFrom(data[i:])
+				i += consumed
 				if err != nil {
 					if verr, ok := err.(ggen.Error); ok {
-						errs.Append("inner", ggen.ShiftPos(verr, i-_n))
+						errs.Append("inner", ggen.ShiftPos(verr, i-consumed))
 					} else {
-						return result, i, ggen.NewParseErrShift("inner", i, _n, err)
+						return result, i, ggen.NewParseErrShift("inner", i, consumed, err)
 					}
 				}
 			}
@@ -2843,11 +2843,11 @@ func (recv DrainOuter) DecodeFrom(data []byte) (result DrainOuter, i int, err er
 				}
 			} else {
 				seenI = true
-				var _n int
-				result.I, _n, err = result.I.DecodeFrom(data[i:])
-				i += _n
+				var consumed int
+				result.I, consumed, err = result.I.DecodeFrom(data[i:])
+				i += consumed
 				if err != nil {
-					return result, i, ggen.NewParseErrShift("i", i, _n, err)
+					return result, i, ggen.NewParseErrShift("i", i, consumed, err)
 				}
 			}
 		case "ime":
@@ -2859,14 +2859,14 @@ func (recv DrainOuter) DecodeFrom(data []byte) (result DrainOuter, i int, err er
 				}
 			} else {
 				seenIME = true
-				var _n int
-				result.IME, _n, err = result.IME.DecodeFrom(data[i:])
-				i += _n
+				var consumed int
+				result.IME, consumed, err = result.IME.DecodeFrom(data[i:])
+				i += consumed
 				if err != nil {
 					if verr, ok := err.(ggen.Error); ok {
-						errs.Append("ime", ggen.ShiftPos(verr, i-_n))
+						errs.Append("ime", ggen.ShiftPos(verr, i-consumed))
 					} else {
-						return result, i, ggen.NewParseErrShift("ime", i, _n, err)
+						return result, i, ggen.NewParseErrShift("ime", i, consumed, err)
 					}
 				}
 			}
