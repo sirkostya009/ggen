@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
@@ -133,7 +134,7 @@ func main() {
 	}
 
 	// A leading FILE takes the rest as a struct-name filter; anything else
-	// (dir / pattern) makes every positional its own target, like `go build`.
+	// (dir / pattern) is a package target, like `go build`.
 	if info, err := os.Stat(positional[0]); err == nil && !info.IsDir() {
 		if cliDry {
 			err = checkFile(positional[0], positional[1:])
@@ -143,43 +144,49 @@ func main() {
 		if err != nil {
 			cliLog.Error(err)
 		}
+	} else if target := positional[0]; len(positional) == 1 && !isPattern(target) {
+		// One plain directory: honours -o / -pkg and picks up a test-only package.
+		if err := checkDirTarget(target); err != nil {
+			cliLog.Fatal(err)
+		}
+		var err error
+		if cliDry {
+			err = checkPackage(target)
+		} else {
+			err = generateDir(target, outFlag, pkgFlag)
+		}
+		if err != nil {
+			cliLog.Error(err)
+		}
 	} else {
-		if outFlag != "" && len(positional) > 1 {
-			cliLog.Fatal(errors.New("-o cannot be used with multiple targets (each package writes its own output)"))
+		if outFlag != "" || pkgFlag != "" {
+			name := "-o"
+			if outFlag == "" {
+				name = "-pkg"
+			}
+			if slices.ContainsFunc(positional, isPattern) {
+				cliLog.Fatal(fmt.Errorf("%s cannot be used with ./... (pattern matches multiple packages; each writes its own output)", name))
+			}
+			cliLog.Fatal(fmt.Errorf("%s cannot be used with multiple targets (each package writes its own output)", name))
 		}
 		for _, target := range positional {
-			if strings.HasSuffix(target, "...") {
-				if outFlag != "" {
-					cliLog.Fatal(errors.New("-o cannot be used with ./... (pattern matches multiple packages; each writes its own output)"))
-				}
-				// Pattern mode collects per-package errors rather than bailing;
-				// only packages.Load failures (no go.mod, bad pattern) are fatal.
-				act := func(dir string) error { return generateDir(dir, "", "") }
-				if cliDry {
-					act = checkPackage
-				}
-				if err := walkPackages(target, act); err != nil {
+			if !isPattern(target) {
+				if err := checkDirTarget(target); err != nil {
 					cliLog.Fatal(err)
 				}
-				continue
 			}
-			info, err := os.Stat(target)
-			if err != nil {
-				cliLog.Fatal(err)
-			}
-			if !info.IsDir() {
-				// Only the FIRST positional may be a file (its trailing args
-				// are struct names); a file here is a mixed-target mistake.
-				cliLog.Fatal(fmt.Errorf("%s: file targets must come first (ggen <file.go> [Names...]); mixing files with packages is not supported", target))
-			}
-			if cliDry {
-				err = checkPackage(target)
-			} else {
-				err = generateDir(target, outFlag, pkgFlag)
-			}
-			if err != nil {
-				cliLog.Error(err)
-			}
+		}
+		// One walk over every target: post-order across the union, so an
+		// importer never runs before its dependency's _ggen.go exists — no
+		// matter the order on the command line. Per-package errors are
+		// collected; only packages.Load failures (no go.mod, bad pattern)
+		// are fatal.
+		act := func(dir string) error { return generateDir(dir, "", "") }
+		if cliDry {
+			act = checkPackage
+		}
+		if err := walkPackages(positional, act); err != nil {
+			cliLog.Fatal(err)
 		}
 	}
 
@@ -189,6 +196,22 @@ func main() {
 	if cliLog.HasErrors() {
 		os.Exit(1)
 	}
+}
+
+func isPattern(target string) bool { return strings.HasSuffix(target, "...") }
+
+// checkDirTarget rejects a missing target and a file positioned after the
+// first argument (only the FIRST positional may be a file; its trailing args
+// are struct names, so a file here is a mixed-target mistake).
+func checkDirTarget(target string) error {
+	info, err := os.Stat(target)
+	if err != nil {
+		return err
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s: file targets must come first (ggen <file.go> [Names...]); mixing files with packages is not supported", target)
+	}
+	return nil
 }
 
 // applyCLIFlags ORs the CLI hook flags into each struct's flags and propagates
@@ -246,19 +269,30 @@ func applyCLIFlags(structs []StructInfo) {
 	}
 }
 
-// walkPackages resolves `pattern` via go/packages and invokes `act` on every
-// matched package's directory — module-scoped, never crossing module bounds
-// (like `go build <pattern>`). Processing is post-order over the matched import
-// subgraph, so a package's `_ggen.go` lands on disk before any matched importer
-// runs and cross-package field types route through direct DecodeFrom/AppendJSON
-// rather than encoding/json. Deps outside the matched set are left alone.
-func walkPackages(pattern string, act func(dir string) error) error {
+// walkPackages resolves every target (dirs and `...` patterns) in one
+// go/packages load and invokes `act` on each matched package's directory —
+// module-scoped, never crossing module bounds (like `go build <patterns>`).
+// Processing is post-order over the matched import subgraph, so a package's
+// `_ggen.go` lands on disk before any matched importer runs and cross-package
+// field types route through direct DecodeFrom/AppendJSON rather than
+// encoding/json. Deps outside the matched set are left alone. A test-only
+// package is skipped when a pattern matched it and visited when it was named
+// outright.
+func walkPackages(targets []string, act func(dir string) error) error {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedImports,
 	}
-	pkgs, err := packages.Load(cfg, pattern)
+	pkgs, err := packages.Load(cfg, targets...)
 	if err != nil {
 		return err
+	}
+	explicit := make(map[string]struct{}, len(targets))
+	for _, t := range targets {
+		if !isPattern(t) {
+			if abs, err := filepath.Abs(t); err == nil {
+				explicit[abs] = struct{}{}
+			}
+		}
 	}
 	// Surface per-package load errors via the logger rather than returning on
 	// the first — a broken-import package shouldn't hide its siblings.
@@ -287,16 +321,22 @@ func walkPackages(pattern string, act func(dir string) error) error {
 				visit(imp)
 			}
 		}
-		if len(p.GoFiles) == 0 {
+		dir := p.Dir
+		if dir == "" && len(p.GoFiles) > 0 {
+			dir = filepath.Dir(p.GoFiles[0])
+		}
+		if dir == "" {
 			return
 		}
-		dir := filepath.Dir(p.GoFiles[0])
+		if _, named := explicit[dir]; len(p.GoFiles) == 0 && !named {
+			return
+		}
 		if _, ok := visited[dir]; ok {
 			return
 		}
 		visited[dir] = struct{}{}
 		if err := act(dir); err != nil {
-			cliLog.Error(fmt.Errorf("in %s: %w", dir, err))
+			cliLog.Error(prefixBare(err, "in "+dir))
 		}
 	}
 	for _, p := range pkgs {
@@ -330,13 +370,35 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 		outPkg = pkgName
 	}
 
-	// Bucket structs by (BuildTag, Test): each emits its own gen file with a
-	// matching //go:build header so a tagged struct doesn't pollute the
-	// unconstrained file.
+	// Bucket structs by (BuildTag, Test, XTest): each emits its own gen file
+	// with a matching //go:build header so a tagged struct doesn't pollute the
+	// unconstrained file. The external test package is a package of its own —
+	// its buckets generate with their own type seeding and package clause.
 	buckets := bucketStructs(structs)
 	if outFlag != "" && len(buckets) > 1 {
 		return fmt.Errorf("-o cannot be used when %s has structs across multiple build-tag / test groups (%d buckets)", dir, len(buckets))
 	}
+	var base, xtest []StructInfo
+	for _, s := range structs {
+		if s.XTest {
+			xtest = append(xtest, s)
+		} else {
+			base = append(base, s)
+		}
+	}
+	if err := generateBuckets(dir, outFlag, outPkg, base); err != nil {
+		return err
+	}
+	return generateBuckets(dir, outFlag, outPkg+"_test", xtest)
+}
+
+// generateBuckets writes one file per (BuildTag, Test) bucket of structs,
+// which all belong to one Go package.
+func generateBuckets(dir, outFlag, outPkg string, structs []StructInfo) error {
+	if len(structs) == 0 {
+		return nil
+	}
+	buckets := bucketStructs(structs)
 
 	// LOCKED through the per-bucket loop. Seed generatedTypes with the full
 	// package set first — a tagged-bucket struct may reference an untagged one
@@ -345,11 +407,10 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 	genGlobalsMu.Lock()
 	defer genGlobalsMu.Unlock()
 	generatedTypes = make(map[string]struct{}, len(structs))
-	generatedFields = make(map[string][]FieldInfo, len(structs))
+	generatedFields = seedGeneratedFields(structs)
 	namedKinds = make(map[string]TypeKind)
 	for _, s := range structs {
 		generatedTypes[s.Name] = struct{}{}
-		generatedFields[s.Name] = s.Fields
 	}
 	seedNamedKinds(structs)
 	multiErrTypes = seedMultiErrTypes(structs)
@@ -363,68 +424,82 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 	}()
 
 	for _, bk := range bucketKeys(buckets) {
-		group := buckets[bk]
 		out := outFlag
 		if out == "" {
-			out = filepath.Join(dir, packageFileName(dir, bk.tag, bk.test))
+			out = filepath.Join(dir, packageFileName(dir, bk.tag, bk.test, bk.xtest))
 		}
-		f, err := os.Create(out)
-		if err != nil {
+		if err := writeGenerated(out, outPkg, buckets[bk]); err != nil {
 			return err
 		}
-		err = generateTo(f, outPkg, out, group)
-		cerr := f.Close()
-		if err != nil {
-			return err
-		}
-		if cerr != nil {
-			return cerr
-		}
-		cliLog.Info("wrote %s", out)
 	}
 	return nil
 }
 
-// bucketKey identifies one output file: same build constraint + test status.
-type bucketKey struct {
-	tag  string
-	test bool
+// writeGenerated renders structs and replaces out only once the whole file
+// has formatted: a failed render must not truncate the previous good output
+// and take the package build down with it.
+func writeGenerated(out, pkg string, structs []StructInfo) error {
+	var buf bytes.Buffer
+	if err := generateTo(&buf, pkg, out, structs); err != nil {
+		return err
+	}
+	if err := os.WriteFile(out, buf.Bytes(), 0o644); err != nil {
+		return err
+	}
+	cliLog.Info("wrote %s", out)
+	return nil
 }
 
-// bucketStructs groups structs by (BuildTag, Test); bucketKeys gives stable
-// iteration order.
+// bucketKey identifies one output file: same build constraint + test status
+// + package (base or external test).
+type bucketKey struct {
+	tag   string
+	test  bool
+	xtest bool
+}
+
+// bucketStructs groups structs by (BuildTag, Test, XTest); bucketKeys gives
+// stable iteration order.
 func bucketStructs(structs []StructInfo) map[bucketKey][]StructInfo {
 	out := make(map[bucketKey][]StructInfo, len(structs))
 	for _, s := range structs {
-		k := bucketKey{tag: s.BuildTag, test: s.Test}
+		k := bucketKey{tag: s.BuildTag, test: s.Test, xtest: s.XTest}
 		out[k] = append(out[k], s)
 	}
 	return out
 }
 
 // bucketKeys returns m's keys sorted deterministically (empty tag first, then
-// by tag, non-test before test) so `wrote` output stays stable across runs.
+// by tag, non-test before test, base package before external test) so
+// `wrote` output stays stable across runs.
 func bucketKeys(m map[bucketKey][]StructInfo) []bucketKey {
 	keys := slices.Collect(maps.Keys(m))
+	boolOrder := func(a, b bool) int {
+		switch {
+		case a == b:
+			return 0
+		case a:
+			return 1
+		}
+		return -1
+	}
 	slices.SortFunc(keys, func(a, b bucketKey) int {
 		if a.tag != b.tag {
 			return strings.Compare(a.tag, b.tag)
 		}
-		// non-test (false) before test (true)
 		if a.test != b.test {
-			if a.test {
-				return 1
-			}
-			return -1
+			return boolOrder(a.test, b.test)
 		}
-		return 0
+		return boolOrder(a.xtest, b.xtest)
 	})
 	return keys
 }
 
 // packageFileName builds the output filename for one bucket: untagged buckets
-// get `<dir>_ggen.go` / `<dir>_ggen_test.go`, tagged buckets `<dir>_<slug>_ggen.go`.
-func packageFileName(dir, tag string, testFile bool) string {
+// get `<dir>_ggen.go` / `<dir>_ggen_test.go`, tagged buckets
+// `<dir>_<slug>_ggen.go`; the external test package's buckets carry `_xtest`
+// before the suffix (`<dir>_xtest_ggen_test.go`).
+func packageFileName(dir, tag string, testFile, xtest bool) string {
 	base := filepath.Base(filepath.Clean(dir))
 	if base == "." || base == "/" || base == "" {
 		abs, err := filepath.Abs(dir)
@@ -432,14 +507,17 @@ func packageFileName(dir, tag string, testFile bool) string {
 			base = filepath.Base(abs)
 		}
 	}
-	suffix := genSuffix
+	name := base
+	if tag != "" {
+		name += "_" + slugifyTag(tag)
+	}
+	if xtest {
+		name += "_xtest"
+	}
 	if testFile {
-		suffix = genTestSuffix
+		return name + genTestSuffix
 	}
-	if tag == "" {
-		return base + suffix
-	}
-	return base + "_" + slugifyTag(tag) + suffix
+	return name + genSuffix
 }
 
 // slugifyTag makes a build-constraint expression filename-safe: non-alnum runs
@@ -496,13 +574,13 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 	// what it owns rather than falling back to "unknown".
 	generatedFields = make(map[string][]FieldInfo, len(pkgFields)+len(structs))
 	maps.Copy(generatedFields, pkgFields)
+	maps.Copy(generatedFields, seedGeneratedFields(structs))
 	namedKinds = make(map[string]TypeKind)
 	for n := range siblings {
 		generatedTypes[n] = struct{}{}
 	}
 	for _, s := range structs {
 		generatedTypes[s.Name] = struct{}{}
-		generatedFields[s.Name] = s.Fields
 	}
 	seedNamedKinds(structs)
 	// Union with the package-wide multierr set — a cross-file multierr
@@ -523,18 +601,5 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 		cyclicTypes = nil
 	}()
 
-	f, err := os.Create(out)
-	if err != nil {
-		return err
-	}
-	err = generateTo(f, outPkg, out, structs)
-	cerr := f.Close()
-	if err != nil {
-		return err
-	}
-	if cerr != nil {
-		return cerr
-	}
-	cliLog.Info("wrote %s", out)
-	return nil
+	return writeGenerated(out, outPkg, structs)
 }

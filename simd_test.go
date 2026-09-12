@@ -27,6 +27,9 @@ func TestStringSIMD_Parity(t *testing.T) {
 		[]byte(`""`), []byte(`"a"`), []byte(`"ab"`), []byte(`not a string`), {},
 		[]byte(`"unterminated`), []byte(`"trailing\`), []byte(`"bad\u12`),
 		[]byte(`"esc\nape"`), []byte(`"A😀"`), []byte(`"\q"`),
+		// Final malformations at the end of data vs truncated prefixes.
+		[]byte(`"\u12"`), []byte(`"ab\uZ"`), []byte(`"\u00`), []byte(`"\ud83d\uDE`),
+		[]byte(`"\ud83d"`), []byte("\"ab\x01"), []byte("\"ab\x01}"),
 	}
 	for _, n := range []int{1, 7, 15, 16, 17, 31, 32, 33, 63, 64, 65, 127, 500} {
 		body := strings.Repeat("x", n)
@@ -214,5 +217,64 @@ func TestStreamStringSIMD_RefillErrorIdentity(t *testing.T) {
 				t.Errorf("transient mid-string: got %v, want raw reader error", err)
 			}
 		})
+	}
+}
+
+// TestStreamStringSIMD_ErrorPos is the tier twin of TestStreamString_ErrorPos:
+// every error exit of the stringViewAVX* cores must leave Offset() where the
+// scalar core does. A consumed prefix makes the window compact first, so an
+// exit that skips the rebase reports the pre-compaction cursor — inflated by
+// the discarded prefix, past the document on the unterminated row.
+func TestStreamStringSIMD_ErrorPos(t *testing.T) {
+	t.Parallel()
+	const prefix = `"pre"`
+	cases := []struct {
+		name string
+		in   string
+		want error
+	}{
+		{"ctrl after refills", `"` + strings.Repeat("a", 100) + "\x01\"", ErrBadString},
+		{"invalid utf8 after refills", `"` + strings.Repeat("a", 100) + "\xff\"", ErrInvalidUTF8},
+		{"unterminated", `"` + strings.Repeat("a", 100), ErrUnterminated},
+		{"not a string at compacted head", `[]`, ErrExpectString},
+		{"drained at compacted head", ``, ErrExpectString},
+		{"ctrl in first window", "\"ab\x01cd\"", ErrBadString},
+		{"truncated escape", `"ab\u12`, ErrBadString},
+	}
+	tiers := []struct {
+		name string
+		fn   func(*Stream, bool) (string, error)
+	}{
+		{"AVX", (*Stream).StringAVX},
+		{"AVX2", (*Stream).StringAVX2},
+		{"AVX512", (*Stream).StringAVX512},
+	}
+	for _, tc := range cases {
+		doc := prefix + tc.in
+		for _, chunk := range []int{5, 7, 64} {
+			var ref Stream
+			ref.Reset(strings.NewReader(doc), make([]byte, 0, chunk))
+			if err := ref.skipString(); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := ref.String(true); err != tc.want {
+				t.Fatalf("%s chunk=%d: scalar err %v, want %v", tc.name, chunk, err, tc.want)
+			}
+			for _, tier := range tiers {
+				var s Stream
+				s.Reset(strings.NewReader(doc), make([]byte, 0, chunk))
+				if err := s.skipString(); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := tier.fn(&s, true); err != tc.want {
+					t.Errorf("%s/%s chunk=%d: err %v, want %v", tc.name, tier.name, chunk, err, tc.want)
+					continue
+				}
+				if s.Offset() != ref.Offset() || s.Pos > len(s.Bytes()) {
+					t.Errorf("%s/%s chunk=%d: Offset %d (Pos %d, len(buf) %d, doc len %d), scalar %d",
+						tc.name, tier.name, chunk, s.Offset(), s.Pos, len(s.Bytes()), len(doc), ref.Offset())
+				}
+			}
+		}
 	}
 }

@@ -67,7 +67,10 @@ func (recv base32Wrap) DecodeFrom(data []byte) (result base32Wrap, i int, err er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"b"}}
 			}
 			seenB = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("b", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.B = nil
 				break
@@ -203,7 +206,12 @@ func (recv base32Wrap) DecodeFromStream(s *ggen.Stream) (result base32Wrap, err 
 				result.B = []byte{}
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -409,7 +417,12 @@ func (recv TimeLayout) DecodeFromStream(s *ggen.Stream) (result TimeLayout, err 
 				return result, ggen.NewParseErr("layout", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -611,7 +624,12 @@ func (recv TimeStamp) DecodeFromStream(s *ggen.Stream) (result TimeStamp, err er
 				return result, ggen.NewParseErr("stamp", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -813,7 +831,12 @@ func (recv TimeStampMilli) DecodeFromStream(s *ggen.Stream) (result TimeStampMil
 				return result, ggen.NewParseErr("stampMilli", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1015,7 +1038,12 @@ func (recv TimeStampMicro) DecodeFromStream(s *ggen.Stream) (result TimeStampMic
 				return result, ggen.NewParseErr("stampMicro", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1217,7 +1245,12 @@ func (recv TimeStampNano) DecodeFromStream(s *ggen.Stream) (result TimeStampNano
 				return result, ggen.NewParseErr("stampNano", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1419,7 +1452,12 @@ func (recv TimeCustomTiny) DecodeFromStream(s *ggen.Stream) (result TimeCustomTi
 				return result, ggen.NewParseErr("customTiny", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1682,7 +1720,12 @@ func (recv TimeEscapingLayout) DecodeFromStream(s *ggen.Stream) (result TimeEsca
 				return result, ggen.NewParseErr("slash", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2096,7 +2139,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 					return result, i, ggen.NewParseErr("default", i, err)
 				}
 			}
-			result.Default, err = time.Parse(time.RFC3339Nano, s)
+			result.Default, err = ggen.ParseRFC3339(s)
 			if err != nil {
 				return result, i, ggen.NewParseErr("default", i, err)
 			}
@@ -2246,7 +2289,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 					return result, i, ggen.NewParseErr("rfc3339", i, err)
 				}
 			}
-			result.RFC3339, err = time.Parse(time.RFC3339, s)
+			result.RFC3339, err = ggen.ParseRFC3339(s)
 			if err != nil {
 				return result, i, ggen.NewParseErr("rfc3339", i, err)
 			}
@@ -2276,7 +2319,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 					return result, i, ggen.NewParseErr("rfc3339Nano", i, err)
 				}
 			}
-			result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, s)
+			result.RFC3339Nano, err = ggen.ParseRFC3339(s)
 			if err != nil {
 				return result, i, ggen.NewParseErr("rfc3339Nano", i, err)
 			}
@@ -2988,7 +3031,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 			if err != nil {
 				return result, ggen.NewParseErr("default", s.Offset(), err)
 			}
-			result.Default, err = time.Parse(time.RFC3339Nano, sv)
+			result.Default, err = ggen.ParseRFC3339(sv)
 			if err != nil {
 				return result, ggen.NewParseErr("default", s.Offset(), err)
 			}
@@ -3078,7 +3121,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 			if err != nil {
 				return result, ggen.NewParseErr("rfc3339", s.Offset(), err)
 			}
-			result.RFC3339, err = time.Parse(time.RFC3339, sv)
+			result.RFC3339, err = ggen.ParseRFC3339(sv)
 			if err != nil {
 				return result, ggen.NewParseErr("rfc3339", s.Offset(), err)
 			}
@@ -3096,7 +3139,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 			if err != nil {
 				return result, ggen.NewParseErr("rfc3339Nano", s.Offset(), err)
 			}
-			result.RFC3339Nano, err = time.Parse(time.RFC3339Nano, sv)
+			result.RFC3339Nano, err = ggen.ParseRFC3339(sv)
 			if err != nil {
 				return result, ggen.NewParseErr("rfc3339Nano", s.Offset(), err)
 			}
@@ -3344,7 +3387,12 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 			}
 			result.UnixNano = time.Unix(0, n)
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3482,7 +3530,9 @@ func (s TimeFormatsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "\",\"dateTime\":\""...)
 	dst = s.DateTime.AppendFormat(dst, time.DateTime)
 	dst = append(dst, "\",\"default\":\""...)
-	dst = s.Default.AppendFormat(dst, time.RFC3339Nano)
+	if dst, err = ggen.AppendRFC3339(dst, s.Default, time.RFC3339Nano); err != nil {
+		return dst, err
+	}
 	dst = append(dst, "\",\"kitchen\":\""...)
 	dst = s.Kitchen.AppendFormat(dst, time.Kitchen)
 	dst = append(dst, "\",\"layout\":\""...)
@@ -3492,9 +3542,13 @@ func (s TimeFormatsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "\",\"rfc1123Z\":\""...)
 	dst = s.RFC1123Z.AppendFormat(dst, time.RFC1123Z)
 	dst = append(dst, "\",\"rfc3339\":\""...)
-	dst = s.RFC3339.AppendFormat(dst, time.RFC3339)
+	if dst, err = ggen.AppendRFC3339(dst, s.RFC3339, time.RFC3339); err != nil {
+		return dst, err
+	}
 	dst = append(dst, "\",\"rfc3339Nano\":\""...)
-	dst = s.RFC3339Nano.AppendFormat(dst, time.RFC3339Nano)
+	if dst, err = ggen.AppendRFC3339(dst, s.RFC3339Nano, time.RFC3339Nano); err != nil {
+		return dst, err
+	}
 	dst = append(dst, "\",\"rfc822\":\""...)
 	dst = s.RFC822.AppendFormat(dst, time.RFC822)
 	dst = append(dst, "\",\"rfc822Z\":\""...)
@@ -3783,7 +3837,12 @@ func (recv BoundaryStruct) DecodeFromStream(s *ggen.Stream) (result BoundaryStru
 				return result, ggen.NewParseErr("str", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

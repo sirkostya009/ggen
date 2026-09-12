@@ -22,6 +22,10 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 	if fi.StructName != "" {
 		desc = fi.StructName + "." + fi.GoName
 	}
+	// Judge `[N]byte` by the shape it decodes as (one base64 string), whether
+	// or not the caller has folded it yet — the go/types re-run precedes the
+	// fold, and an unfolded `[3]byte` reads as a diveable array of uint8.
+	foldByteArray(&fi)
 
 	// Gather across every phase rather than short-circuiting — two bugs on one
 	// field should both surface in a single run.
@@ -45,10 +49,9 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 	}
 
 	// json:",string" is numerics-only (jsonv2 defaults; bool is tolerated as
-	// a documented no-op since v2 dropped bool quoting). A STRING field used
-	// to be accepted as a silent no-op that didn't even match v1's
-	// double-encoding — dropped in favor of a loud reject. Named primitives
-	// are rejected too — the string-tag emit does not cast.
+	// a documented no-op since v2 dropped bool quoting). A string field is a
+	// loud reject rather than a silent no-op that matches neither v1 nor v2;
+	// so are named primitives — the string-tag emit does not cast.
 	if fi.String {
 		switch fi.Kind { // for pointers fi.Kind is already the pointee kind
 		case KindBool,
@@ -63,6 +66,20 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 				UserHint: "`,string` quotes numeric values, like encoding/json/v2; drop it",
 			})
 		}
+	}
+
+	// `omitempty` omits a value encoding as null, "", [] or {}, and a struct's
+	// `{}` is the one of those ggen does not act on: a struct field is always
+	// emitted. Reject rather than accept a silent no-op. Pointers are untouched
+	// — nil still omits — and the kinds with a wire shape of their own
+	// (time.Time, url.URL, sql.Null*, big.*, …) never reach KindStruct.
+	if fi.OmitEmpty && fi.UnderlyingStruct && eff(fi.GoType, fi.Kind) == KindStruct {
+		collect(&richError{
+			Msg:      desc + ": `omitempty` is not applicable to a struct field (got " + fi.GoType + ")",
+			CodeSpan: "omitempty",
+			BotHint:  "omitempty never omits a struct; the option would be a no-op",
+			UserHint: "use `omitzero` to omit the Go zero value, or make the field a pointer so nil omits",
+		})
 	}
 
 	// checkVal/checkMod defer opaque (KindStruct) positions until the
@@ -99,44 +116,53 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 	checkVal(fi.KeyValidation, "pipe keys:", KindString, "string", desc+" key")
 	checkMod(fi.KeyMods, "pipe keys:", KindString, "string", desc+" key")
 
-	// inner: only valid on slice/array/map/[]byte.
+	// inner: only valid on slice/array/map. `[]byte`/`[N]byte` decode as one
+	// base64 string with no element loop, so an element step there never
+	// runs; only `[N]byte json:",format:array"` keeps real elements.
 	hasDive := len(fi.ElemValidation) > 0 || len(fi.ElemMods) > 0 ||
 		len(fi.InnerValidation) > 0 || len(fi.InnerMods) > 0
 	if hasDive && !canDive(fi.Kind) {
+		userHint := "`inner:` only works with slice/array/map"
+		if fi.Kind == KindBytes {
+			userHint = "a byte slice/array decodes as one base64 string, so there are no elements to dive into; `[N]byte` with `format:array` keeps them"
+		}
 		collect(&richError{
 			Msg:      desc + ": `inner:` tag prefix is only valid on slice/array/map fields (got " + fi.GoType + ")",
 			CodeSpan: "inner:",
 			BotHint:  "expected slice/array/map field",
-			UserHint: "`inner:` only works with slice/array/map",
+			UserHint: userHint,
 		})
-	}
-	checkVal(fi.ElemValidation, "pipe inner:", eff(fi.ElemType, fi.ElemKind), fi.ElemType, desc+" element")
-	checkMod(fi.ElemMods, "pipe inner:", eff(fi.ElemType, fi.ElemKind), fi.ElemType, desc+" element")
+	} else {
+		// Element rules are judged only where the field HAS an element type
+		// to name them against; above, the one diagnostic is the whole story.
+		checkVal(fi.ElemValidation, "pipe inner:", eff(fi.ElemType, fi.ElemKind), fi.ElemType, desc+" element")
+		checkMod(fi.ElemMods, "pipe inner:", eff(fi.ElemType, fi.ElemKind), fi.ElemType, desc+" element")
 
-	// Levels >= 2 (`inner:(inner:(...))`) peel the element type per level —
-	// they used to bypass the matrix entirely, so a mismatched rule two
-	// levels down emitted non-compiling code the level-1 check rejects.
-	levelType := fi.ElemType
-	for li := 0; li < max(len(fi.InnerValidation), len(fi.InnerMods)); li++ {
-		var levelKind TypeKind
-		var ok bool
-		levelType, levelKind, ok = peelTypeOnce(levelType)
-		ldesc := fmt.Sprintf("%s element (depth %d)", desc, li+2)
-		if !ok {
-			collect(&richError{
-				Msg:      fmt.Sprintf("%s: `inner:` nested %d deep, but %s has no element at that depth", desc, li+2, fi.GoType),
-				CodeSpan: "inner:",
-				BotHint:  "more inner: levels than container nesting",
-				UserHint: "remove the extra `inner:` level",
-			})
-			break
-		}
-		lk := eff(levelType, levelKind)
-		if li < len(fi.InnerValidation) {
-			checkVal(fi.InnerValidation[li], "pipe inner:", lk, levelType, ldesc)
-		}
-		if li < len(fi.InnerMods) {
-			checkMod(fi.InnerMods[li], "pipe inner:", lk, levelType, ldesc)
+		// Levels >= 2 (`inner:(inner:(...))`) peel the element type per
+		// level, so a rule mismatched deep in the nest is judged on the same
+		// terms as one at level 1.
+		levelType := fi.ElemType
+		for li := 0; li < max(len(fi.InnerValidation), len(fi.InnerMods)); li++ {
+			var levelKind TypeKind
+			var ok bool
+			levelType, levelKind, ok = peelTypeOnce(levelType)
+			ldesc := fmt.Sprintf("%s element (depth %d)", desc, li+2)
+			if !ok {
+				collect(&richError{
+					Msg:      fmt.Sprintf("%s: `inner:` nested %d deep, but %s has no element at that depth", desc, li+2, fi.GoType),
+					CodeSpan: "inner:",
+					BotHint:  "more inner: levels than container nesting",
+					UserHint: "remove the extra `inner:` level",
+				})
+				break
+			}
+			lk := eff(levelType, levelKind)
+			if li < len(fi.InnerValidation) {
+				checkVal(fi.InnerValidation[li], "pipe inner:", lk, levelType, ldesc)
+			}
+			if li < len(fi.InnerMods) {
+				checkMod(fi.InnerMods[li], "pipe inner:", lk, levelType, ldesc)
+			}
 		}
 	}
 
@@ -151,8 +177,8 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 			UserHint: "`hint` is a prealloc capacity hint; only slice/map have capacity to size",
 		})
 	}
-	// hint: inner levels must land on a growable level too — they used to
-	// bypass the matrix entirely (parsed, then silently ignored).
+	// hint: inner levels must land on a growable level too — a level with no
+	// capacity to size has nothing for a hint to do.
 	hintLevelType := fi.ElemType
 	hintLevelKind := fi.ElemKind
 	for li, h := range fi.HintLevels {
@@ -181,11 +207,11 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 }
 
 // checkFormat rejects a `format:` the emitters don't recognize. Every emit
-// switch has a silent default arm, so a typo (`format:base64ur`) used to fall
-// back to the default encoding — wrong bytes on the wire, no diagnostic
-// anywhere. time.Time is deliberately open-ended: an unrecognized value there
-// is a custom Go layout (see the custom-layout support), so only the closed
-// sets are policed.
+// switch has a silent default arm, so without this a typo (`format:base64ur`)
+// would reach the wire as the default encoding with no diagnostic anywhere.
+// time.Time is deliberately open-ended: an unrecognized value there is a
+// custom Go layout (see the custom-layout support), so only the closed sets
+// are policed.
 func checkFormat(fi FieldInfo, desc string) error {
 	if fi.Format == "" {
 		return nil
@@ -229,7 +255,9 @@ func checkFormat(fi FieldInfo, desc string) error {
 // A fixed byte array (`[N]byte`) is a []byte-shaped value, not a container of
 // formatted elements — it takes the same encodings.
 func formatElemKind(fi FieldInfo) (TypeKind, bool) {
-	if isByteArrayType(fi.GoType) {
+	// `format:array` keeps a byte array at KindArray, and a pointer to one
+	// spells its levels in GoType — peel both to reach the byte array.
+	if _, leaf := pointerDepth(fi.GoType); isByteArrayType(leaf) {
 		return KindBytes, true
 	}
 	if fi.ElemKind == KindBytes || fi.ElemKind == KindTime || fi.ElemKind == KindDuration {
@@ -274,8 +302,15 @@ func peelTypeOnce(typ string) (string, TypeKind, bool) {
 
 // canDive reports whether inner: can peel one level off this kind.
 func canDive(k TypeKind) bool {
-	return k == KindSlice || k == KindArray || k == KindMap || k == KindBytes
+	return k == KindSlice || k == KindArray || k == KindMap
 }
+
+// maxPrealloc caps every value the emitters paste into a make() capacity
+// (`hint:`, and `len`/`minlen` on a slice or map): the largest int a 32-bit
+// target can hold. Past it the value either overflows the constant at compile
+// time or panics with `makeslice: cap out of range` on the first payload
+// carrying the key — a generate-time diagnostic instead.
+const maxPrealloc = math.MaxInt32
 
 // isLenKind reports whether len() is meaningful on this kind, so
 // `len`/`minlen`/`maxlen`/`notempty` make sense.
@@ -400,7 +435,21 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 				"expected string/slice/array/map/[]byte",
 				userHint)
 		}
-		return needNonNegInt(r, fieldDesc)
+		if err := needNonNegInt(r, fieldDesc); err != nil {
+			return err
+		}
+		// `len`/`minlen` on a growable container double as its prealloc hint.
+		if r.Name != "maxlen" && (kind == KindSlice || kind == KindMap) {
+			if n, _ := strconv.Atoi(strings.TrimSpace(r.Value)); n > maxPrealloc {
+				return &richError{
+					Msg:      fmt.Sprintf("%s: `%s=%s` exceeds the %d prealloc ceiling", fieldDesc, r.Name, r.Value, maxPrealloc),
+					CodeSpan: r.Name + "=" + r.Value,
+					BotHint:  "len/minlen size the container's make(); an unallocatable capacity panics at decode",
+					UserHint: "use a bound the decoder can preallocate, or `hint:\"0\"` to keep the bound without the prealloc",
+				}
+			}
+		}
+		return nil
 
 	case "runes", "minrunes", "maxrunes":
 		if kind != KindString {
@@ -439,12 +488,20 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 				"modulo (multiple=N) only valid on integer types",
 				userHint)
 		}
-		if err := needInt(r, fieldDesc); err != nil {
-			return err
+		v := strings.TrimSpace(r.Value)
+		if v == "" {
+			return missingIntErr(r, fieldDesc)
+		}
+		n, err := parseIntBound(v, kind)
+		if errors.Is(err, strconv.ErrRange) {
+			return boundRangeErr(fieldDesc, "multiple="+r.Value, v)
+		}
+		if err != nil {
+			return notIntErr(r, fieldDesc)
 		}
 		// The emit is `ref % N != 0` — a zero divisor is a compile error in
 		// the generated file, and a negative one is meaningless.
-		if n, _ := strconv.Atoi(strings.TrimSpace(r.Value)); n <= 0 {
+		if _, unsigned := kindIntBits(kind); n == 0 || (!unsigned && int64(n) < 0) {
 			return &richError{
 				Msg:      fmt.Sprintf("%s: `multiple=%s` requires a positive integer", fieldDesc, r.Value),
 				CodeSpan: "multiple=" + r.Value,
@@ -488,7 +545,9 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 			}
 		}
 		// Duplicates emit duplicate switch cases — a compile error in the
-		// generated file. Numeric parts compare by VALUE (1 vs 1.0 vs +1).
+		// generated file. Numeric parts compare by VALUE (1 vs 1.0 vs +1); an
+		// integral kind keys on the integer itself, since a float64 key
+		// merges distinct integers above 2^53.
 		dupErr := func(p string) error {
 			return &richError{
 				Msg:      fmt.Sprintf("%s: `oneof=%s` part %q is a duplicate", fieldDesc, r.Value, p),
@@ -498,9 +557,10 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 			}
 		}
 		if isNumeric(kind) {
-			seen := map[float64]struct{}{}
+			seen := map[uint64]struct{}{}
 			for _, p := range splitPipeParts(r.Value) {
-				f, err := strconv.ParseFloat(strings.TrimSpace(p), 64)
+				p = strings.TrimSpace(p)
+				key, err := numericPartKey(p, kind)
 				if err != nil {
 					return &richError{
 						Msg:      fmt.Sprintf("%s: `oneof=%s` part %q is not a valid number", fieldDesc, r.Value, p),
@@ -509,11 +569,11 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 						UserHint: "for numeric fields every `oneof=` part must parse as a number",
 					}
 				}
-				if _, dup := seen[f]; dup {
+				if _, dup := seen[key]; dup {
 					return dupErr(p)
 				}
-				seen[f] = struct{}{}
-				if !boundFits(strings.TrimSpace(p), kind) {
+				seen[key] = struct{}{}
+				if !boundFits(p, kind) {
 					return boundRangeErr(fieldDesc, "oneof="+r.Value, p)
 				}
 			}
@@ -702,7 +762,7 @@ func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDes
 				}
 			}
 			if isIntegralNumeric(kind) {
-				if _, err := strconv.Atoi(v); err != nil {
+				if _, err := parseIntBound(v, kind); err != nil && !errors.Is(err, strconv.ErrRange) {
 					return &richError{
 						Msg:      fmt.Sprintf("%s: `clamp` %s %q — integer field needs integer bounds", fieldDesc, name, v),
 						CodeSpan: v,
@@ -785,26 +845,65 @@ func kindIntBits(kind TypeKind) (int, bool) {
 	return 0, false
 }
 
+// parseIntBound parses v as an integer constant of the kind's width and sign,
+// returning its 64-bit two's-complement pattern (signed kinds sign-extend).
+// The error is strconv's: ErrSyntax for a non-integer spelling, ErrRange when
+// the value does not fit. Not Atoi: that caps at MaxInt64 and would call every
+// uint64 bound from 2^63 up fractional.
+func parseIntBound(v string, kind TypeKind) (uint64, error) {
+	bits, unsigned := kindIntBits(kind)
+	if unsigned {
+		// A negative integer is a sign problem, not a spelling one.
+		if rest, neg := strings.CutPrefix(v, "-"); neg {
+			if _, err := strconv.ParseUint(rest, 10, 64); err == nil || errors.Is(err, strconv.ErrRange) {
+				return 0, strconv.ErrRange
+			}
+		}
+		return strconv.ParseUint(v, 10, bits)
+	}
+	n, err := strconv.ParseInt(v, 10, bits)
+	return uint64(n), err
+}
+
+// numericPartKey is the dedupe key of one numeric `oneof` part: the integer
+// itself on an integral kind (an integer-valued float spelling such as `1.0`
+// folds onto it), the float64 value otherwise (−0 folded onto 0).
+func numericPartKey(p string, kind TypeKind) (uint64, error) {
+	if isIntegralNumeric(kind) {
+		if n, err := parseIntBound(p, kind); err == nil {
+			return n, nil
+		}
+	}
+	f, err := strconv.ParseFloat(p, 64)
+	if err != nil {
+		return 0, err
+	}
+	if isIntegralNumeric(kind) && f == math.Trunc(f) {
+		if _, unsigned := kindIntBits(kind); unsigned {
+			return uint64(f), nil
+		}
+		return uint64(int64(f)), nil
+	}
+	if f == 0 {
+		f = 0
+	}
+	return math.Float64bits(f), nil
+}
+
 // boundFits reports whether the numeric literal v fits the kind's range and
 // sign — bounds are pasted verbatim into Go comparisons against the field, so
 // `uint8 >= -1` or `int8 <= 300` is a constant-overflow compile error in the
 // generated file.
 func boundFits(v string, kind TypeKind) bool {
-	bits, unsigned := kindIntBits(kind)
-	if bits == 0 {
-		if kind == KindFloat32 {
-			f, err := strconv.ParseFloat(v, 64)
-			return err == nil && !math.IsInf(float64(float32(f)), 0)
-		}
-		return true
+	if isIntegralNumeric(kind) {
+		_, err := parseIntBound(v, kind)
+		return err == nil
 	}
-	var err error
-	if unsigned {
-		_, err = strconv.ParseUint(v, 10, bits)
-	} else {
-		_, err = strconv.ParseInt(v, 10, bits)
+	if kind == KindFloat32 {
+		f, err := strconv.ParseFloat(v, 64)
+		return err == nil && !math.IsInf(float64(float32(f)), 0)
 	}
-	return err == nil
+	return true
 }
 
 func boundRangeErr(fieldDesc, ruleSpelling, v string) *richError {
@@ -834,25 +933,35 @@ func needNonNegInt(r ValidationRule, fieldDesc string) error {
 	return nil
 }
 
+// needInt checks a count parameter (lengths, rune counts) — a plain int, no
+// kind involved.
 func needInt(r ValidationRule, fieldDesc string) error {
 	v := strings.TrimSpace(r.Value)
 	if v == "" {
-		return &richError{
-			Msg:      fmt.Sprintf("%s: `%s` requires an integer value", fieldDesc, r.Name),
-			CodeSpan: r.Name,
-			BotHint:  "missing integer parameter",
-			UserHint: fmt.Sprintf("provide an integer like `%s=5`", r.Name),
-		}
+		return missingIntErr(r, fieldDesc)
 	}
 	if _, err := strconv.Atoi(v); err != nil {
-		return &richError{
-			Msg:      fmt.Sprintf("%s: `%s=%s` value is not a valid integer", fieldDesc, r.Name, r.Value),
-			CodeSpan: r.Name + "=" + r.Value,
-			BotHint:  "non-integer parameter for integer rule",
-			UserHint: fmt.Sprintf("use a whole-number value like `%s=5` (no decimals, no letters)", r.Name),
-		}
+		return notIntErr(r, fieldDesc)
 	}
 	return nil
+}
+
+func missingIntErr(r ValidationRule, fieldDesc string) *richError {
+	return &richError{
+		Msg:      fmt.Sprintf("%s: `%s` requires an integer value", fieldDesc, r.Name),
+		CodeSpan: r.Name,
+		BotHint:  "missing integer parameter",
+		UserHint: fmt.Sprintf("provide an integer like `%s=5`", r.Name),
+	}
+}
+
+func notIntErr(r ValidationRule, fieldDesc string) *richError {
+	return &richError{
+		Msg:      fmt.Sprintf("%s: `%s=%s` value is not a valid integer", fieldDesc, r.Name, r.Value),
+		CodeSpan: r.Name + "=" + r.Value,
+		BotHint:  "non-integer parameter for integer rule",
+		UserHint: fmt.Sprintf("use a whole-number value like `%s=5` (no decimals, no letters)", r.Name),
+	}
 }
 
 func needFloat(r ValidationRule, fieldDesc string, kind TypeKind) error {
@@ -886,7 +995,7 @@ func needFloat(r ValidationRule, fieldDesc string, kind TypeKind) error {
 		}
 	}
 	if isIntegralNumeric(kind) {
-		if _, err := strconv.Atoi(v); err != nil {
+		if _, err := parseIntBound(v, kind); err != nil && !errors.Is(err, strconv.ErrRange) {
 			return &richError{
 				Msg:      fmt.Sprintf("%s: `%s=%s` — integer field needs an integer bound", fieldDesc, r.Name, r.Value),
 				CodeSpan: r.Name + "=" + r.Value,

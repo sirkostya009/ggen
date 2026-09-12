@@ -56,17 +56,18 @@ func appendURLRaw(dst []byte, u url.URL) []byte {
 		// creates a ':' or '/', so the raw bytes answer both questions.
 		raw := u.RawPath != "" && validURLEncoded(u.RawPath, urlEncodePath) &&
 			urlUnescapesTo(u.RawPath, u.Path)
-		var p0 byte // first byte of the escaped path; 0 = empty path
+		hasPath := raw || u.Path != ""
+		var p0 byte // first byte of the escaped path
 		var seg string
 		switch {
 		case raw:
 			p0, seg = u.RawPath[0], pathFirstSegment(u.RawPath)
 		case u.Path == "*":
 			p0, seg = '*', "*"
-		case u.Path != "":
+		case hasPath:
 			p0, seg = u.Path[0], pathFirstSegment(u.Path)
 		}
-		if p0 != 0 && p0 != '/' && u.Host != "" {
+		if hasPath && p0 != '/' && u.Host != "" {
 			dst = append(dst, '/')
 		}
 		// §4.2 applies only when NOTHING of this URL precedes the path

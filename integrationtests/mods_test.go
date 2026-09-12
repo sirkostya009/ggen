@@ -416,3 +416,181 @@ func TestMultierr_NoCursorDesyncOnSingleErrorCallee(t *testing.T) {
 		t.Errorf("got %d leaves, want >= 3 (ime.a + name + tail): %v", len(errs), errs)
 	}
 }
+
+// R10PtrPipeOrder: value steps on a POINTER field run in declared order like
+// on a value field. The deref'd leaf used to run every mod before every
+// validator, so `gte=0 clamp=0|5` clamped -1 into range and `minlen=3 trim`
+// measured the trimmed text.
+//
+//ggen:generate
+type R10PtrPipeOrder struct {
+	V  int     `json:"v" pipe:"gte=0 clamp=0|5"`
+	P  *int    `json:"p" pipe:"gte=0 clamp=0|5"`
+	Cp *int    `json:"cp" pipe:"clamp=0|5 gte=1"`
+	Q  string  `json:"q" pipe:"minlen=3 trim"`
+	Qp *string `json:"qp" pipe:"minlen=3 trim"`
+}
+
+//ggen:generate multierr
+type R10PtrPipeOrderME struct {
+	P *int `json:"p" pipe:"gte=0 clamp=0|5"`
+}
+
+func TestMods_pointerPipeDeclaredOrder(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   string
+		ok   bool
+		want func(v R10PtrPipeOrder) bool
+	}{
+		{`{"v":-1}`, false, nil},
+		{`{"p":-1}`, false, nil},
+		{`{"p":7}`, true, func(v R10PtrPipeOrder) bool { return *v.P == 5 }},
+		{`{"cp":-1}`, false, nil},
+		{`{"cp":3}`, true, func(v R10PtrPipeOrder) bool { return *v.Cp == 3 }},
+		{`{"q":"  a  "}`, true, func(v R10PtrPipeOrder) bool { return v.Q == "a" }},
+		{`{"qp":"  a  "}`, true, func(v R10PtrPipeOrder) bool { return *v.Qp == "a" }},
+		{`{"qp":"ab"}`, false, nil},
+	}
+	for _, c := range cases {
+		got, _, err := R10PtrPipeOrder{}.DecodeFrom([]byte(c.in))
+		if (err == nil) != c.ok || (c.want != nil && err == nil && !c.want(got)) {
+			t.Errorf("bytes %s: %+v (%v), want ok=%v", c.in, got, err, c.ok)
+		}
+		sgot, err := ggen.NewStream(strings.NewReader(c.in), nil).Value[R10PtrPipeOrder]()
+		if (err == nil) != c.ok || (c.want != nil && err == nil && !c.want(sgot)) {
+			t.Errorf("stream %s: %+v (%v), want ok=%v", c.in, sgot, err, c.ok)
+		}
+	}
+	if _, _, err := (R10PtrPipeOrderME{}).DecodeFrom([]byte(`{"p":-1}`)); err == nil {
+		t.Error("multierr: gte=0 bypassed by the later clamp")
+	}
+	if _, err := ggen.NewStream(strings.NewReader(`{"p":-1}`), nil).Value[R10PtrPipeOrderME](); err == nil {
+		t.Error("multierr stream: gte=0 bypassed by the later clamp")
+	}
+}
+
+// R10BPtrPipeOrder: a POINTER field interleaving `@Func` steps with built-in
+// ones runs the whole pipeline in declared order, exactly as the value-typed
+// twin does. `@Func` steps take the field type (`*T`); built-ins the leaf.
+//
+//ggen:generate
+type R10BPtrPipeOrder struct {
+	C *int    `json:"c" pipe:"@zpAdd1 gte=2"`
+	E *string `json:"e" pipe:"@zpUpper oneof=AB"`
+	F *int    `json:"f" pipe:"gte=2 @zpAdd1"`
+}
+
+//ggen:generate multierr
+type R10BPtrPipeOrderME struct {
+	C *int `json:"c" pipe:"@zpAdd1 gte=2"`
+}
+
+//ggen:generate
+type R10BValPipeOrder struct {
+	C int    `json:"c" pipe:"@zpAdd1V gte=2"`
+	E string `json:"e" pipe:"@zpUpperV oneof=AB"`
+	F int    `json:"f" pipe:"gte=2 @zpAdd1V"`
+}
+
+func zpAdd1(p *int) *int {
+	if p == nil {
+		return nil
+	}
+	n := *p + 1
+	return &n
+}
+
+func zpUpper(p *string) *string {
+	if p == nil {
+		return nil
+	}
+	s := strings.ToUpper(*p)
+	return &s
+}
+
+func zpAdd1V(n int) int { return n + 1 }
+
+func zpUpperV(s string) string { return strings.ToUpper(s) }
+
+func TestMods_pointerCustomStepDeclaredOrder(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   string
+		ok   bool
+		want func(p R10BPtrPipeOrder) bool
+	}{
+		{`{"c":1}`, true, func(p R10BPtrPipeOrder) bool { return *p.C == 2 }},
+		{`{"c":0}`, false, nil},
+		{`{"e":"ab"}`, true, func(p R10BPtrPipeOrder) bool { return *p.E == "AB" }},
+		{`{"f":2}`, true, func(p R10BPtrPipeOrder) bool { return *p.F == 3 }},
+		{`{"f":1}`, false, nil},
+		{`{"c":null,"e":null,"f":null}`, true, func(p R10BPtrPipeOrder) bool { return p.C == nil && p.E == nil }},
+	}
+	for _, c := range cases {
+		got, _, err := R10BPtrPipeOrder{}.DecodeFrom([]byte(c.in))
+		if (err == nil) != c.ok || (c.want != nil && err == nil && !c.want(got)) {
+			t.Errorf("bytes %s: %+v (%v), want ok=%v", c.in, got, err, c.ok)
+		}
+		sgot, err := ggen.NewStream(strings.NewReader(c.in), nil).Value[R10BPtrPipeOrder]()
+		if (err == nil) != c.ok || (c.want != nil && err == nil && !c.want(sgot)) {
+			t.Errorf("stream %s: %+v (%v), want ok=%v", c.in, sgot, err, c.ok)
+		}
+		// The value-typed twin must reach the same verdict.
+		if !strings.Contains(c.in, "null") {
+			vgot, _, verr := R10BValPipeOrder{}.DecodeFrom([]byte(c.in))
+			if (verr == nil) != c.ok {
+				t.Errorf("value %s: %+v (%v), want ok=%v", c.in, vgot, verr, c.ok)
+			}
+		}
+	}
+	// multierr collects the ordered verdict rather than short-circuiting.
+	if _, _, err := (R10BPtrPipeOrderME{}).DecodeFrom([]byte(`{"c":1}`)); err != nil {
+		t.Errorf("multierr: @zpAdd1 must run before gte=2: %v", err)
+	}
+	if _, _, err := (R10BPtrPipeOrderME{}).DecodeFrom([]byte(`{"c":0}`)); err == nil {
+		t.Error("multierr: gte=2 must still reject 0+1")
+	}
+}
+
+// A numeric bound above float64's exact integer range must be reported as
+// written: the error's Limit/Of/Want carry the field's own kind, so nothing
+// is rounded on the way into the message.
+//
+//ggen:generate
+type R10BBigBounds struct {
+	A uint64 `json:"a" pipe:"gte=9223372036854775809"`
+	B uint64 `json:"b" pipe:"multiple=9223372036854775809"`
+	C uint64 `json:"c" pipe:"eq=18446744073709551615"`
+}
+
+func TestBigUint64Bounds_reportedExactly(t *testing.T) {
+	t.Parallel()
+	const big = uint64(9223372036854775809)
+	_, _, err := R10BBigBounds{}.DecodeFrom([]byte(`{"a":1,"b":1,"c":1}`))
+	var ge *ggen.GTEError
+	if !errors.As(err, &ge) {
+		t.Fatalf("no GTEError: %v", err)
+	}
+	if ge.Limit != big || !strings.Contains(ge.Error(), "9223372036854775809") {
+		t.Errorf("GTEError.Limit = %v (%T), message %q", ge.Limit, ge.Limit, ge)
+	}
+
+	_, _, err = R10BBigBounds{}.DecodeFrom([]byte(`{"a":9223372036854775809,"b":1,"c":1}`))
+	var me *ggen.MultipleError
+	if !errors.As(err, &me) {
+		t.Fatalf("no MultipleError: %v", err)
+	}
+	if me.Of != big || !strings.Contains(me.Error(), "9223372036854775809") {
+		t.Errorf("MultipleError.Of = %v (%T), message %q", me.Of, me.Of, me)
+	}
+
+	_, _, err = R10BBigBounds{}.DecodeFrom([]byte(`{"a":9223372036854775809,"b":0,"c":1}`))
+	var ee *ggen.EqError
+	if !errors.As(err, &ee) {
+		t.Fatalf("no EqError: %v", err)
+	}
+	if ee.Want != uint64(18446744073709551615) {
+		t.Errorf("EqError.Want = %v (%T)", ee.Want, ee.Want)
+	}
+}

@@ -13,16 +13,67 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
 - **Error-position contract (2026-08).** On error every bytes primitive returns
   the position where scanning STOPPED — a byte strictly inside `data` for a
   malformation, `len(data)` when it ran off the end — never a flat 0 (which made
-  every runtime-call parse failure stamp `ParseError.Pos = 0`). String-content
-  errors (`ErrBadString`/`ErrInvalidUTF8` on a clean span) report the span
-  start; `stringSlow` reports its interior cursor (its prefix-ctrl arm reports
-  the span start, like the clean-span errors). The SIMD twins
+  every runtime-call parse failure stamp `ParseError.Pos = 0`). **A control
+  byte inside a string reports the CONTROL BYTE's own index** — every string
+  scanner, both paths, all SIMD tiers: bytes `String` (open tail, clean span,
+  and `stringSlow`'s pre-escape prefix), `skipString`, the stream
+  `stringView`/`KeyView`/`stringSlow`, and the vector tiers, which get the
+  index for free from their structural locate. The hot loops keep their
+  boolean SWAR gates (`hasCtrlByte`/`ctrlOrHigh`/`checkSpan`); a cold byte
+  walk `ctrlIndex` spells the position on the error branch only.
+  `ErrInvalidUTF8` reports the span start instead — there is no single
+  offending byte. The SIMD twins
   (`StringAVX*`, `SkipValueAVX*` + skip tiers) mirror the scalar positions
   byte-for-byte — pinned by the existing `*SIMD_Parity` differentials, which
   compare (value, pos, err) against scalar. The `Any*` families propagate the
   improved positions; `skipValueAt` is gone (it existed only because exported
   `SkipValue` normalized to 0 — `SkipValue` itself now preserves the give-up
   position, and `CaptureValue` reads it directly).
+  **End-of-data malformations are final.** A `\uXXXX` escape whose buffered
+  digits contain a non-hex byte reports the backslash (bytes) / leaves `Pos`
+  on the backslash (stream); only a tail that can still become an escape —
+  empty, `\`, `\u`, `\u`+hex digits, `uEscapePrefix(tail)` — reports
+  `len(data)` (bytes) or refills (stream); when that refill DRAINS, the
+  stream lands on the same absolute offset the bytes path reports — the end
+  of the input, not the backslash (`"ab\` → 4, `"ab\u00` → 7, against
+  `"ab\u00zz"` → 3, the backslash, on both), at every chunk and buffer size.
+  The surrogate low-half probe
+  follows the same rule on BOTH paths (a still-completable low half in
+  validate mode reports `ErrInvalidUTF8` at `len(data)`; the stream's
+  surrogate-pair lookahead refills only while `uEscapePrefix` holds, so a
+  reader that DRAINS there was truncated, not lone, and the arm reports the
+  end of what arrived instead of the byte past the high-surrogate escape).
+  A control byte in an OPEN tail (no closing quote yet, no backslash) is
+  `ErrBadString` at that byte (`hasCtrlByte(rest)` gates, `ctrlIndex(rest)`
+  locates), never `ErrUnterminated` — `ErrUnterminated` means "ran off
+  the end with no malformation seen". Every `\u` site used to demand its six
+  bytes before looking at the digits already buffered, and the bytes string
+  scanners located the closing quote before classifying the tail, so a
+  malformed value near the end read as truncated: `CaptureValue` and every
+  stream refill classify `pos == len` as "read again", which blocked a live
+  reader forever on an irreparable value, and the bytes verdict split from
+  the stream's (jsonv2 sides with the stream). The SIMD tiers
+  (`classifyStructural`/`classifyStructural64`, the three `skipString*`)
+  return `ErrBadString` unconditionally on a ctrl hit, at the scalar position.
+  Pinned by `TestString_MalformedTailIsFinal`,
+  `TestStreamString_LiveMalformedTailDoesNotHang`, the `"abc\x01` /
+  `"\u12"` rows of `TestBytesStreamTruncationErrorParity`,
+  `TestStreamString_ErrorPos` + `TestStreamSkipStringSIMD_ErrorPos` (the exact
+  ctrl offset per scanner and per tier) and the SIMD parity lists.
+  **`Bool` is an inlinable PROBE; `BoolEnd` carries the position.** `Bool`
+  returns the literal START on failure (cost 54 of the 80 inline budget; any
+  give-up walk or call inside it measured 95–117 and would de-inline it at
+  every generated bool site). The give-up position — first byte breaking the
+  literal, or `len(data)` for a proper prefix — comes from the exported cold
+  `BoolEnd(data, i)` (`litEnd` over `"true"`/`"false"`, chosen by `data[i]`);
+  `skipValue` (+ the SIMD skip tiers), all four `Any*` families and the
+  generated bool sites (cli/CLAUDE.md opt #82) stamp it, as the null arm
+  already does via `litEnd`. `Stream.Bool` mirrors it: `Pos` = the
+  mismatching byte, or the window end when the reader drained mid-literal,
+  rebased to 0 after the compacting head refill; a transient reader error
+  keeps `Pos` on the literal head (the grow-only refill keeps it buffered) so
+  a retry re-scans losslessly. Pinned by `TestBoolEnd_GiveUpPosition` +
+  `TestStreamBool_ErrorPosMatchesBytes`.
 
 - **Depth cap (`maxDepth` = 10000).** `SkipValue` and the four `Any` families
   (`Any`/`AnyNumber`/`AnyCopy`/`AnyNumberCopy`), their stream mirrors, and the
@@ -94,11 +145,43 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   incl. -0 + accept/reject parity, plus must-accept/must-decline assertions —
   the differential only checks ACCEPTED results, so a fast path that silently
   always bailed would otherwise pass it).
+- **`Float32` rounds the decimal once.** `Float32(data, i)` and
+  `(*Stream).Float32()` duplicate `Float64`'s inline RFC 8259 walk (same
+  "removing decode inliners" reason as `skipNumber`) and keep the ≤16 B
+  `exactShort` fast path, but narrow its result only through `narrowExact`:
+  accepted when the float64 is provably not a float32 rounding midpoint (bit
+  test `mant & (1<<29-1) == 1<<28` on the `Float64bits`) and not
+  float32-subnormal (midpoints there sit on a coarser grid), otherwise
+  `strconv.ParseFloat(raw, 32)`; strconv's `ErrRange` maps to
+  `ErrNumberOverflow`. Scanning as float64 and casting rounds twice, which
+  lands one ulp off whenever the float64 result IS a midpoint — the shortest
+  float64 forms of such values, i.e. what `json.Marshal` of a float64 emits
+  (`1.0000000596046448` → `1` instead of `1.0000001`) — and turned
+  `3.4028235677973366e38` (below the overflow midpoint 2^128−2^103) into
+  +Inf. The stream mirror assembles the span like `Stream.Float64` then runs
+  the same tail. Generated code calls them at every float32 site
+  (cli/CLAUDE.md). Pinned by `TestFloat32_StdlibParity` (180k random
+  float32-midpoint neighbourhoods, bytes + stream, bit-exact vs
+  `strconv.ParseFloat(s, 32)`).
+- **`ParseRFC3339(s)` (`rfc3339.go`)** — `time.Parse(time.RFC3339Nano, s)`
+  plus jsonv2's four post-checks that `time.Parse` skips (two-digit hour, `.`
+  fraction separator, zone hour < 24, zone minute < 60), checked in the order
+  that keeps every index in range. Generated default / `format:RFC3339` /
+  `RFC3339Nano` time sites call it on both paths; the stream path parses from
+  `StringView` (no copy), and the checks are byte compares on the
+  already-validated string. `AppendRFC3339` is the encode twin
+  (.claude/encode.md). Pinned by `TestParseRFC3339_JSONv2Parity`.
+- **`Zero[T any](p *T)`** — one-line generic reset generated code calls before
+  a merging cross-package rung (`encoding/json`, `UnmarshalJSON`,
+  `UnmarshalText`) so decode-into-receiver yields what a fresh decode would;
+  generic so the emitter needs no spelling of the foreign type.
 - **`String()` zero-copy alias** via `unsafe.String(unsafe.SliceData(data[start:]),
   len)` when no escapes; falls back to `stringSlow` (`utf8.AppendRune` for `\uXXXX` +
   surrogates). `bytes.IndexByte` (SIMD) finds the closing `"`; a second IndexByte
-  over the span detects a preceding `\`. Truncated `\u…`/trailing `\` →
-  `ErrBadString` via fallthrough to `stringSlow`. **UTF-8 validated** (jsonv2
+  over the span detects a preceding `\`. A truncated `\u…`/trailing `\` that is
+  still a valid escape prefix → `ErrBadString` at `len(data)` via fallthrough
+  to `stringSlow`; a tail that cannot become an escape reports the backslash
+  (`uEscapeEnd`, see the error-position contract). **UTF-8 validated** (jsonv2
   parity, `ErrInvalidUTF8`): the clean span goes through `checkSpan` — the SWAR
   ctrl walk fused with a high-bit accumulate, so pure-ASCII spans never pay the
   `utf8.Valid` rune walk; only spans that actually contain ≥0x80 bytes run it.
@@ -145,6 +228,13 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   (`rep4`). The first block has no predecessor, so it runs one 16-lane classify
   with `prev = zero` and NO EOF check (the rune may continue into the wide
   region); the wide loop starts at 16, where every prevN load is in bounds.
+  The FINAL block is pulled back to start at `len(b)-64` instead of a
+  zero-padded `Part` load — each lane's classification is a pure function of
+  its own four bytes ORed into `errAcc`, so re-classifying the overlap is
+  idempotent, and a block ending exactly at `len(b)` hands a dangling rune to
+  the same `check_eof` sub (one loop body, no copy, no mask, no duplicated
+  tail). This is the no-over-read rule below: `LoadUint8x64Part` is an
+  UNMASKED 64-byte load on go1.27.
   Kernel: 3× from ~1 KB (4 KB 314→104 ns, 13→39 GB/s), −35% at 128 B. Wired in
   via a `classifyStructural64` COPY + the avx512 stream core, because the
   shared `classifyStructural` links into avx/avx2 binaries that must execute no
@@ -203,11 +293,34 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   VPMOVM2B+VPORD+VPMOVB2M). Both shaves measured −2.9% NoAlloc at avx512. Shared scalar `classifyStructural` tail keeps alias return /
   `stringSlow` handoff / error identity byte-identical to `String` (pinned by
   `TestStringSIMD_Parity`: fixed cases at every vector-phase alignment + 2000
-  randomized bodies, all three tiers). Tail loads via `Load*Part`
-  (zero-fill); padding zeroes register as ctrl bytes, filtered by the
-  `k < len(rest)` position check. NO runtime feature probing — generated code
-  calls one tier directly (`ggen -simd`, see `cli/CLAUDE.md` opt #46); wrong
-  CPU faults. 4.2× vs `String` on a 4 KiB clean string, ~1.1× at 8 B.
+  randomized bodies, all three tiers). **No tier ever reads past
+  `data[len(data)-1]`.** The 16/32-lane tiers take their tail through
+  `Load*Part` (zero-fill, composed from scalar element loads); padding zeroes
+  register as ctrl bytes, filtered by the `k < len(rest)` position check. The
+  64-lane tier does NOT use `LoadUint8x64Part`: go1.27 archsimd lowers it to
+  an unmasked full-width VMOVDQU64 plus a zeroing mask-move (`Uint8x64.Masked`
+  is documented "Emulated" — a vector-domain AND after the load; the only
+  k-masked 8-bit memory op is `StoreArrayMasked`), so it always reads 64
+  bytes and faults when the input ends within 63 bytes of unmapped memory —
+  mmap'd files at a page multiple, foreign buffers, arena edges; nearly every
+  document's LAST string value took that tail. `StringAVX512`'s tail reloads
+  the last 64 bytes of `rest` when the body spans a lane (a
+  backward-overlapping full load, the encode tiers' idiom — the overlapped
+  lanes were classified clean, so their mask bits are zero and the `acc` OR
+  is idempotent) and otherwise copies the <64-byte remainder into a zeroed
+  stack lane (padding still registers as ctrl bytes, filtered by the same
+  position check). Every other 64-lane load (skip/space tiers, the stream
+  `structuralIndex*` cores, encode) is bounded `j+64 <= len` or already
+  overlapping. Pinned by `TestSIMD_NoOverRead` (`simd_overread_test.go`,
+  unix): the parent re-executes the test binary as a child with
+  `GGEN_OVERREAD_PROBE=1`, which places every input flush against a
+  PROT_NONE page — lengths 0..130 (validators to 260) over every String /
+  UTF-8 / skip / space / AppendString tier and the stream cores with a window
+  whose capacity ends at the page edge — so a SIGSEGV surfaces as a normal
+  test failure carrying the child's trace instead of killing the suite. NO
+  runtime feature probing — generated code calls one tier directly (`ggen
+  -simd`, see `cli/CLAUDE.md` opt #46); wrong CPU faults. 4.2× vs `String` on
+  a 4 KiB clean string, ~1.1× at 8 B.
 - **`stringSlow` rejects ctrl bytes in the pre-escape prefix.** The prefix
   `data[start:j]` (escape-free span before the first `\`) is `hasCtrlByte`-
   checked before copying — it used to land in scratch unvalidated, silently
@@ -231,21 +344,37 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   `unsafe.String` over write-once scratch — 1 alloc per escaped string. Stream
   `stringSlow` mirrors the alias return (cap bounded at 32). Pinned by
   `TestStringEscapeAllocBounded`.
-- **`(*Stream).stringSlow` buffers the low surrogate before pairing.** A
-  `\uXXXX\uXXXX` surrogate pair (😀) whose low half straddles a refill boundary
-  used to silently split into two lone surrogates (😀 → ��): the pair-continuation
-  check tested `j+6 <= len(s.buf)` but never `ReadMore`d to bring the low
-  surrogate in (the high-surrogate read does). Now it pulls the 6 bytes in first
-  (tolerating EOF → trailing lone surrogate stays RuneError, matching the bytes
-  path). The bytes path was always correct (whole payload buffered). Escaped
-  strings never reached any fuzz/bench payload (all asciiLetters), so this shipped
-  undetected until the EscapeHeavy bench; pinned by
-  `TestStreamStringSurrogateAcrossRefill` (surrogate at every offset × tiny bufs
-  vs the bytes path) + escape seeds in `FuzzStreamEqualsBytes`.
-- **`Any`/`AnyNumber` + `AnyCopy`/`AnyNumberCopy`.** `Any` decodes a value into a
-  Go `any` with stdlib defaults (`null→nil`, bool, `number→float64`,
-  `string`-alias, `[]any`, `map[string]any`); `AnyNumber` is the `json.Number`
-  variant. The `*Copy` siblings (generated bytes-path decoders emit them under
+- **`(*Stream).stringSlow` pairs surrogates through a STAGED peek.** After a
+  high-surrogate `\uXXXX` the low-half lookahead runs through
+  `(*Stream).ensureSpan(&j, n)` (compacts from `j`, rebases it, returns
+  `ReadMore`'s error) in stages — 1 byte to test `\`, 2 to test `u`, then 6
+  for the hex quad, and only while `uEscapePrefix` says the buffered tail can
+  still become an escape — so every byte awaited is part of the low-surrogate
+  escape and a live (never-EOF) reader that delivered the whole string is
+  never asked for bytes past its closing quote. A drained reader at any
+  stage leaves a lone surrogate exactly as the bytes path does
+  (`ErrInvalidUTF8` under validate, U+FFFD otherwise); a transient reader
+  error propagates raw. Pulling 6 bytes up front (needed so a pair whose low
+  half straddles a refill did not split into two lone surrogates) hung
+  forever on `"\ud83d"}` from a live reader — under `validate=false` even
+  though the value is legal. All three SIMD `stringView*` cores share this
+  `stringSlow`. `ensureSpan` is not inlinable (cost 86), so the `\X` and
+  `\uXXXX` arms guard it behind an inline `j+n > len(s.buf)` compare and call
+  only at a window edge (the same split as `refillSkip`); the cold surrogate
+  arm calls it unconditionally. Pinned by
+  `TestStreamStringSurrogateAcrossRefill` (surrogate at every offset × tiny
+  bufs vs the bytes path), `TestStreamStringSurrogate_LiveReader` (liveReader
+  + timeout, paired control must still assemble 😀) + escape seeds in
+  `FuzzStreamEqualsBytes`.
+- **`Any`/`AnyNumber` + `AnyCopy`/`AnyNumberCopy`.** `Any(data, i, validate)`
+  decodes a value into a Go `any` with stdlib defaults (`null→nil`, bool,
+  `number→float64`, `string`-alias, `[]any`, `map[string]any`); `AnyNumber` is
+  the `json.Number` variant. `validate` is `String`'s UTF-8 switch applied to
+  every string and object key in the value (span-level, the per-byte loops
+  never test it); the stream twins `(*Stream).Any(validate)` /
+  `AnyNumber(validate)` take the same flag, and generated code passes the
+  `vArg` its string scans use, so `allowinvalidutf8` reaches `any` values.
+  The `*Copy` siblings (generated bytes-path decoders emit them under
   `-copy`) are byte-for-byte the same walk but detach every string value AND object
   key via `Detach(String(…), data)` (one clone, skipped when the escape arm already
   owns — no `stringSlow`+`Clone` double-copy) and clone the `json.Number` span, so
@@ -318,9 +447,11 @@ element i into `rcv[0][i]`, so each element's own containers are reused too.
 Element `i` is read BEFORE the `append` that overwrites that slot, which is safe
 only because `result` and `prev` share a backing array — do not reorder. Steady
 state is measured at ZERO allocations per decode (`TestStreamBufferReuse`, which
-also pins that a no-rcv call stays independent). Caveat worth repeating to
-users: a field the payload OMITS keeps the rcv's old value, since only present
-keys are written.
+also pins that a no-rcv call stays independent). The receiver only lends its
+memory: the result equals a fresh decode of the payload — omitted fields are
+zeroed, containers emptied and refilled keeping capacity — which the `Value`
+godoc states and `TestMerge_omittedKeysZeroEveryKind` pins through
+`Value(rcv)` as well as `DecodeFromStream`.
 
 **`Array` — one array, lazily.** Same grammar and element decoding as `Slice`,
 but it yields through `iter.Seq2` instead of accumulating, so a million-element
@@ -465,26 +596,54 @@ compaction (`i = 0`, or `j -= start; start = 0` for the string/number body) then
 writes final `s.Pos`. **Every ERROR return past a compaction rebases `s.Pos`
 too** — it is buffer-relative, so a pre-compaction cursor reads as inflated by
 the discarded prefix and can exceed `len(buf)`; generated stream decoders stamp
-it straight into `ParseError.Pos`. The rebased positions mirror the bytes-path
-error-position contract: the number scanners and the string content errors
-(`ErrBadString`/`ErrInvalidUTF8`) report the value/span start, `ErrUnterminated`
-reports the end of what arrived, `skipString` reports its scan cursor. All four
-number scanners keep from the VALUE HEAD (`ReadMore(start)`, spans are bounded
-at ~20 bytes), which is also what makes ReadMore's "a transient error that loses
-no bytes resumes losslessly" contract hold for them: a retry re-scans the intact
-span instead of a `-` or the digits already folded into the accumulator having
-been discarded. Pinned by `TestStreamNumberLosslessRetry`,
-`TestStreamString_ErrorPos`, `TestStreamStringSlow_ErrorPos`. `Float64`/`Number` USED to refill mid-number with grow-only
+it straight into `ParseError.Pos`. That includes the five value-primitive
+HEADS (`Int64`/`Uint64`/`Float64`/`Number`/`Bool`): a head refill at `Pos ==
+len(buf) > 0` (right after a string that ended exactly at the window edge)
+takes `ReadMore`'s full-discard branch BEFORE the Read, so the failed-refill
+return rebases to 0 rather than doubling `Offset()` (6 on a 3-byte document).
+**The stream error position IS the bytes-path error position** — every
+stream primitive leaves `Offset()` on the byte its bytes twin returns, at
+every chunk size: the number scanners report the stop cursor (after a bare
+`-`, at the leading-zero digit, at the `.`/`e`, at the overflowing digit;
+`Float64`/`Number` use `skipNumber`'s grammar stop, `s.Pos = start + end`, and
+`s.Pos = i` for an empty span); `Bool` the give-up byte (`BoolEnd`, above);
+`String`/`KeyView`/`StringView` the control byte for `ErrBadString`, the span
+start for `ErrInvalidUTF8`, and `len(buf)` — the end of what arrived —
+for `ErrUnterminated` and for a truncated `\X`/`\uXXXX` escape (`stringSlow`
+and `skipString`, like the bytes `len(data)`; the truncated high-surrogate
+tail lands here too); `SkipValue` the give-up byte
+(every `skipNumber` exit writes the rebased cursor, literals via
+`skipLiteral` report `litEnd`); `CaptureValue` the bytes skip's give-up byte
+(`s.Pos = end` on both final error returns; `s.Pos = 0` only for a transient
+error after the compacting refill). Only a transient reader error keeps the
+number scanners on the value head (`ReadMore(start)`, spans are bounded at
+~20 bytes), which is what makes ReadMore's "a transient error that loses no
+bytes resumes losslessly" contract hold for them: a retry re-scans the intact
+span instead of a `-` or the digits already folded into the accumulator
+having been discarded. Stream `skipString` full-discards windows as it scans,
+so it cannot name the span head — which is why the ctrl verdict is reported
+at the OFFENDING BYTE: that is the one position both paths can name at every
+chunk size (`TestStreamString_ErrorPos` pins the exact offset). Pinned by
+`TestStreamErrorPos_MatchesBytes` (every primitive × malformed inputs ×
+chunks 1/5/7/64 after a consumed prefix: err identity, `Offset() ==` bytes
+pos, `Pos <= len(buf)`, `Offset() <= len(doc)`), `TestStreamNumberLosslessRetry`,
+`TestStreamString_ErrorPos`, `TestStreamStringSlow_ErrorPos`, and end-to-end
+through generated decoders by `TestParseError_StreamPosChunkInvariant`
+(integ). `Float64`/`Number` USED to refill mid-number with grow-only
 `ReadMore(0)`; since readers fill the whole window, every mid-number window edge
 landed with `len == cap` and DOUBLED the buffer (a 64 B buffer ballooned to 1 MB
 on a 50k-short-float stream). They now compact from `start` + rebase `i` like
 `stringView` (pinned by `TestFloatNumberBufBounded`) — same class as the skip-tree
 compaction fix. The escape decoder `stringSlow` got
 the same treatment: it copies into an owned scratch and aliases THAT (not `s.buf`),
-so every refill compacts from the cursor `j` + rebases (`\X`/`\uXXXX`/surrogate
-each ensure their whole span first) — grow-only ballooned a multi-MB escaped
-string (a 64 B buffer → 256 KB on a 200 KB escaped string; pinned by
-`TestStreamStringSlowBufBounded`). `Float64` also gained the ≤16 B
+so every refill compacts from the cursor `j` + rebases — the `\X`/`\uXXXX`/
+surrogate arms through `ensureSpan(&j, n)`, which compacts from the cursor,
+rebases and returns `ReadMore`'s error, behind an inline bound check on the
+two hot arms (the helper costs 86, not inlinable) and unconditionally in the
+cold surrogate arm; the `\uXXXX` arm refills only while `uEscapePrefix` holds
+— grow-only ballooned a multi-MB escaped string (a 64 B buffer → 256 KB on a
+200 KB escaped string; pinned by `TestStreamStringSlowBufBounded`). `Float64`
+also gained the ≤16 B
 `exactShort` gate the bytes path has (skips `strconv.ParseFloat`'s re-scan;
 bit-identical).
 
@@ -519,9 +678,14 @@ Exactly ONE Read per re-skip: once the arrived bytes may complete the value, a
 second Read on a momentarily-drained live reader (socket with the value fully
 delivered, nothing in flight) would block forever — the old fill-spare-
 capacity-then-re-skip loop was that hang. Eager readers (file, bytes.Reader)
-fill the whole spare tail per Read, so their skips still land on doubling
-windows (O(n)); a short-read regime re-skips per delivery — the price of
-liveness. Returns a buffer alias (valid until the next Stream op — RawMessage copies
+fill whatever tail a refill freed: after the first, compacting refill that is
+only the `start` bytes the prefix occupied when the window was full, so that
+one Read can be tiny and its re-skip wasted before the next refill takes the
+doubling arm; from there on their skips land on doubling windows (O(n)). A
+short-read regime re-skips per delivery — the price of liveness. On a skip
+error the give-up byte is left in `Pos` (`s.Pos = end`), so `Offset()` names
+the malformed byte on the stream exactly as the bytes skip does. Returns a
+buffer alias (valid until the next Stream op — RawMessage copies
 it, `json.Unmarshal`/`SetString` consume it in place). The whole stream skip now
 compacts unconditionally — the `if s.Shift` gates are gone, replaced by plain
 rebases. Pinned by `TestStreamCaptureValue` (correctness × chunk sizes, trailing
@@ -537,8 +701,13 @@ the alias via `strings.Clone(key)`.
 **Lazy bounds checks.** Each method bounds-checks itself (`if s.Pos >= len(s.buf) {
 … ReadMore(s.Pos) … }`), proceeds once **one** new byte lands. Multi-byte literals
 (`true`, `false`, `null`, `\uXXXX`) scan **byte-by-byte**: each char → individual
-check + maybe ReadMore, mismatch fails fast without fetching the rest. (Old
-`Ensure`/`Anchor`/`Unanchor` bulk-fetch in backlog "Tried Rejected".)
+check + maybe ReadMore, mismatch fails fast without fetching the rest. The
+skip tree's literal arms — scalar `SkipValue`'s true/false/null, the three
+`SkipValueAVX*` tiers and both `Any` walkers' null arm — share
+`(*Stream).skipLiteral(want, sentinel)`, which leaves `Pos` on the give-up
+byte like the bytes-path `litEnd` (`len` for a truncated prefix, else the
+first mismatch); `Bool` keeps its own loop with the same give-up contract.
+(Old `Ensure`/`Anchor`/`Unanchor` bulk-fetch in backlog "Tried Rejected".)
 
 **Inlinable two-tier `SkipSpace`.** A tiny inlinable shell (`if s.Pos < len(s.buf)
 && s.buf[s.Pos] > ' ' { return nil }; return s.skipSpaceSlow()`) over the full loop
@@ -547,8 +716,20 @@ bytes/EOF refill hit the slow path. The shell inlines into callers
 (`ConsumeColon`/`ObjectOpen`/`ArrayOpen` + generated dispatch), eliding the call +
 `s.Pos`/`s.buf` reloads. The exact no-temp shell shape is load-bearing: it inlines
 at cost 77 (budget 80); an `i := s.Pos` temp variant costs 81 and does NOT inline.
-Slow path stays byte-exact, including the EOF-returns-nil-at-`Pos==len` quirk
-generated code relies on.
+The budget applies only to callers under 5000 IR nodes: gc classifies larger
+functions as "big" and inlines only callees costing ≤ 20 into them
+(`inlineBigFunctionNodes`/`inlineBigFunctionMaxCost`, cmd/compile
+inl.go), so inside the six largest generated decoders — Mega's
+`Node`/`CopyNode` `decodeFromDepth` + `decodeFromStreamDepth`, NoAlloc's
+`Account`/`CopyAccount.DecodeFrom` — this shell (77), `Bool` (54), `Detach`
+(66) and `StringView` (71) are real CALLs while `Offset` (6), `Bytes` (3) and
+`NotEOF` (8) still inline; every other generated file inlines 100%. A CALL
+node costs 57 in the inliner's model, so no shell containing a call can ever
+get under 20 there. The backlog's stream-tier rejections (the `_s.SkipSpace`
+inliner, the window-gated int loops, `ggen.Bool` inlining) predict flat for
+emitting a guard into those decoders — do not chase it without a house-rule
+A/B. Slow path stays byte-exact, including the EOF-returns-nil-at-`Pos==len`
+quirk generated code relies on.
 
 **Buffer-header hoist in refill loops.** `skipSpaceSlow`, `Int64`, `Uint64`,
 `Float64`, `Number` hoist `buf := s.buf` and run a nested loop (`for i < len(buf)`)
@@ -578,12 +759,16 @@ point**:
 - `net.IP` (`ParseIP` copies; the `&net.ParseError{Text:…}` error literal
   detaches via `strings.Clone(sv)` — `string(sv)` of a string is an identity
   conversion, NOT a copy, a round-9 find)
-- `netip.Addr`/`netip.Prefix` (value types, zones deep-copied by `unique`)
+- `netip.Addr`/`netip.Prefix` (value types, zones deep-copied by `unique`;
+  the error branch re-parses a detached `strings.Clone(sv)` like `net.IP`'s
+  clone, because `parseAddrError`/`parsePrefixError` retain the input string
+  and quote it in `Error()` — pinned by `TestNetip_ErrorDetachedFromBuffer`)
 - `big.Float`/`big.Rat` (parse into receiver, like `big.Int`'s span alias)
 - cross-pkg `TextUnmarshaler` (encoding contract forbids retaining the arg)
 
-A parse error halts decoding, so an error value retaining the string never sees a
-subsequent buffer write. **NOT** for `url.URL` (`url.Parse` slices `Path`/`RawQuery`
+An ERROR value must not retain the alias either: the buffer is recyclable the
+moment decode returns (the documented pooled-buffer usage), so a message that
+quoted the alias mutated once the buffer was reused. **NOT** for `url.URL` (`url.Parse` slices `Path`/`RawQuery`
 out of input → stored value would alias `s.buf`), plain `string` fields, map keys, or
 map/slice string elements (all outlive the scan → `Stream.String` copy). Body is a
 near-duplicate of `Stream.String`'s scan (alias vs copy) — keep in sync.
@@ -631,7 +816,16 @@ failure to `ErrUnterminated` (scalar: `NotEOF(err, ErrUnterminated)` — a
 transient reader error was relabeled as malformed JSON). The parity test only
 feeds complete payloads, so both slipped through; now routed through `NotEOF`
 like the scalar path and pinned by
-`TestStreamStringSIMD_RefillErrorIdentity`.
+`TestStreamStringSIMD_RefillErrorIdentity`. The cores also mirror the scalar
+core's four `s.Pos` writes on error exactly — head refill failure `i = 0;
+s.Pos = i`, non-quote head `s.Pos = i`, mid-string refill failure `s.Pos =
+len(s.buf)`, `ErrBadString`/`ErrInvalidUTF8` `s.Pos = start` — so `Offset()`
+stays rebased after a compacting `ReadMore` (without the writes an
+unterminated 106-byte string reported 11 where scalar said 106, and every
+`-simd` stream decoder stamps that into `ParseError.Pos` via
+`tierStreamStringCalls`). Pinned by `TestStreamStringSIMD_ErrorPos`
+(String* tiers × malformed/truncated bodies × chunk 5/7/64 vs scalar
+`Offset()`, sibling of `TestStreamSkipStringSIMD_ErrorPos`).
 
 ### Skip-tree SIMD tiers (`simd_skip_amd64.go`, `//go:build goexperiment.simd`)
 
@@ -647,12 +841,10 @@ was 22% flat of SkipHeavy/compact as a non-inlined call + prologue + ret (the
 vector body unreachable there yet blocking inlining); splitting it recovered
 −9.7% on the compact ggen row (avx512, interleaved n=8). (b)
 `skipString*`: fused `structuralIndex*` locate + shared `skipStringTail`
-escape switch (identical to scalar skipString's). Error identity scalar-exact
-incl. the truncated-string split via `ctrlHitErr` (scalar returns
-ErrUnterminated for an unterminated tail with no backslash WITHOUT checking
-ctrl bytes; ErrBadString otherwise) — the same helper now also fixes
-`classifyStructural`'s ctrl arm, which used to return ErrBadString
-unconditionally. ggen swaps `ggen.SkipValue` → tier in bytes decode bodies
+escape switch (identical to scalar skipString's, `uEscapePrefix` gating
+included). Error identity scalar-exact: a ctrl hit is `ErrBadString` at the
+scan cursor whatever follows, as in scalar `skipString` (see the
+error-position contract). ggen swaps `ggen.SkipValue` → tier in bytes decode bodies
 and emits a guarded `ggen.SkipSpace*` handoff in `inlineSkipWS` (one WS byte
 consumed inline so compact/single-space payloads stay call-free). Measured
 at avx512 (SkipHeavy bench): compact −21.6%, pretty −29.9%; pretty
@@ -691,7 +883,7 @@ scalar path does, reading the give-up position the tier skip preserves
 buffer length, a stale index once `ReadMore` truncated `s.buf` to `[:0]`
 (`ReadMore` always fully discards here since `keep == len(s.buf)` exactly at
 every call site), overcounting every subsequent `Offset()`. And the ~15
-refill sites across `skipStringStreamTail`/`skipString*`/`skipNull`/
+refill sites across `skipStringStreamTail`/`skipString*`/the literal arms/
 `skipArray*`/`skipObject*` returned a bare grammar sentinel
 (`ErrBadString`/`ErrUnterminated`/`ErrBadLiteral`/`ErrBadArray`/
 `ErrBadObject`) on ANY `ReadMore` failure — including a transient reader
@@ -709,7 +901,12 @@ Skipped bytes are discardable, so every skip refill now compacts:
 clean-window refill full-discards (`ReadMore(len(buf))`); `skipNumber`
 refills via `refillSkip(&i)` — the hot `i < len(s.buf)` bounds check stays
 inline, the cold helper compacts + rebases (a pointer-arg `hasByteAt`
-variant broke inlining and cost +40% — the split is load-bearing).
+variant broke inlining and cost +40% — the split is load-bearing), and
+EVERY `skipNumber` exit writes the rebased `i` back to `s.Pos` (its error
+returns used to leave the stale pre-compaction cursor, so generated
+`ignoreunknown`/`allowdups` decoders stamped `ParseError.Pos` past the end of
+the document — 35/36 on a 20-byte doc — for a malformed number under an
+ignored key straddling a window edge).
 8.4 MB/op → 127 KB/op, 12 → 6 allocs. NOTE: raw `Pos` across a `SkipValue`
 is buffer-relative (like SkipSpace/Int64) — use `Offset()`;
 `TestSkipNumber_StreamMatchesBytes` asserts via Offset. (RawJSON capture no
@@ -764,9 +961,17 @@ compacting `ReadMore` memmoves on the same backing.
   parity + input-decouple checks, + `BenchmarkAny_Shapes`.
 - `string_test.go`, `number_test.go`, `stream_test.go` — primitive
   correctness + edge cases; string_test also carries the `stringSlow`
-  reference differential and the SWAR control-byte probes, number_test the
-  skip-number grammar and float-form benches, stream_test the bytes-vs-stream
-  truncation parity.
-- `decode_test.go` — walkers, parse-error shapes, min-alloc pins, depth cap.
+  reference differential, the SWAR control-byte probes and the malformed-tail
+  finality pins, number_test the skip-number grammar, the `Float32`
+  differential and float-form benches, stream_test the bytes-vs-stream
+  truncation parity, the bytes-vs-stream error-POSITION differential
+  (`TestStreamErrorPos_MatchesBytes`) and the live-reader liveness pins
+  (surrogate, malformed tail).
+- `decode_test.go` — walkers, parse-error shapes, min-alloc pins, depth cap,
+  `BoolEnd`.
+- `rfc3339_test.go` — `ParseRFC3339`/`AppendRFC3339` jsonv2 accept/reject parity.
 - `simd_test.go`, `simd_skip_test.go`, `simd_utf8_test.go` — per-tier parity
-  and benches, one file per kernel family (goexperiment.simd).
+  and benches, one file per kernel family (goexperiment.simd); simd_test also
+  carries the stream string tier error-position pin.
+- `simd_overread_test.go` — the guard-page no-over-read probe over every tier
+  (goexperiment.simd && unix, child test binary).

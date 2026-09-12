@@ -294,7 +294,12 @@ func (recv Addr) DecodeFromStream(s *ggen.Stream) (result Addr, err error) {
 				return result, ggen.NewParseErr("street", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -472,6 +477,7 @@ func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, er
 			seenActive = true
 			result.Active, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("active", i, err)
 			}
 		case "blob":
@@ -479,7 +485,10 @@ func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"blob"}}
 			}
 			seenBlob = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("blob", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Blob = nil
 				break
@@ -520,7 +529,10 @@ func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"children"}}
 			}
 			seenChildren = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("children", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Children = nil
 			} else {
@@ -593,7 +605,7 @@ func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, er
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"coords"}, Want: 2, Got: idx0}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"coords"}, Want: 2, Got: 3}
 					}
 					result.Coords[idx0], i, err = ggen.Float64(data, i)
 					if err != nil {
@@ -649,7 +661,7 @@ func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, er
 					return result, i, ggen.NewParseErr("createdAt", i, err)
 				}
 			}
-			result.CreatedAt, err = time.Parse(time.RFC3339Nano, s)
+			result.CreatedAt, err = ggen.ParseRFC3339(s)
 			if err != nil {
 				return result, i, ggen.NewParseErr("createdAt", i, err)
 			}
@@ -658,7 +670,7 @@ func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"extra"}}
 			}
 			seenExtra = true
-			result.Extra, i, err = ggen.Any(data, i)
+			result.Extra, i, err = ggen.Any(data, i, true)
 			if err != nil {
 				return result, i, ggen.NewParseErr("extra", i, err)
 			}
@@ -717,14 +729,17 @@ func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, er
 			}
 			result.ID = n
 			if result.ID < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"id"}, Limit: 0, Value: result.ID}
+				return result, i, &ggen.GTEError{Pos: i, Path: []string{"id"}, Limit: int64(0), Value: result.ID}
 			}
 		case "matrix":
 			if seenMatrix {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"matrix"}}
 			}
 			seenMatrix = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("matrix", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Matrix = nil
 			} else {
@@ -751,7 +766,10 @@ func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, er
 						} else {
 							result.Matrix = append(result.Matrix, nil)
 						}
-						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("matrix", i, ggen.ErrBadLiteral)
+							}
 							i += 4
 							result.Matrix[len(result.Matrix)-1] = nil
 							if len(result.Matrix[len(result.Matrix)-1]) > 32 {
@@ -932,7 +950,10 @@ func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"parent"}}
 			}
 			seenParent = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("parent", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Parent = nil
 				break
@@ -957,7 +978,10 @@ func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"props"}}
 			}
 			seenProps = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("props", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Props = nil
 			} else {
@@ -1074,7 +1098,10 @@ func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"refs"}}
 			}
 			seenRefs = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("refs", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Refs = nil
 			} else {
@@ -1098,7 +1125,10 @@ func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, er
 				}
 				if i < len(data) && data[i] != ']' {
 					for {
-						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("refs", i, ggen.ErrBadLiteral)
+							}
 							i += 4
 							result.Refs = append(result.Refs, nil)
 							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1162,17 +1192,20 @@ func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, er
 				return result, i, ggen.NewParseErr("score", i, err)
 			}
 			if result.Score < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"score"}, Limit: 0, Value: result.Score}
+				return result, i, &ggen.GTEError{Pos: i, Path: []string{"score"}, Limit: float64(0), Value: result.Score}
 			}
 			if result.Score > 100 {
-				return result, i, &ggen.LTEError{Pos: i, Path: []string{"score"}, Limit: 100, Value: result.Score}
+				return result, i, &ggen.LTEError{Pos: i, Path: []string{"score"}, Limit: float64(100), Value: result.Score}
 			}
 		case "tags":
 			if seenTags {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
 			}
 			seenTags = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("tags", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Tags = nil
 			} else {
@@ -1578,7 +1611,7 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Node, 
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"coords"}, Want: 2, Got: idx0}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"coords"}, Want: 2, Got: 3}
 				}
 				result.Coords[idx0], err = s.Float64()
 				if err != nil {
@@ -1628,7 +1661,7 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Node, 
 			if err != nil {
 				return result, ggen.NewParseErr("createdAt", s.Offset(), err)
 			}
-			result.CreatedAt, err = time.Parse(time.RFC3339Nano, sv)
+			result.CreatedAt, err = ggen.ParseRFC3339(sv)
 			if err != nil {
 				return result, ggen.NewParseErr("createdAt", s.Offset(), err)
 			}
@@ -1641,7 +1674,7 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Node, 
 				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"extra"}}
 			}
 			seenExtra = true
-			result.Extra, err = s.Any()
+			result.Extra, err = s.Any(true)
 			if err != nil {
 				return result, ggen.NewParseErr("extra", s.Offset(), err)
 			}
@@ -1659,7 +1692,7 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Node, 
 				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 			if result.ID < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"id"}, Limit: 0, Value: result.ID}
+				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"id"}, Limit: int64(0), Value: result.ID}
 			}
 		case "matrix":
 			err = s.ConsumeColon()
@@ -2199,10 +2232,10 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Node, 
 				return result, ggen.NewParseErr("score", s.Offset(), err)
 			}
 			if result.Score < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"score"}, Limit: 0, Value: result.Score}
+				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"score"}, Limit: float64(0), Value: result.Score}
 			}
 			if result.Score > 100 {
-				return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"score"}, Limit: 100, Value: result.Score}
+				return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"score"}, Limit: float64(100), Value: result.Score}
 			}
 		case "tags":
 			err = s.ConsumeColon()
@@ -2301,7 +2334,12 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Node, 
 				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"tags"}, Limit: 64, Got: len(result.Tags)}
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2484,7 +2522,9 @@ func (s Node) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, ',')
 	}
 	dst = append(dst, "\"createdAt\":\""...)
-	dst = s.CreatedAt.AppendFormat(dst, time.RFC3339Nano)
+	if dst, err = ggen.AppendRFC3339(dst, s.CreatedAt, time.RFC3339Nano); err != nil {
+		return dst, err
+	}
 	dst = append(dst, '"')
 	if len(dst) > start {
 		dst = append(dst, ',')
@@ -2838,7 +2878,12 @@ func (recv CopyAddr) DecodeFromStream(s *ggen.Stream) (result CopyAddr, err erro
 				return result, ggen.NewParseErr("street", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3016,6 +3061,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, depth int) (result CopyNode, i
 			seenActive = true
 			result.Active, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("active", i, err)
 			}
 		case "blob":
@@ -3023,7 +3069,10 @@ func (recv CopyNode) decodeFromDepth(data []byte, depth int) (result CopyNode, i
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"blob"}}
 			}
 			seenBlob = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("blob", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Blob = nil
 				break
@@ -3064,7 +3113,10 @@ func (recv CopyNode) decodeFromDepth(data []byte, depth int) (result CopyNode, i
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"children"}}
 			}
 			seenChildren = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("children", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Children = nil
 			} else {
@@ -3137,7 +3189,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, depth int) (result CopyNode, i
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"coords"}, Want: 2, Got: idx0}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"coords"}, Want: 2, Got: 3}
 					}
 					result.Coords[idx0], i, err = ggen.Float64(data, i)
 					if err != nil {
@@ -3193,7 +3245,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, depth int) (result CopyNode, i
 					return result, i, ggen.NewParseErr("createdAt", i, err)
 				}
 			}
-			result.CreatedAt, err = time.Parse(time.RFC3339Nano, s)
+			result.CreatedAt, err = ggen.ParseRFC3339(s)
 			if err != nil {
 				return result, i, ggen.NewParseErr("createdAt", i, err)
 			}
@@ -3202,7 +3254,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, depth int) (result CopyNode, i
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"extra"}}
 			}
 			seenExtra = true
-			result.Extra, i, err = ggen.AnyCopy(data, i)
+			result.Extra, i, err = ggen.AnyCopy(data, i, true)
 			if err != nil {
 				return result, i, ggen.NewParseErr("extra", i, err)
 			}
@@ -3261,14 +3313,17 @@ func (recv CopyNode) decodeFromDepth(data []byte, depth int) (result CopyNode, i
 			}
 			result.ID = n
 			if result.ID < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"id"}, Limit: 0, Value: result.ID}
+				return result, i, &ggen.GTEError{Pos: i, Path: []string{"id"}, Limit: int64(0), Value: result.ID}
 			}
 		case "matrix":
 			if seenMatrix {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"matrix"}}
 			}
 			seenMatrix = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("matrix", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Matrix = nil
 			} else {
@@ -3295,7 +3350,10 @@ func (recv CopyNode) decodeFromDepth(data []byte, depth int) (result CopyNode, i
 						} else {
 							result.Matrix = append(result.Matrix, nil)
 						}
-						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("matrix", i, ggen.ErrBadLiteral)
+							}
 							i += 4
 							result.Matrix[len(result.Matrix)-1] = nil
 							if len(result.Matrix[len(result.Matrix)-1]) > 32 {
@@ -3477,7 +3535,10 @@ func (recv CopyNode) decodeFromDepth(data []byte, depth int) (result CopyNode, i
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"parent"}}
 			}
 			seenParent = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("parent", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Parent = nil
 				break
@@ -3502,7 +3563,10 @@ func (recv CopyNode) decodeFromDepth(data []byte, depth int) (result CopyNode, i
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"props"}}
 			}
 			seenProps = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("props", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Props = nil
 			} else {
@@ -3621,7 +3685,10 @@ func (recv CopyNode) decodeFromDepth(data []byte, depth int) (result CopyNode, i
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"refs"}}
 			}
 			seenRefs = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("refs", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Refs = nil
 			} else {
@@ -3645,7 +3712,10 @@ func (recv CopyNode) decodeFromDepth(data []byte, depth int) (result CopyNode, i
 				}
 				if i < len(data) && data[i] != ']' {
 					for {
-						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("refs", i, ggen.ErrBadLiteral)
+							}
 							i += 4
 							result.Refs = append(result.Refs, nil)
 							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -3709,17 +3779,20 @@ func (recv CopyNode) decodeFromDepth(data []byte, depth int) (result CopyNode, i
 				return result, i, ggen.NewParseErr("score", i, err)
 			}
 			if result.Score < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"score"}, Limit: 0, Value: result.Score}
+				return result, i, &ggen.GTEError{Pos: i, Path: []string{"score"}, Limit: float64(0), Value: result.Score}
 			}
 			if result.Score > 100 {
-				return result, i, &ggen.LTEError{Pos: i, Path: []string{"score"}, Limit: 100, Value: result.Score}
+				return result, i, &ggen.LTEError{Pos: i, Path: []string{"score"}, Limit: float64(100), Value: result.Score}
 			}
 		case "tags":
 			if seenTags {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
 			}
 			seenTags = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("tags", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Tags = nil
 			} else {
@@ -4126,7 +4199,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Co
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"coords"}, Want: 2, Got: idx0}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"coords"}, Want: 2, Got: 3}
 				}
 				result.Coords[idx0], err = s.Float64()
 				if err != nil {
@@ -4176,7 +4249,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Co
 			if err != nil {
 				return result, ggen.NewParseErr("createdAt", s.Offset(), err)
 			}
-			result.CreatedAt, err = time.Parse(time.RFC3339Nano, sv)
+			result.CreatedAt, err = ggen.ParseRFC3339(sv)
 			if err != nil {
 				return result, ggen.NewParseErr("createdAt", s.Offset(), err)
 			}
@@ -4189,7 +4262,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Co
 				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"extra"}}
 			}
 			seenExtra = true
-			result.Extra, err = s.Any()
+			result.Extra, err = s.Any(true)
 			if err != nil {
 				return result, ggen.NewParseErr("extra", s.Offset(), err)
 			}
@@ -4207,7 +4280,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Co
 				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 			if result.ID < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"id"}, Limit: 0, Value: result.ID}
+				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"id"}, Limit: int64(0), Value: result.ID}
 			}
 		case "matrix":
 			err = s.ConsumeColon()
@@ -4747,10 +4820,10 @@ func (recv CopyNode) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Co
 				return result, ggen.NewParseErr("score", s.Offset(), err)
 			}
 			if result.Score < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"score"}, Limit: 0, Value: result.Score}
+				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"score"}, Limit: float64(0), Value: result.Score}
 			}
 			if result.Score > 100 {
-				return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"score"}, Limit: 100, Value: result.Score}
+				return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"score"}, Limit: float64(100), Value: result.Score}
 			}
 		case "tags":
 			err = s.ConsumeColon()
@@ -4849,7 +4922,12 @@ func (recv CopyNode) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Co
 				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"tags"}, Limit: 64, Got: len(result.Tags)}
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -5032,7 +5110,9 @@ func (s CopyNode) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, ',')
 	}
 	dst = append(dst, "\"createdAt\":\""...)
-	dst = s.CreatedAt.AppendFormat(dst, time.RFC3339Nano)
+	if dst, err = ggen.AppendRFC3339(dst, s.CreatedAt, time.RFC3339Nano); err != nil {
+		return dst, err
+	}
 	dst = append(dst, '"')
 	if len(dst) > start {
 		dst = append(dst, ',')
@@ -5247,7 +5327,10 @@ func (recv MapValues) DecodeFrom(data []byte) (result MapValues, i int, err erro
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"entries"}}
 			}
 			seenEntries = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("entries", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Entries = nil
 				break
@@ -5331,7 +5414,10 @@ func (recv MapValues) DecodeFrom(data []byte) (result MapValues, i int, err erro
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"lists"}}
 			}
 			seenLists = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("lists", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Lists = nil
 				break
@@ -5384,7 +5470,10 @@ func (recv MapValues) DecodeFrom(data []byte) (result MapValues, i int, err erro
 						if reuse {
 							mv = carried[mk][:0]
 						}
-						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("lists.value", i, ggen.ErrBadLiteral)
+							}
 							i += 4
 							mv = nil
 						} else {
@@ -5867,7 +5956,12 @@ func (recv MapValues) DecodeFromStream(s *ggen.Stream) (result MapValues, err er
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -6090,7 +6184,10 @@ func (recv MapHeavyEntry) DecodeFrom(data []byte) (result MapHeavyEntry, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"meta"}}
 			}
 			seenMeta = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("meta", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Meta = nil
 				break
@@ -6189,7 +6286,10 @@ func (recv MapHeavyEntry) DecodeFrom(data []byte) (result MapHeavyEntry, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
 			}
 			seenTags = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("tags", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Tags = nil
 				break
@@ -6528,7 +6628,12 @@ func (recv MapHeavyEntry) DecodeFromStream(s *ggen.Stream) (result MapHeavyEntry
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -6674,7 +6779,10 @@ func (recv MapValuesHeavy) DecodeFrom(data []byte) (result MapValuesHeavy, i int
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"entries"}}
 			}
 			seenEntries = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("entries", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Entries = nil
 				break
@@ -6922,7 +7030,12 @@ func (recv MapValuesHeavy) DecodeFromStream(s *ggen.Stream) (result MapValuesHea
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -7130,7 +7243,10 @@ func (recv MapEntry) DecodeFrom(data []byte) (result MapEntry, i int, err error)
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
 			}
 			seenTags = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("tags", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Tags = nil
 				break
@@ -7377,7 +7493,12 @@ func (recv MapEntry) DecodeFromStream(s *ggen.Stream) (result MapEntry, err erro
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -7504,7 +7625,10 @@ func (recv MapHeavy) DecodeFrom(data []byte) (result MapHeavy, i int, err error)
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"labels"}}
 			}
 			seenLabels = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("labels", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Labels = nil
 				break
@@ -7762,7 +7886,12 @@ func (recv MapHeavy) DecodeFromStream(s *ggen.Stream) (result MapHeavy, err erro
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

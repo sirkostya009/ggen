@@ -14,7 +14,7 @@ import (
 // Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
 const ggenCap_CustomBothStruct_Tags_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
 
-var ggenOneof_custom_0 = []string{"admin", "user", "guest"}
+var ggenOneof_custom_test_0 = []string{"admin", "user", "guest"}
 
 func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int, err error) {
 	result = recv
@@ -139,10 +139,10 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 				}
 				result.Age = int(n)
 				if result.Age < 0 {
-					errs = append(errs, &ggen.GTEError{Pos: i, Path: []string{"age"}, Limit: 0, Value: result.Age})
+					errs = append(errs, &ggen.GTEError{Pos: i, Path: []string{"age"}, Limit: int(0), Value: result.Age})
 				}
 				if result.Age > 100 {
-					errs = append(errs, &ggen.LTEError{Pos: i, Path: []string{"age"}, Limit: 100, Value: result.Age})
+					errs = append(errs, &ggen.LTEError{Pos: i, Path: []string{"age"}, Limit: int(100), Value: result.Age})
 				}
 			}
 		case "name":
@@ -213,7 +213,7 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 				switch result.Role {
 				case "admin", "user", "guest":
 				default:
-					errs = append(errs, &ggen.OneOfError{Pos: i, Path: []string{"role"}, Allowed: ggenOneof_custom_0, Value: result.Role})
+					errs = append(errs, &ggen.OneOfError{Pos: i, Path: []string{"role"}, Allowed: ggenOneof_custom_test_0, Value: result.Role})
 				}
 			}
 		default:
@@ -325,10 +325,10 @@ func (recv MultiErrStruct) DecodeFromStream(s *ggen.Stream) (result MultiErrStru
 				}
 				result.Age = int(iv)
 				if result.Age < 0 {
-					errs = append(errs, &ggen.GTEError{Pos: s.Offset(), Path: []string{"age"}, Limit: 0, Value: result.Age})
+					errs = append(errs, &ggen.GTEError{Pos: s.Offset(), Path: []string{"age"}, Limit: int(0), Value: result.Age})
 				}
 				if result.Age > 100 {
-					errs = append(errs, &ggen.LTEError{Pos: s.Offset(), Path: []string{"age"}, Limit: 100, Value: result.Age})
+					errs = append(errs, &ggen.LTEError{Pos: s.Offset(), Path: []string{"age"}, Limit: int(100), Value: result.Age})
 				}
 
 			}
@@ -377,17 +377,17 @@ func (recv MultiErrStruct) DecodeFromStream(s *ggen.Stream) (result MultiErrStru
 				switch result.Role {
 				case "admin", "user", "guest":
 				default:
-					errs = append(errs, &ggen.OneOfError{Pos: s.Offset(), Path: []string{"role"}, Allowed: ggenOneof_custom_0, Value: result.Role})
+					errs = append(errs, &ggen.OneOfError{Pos: s.Offset(), Path: []string{"role"}, Allowed: ggenOneof_custom_test_0, Value: result.Role})
 				}
 
 			}
 		default:
 			ownKey := strings.Clone(key)
-			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}})
 			err = s.ConsumeColon()
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
+			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}})
 			err = s.SkipValue()
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
@@ -509,7 +509,10 @@ func (recv CustomBothStruct) DecodeFrom(data []byte) (result CustomBothStruct, i
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
 			}
 			seenTags = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("tags", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Tags = nil
 				break
@@ -724,7 +727,12 @@ func (recv CustomBothStruct) DecodeFromStream(s *ggen.Stream) (result CustomBoth
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

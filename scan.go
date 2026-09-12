@@ -99,6 +99,11 @@ func String(data []byte, i int, validate bool) (string, int, error) {
 		if bsIdx := bytes.IndexByte(rest, '\\'); bsIdx >= 0 {
 			return stringSlow(data, start, start+bsIdx, bsIdx+16, validate)
 		}
+		// A control byte before the end is malformed whatever follows —
+		// the stream scanners judge each window before waiting for more.
+		if hasCtrlByte(rest) {
+			return "", start + ctrlIndex(rest), ErrBadString
+		}
 		return "", len(data), ErrUnterminated
 	}
 	if bsIdx := bytes.IndexByte(rest[:closeIdx], '\\'); bsIdx >= 0 {
@@ -110,10 +115,14 @@ func String(data []byte, i int, validate bool) (string, int, error) {
 	}
 	if validate {
 		if err := checkSpan(rest[:closeIdx]); err != nil {
+			if err == ErrBadString {
+				return "", start + ctrlIndex(rest[:closeIdx]), err
+			}
+			// Invalid UTF-8 has no single offending byte — the span head.
 			return "", start, err
 		}
 	} else if hasCtrlByte(rest[:closeIdx]) {
-		return "", start, ErrBadString
+		return "", start + ctrlIndex(rest[:closeIdx]), ErrBadString
 	}
 	return unsafe.String(unsafe.SliceData(rest), closeIdx), start + closeIdx + 1, nil
 }
@@ -258,6 +267,20 @@ func hasCtrlByte(b []byte) bool {
 	return false
 }
 
+// ctrlIndex returns the offset of the first control character in b, which
+// hasCtrlByte / ctrlOrHigh / checkSpan has already reported present. Error
+// path only — every string scanner reports ErrBadString at the offending
+// byte, and the byte walk spells it where the SWAR kernels returned a bare
+// bool (the vector tiers get it for free from their structural index).
+func ctrlIndex(b []byte) int {
+	for i, c := range b {
+		if c < 0x20 {
+			return i
+		}
+	}
+	return len(b)
+}
+
 // stringSpanEnd returns the offset of the unescaped closing '"' at or after
 // start (or len(data) if unterminated), skipping escaped quotes via a
 // trailing-backslash parity count. Used to size stringSlow's scratch exactly —
@@ -298,7 +321,7 @@ const escRunWindow = 16
 func stringSlow(data []byte, start, j, capHint int, validate bool) (string, int, error) {
 	bad, rawHigh := ctrlOrHigh(data[start:j])
 	if bad {
-		return "", start, ErrBadString
+		return "", start + ctrlIndex(data[start:j]), ErrBadString
 	}
 	buf := make([]byte, 0, capHint)
 	buf = append(buf, data[start:j]...)
@@ -363,7 +386,7 @@ func stringSlow(data []byte, start, j, capHint int, validate bool) (string, int,
 				j += 2
 			case 'u':
 				if j+6 > len(data) {
-					return "", len(data), ErrBadString
+					return "", uEscapeEnd(data, j), ErrBadString
 				}
 				r, ok := parseHex4(data[j+2 : j+6])
 				if !ok {
@@ -371,13 +394,18 @@ func stringSlow(data []byte, start, j, capHint int, validate bool) (string, int,
 				}
 				j += 6
 				if utf16.IsSurrogate(r) {
-					if j+6 <= len(data) && data[j] == '\\' && data[j+1] == 'u' {
-						if r2, ok := parseHex4(data[j+2 : j+6]); ok {
-							if dec := utf16.DecodeRune(r, r2); dec != utf8.RuneError {
-								r = dec
-								j += 6
+					if j+6 <= len(data) {
+						if data[j] == '\\' && data[j+1] == 'u' {
+							if r2, ok := parseHex4(data[j+2 : j+6]); ok {
+								if dec := utf16.DecodeRune(r, r2); dec != utf8.RuneError {
+									r = dec
+									j += 6
+								}
 							}
 						}
+					} else if validate && uEscapePrefix(data[j:]) {
+						// The low half may still arrive: truncated, not lone.
+						return "", len(data), ErrInvalidUTF8
 					}
 					// Still a surrogate → lone/unpaired: jsonv2 rejects;
 					// permissive mode keeps v1's U+FFFD substitution
@@ -417,6 +445,36 @@ func parseHex4(b []byte) (rune, bool) {
 	return r, true
 }
 
+// uEscapePrefix reports whether tail — fewer than the 6 bytes of a full
+// `\uXXXX` escape — could still grow into one: empty, `\`, `\u`, or `\u`
+// followed only by hex digits. Anything else is final wherever the data ends:
+// malformed, never truncated, so a stream must not refill for it (a live
+// reader would block).
+func uEscapePrefix(tail []byte) bool {
+	switch {
+	case len(tail) == 0:
+		return true
+	case tail[0] != '\\':
+		return false
+	case len(tail) == 1:
+		return true
+	case tail[1] != 'u':
+		return false
+	}
+	_, ok := parseHex4(tail[2:])
+	return ok
+}
+
+// uEscapeEnd is where a `\uXXXX` escape at bs cut short by the end of data
+// gave up: len(data) when the buffered bytes are still a valid prefix, else
+// the backslash.
+func uEscapeEnd(data []byte, bs int) int {
+	if uEscapePrefix(data[bs:]) {
+		return len(data)
+	}
+	return bs
+}
+
 // skipString advances past a JSON string at data[i] (must start with '"')
 // without decoding — escapes are validated only enough to find the end.
 // Used by SkipValue/skipObject where the value is discarded; avoids the
@@ -444,16 +502,20 @@ func skipString(data []byte, i int) (int, error) {
 		bsRel := bytes.IndexByte(data[j:q], '\\')
 		if q < len(data) && bsRel < 0 {
 			if hasCtrlByte(data[j:q]) {
-				return j, ErrBadString
+				return j + ctrlIndex(data[j:q]), ErrBadString
 			}
 			return q + 1, nil
 		}
 		if bsRel < 0 {
+			// Ctrl before the end is malformed whatever follows — see String.
+			if hasCtrlByte(data[j:]) {
+				return j + ctrlIndex(data[j:]), ErrBadString
+			}
 			return len(data), ErrUnterminated
 		}
 		bs := j + bsRel
 		if hasCtrlByte(data[j:bs]) {
-			return j, ErrBadString
+			return j + ctrlIndex(data[j:bs]), ErrBadString
 		}
 		if bs+1 >= len(data) {
 			return len(data), ErrBadString
@@ -463,7 +525,7 @@ func skipString(data []byte, i int) (int, error) {
 			j = bs + 2
 		case 'u':
 			if bs+6 > len(data) {
-				return len(data), ErrBadString
+				return uEscapeEnd(data, bs), ErrBadString
 			}
 			if _, ok := parseHex4(data[bs+2 : bs+6]); !ok {
 				return bs, ErrBadString
@@ -535,7 +597,7 @@ func Int64(data []byte, i int) (int64, int, error) {
 }
 
 // Uint64 scans an unsigned integer JSON number. Returns ErrNumberOverflow
-// when the magnitude exceeds MaxUint64.
+// when the magnitude exceeds [math.MaxUint64].
 func Uint64(data []byte, i int) (uint64, int, error) {
 	if i >= len(data) || data[i] < '0' || data[i] > '9' {
 		return 0, i, ErrBadNumber
@@ -633,6 +695,93 @@ func Float64(data []byte, i int) (float64, int, error) {
 		return 0, start, err
 	}
 	return v, i, nil
+}
+
+// Float32 scans a JSON number into a float32, rounding the decimal ONCE the
+// way strconv.ParseFloat(s, 32) does. Narrowing a float64 parse rounds
+// twice, which lands one float32 ulp off whenever the float64 result sits
+// exactly on a float32 rounding midpoint (the shortest form of 1+2^-24,
+// 1.0000000596046448, decoded to 1 that way) and turned the in-range
+// 3.4028235677973366e38 into an overflow. Out of float32 range →
+// ErrNumberOverflow.
+func Float32(data []byte, i int) (float32, int, error) {
+	start := i
+	// Grammar walk duplicated from Float64 — routing through a shared call
+	// is the "removing decode inliners" regression class.
+	n := len(data)
+	if i < n && data[i] == '-' {
+		i++
+	}
+	if i >= n {
+		return 0, i, ErrBadNumber
+	}
+	if data[i] == '0' {
+		i++
+	} else if data[i] >= '1' && data[i] <= '9' {
+		i++
+		for i < n && data[i] >= '0' && data[i] <= '9' {
+			i++
+		}
+	} else {
+		return 0, i, ErrBadNumber
+	}
+	if i < n && data[i] == '.' {
+		i++
+		if i >= n || data[i] < '0' || data[i] > '9' {
+			return 0, i, ErrBadNumber
+		}
+		i++
+		for i < n && data[i] >= '0' && data[i] <= '9' {
+			i++
+		}
+	}
+	if i < n && (data[i] == 'e' || data[i] == 'E') {
+		i++
+		if i < n && (data[i] == '+' || data[i] == '-') {
+			i++
+		}
+		if i >= n || data[i] < '0' || data[i] > '9' {
+			return 0, i, ErrBadNumber
+		}
+		i++
+		for i < n && data[i] >= '0' && data[i] <= '9' {
+			i++
+		}
+	}
+	if i-start <= 16 {
+		if v, ok := exactShort(data[start:i]); ok {
+			if f, ok := narrowExact(v); ok {
+				return f, i, nil
+			}
+		}
+	}
+	raw := unsafe.String(unsafe.SliceData(data[start:]), i-start)
+	v, err := strconv.ParseFloat(raw, 32)
+	if err != nil {
+		if errors.Is(err, strconv.ErrRange) {
+			return 0, start, ErrNumberOverflow
+		}
+		return 0, start, err
+	}
+	return float32(v), i, nil
+}
+
+// narrowExact narrows a correctly rounded float64 parse to float32 when the
+// second rounding provably matches a direct float32 parse of the same
+// decimal: the float64 sits strictly between two float32 midpoints, so both
+// parses round toward the same neighbour. It bails when v IS a midpoint (the
+// decimal may lie on either side of it, which ties-to-even cannot tell) or
+// falls in float32's subnormal range, whose midpoints sit on a coarser grid
+// the bit test does not see.
+func narrowExact(v float64) (float32, bool) {
+	b := math.Float64bits(v)
+	if b&(1<<29-1) == 1<<28 {
+		return 0, false
+	}
+	if e := b >> 52 & 0x7FF; e != 0 && e < 1023-126 {
+		return 0, false
+	}
+	return float32(v), true
 }
 
 // exactPow10[k] = 10^k, exactly representable for k ≤ 22.
@@ -790,7 +939,10 @@ const (
 	litAlse = 0x65736c61 // "alse"  — a, l, s, e (tail of "false")
 )
 
-// Bool scans a JSON true/false literal.
+// Bool scans a JSON true/false literal. On failure the returned position is
+// the literal START, not where the scan gave up: the probe stays under the
+// inline budget only without the give-up walk, so callers that report a
+// position derive it with [BoolEnd] on their error path.
 func Bool(data []byte, i int) (bool, int, error) {
 	if i+4 <= len(data) && binary.LittleEndian.Uint32(data[i:]) == litTrue {
 		return true, i + 4, nil
@@ -799,6 +951,17 @@ func Bool(data []byte, i int) (bool, int, error) {
 		return false, i + 5, nil
 	}
 	return false, i, ErrBadBool
+}
+
+// BoolEnd is where a failed [Bool] scan at i gave up: the first byte that
+// breaks the literal, or len(data) when data[i:] is a proper prefix of it
+// (truncated — more bytes could still complete it). Generated bytes decoders
+// and the Any*/SkipValue dispatchers stamp it on the error path.
+func BoolEnd(data []byte, i int) int {
+	if i < len(data) && data[i] == 'f' {
+		return litEnd(data, i, "false")
+	}
+	return litEnd(data, i, "true")
 }
 
 // Null consumes a null literal. Returns new pos + true if matched, else (i, false).
@@ -820,8 +983,8 @@ func SkipValue(data []byte, i int) (int, error) {
 // litEnd reports where a fixed literal scan gave up: len(data) when data[i:]
 // is a proper PREFIX of want (truncated — more bytes could still complete
 // it), else the index of the first mismatching byte (malformed, final).
-// Bool reports its start position on failure, which would wrongly mark a
-// chunked `tru` final.
+// Bool and Null report the literal start on a miss (they are inlinable
+// probes), which would wrongly mark a chunked `tru` final.
 func litEnd(data []byte, i int, want string) int {
 	k := 0
 	for i+k < len(data) && k < len(want) && data[i+k] == want[k] {
@@ -844,11 +1007,7 @@ func skipValue(data []byte, i, depth int) (int, error) {
 	case 't', 'f':
 		_, j, err := Bool(data, i)
 		if err != nil {
-			want := "true"
-			if data[i] == 'f' {
-				want = "false"
-			}
-			return litEnd(data, i, want), err
+			return BoolEnd(data, i), err
 		}
 		return j, nil
 	case 'n':
@@ -937,12 +1096,13 @@ func skipObject(data []byte, i, depth int) (int, error) {
 // Any decodes the next JSON value at i into a Go any using stdlib
 // encoding/json defaults: null→nil, true/false→bool, number→float64,
 // string→string, array→[]any, object→map[string]any. Strings alias
-// the input via the same zero-copy path used by [String].
-func Any(data []byte, i int) (any, int, error) {
-	return anyValue(data, i, 0)
+// the input via the same zero-copy path used by [String]; validate is its
+// UTF-8 switch, applied to every string and object key in the value.
+func Any(data []byte, i int, validate bool) (any, int, error) {
+	return anyValue(data, i, 0, validate)
 }
 
-func anyValue(data []byte, i, depth int) (any, int, error) {
+func anyValue(data []byte, i, depth int, validate bool) (any, int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) {
 		return nil, i, ErrUnexpectedEnd
@@ -956,22 +1116,25 @@ func anyValue(data []byte, i, depth int) (any, int, error) {
 		return nil, j, nil
 	case c == 't' || c == 'f':
 		v, j, err := Bool(data, i)
-		return v, j, err
+		if err != nil {
+			return v, BoolEnd(data, i), err
+		}
+		return v, j, nil
 	case c == '"':
-		s, j, err := String(data, i, true)
+		s, j, err := String(data, i, validate)
 		return s, j, err
 	case c == '-' || (c >= '0' && c <= '9'):
 		v, j, err := Float64(data, i)
 		return v, j, err
 	case c == '[':
-		return anyArray(data, i, depth+1)
+		return anyArray(data, i, depth+1, validate)
 	case c == '{':
-		return anyObject(data, i, depth+1)
+		return anyObject(data, i, depth+1, validate)
 	}
 	return nil, i, ErrBadLiteral
 }
 
-func anyArray(data []byte, i, depth int) ([]any, int, error) {
+func anyArray(data []byte, i, depth int, validate bool) ([]any, int, error) {
 	if depth > maxDepth {
 		return nil, i, ErrMaxDepth
 	}
@@ -982,7 +1145,7 @@ func anyArray(data []byte, i, depth int) ([]any, int, error) {
 	}
 	out := make([]any, 0, 4)
 	for {
-		v, j, err := anyValue(data, i, depth)
+		v, j, err := anyValue(data, i, depth, validate)
 		if err != nil {
 			return nil, j, err
 		}
@@ -1002,7 +1165,7 @@ func anyArray(data []byte, i, depth int) ([]any, int, error) {
 	}
 }
 
-func anyObject(data []byte, i, depth int) (map[string]any, int, error) {
+func anyObject(data []byte, i, depth int, validate bool) (map[string]any, int, error) {
 	if depth > maxDepth {
 		return nil, i, ErrMaxDepth
 	}
@@ -1013,7 +1176,7 @@ func anyObject(data []byte, i, depth int) (map[string]any, int, error) {
 	}
 	out := make(map[string]any, 4)
 	for {
-		key, j, err := String(data, i, true)
+		key, j, err := String(data, i, validate)
 		if err != nil {
 			return nil, j, err
 		}
@@ -1022,7 +1185,7 @@ func anyObject(data []byte, i, depth int) (map[string]any, int, error) {
 			return nil, j, ErrBadObject
 		}
 		j = SkipSpace(data, j+1)
-		v, k, err := anyValue(data, j, depth)
+		v, k, err := anyValue(data, j, depth, validate)
 		if err != nil {
 			return nil, k, err
 		}
@@ -1057,11 +1220,11 @@ func Number(data []byte, i int) (json.Number, int, error) {
 // AnyNumber is the [Any] variant that decodes JSON numbers into json.Number
 // (preserving exact digits) instead of float64. Mirrors stdlib's
 // json.Decoder.UseNumber() option.
-func AnyNumber(data []byte, i int) (any, int, error) {
-	return anyNumberValue(data, i, 0)
+func AnyNumber(data []byte, i int, validate bool) (any, int, error) {
+	return anyNumberValue(data, i, 0, validate)
 }
 
-func anyNumberValue(data []byte, i, depth int) (any, int, error) {
+func anyNumberValue(data []byte, i, depth int, validate bool) (any, int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) {
 		return nil, i, ErrUnexpectedEnd
@@ -1075,22 +1238,25 @@ func anyNumberValue(data []byte, i, depth int) (any, int, error) {
 		return nil, j, nil
 	case c == 't' || c == 'f':
 		v, j, err := Bool(data, i)
-		return v, j, err
+		if err != nil {
+			return v, BoolEnd(data, i), err
+		}
+		return v, j, nil
 	case c == '"':
-		s, j, err := String(data, i, true)
+		s, j, err := String(data, i, validate)
 		return s, j, err
 	case c == '-' || (c >= '0' && c <= '9'):
 		v, j, err := Number(data, i)
 		return v, j, err
 	case c == '[':
-		return anyNumberArray(data, i, depth+1)
+		return anyNumberArray(data, i, depth+1, validate)
 	case c == '{':
-		return anyNumberObject(data, i, depth+1)
+		return anyNumberObject(data, i, depth+1, validate)
 	}
 	return nil, i, ErrBadLiteral
 }
 
-func anyNumberArray(data []byte, i, depth int) ([]any, int, error) {
+func anyNumberArray(data []byte, i, depth int, validate bool) ([]any, int, error) {
 	if depth > maxDepth {
 		return nil, i, ErrMaxDepth
 	}
@@ -1101,7 +1267,7 @@ func anyNumberArray(data []byte, i, depth int) ([]any, int, error) {
 	}
 	out := make([]any, 0, 4)
 	for {
-		v, j, err := anyNumberValue(data, i, depth)
+		v, j, err := anyNumberValue(data, i, depth, validate)
 		if err != nil {
 			return nil, j, err
 		}
@@ -1121,7 +1287,7 @@ func anyNumberArray(data []byte, i, depth int) ([]any, int, error) {
 	}
 }
 
-func anyNumberObject(data []byte, i, depth int) (map[string]any, int, error) {
+func anyNumberObject(data []byte, i, depth int, validate bool) (map[string]any, int, error) {
 	if depth > maxDepth {
 		return nil, i, ErrMaxDepth
 	}
@@ -1132,7 +1298,7 @@ func anyNumberObject(data []byte, i, depth int) (map[string]any, int, error) {
 	}
 	out := make(map[string]any, 4)
 	for {
-		key, j, err := String(data, i, true)
+		key, j, err := String(data, i, validate)
 		if err != nil {
 			return nil, j, err
 		}
@@ -1141,7 +1307,7 @@ func anyNumberObject(data []byte, i, depth int) (map[string]any, int, error) {
 			return nil, j, ErrBadObject
 		}
 		j = SkipSpace(data, j+1)
-		v, k, err := anyNumberValue(data, j, depth)
+		v, k, err := anyNumberValue(data, j, depth, validate)
 		if err != nil {
 			return nil, k, err
 		}
@@ -1167,11 +1333,11 @@ func anyNumberObject(data []byte, i, depth int) (map[string]any, int, error) {
 // mutation of data. Numbers decode to float64 (use [AnyNumberCopy] for
 // json.Number). Strings with escapes already own their bytes; the clone is
 // still applied (one extra copy on the rare escape path).
-func AnyCopy(data []byte, i int) (any, int, error) {
-	return anyCopyValue(data, i, 0)
+func AnyCopy(data []byte, i int, validate bool) (any, int, error) {
+	return anyCopyValue(data, i, 0, validate)
 }
 
-func anyCopyValue(data []byte, i, depth int) (any, int, error) {
+func anyCopyValue(data []byte, i, depth int, validate bool) (any, int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) {
 		return nil, i, ErrUnexpectedEnd
@@ -1185,9 +1351,12 @@ func anyCopyValue(data []byte, i, depth int) (any, int, error) {
 		return nil, j, nil
 	case c == 't' || c == 'f':
 		v, j, err := Bool(data, i)
-		return v, j, err
+		if err != nil {
+			return v, BoolEnd(data, i), err
+		}
+		return v, j, nil
 	case c == '"':
-		s, j, err := String(data, i, true)
+		s, j, err := String(data, i, validate)
 		if err != nil {
 			return nil, j, err
 		}
@@ -1196,14 +1365,14 @@ func anyCopyValue(data []byte, i, depth int) (any, int, error) {
 		v, j, err := Float64(data, i)
 		return v, j, err
 	case c == '[':
-		return anyArrayCopy(data, i, depth+1)
+		return anyArrayCopy(data, i, depth+1, validate)
 	case c == '{':
-		return anyObjectCopy(data, i, depth+1)
+		return anyObjectCopy(data, i, depth+1, validate)
 	}
 	return nil, i, ErrBadLiteral
 }
 
-func anyArrayCopy(data []byte, i, depth int) ([]any, int, error) {
+func anyArrayCopy(data []byte, i, depth int, validate bool) ([]any, int, error) {
 	if depth > maxDepth {
 		return nil, i, ErrMaxDepth
 	}
@@ -1214,7 +1383,7 @@ func anyArrayCopy(data []byte, i, depth int) ([]any, int, error) {
 	}
 	out := make([]any, 0, 4)
 	for {
-		v, j, err := anyCopyValue(data, i, depth)
+		v, j, err := anyCopyValue(data, i, depth, validate)
 		if err != nil {
 			return nil, j, err
 		}
@@ -1234,7 +1403,7 @@ func anyArrayCopy(data []byte, i, depth int) ([]any, int, error) {
 	}
 }
 
-func anyObjectCopy(data []byte, i, depth int) (map[string]any, int, error) {
+func anyObjectCopy(data []byte, i, depth int, validate bool) (map[string]any, int, error) {
 	if depth > maxDepth {
 		return nil, i, ErrMaxDepth
 	}
@@ -1245,7 +1414,7 @@ func anyObjectCopy(data []byte, i, depth int) (map[string]any, int, error) {
 	}
 	out := make(map[string]any, 4)
 	for {
-		key, j, err := String(data, i, true)
+		key, j, err := String(data, i, validate)
 		if err != nil {
 			return nil, j, err
 		}
@@ -1254,7 +1423,7 @@ func anyObjectCopy(data []byte, i, depth int) (map[string]any, int, error) {
 			return nil, j, ErrBadObject
 		}
 		j = SkipSpace(data, j+1)
-		v, k, err := anyCopyValue(data, j, depth)
+		v, k, err := anyCopyValue(data, j, depth, validate)
 		if err != nil {
 			return nil, k, err
 		}
@@ -1277,11 +1446,11 @@ func anyObjectCopy(data []byte, i, depth int) (map[string]any, int, error) {
 // AnyNumberCopy is [AnyCopy] with json.Number for numbers (the -copy +
 // -usenumber combination). The json.Number span is cloned too, since [Number]
 // aliases the input like [String].
-func AnyNumberCopy(data []byte, i int) (any, int, error) {
-	return anyNumberCopyValue(data, i, 0)
+func AnyNumberCopy(data []byte, i int, validate bool) (any, int, error) {
+	return anyNumberCopyValue(data, i, 0, validate)
 }
 
-func anyNumberCopyValue(data []byte, i, depth int) (any, int, error) {
+func anyNumberCopyValue(data []byte, i, depth int, validate bool) (any, int, error) {
 	i = SkipSpace(data, i)
 	if i >= len(data) {
 		return nil, i, ErrUnexpectedEnd
@@ -1295,9 +1464,12 @@ func anyNumberCopyValue(data []byte, i, depth int) (any, int, error) {
 		return nil, j, nil
 	case c == 't' || c == 'f':
 		v, j, err := Bool(data, i)
-		return v, j, err
+		if err != nil {
+			return v, BoolEnd(data, i), err
+		}
+		return v, j, nil
 	case c == '"':
-		s, j, err := String(data, i, true)
+		s, j, err := String(data, i, validate)
 		if err != nil {
 			return nil, j, err
 		}
@@ -1309,14 +1481,14 @@ func anyNumberCopyValue(data []byte, i, depth int) (any, int, error) {
 		}
 		return json.Number(strings.Clone(string(n))), j, nil
 	case c == '[':
-		return anyNumberArrayCopy(data, i, depth+1)
+		return anyNumberArrayCopy(data, i, depth+1, validate)
 	case c == '{':
-		return anyNumberObjectCopy(data, i, depth+1)
+		return anyNumberObjectCopy(data, i, depth+1, validate)
 	}
 	return nil, i, ErrBadLiteral
 }
 
-func anyNumberArrayCopy(data []byte, i, depth int) ([]any, int, error) {
+func anyNumberArrayCopy(data []byte, i, depth int, validate bool) ([]any, int, error) {
 	if depth > maxDepth {
 		return nil, i, ErrMaxDepth
 	}
@@ -1327,7 +1499,7 @@ func anyNumberArrayCopy(data []byte, i, depth int) ([]any, int, error) {
 	}
 	out := make([]any, 0, 4)
 	for {
-		v, j, err := anyNumberCopyValue(data, i, depth)
+		v, j, err := anyNumberCopyValue(data, i, depth, validate)
 		if err != nil {
 			return nil, j, err
 		}
@@ -1347,7 +1519,7 @@ func anyNumberArrayCopy(data []byte, i, depth int) ([]any, int, error) {
 	}
 }
 
-func anyNumberObjectCopy(data []byte, i, depth int) (map[string]any, int, error) {
+func anyNumberObjectCopy(data []byte, i, depth int, validate bool) (map[string]any, int, error) {
 	if depth > maxDepth {
 		return nil, i, ErrMaxDepth
 	}
@@ -1358,7 +1530,7 @@ func anyNumberObjectCopy(data []byte, i, depth int) (map[string]any, int, error)
 	}
 	out := make(map[string]any, 4)
 	for {
-		key, j, err := String(data, i, true)
+		key, j, err := String(data, i, validate)
 		if err != nil {
 			return nil, j, err
 		}
@@ -1367,7 +1539,7 @@ func anyNumberObjectCopy(data []byte, i, depth int) (map[string]any, int, error)
 			return nil, j, ErrBadObject
 		}
 		j = SkipSpace(data, j+1)
-		v, k, err := anyNumberCopyValue(data, j, depth)
+		v, k, err := anyNumberCopyValue(data, j, depth, validate)
 		if err != nil {
 			return nil, k, err
 		}

@@ -77,7 +77,10 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"addresses"}}
 			}
 			seenAddresses = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("addresses", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Addresses = nil
 				break
@@ -164,7 +167,10 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"counts"}}
 			}
 			seenCounts = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("counts", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Counts = nil
 			} else {
@@ -295,7 +301,10 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"labels"}}
 			}
 			seenLabels = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("labels", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Labels = nil
 				break
@@ -788,7 +797,12 @@ func (recv MapStruct) DecodeFromStream(s *ggen.Stream) (result MapStruct, err er
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -965,7 +979,10 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"clamped"}}
 			}
 			seenClamped = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("clamped", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Clamped = nil
 				break
@@ -1099,7 +1116,10 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"counts"}}
 			}
 			seenCounts = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("counts", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Counts = nil
 				break
@@ -1203,10 +1223,10 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 					}
 					result.Counts[mk] = int(n)
 					if result.Counts[mk] < 0 {
-						return result, i, &ggen.GTEError{Pos: i, Path: []string{"counts.value"}, Limit: 0, Value: result.Counts[mk]}
+						return result, i, &ggen.GTEError{Pos: i, Path: []string{"counts.value"}, Limit: int(0), Value: result.Counts[mk]}
 					}
 					if result.Counts[mk] > 100 {
-						return result, i, &ggen.LTEError{Pos: i, Path: []string{"counts.value"}, Limit: 100, Value: result.Counts[mk]}
+						return result, i, &ggen.LTEError{Pos: i, Path: []string{"counts.value"}, Limit: int(100), Value: result.Counts[mk]}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -1233,7 +1253,10 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"names"}}
 			}
 			seenNames = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("names", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Names = nil
 				break
@@ -1597,10 +1620,10 @@ func (recv MapDiveStruct) DecodeFromStream(s *ggen.Stream) (result MapDiveStruct
 				}
 				result.Counts[mk] = int(iv)
 				if result.Counts[mk] < 0 {
-					return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"counts.value"}, Limit: 0, Value: result.Counts[mk]}
+					return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"counts.value"}, Limit: int(0), Value: result.Counts[mk]}
 				}
 				if result.Counts[mk] > 100 {
-					return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"counts.value"}, Limit: 100, Value: result.Counts[mk]}
+					return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"counts.value"}, Limit: int(100), Value: result.Counts[mk]}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -1743,7 +1766,12 @@ func (recv MapDiveStruct) DecodeFromStream(s *ggen.Stream) (result MapDiveStruct
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2123,7 +2151,12 @@ func (recv Derived) DecodeFromStream(s *ggen.Stream) (result Derived, err error)
 				return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2270,7 +2303,10 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"b"}}
 			}
 			seenB = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("b", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.B = nil
 				break
@@ -2327,6 +2363,7 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 					var namedVal bool
 					namedVal, i, err = ggen.Bool(data, i)
 					if err != nil {
+						i = ggen.BoolEnd(data, i)
 						return result, i, ggen.NewParseErr("b", i, err)
 					}
 					result.B[mk] = NVBool(namedVal)
@@ -2355,7 +2392,10 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f"}}
 			}
 			seenF = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("f", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.F = nil
 				break
@@ -2440,7 +2480,10 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i"}}
 			}
 			seenI = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("i", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.I = nil
 				break
@@ -2570,7 +2613,10 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u"}}
 			}
 			seenU = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("u", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.U = nil
 				break
@@ -3184,7 +3230,12 @@ func (recv NamedValMaps) DecodeFromStream(s *ggen.Stream) (result NamedValMaps, 
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3381,7 +3432,10 @@ func (recv NestedMaps) DecodeFrom(data []byte) (result NestedMaps, i int, err er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"counts"}}
 			}
 			seenCounts = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("counts", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Counts = nil
 				break
@@ -3435,7 +3489,10 @@ func (recv NestedMaps) DecodeFrom(data []byte) (result NestedMaps, i int, err er
 							mv = carried[mk]
 							clear(mv)
 						}
-						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("counts.value", i, ggen.ErrBadLiteral)
+							}
 							i += 4
 							mv = nil
 						} else {
@@ -3585,7 +3642,10 @@ func (recv NestedMaps) DecodeFrom(data []byte) (result NestedMaps, i int, err er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"inners"}}
 			}
 			seenInners = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("inners", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Inners = nil
 				break
@@ -3639,7 +3699,10 @@ func (recv NestedMaps) DecodeFrom(data []byte) (result NestedMaps, i int, err er
 							mv = carried[mk]
 							clear(mv)
 						}
-						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("inners.value", i, ggen.ErrBadLiteral)
+							}
 							i += 4
 							mv = nil
 						} else {
@@ -3748,7 +3811,10 @@ func (recv NestedMaps) DecodeFrom(data []byte) (result NestedMaps, i int, err er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"lists"}}
 			}
 			seenLists = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("lists", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Lists = nil
 				break
@@ -3802,7 +3868,10 @@ func (recv NestedMaps) DecodeFrom(data []byte) (result NestedMaps, i int, err er
 							mv = carried[mk]
 							clear(mv)
 						}
-						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("lists.value", i, ggen.ErrBadLiteral)
+							}
 							i += 4
 							mv = nil
 						} else {
@@ -3854,7 +3923,10 @@ func (recv NestedMaps) DecodeFrom(data []byte) (result NestedMaps, i int, err er
 										if reuse1 {
 											mv1 = carried1[mk1][:0]
 										}
-										if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+										if i < len(data) && data[i] == 'n' {
+											if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+												return result, i, ggen.NewParseErr("lists.value.value", i, ggen.ErrBadLiteral)
+											}
 											i += 4
 											mv1 = nil
 										} else {
@@ -4774,7 +4846,12 @@ func (recv NestedMaps) DecodeFromStream(s *ggen.Stream) (result NestedMaps, err 
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

@@ -169,6 +169,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			seen |= 1 << 0
 			result.Active, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("active", i, err)
 			}
 		case "address":
@@ -376,6 +377,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			seen |= 1 << 9
 			result.Deleted, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("deleted", i, err)
 			}
 		case "displayName":
@@ -898,6 +900,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			seen |= 1 << 25
 			result.Premium, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("premium", i, err)
 			}
 		case "reputation":
@@ -1072,6 +1075,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			seen |= 1 << 29
 			result.Suspended, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("suspended", i, err)
 			}
 		case "trustScore":
@@ -1090,6 +1094,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			seen |= 1 << 31
 			result.TwoFactorEnabled, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("twoFactorEnabled", i, err)
 			}
 		case "updatedAt":
@@ -1178,6 +1183,7 @@ func (recv Account) DecodeFrom(data []byte) (result Account, i int, err error) {
 			seen |= 1 << 34
 			result.Verified, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("verified", i, err)
 			}
 		default:
@@ -1924,7 +1930,12 @@ func (recv Account) DecodeFromStream(s *ggen.Stream) (result Account, err error)
 				return result, ggen.NewParseErr("verified", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2590,7 +2601,12 @@ func (recv PostalAddress) DecodeFromStream(s *ggen.Stream) (result PostalAddress
 				return result, ggen.NewParseErr("state", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2741,15 +2757,10 @@ func (recv Geo) DecodeFrom(data []byte) (result Geo, i int, err error) {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"accuracy"}}
 			}
 			seenAccuracy = true
-			var fv float64
-			fv, i, err = ggen.Float64(data, i)
+			result.Accuracy, i, err = ggen.Float32(data, i)
 			if err != nil {
 				return result, i, ggen.NewParseErr("accuracy", i, err)
 			}
-			if math.IsInf(float64(float32(fv)), 0) {
-				return result, i, ggen.NewParseErr("accuracy", i, ggen.ErrNumberOverflow)
-			}
-			result.Accuracy = float32(fv)
 		case "altitude":
 			if seenAltitude {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"altitude"}}
@@ -2865,15 +2876,10 @@ func (recv Geo) DecodeFromStream(s *ggen.Stream) (result Geo, err error) {
 				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"accuracy"}}
 			}
 			seenAccuracy = true
-			var fv float64
-			fv, err = s.Float64()
+			result.Accuracy, err = s.Float32()
 			if err != nil {
 				return result, ggen.NewParseErr("accuracy", s.Offset(), err)
 			}
-			if math.IsInf(float64(float32(fv)), 0) {
-				return result, ggen.NewParseErr("accuracy", s.Offset(), ggen.ErrNumberOverflow)
-			}
-			result.Accuracy = float32(fv)
 		case "altitude":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -2914,7 +2920,12 @@ func (recv Geo) DecodeFromStream(s *ggen.Stream) (result Geo, err error) {
 				return result, ggen.NewParseErr("lng", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3224,6 +3235,7 @@ func (recv Company) DecodeFrom(data []byte) (result Company, i int, err error) {
 			seenIsPublic = true
 			result.IsPublic, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("isPublic", i, err)
 			}
 		case "name":
@@ -3475,7 +3487,12 @@ func (recv Company) DecodeFromStream(s *ggen.Stream) (result Company, err error)
 				return result, ggen.NewParseErr("title", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3647,6 +3664,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			seenAutoSave = true
 			result.AutoSave, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("autoSave", i, err)
 			}
 		case "betaFeatures":
@@ -3656,6 +3674,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			seenBetaFeatures = true
 			result.BetaFeatures, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("betaFeatures", i, err)
 			}
 		case "currency":
@@ -3690,6 +3709,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			seenEmailNotifications = true
 			result.EmailNotifications, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("emailNotifications", i, err)
 			}
 		case "itemsPerPage":
@@ -3762,6 +3782,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			seenPushNotifications = true
 			result.PushNotifications, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("pushNotifications", i, err)
 			}
 		case "smsNotifications":
@@ -3771,6 +3792,7 @@ func (recv Preferences) DecodeFrom(data []byte) (result Preferences, i int, err 
 			seenSMSNotifications = true
 			result.SMSNotifications, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("smsNotifications", i, err)
 			}
 		case "theme":
@@ -4080,7 +4102,12 @@ func (recv Preferences) DecodeFromStream(s *ggen.Stream) (result Preferences, er
 				return result, ggen.NewParseErr("timezone", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -4333,6 +4360,7 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			seen |= 1 << 0
 			result.Active, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("active", i, err)
 			}
 		case "address":
@@ -4543,6 +4571,7 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			seen |= 1 << 9
 			result.Deleted, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("deleted", i, err)
 			}
 		case "displayName":
@@ -5072,6 +5101,7 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			seen |= 1 << 25
 			result.Premium, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("premium", i, err)
 			}
 		case "reputation":
@@ -5246,6 +5276,7 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			seen |= 1 << 29
 			result.Suspended, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("suspended", i, err)
 			}
 		case "trustScore":
@@ -5264,6 +5295,7 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			seen |= 1 << 31
 			result.TwoFactorEnabled, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("twoFactorEnabled", i, err)
 			}
 		case "updatedAt":
@@ -5353,6 +5385,7 @@ func (recv CopyAccount) DecodeFrom(data []byte) (result CopyAccount, i int, err 
 			seen |= 1 << 34
 			result.Verified, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("verified", i, err)
 			}
 		default:
@@ -6099,7 +6132,12 @@ func (recv CopyAccount) DecodeFromStream(s *ggen.Stream) (result CopyAccount, er
 				return result, ggen.NewParseErr("verified", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -6771,7 +6809,12 @@ func (recv CopyPostalAddress) DecodeFromStream(s *ggen.Stream) (result CopyPosta
 				return result, ggen.NewParseErr("state", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -7099,6 +7142,7 @@ func (recv CopyCompany) DecodeFrom(data []byte) (result CopyCompany, i int, err 
 			seenIsPublic = true
 			result.IsPublic, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("isPublic", i, err)
 			}
 		case "name":
@@ -7352,7 +7396,12 @@ func (recv CopyCompany) DecodeFromStream(s *ggen.Stream) (result CopyCompany, er
 				return result, ggen.NewParseErr("title", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -7524,6 +7573,7 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 			seenAutoSave = true
 			result.AutoSave, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("autoSave", i, err)
 			}
 		case "betaFeatures":
@@ -7533,6 +7583,7 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 			seenBetaFeatures = true
 			result.BetaFeatures, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("betaFeatures", i, err)
 			}
 		case "currency":
@@ -7568,6 +7619,7 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 			seenEmailNotifications = true
 			result.EmailNotifications, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("emailNotifications", i, err)
 			}
 		case "itemsPerPage":
@@ -7641,6 +7693,7 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 			seenPushNotifications = true
 			result.PushNotifications, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("pushNotifications", i, err)
 			}
 		case "smsNotifications":
@@ -7650,6 +7703,7 @@ func (recv CopyPreferences) DecodeFrom(data []byte) (result CopyPreferences, i i
 			seenSMSNotifications = true
 			result.SMSNotifications, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("smsNotifications", i, err)
 			}
 		case "theme":
@@ -7961,7 +8015,12 @@ func (recv CopyPreferences) DecodeFromStream(s *ggen.Stream) (result CopyPrefere
 				return result, ggen.NewParseErr("timezone", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

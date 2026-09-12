@@ -150,7 +150,7 @@ func (recv External2) DecodeFrom(data []byte) (result External2, i int, err erro
 			}
 			result.Value = int(n)
 			if result.Value < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"value"}, Limit: 0, Value: result.Value}
+				return result, i, &ggen.GTEError{Pos: i, Path: []string{"value"}, Limit: int(0), Value: result.Value}
 			}
 		default:
 			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
@@ -255,10 +255,15 @@ func (recv External2) DecodeFromStream(s *ggen.Stream) (result External2, err er
 			}
 			result.Value = int(iv)
 			if result.Value < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"value"}, Limit: 0, Value: result.Value}
+				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"value"}, Limit: int(0), Value: result.Value}
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

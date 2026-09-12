@@ -16,13 +16,16 @@ type JSONOptions struct {
 	Embed     bool   // embedded fallback: map absorbs unknown keys, entries splice into parent object
 }
 
-// parseJSONTag follows jsonv2's tag grammar: options split on commas OUTSIDE
-// single-quoted regions (`format:'Jan 2, 2006'`, name `'a,b'`), `\'` is a
-// literal quote, an empty option (trailing comma, `,,`) is malformed, and a
+// parseJSONTag follows jsonv2's tag grammar: the name is taken verbatim
+// (whitespace included — v1 and v2 both keep it), options split on commas
+// OUTSIDE single-quoted regions (`format:'Jan 2, 2006'`, name `'a,b'`), `\'`
+// is a literal quote, an empty or whitespace-padded option is malformed, and a
 // bare `-` name with options is rejected — quote it (`'-'`) for a field
-// literally named "-". Unknown option words pass silently (jsonv2 parity), the
-// one exception being `inline`, which is rejected so a tag written for the
-// older spelling cannot silently decode as an ordinary named field.
+// literally named "-". Unknown option words pass silently (jsonv2 parity)
+// with three exceptions, each a would-be silent no-op: `inline` (the older
+// catch-all spelling), `case:` (case-insensitive key matching, which ggen
+// does not implement), and a near-miss spelling of a known option
+// (`omitEmpty`, `omit_empty`), which jsonv2 itself rejects.
 func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool, err error) {
 	if tag == "" {
 		return "", JSONOptions{}, false, nil
@@ -34,15 +37,17 @@ func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool, err 
 	if unterminated {
 		return "", JSONOptions{}, false, fmt.Errorf("json tag %q: unterminated quoted section (odd number of `'`); escape a literal quote as \\'", tag)
 	}
-	name = strings.TrimSpace(parts[0])
+	name = parts[0]
 	if name == "-" && len(parts) > 1 {
 		return "", JSONOptions{}, false, fmt.Errorf(`json tag %q: use json:"-" to ignore the field, or json:"'-'" for a field named "-"`, tag)
 	}
 	name = unquoteTagValue(name)
 	for _, opt := range parts[1:] {
-		opt = strings.TrimSpace(opt)
 		if opt == "" {
 			return "", JSONOptions{}, false, fmt.Errorf("json tag %q: empty option", tag)
+		}
+		if opt != strings.TrimSpace(opt) {
+			return "", JSONOptions{}, false, fmt.Errorf("json tag %q: option %q is padded with whitespace", tag, opt)
 		}
 		if rest, ok := strings.CutPrefix(opt, "format:"); ok {
 			opts.Format = unquoteTagValue(rest)
@@ -57,8 +62,10 @@ func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool, err 
 			opts.String = true
 		case "embed":
 			opts.Embed = true
-		case "inline":
-			return "", JSONOptions{}, false, fmt.Errorf("json tag %q: `inline` is not a tag option — the catch-all map is `json:\",embed\"` (jsonv2 spells it `embed`)", tag)
+		default:
+			if err := checkTagOptionWord(tag, opt); err != nil {
+				return "", JSONOptions{}, false, err
+			}
 		}
 	}
 	// jsonv2: an embedded fallback carries no name and no other option, since
@@ -72,6 +79,23 @@ func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool, err 
 		}
 	}
 	return name, opts, false, nil
+}
+
+// checkTagOptionWord judges an option word parseJSONTag has no arm for. The
+// word before a `:` is what jsonv2 keys on, normalised the way it does
+// (lower-case, underscores dropped) so `omitEmpty`/`omit_empty`/`Format:hex`
+// land on the option they were meant to be.
+func checkTagOptionWord(tag, opt string) error {
+	head, _, _ := strings.Cut(opt, ":")
+	switch norm := strings.ReplaceAll(strings.ToLower(head), "_", ""); norm {
+	case "inline":
+		return fmt.Errorf("json tag %q: `inline` is not a tag option — the catch-all map is `json:\",embed\"` (jsonv2 spells it `embed`)", tag)
+	case "case":
+		return fmt.Errorf("json tag %q: `case:` is not supported — ggen matches JSON keys exactly; drop the option", tag)
+	case "embed", "omitzero", "omitempty", "string", "format":
+		return fmt.Errorf("json tag %q: invalid appearance of `%s` tag option; specify `%s` instead", tag, opt, norm)
+	}
+	return nil
 }
 
 // splitTagOpts splits a json tag on commas outside single-quoted regions.

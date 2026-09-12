@@ -122,10 +122,10 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 			}
 			result.N = int(n)
 			if result.N < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"n"}, Limit: 0, Value: result.N}
+				return result, i, &ggen.GTEError{Pos: i, Path: []string{"n"}, Limit: int(0), Value: result.N}
 			}
 			if result.N > 100 {
-				return result, i, &ggen.LTEError{Pos: i, Path: []string{"n"}, Limit: 100, Value: result.N}
+				return result, i, &ggen.LTEError{Pos: i, Path: []string{"n"}, Limit: int(100), Value: result.N}
 			}
 		case "name":
 			if seenName {
@@ -245,10 +245,10 @@ func (recv HookedStruct) DecodeFromStream(s *ggen.Stream) (result HookedStruct, 
 			}
 			result.N = int(iv)
 			if result.N < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: 0, Value: result.N}
+				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: int(0), Value: result.N}
 			}
 			if result.N > 100 {
-				return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: 100, Value: result.N}
+				return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: int(100), Value: result.N}
 			}
 		case "name":
 			err = s.ConsumeColon()
@@ -270,7 +270,12 @@ func (recv HookedStruct) DecodeFromStream(s *ggen.Stream) (result HookedStruct, 
 				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

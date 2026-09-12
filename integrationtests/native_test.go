@@ -322,3 +322,252 @@ func TestByteArray_Base64StrictLen(t *testing.T) {
 		}
 	}
 }
+
+// R10ByteSliceTuple: a fixed-length tuple of variable-length byte slices.
+// The element used to inherit the tuple length and fold onto the `[N]byte`
+// base64 path, rejecting every element that was not exactly N bytes —
+// ggen's own marshal output included.
+//
+//ggen:generate
+type R10ByteSliceTuple struct {
+	AB [2][]byte `json:"ab"`
+}
+
+func TestByteArray_TupleOfByteSlices(t *testing.T) {
+	t.Parallel()
+	in := R10ByteSliceTuple{AB: [2][]byte{[]byte("hello"), []byte("world")}}
+	out, err := ggen.Marshal(in)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if want, _ := jsonv2.Marshal(in); string(out) != string(want) {
+		t.Fatalf("marshal: ggen %s, jsonv2 %s", out, want)
+	}
+	got, _, err := R10ByteSliceTuple{}.DecodeFrom(out)
+	if err != nil {
+		t.Fatalf("bytes: decode of own output %s: %v", out, err)
+	}
+	var s ggen.Stream
+	s.Reset(&chunkReader{data: out, max: 3}, make([]byte, 0, 16))
+	sgot, err := R10ByteSliceTuple{}.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatalf("stream: decode of own output %s: %v", out, err)
+	}
+	for path, v := range map[string]R10ByteSliceTuple{"bytes": got, "stream": sgot} {
+		if !bytes.Equal(v.AB[0], in.AB[0]) || !bytes.Equal(v.AB[1], in.AB[1]) {
+			t.Errorf("%s: %q, want %q", path, v.AB, in.AB)
+		}
+	}
+}
+
+// R10BPtrByteArray: a POINTER to a fixed byte array is base64 (or the tagged
+// encoding) behind a nullable rung, at any depth — the `[N]byte` fold lives in
+// the field's kind, which the pointer leaf must keep instead of re-reading the
+// type string as a tuple of numbers.
+//
+//ggen:generate
+type R10BPtrByteArray struct {
+	P *[8]byte  `json:"p"`
+	Q **[4]byte `json:"q"`
+	H *[4]byte  `json:"h,format:hex"`
+	A *[3]byte  `json:"a,format:array"`
+	O *[2]byte  `json:"o,omitempty"`
+}
+
+func TestByteArray_Pointer(t *testing.T) {
+	t.Parallel()
+	in := `{"a":[1,2,3],"h":"01020304","p":"AQIDBAUGBwg=","q":"AQIDBA=="}`
+	got, _, err := R10BPtrByteArray{}.DecodeFrom([]byte(in))
+	if err != nil {
+		t.Fatalf("bytes decode: %v", err)
+	}
+	if got.P == nil || *got.P != [8]byte{1, 2, 3, 4, 5, 6, 7, 8} {
+		t.Errorf("p = %v", got.P)
+	}
+	if got.Q == nil || *got.Q == nil || **got.Q != [4]byte{1, 2, 3, 4} {
+		t.Errorf("q = %v", got.Q)
+	}
+	if got.H == nil || *got.H != [4]byte{1, 2, 3, 4} || got.A == nil || *got.A != [3]byte{1, 2, 3} {
+		t.Errorf("h = %v, a = %v", got.H, got.A)
+	}
+	out, err := ggen.Marshal(got)
+	if err != nil || string(out) != in {
+		t.Fatalf("marshal: %s, %v", out, err)
+	}
+	var s ggen.Stream
+	s.Reset(&chunkReader{data: []byte(in), max: 3}, make([]byte, 0, 16))
+	sgot, err := R10BPtrByteArray{}.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatalf("stream decode: %v", err)
+	}
+	if sout, err := ggen.Marshal(sgot); err != nil || string(sout) != in {
+		t.Fatalf("stream marshal: %s, %v", sout, err)
+	}
+	// null nils the pointer; a payload of the wrong decoded length is refused.
+	nulled, _, err := got.DecodeFrom([]byte(`{"p":null,"q":null}`))
+	if err != nil || nulled.P != nil || nulled.Q != nil {
+		t.Errorf("null: %v %v %v", nulled.P, nulled.Q, err)
+	}
+	var le *ggen.LenError
+	if _, _, err := (R10BPtrByteArray{}).DecodeFrom([]byte(`{"p":"AQID"}`)); !errors.As(err, &le) {
+		t.Errorf("short base64 into *[8]byte: want LenError, got %v", err)
+	}
+	// omitempty on a nil pointer, and the pointee's base64 when set.
+	if out, err := ggen.Marshal(R10BPtrByteArray{}); err != nil || strings.Contains(string(out), `"o"`) {
+		t.Errorf("omitempty: %s, %v", out, err)
+	}
+}
+
+// R10NetZero: the zero netip.Addr / netip.Prefix and a nil net.IP marshal
+// as "" (jsonv2's shape), and "" decodes back to the zero value the way the
+// types' own UnmarshalText do — ggen used to reject its own output for a
+// never-set address. net.IP is a byte slice, so null nils it like []byte.
+//
+//ggen:generate
+type R10NetZero struct {
+	Addr netip.Addr   `json:"addr"`
+	IP   net.IP       `json:"ip"`
+	Pfx  netip.Prefix `json:"pfx"`
+}
+
+func TestNetTypes_emptyIsZero(t *testing.T) {
+	t.Parallel()
+	out, err := ggen.Marshal(R10NetZero{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want, _ := jsonv2.Marshal(R10NetZero{}); string(out) != string(want) {
+		t.Fatalf("marshal: ggen %s, jsonv2 %s", out, want)
+	}
+	same := func(a, b R10NetZero) bool {
+		return a.Addr == b.Addr && a.Pfx == b.Pfx && bytes.Equal(a.IP, b.IP) && (a.IP == nil) == (b.IP == nil)
+	}
+	carried := R10NetZero{Addr: netip.MustParseAddr("10.0.0.1"), IP: net.ParseIP("10.0.0.2"), Pfx: netip.MustParsePrefix("10.0.0.0/8")}
+	for _, p := range []string{string(out), `{"addr":""}`, `{"ip":""}`, `{"pfx":""}`, `{"ip":null}`, `{"addr":"::1","ip":"127.0.0.1","pfx":"10.0.0.0/8"}`} {
+		var want R10NetZero
+		if err := jsonv2.Unmarshal([]byte(p), &want); err != nil {
+			t.Fatalf("jsonv2 rejects %s: %v", p, err)
+		}
+		// A carried receiver takes the zero too — "" must overwrite, not skip.
+		got, _, err := carried.DecodeFrom([]byte(p))
+		if err != nil || !same(got, want) {
+			t.Errorf("bytes %s: %+v (%v), want %+v", p, got, err, want)
+		}
+		var s ggen.Stream
+		s.Reset(&chunkReader{data: []byte(p), max: 3}, make([]byte, 0, 16))
+		sgot, err := carried.DecodeFromStream(&s)
+		if err != nil || !same(sgot, want) {
+			t.Errorf("stream %s: %+v (%v), want %+v", p, sgot, err, want)
+		}
+	}
+	// Malformed text and null on the value types still reject, both paths.
+	for _, p := range []string{`{"addr":"x"}`, `{"ip":"x"}`, `{"pfx":"x"}`, `{"pfx":"10.0.0.1"}`, `{"addr":null}`, `{"pfx":null}`} {
+		if _, _, err := (R10NetZero{}).DecodeFrom([]byte(p)); err == nil {
+			t.Errorf("bytes %s: accepted", p)
+		}
+		var s ggen.Stream
+		s.Reset(&chunkReader{data: []byte(p), max: 3}, make([]byte, 0, 16))
+		if _, err := (R10NetZero{}).DecodeFromStream(&s); err == nil {
+			t.Errorf("stream %s: accepted", p)
+		}
+	}
+}
+
+// A netip parse failure keeps the offending input in its message; the stream
+// scan aliases the buffer, so the retained text must be detached before the
+// buffer is recycled for the next payload.
+func TestNetip_ErrorDetachedFromBuffer(t *testing.T) {
+	t.Parallel()
+	buf := make([]byte, 0, 64)
+	var s ggen.Stream
+	for _, c := range [][2]string{
+		{`{"addr":"300.1.1.1"}`, `{"addr":"XXX.9.9.9"}`},
+		{`{"cidr":"10.0.0.0/99"}`, `{"cidr":"ZZ.0.0.0/77"}`},
+	} {
+		s.Reset(strings.NewReader(c[0]), buf)
+		_, err := s.Value[NativeTypes]()
+		if err == nil {
+			t.Fatalf("%s accepted", c[0])
+		}
+		before := err.Error()
+		s.Reset(strings.NewReader(c[1]), buf)
+		s.Value[NativeTypes]()
+		if after := err.Error(); after != before {
+			t.Errorf("error text changed after buffer reuse:\n before %q\n after  %q", before, after)
+		}
+	}
+}
+
+// R10Time pins the RFC 3339 checks jsonv2 applies and time.Parse does not, on
+// both RFC 3339 layouts: encode refuses a year outside [0,9999] and a zone
+// hour of 24 or more (a string no RFC 3339 parser reads back); decode refuses
+// a one-digit hour, a `,` fraction separator and out-of-range zone digits.
+//
+//ggen:generate
+type R10Time struct {
+	T time.Time `json:"t"`
+	S time.Time `json:"s,format:RFC3339"`
+}
+
+func TestTime_RFC3339StrictParity(t *testing.T) {
+	t.Parallel()
+	for name, tm := range map[string]time.Time{
+		"year_10000": time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC),
+		"year_-1":    time.Date(-1, 1, 1, 0, 0, 0, 0, time.UTC),
+		"zone_+24h":  time.Date(2020, 1, 1, 0, 0, 0, 0, time.FixedZone("W", 24*3600)),
+	} {
+		_, sErr := jsonv2.Marshal(struct {
+			T time.Time `json:"t"`
+		}{tm})
+		if sErr == nil {
+			t.Errorf("%s: jsonv2 accepts it; the oracle moved", name)
+		}
+		for _, v := range []R10Time{{T: tm}, {S: tm}} {
+			if out, err := ggen.Marshal(v); err == nil {
+				t.Errorf("%s: ggen wrote %s", name, out)
+			}
+		}
+	}
+	for _, s := range []string{
+		"2020-01-01T00:00:00+24:00",
+		"2020-01-01T00:00:00+23:60",
+		"2020-01-01T00:00:00,123Z",
+		"2020-01-01T1:04:05Z",
+	} {
+		payload := []byte(`{"t":"` + s + `","s":"` + s + `"}`)
+		var std struct {
+			T time.Time `json:"t"`
+		}
+		if err := jsonv2.Unmarshal(payload, &std); err == nil {
+			t.Errorf("jsonv2 accepts %q; the oracle moved", s)
+		}
+		for _, p := range [][]byte{payload, []byte(`{"t":"2020-01-01T00:00:00Z","s":"` + s + `"}`)} {
+			if got, _, err := (R10Time{}).DecodeFrom(p); err == nil {
+				t.Errorf("bytes: accepted %s as %v", p, got)
+			}
+			var st ggen.Stream
+			st.Reset(bytes.NewReader(p), nil)
+			if got, err := (R10Time{}).DecodeFromStream(&st); err == nil {
+				t.Errorf("stream: accepted %s as %v", p, got)
+			}
+		}
+	}
+	in := R10Time{
+		T: time.Date(2026, 9, 7, 1, 2, 3, 456000000, time.FixedZone("", 5*3600+30*60)),
+		S: time.Date(2026, 9, 7, 1, 2, 3, 0, time.UTC),
+	}
+	out, err := ggen.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := `{"s":"2026-09-07T01:02:03Z","t":"2026-09-07T01:02:03.456+05:30"}`; string(out) != want {
+		t.Errorf("marshal: got %s want %s", out, want)
+	}
+	got, _, err := R10Time{}.DecodeFrom(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.T.Equal(in.T) || !got.S.Equal(in.S) {
+		t.Errorf("roundtrip: got %v want %v", got, in)
+	}
+}

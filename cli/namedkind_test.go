@@ -116,10 +116,11 @@ func TestNamedPrimitive_ZeroLit(t *testing.T) {
 	}
 }
 
-// A pointer to a container reuses the pointee it is handed, so the reset that
-// every plain container gets has to reach through the stars — otherwise a
-// reused receiver APPENDS where `[]T` would have replaced.
-func TestPointerContainer_ReceiverReset(t *testing.T) {
+// A pointer to a container hands its pointee to the leaf decode, which
+// appends into / fills whatever it is given, so the seed empties the leaf at
+// every depth — the same shape a pointer chain gets as a map value or a
+// []**T element, where no entry reset exists.
+func TestPointerContainer_LeafSeedEmptied(t *testing.T) {
 	gen := func(goType string) string {
 		t.Helper()
 		generatedTypes, namedKinds, cyclicTypes = nil, nil, nil
@@ -136,24 +137,27 @@ func TestPointerContainer_ReceiverReset(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		return string(code)
+		return strings.Join(strings.Fields(string(code)), " ")
 	}
 
 	for _, tc := range []struct{ typ, want string }{
-		{"*[]int", "if result.C != nil {\n\t\t(*result.C) = (*result.C)[:0]"},
-		{"**[]int", "if result.C != nil && *result.C != nil {\n\t\t(**result.C) = (**result.C)[:0]"},
-		{"*map[string]int", "if result.C != nil {\n\t\tclear((*result.C))"},
-		{"**map[string]int", "if result.C != nil && *result.C != nil {\n\t\tclear((**result.C))"},
+		{"*[]int", "if result.C != nil { v = (*result.C)[:0] }"},
+		{"**[]int", "if result.C != nil && (*result.C) != nil { v = (*(*result.C))[:0] }"},
+		{"*map[string]int", "if result.C != nil { v = (*result.C) clear(v) }"},
+		{"**map[string]int", "if result.C != nil && (*result.C) != nil { v = (*(*result.C)) clear(v) }"},
 	} {
-		if s := gen(tc.typ); !strings.Contains(s, tc.want) {
-			t.Errorf("%s: missing reset %q:\n%s", tc.typ, tc.want, s)
+		s := gen(tc.typ)
+		if !strings.Contains(s, tc.want) {
+			t.Errorf("%s: missing seed %q:\n%s", tc.typ, tc.want, s)
+		}
+		if strings.Contains(s, "(*result.C) = (*result.C)[:0]") || strings.Contains(s, "clear((*result.C))") {
+			t.Errorf("%s: entry reset duplicates the seed:\n%s", tc.typ, s)
 		}
 	}
 
-	// A pointer to a non-container leaf is still skipped — the decode path
-	// allocates a fresh pointee there, nothing to reset.
-	if s := gen("*int"); strings.Contains(s, "(*result.C) = (*result.C)") {
-		t.Errorf("pointer-to-scalar must not be reset:\n%s", s)
+	// A pointer to a scalar is never seeded — the scan overwrites the leaf.
+	if s := gen("*int"); strings.Contains(s, "v = (*result.C)") {
+		t.Errorf("pointer-to-scalar must not be seeded:\n%s", s)
 	}
 }
 

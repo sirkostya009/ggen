@@ -91,7 +91,7 @@ func (recv EmbedStruct) DecodeFrom(data []byte) (result EmbedStruct, i int, err 
 			if result.Extra == nil {
 				result.Extra = make(map[string]any)
 			}
-			result.Extra[key], i, err = ggen.Any(data, i)
+			result.Extra[key], i, err = ggen.Any(data, i, true)
 			if err != nil {
 				return result, i, ggen.NewParseErr(key, i, err)
 			}
@@ -176,7 +176,7 @@ func (recv EmbedStruct) DecodeFromStream(s *ggen.Stream) (result EmbedStruct, er
 			if result.Extra == nil {
 				result.Extra = make(map[string]any)
 			}
-			result.Extra[ownKey], err = s.Any()
+			result.Extra[ownKey], err = s.Any(true)
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}

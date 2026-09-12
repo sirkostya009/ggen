@@ -7,7 +7,11 @@ package integrationtests
 
 import (
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
+	"math/big"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/sirkostya009/ggen"
 )
@@ -115,5 +119,65 @@ func TestAnyNumber_NestedShape(t *testing.T) {
 	arr := m["k"].([]any)
 	if _, ok := arr[1].(json.Number); !ok {
 		t.Errorf("array elem = %T, want json.Number", arr[1])
+	}
+}
+
+// R10DurationAny: a Duration field and an `any` holding the same value.
+//
+//ggen:generate
+type R10DurationAny struct {
+	D time.Duration `json:"d"`
+	V any           `json:"v"`
+}
+
+// A pointer-receiver marshaler (big.Rat / big.Float have only those) is
+// reached for a VALUE held in an any, directly or nested — jsonv2 parity;
+// v1 emitted {} for it.
+func TestAny_PointerReceiverValueMarshals(t *testing.T) {
+	t.Parallel()
+	for name, v := range map[string]any{
+		"rat":          *big.NewRat(1, 2),
+		"float":        *big.NewFloat(1.5),
+		"rat_in_map":   map[string]any{"k": *big.NewRat(1, 2)},
+		"rat_in_slice": []any{*big.NewRat(1, 2)},
+	} {
+		in := AnyStruct{Name: name, Body: v}
+		got, err := ggen.Marshal(in)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		want, err := jsonv2.Marshal(in)
+		if err != nil {
+			t.Fatalf("%s: jsonv2: %v", name, err)
+		}
+		// Generated member order differs from jsonv2's; compare parsed.
+		var gv, wv any
+		if err := jsonv2.Unmarshal(got, &gv); err != nil {
+			t.Fatalf("%s: reparse %s: %v", name, got, err)
+		}
+		if err := jsonv2.Unmarshal(want, &wv); err != nil {
+			t.Fatalf("%s: reparse %s: %v", name, want, err)
+		}
+		if !reflect.DeepEqual(gv, wv) {
+			t.Errorf("%s:\n ggen   %s\n jsonv2 %s", name, got, want)
+		}
+	}
+}
+
+// A time.Duration carries the field default (`format:units`) inside an any
+// too, so one document holds one wire shape for the type and the any-path
+// form decodes back into a Duration field.
+func TestAny_DurationMatchesFieldWire(t *testing.T) {
+	t.Parallel()
+	out, err := ggen.Marshal(R10DurationAny{D: 90 * time.Second, V: 90 * time.Second})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != `{"d":"1m30s","v":"1m30s"}` {
+		t.Fatalf("field and any paths disagree on time.Duration: %s", out)
+	}
+	back, _, err := R10DurationAny{}.DecodeFrom([]byte(`{"d":` + string(out[len(`{"d":"1m30s","v":`):len(out)-1]) + `}`))
+	if err != nil || back.D != 90*time.Second {
+		t.Errorf("any-path form does not decode into the field: %v, %v", back.D, err)
 	}
 }

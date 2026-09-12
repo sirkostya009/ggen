@@ -118,7 +118,10 @@ func (recv PtrNameStruct) DecodeFrom(data []byte) (result PtrNameStruct, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("name", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Name = nil
 				break
@@ -247,7 +250,12 @@ func (recv PtrNameStruct) DecodeFromStream(s *ggen.Stream) (result PtrNameStruct
 				(*result.Name) = v
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -358,7 +366,10 @@ func (recv PtrCountStruct) DecodeFrom(data []byte) (result PtrCountStruct, i int
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"count"}}
 			}
 			seenCount = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("count", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Count = nil
 				break
@@ -514,7 +525,12 @@ func (recv PtrCountStruct) DecodeFromStream(s *ggen.Stream) (result PtrCountStru
 				(*result.Count) = int(v)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -624,7 +640,10 @@ func (recv PtrRatioStruct) DecodeFrom(data []byte) (result PtrRatioStruct, i int
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ratio"}}
 			}
 			seenRatio = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("ratio", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Ratio = nil
 				break
@@ -737,7 +756,12 @@ func (recv PtrRatioStruct) DecodeFromStream(s *ggen.Stream) (result PtrRatioStru
 				(*result.Ratio) = v
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -849,7 +873,10 @@ func (recv PtrAddrStruct) DecodeFrom(data []byte) (result PtrAddrStruct, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"addr"}}
 			}
 			seenAddr = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("addr", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Addr = nil
 				break
@@ -970,7 +997,12 @@ func (recv PtrAddrStruct) DecodeFromStream(s *ggen.Stream) (result PtrAddrStruct
 				(*result.Addr) = v
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1083,7 +1115,10 @@ func (recv PtrWhenStruct) DecodeFrom(data []byte) (result PtrWhenStruct, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"when"}}
 			}
 			seenWhen = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("when", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.When = nil
 				break
@@ -1205,7 +1240,12 @@ func (recv PtrWhenStruct) DecodeFromStream(s *ggen.Stream) (result PtrWhenStruct
 				(*result.When) = v
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1315,7 +1355,10 @@ func (recv PtrEnabledStruct) DecodeFrom(data []byte) (result PtrEnabledStruct, i
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"enabled"}}
 			}
 			seenEnabled = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("enabled", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Enabled = nil
 				break
@@ -1323,6 +1366,7 @@ func (recv PtrEnabledStruct) DecodeFrom(data []byte) (result PtrEnabledStruct, i
 			var v bool
 			v, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("enabled", i, err)
 			}
 			if result.Enabled == nil {
@@ -1428,7 +1472,12 @@ func (recv PtrEnabledStruct) DecodeFromStream(s *ggen.Stream) (result PtrEnabled
 				(*result.Enabled) = v
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1557,7 +1606,10 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"addr"}}
 			}
 			seenAddr = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("addr", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Addr = nil
 				break
@@ -1582,7 +1634,10 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"count"}}
 			}
 			seenCount = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("count", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Count = nil
 				break
@@ -1645,7 +1700,10 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"enabled"}}
 			}
 			seenEnabled = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("enabled", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Enabled = nil
 				break
@@ -1653,6 +1711,7 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 			var v bool
 			v, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("enabled", i, err)
 			}
 			if result.Enabled == nil {
@@ -1665,7 +1724,10 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
 			}
 			seenName = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("name", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Name = nil
 				break
@@ -1701,7 +1763,10 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ratio"}}
 			}
 			seenRatio = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("ratio", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Ratio = nil
 				break
@@ -1721,7 +1786,10 @@ func (recv PointerStruct) DecodeFrom(data []byte) (result PointerStruct, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"when"}}
 			}
 			seenWhen = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("when", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.When = nil
 				break
@@ -2076,7 +2144,12 @@ func (recv PointerStruct) DecodeFromStream(s *ggen.Stream) (result PointerStruct
 				(*result.When) = v
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2266,7 +2339,10 @@ func (recv PtrPPStruct) DecodeFrom(data []byte) (result PtrPPStruct, i int, err 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"pp"}}
 			}
 			seenPP = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("pp", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.PP = nil
 				break
@@ -2395,7 +2471,7 @@ func (recv PtrPPStruct) DecodeFromStream(s *ggen.Stream) (result PtrPPStruct, er
 			seenPP = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, ggen.NewParseErr("pp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					return result, ggen.NewParseErr("pp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadNumber))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
@@ -2426,7 +2502,12 @@ func (recv PtrPPStruct) DecodeFromStream(s *ggen.Stream) (result PtrPPStruct, er
 				(*(*result.PP)) = int(v)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2539,7 +2620,10 @@ func (recv PtrPPPStruct) DecodeFrom(data []byte) (result PtrPPPStruct, i int, er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ppp"}}
 			}
 			seenPPP = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("ppp", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.PPP = nil
 				break
@@ -2670,7 +2754,7 @@ func (recv PtrPPPStruct) DecodeFromStream(s *ggen.Stream) (result PtrPPPStruct, 
 			seenPPP = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, ggen.NewParseErr("ppp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					return result, ggen.NewParseErr("ppp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadNumber))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
@@ -2703,7 +2787,12 @@ func (recv PtrPPPStruct) DecodeFromStream(s *ggen.Stream) (result PtrPPPStruct, 
 				(*(*(*result.PPP))) = int(v)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2820,7 +2909,10 @@ func (recv PtrPPPPStruct) DecodeFrom(data []byte) (result PtrPPPPStruct, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"pppp"}}
 			}
 			seenPPPP = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("pppp", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.PPPP = nil
 				break
@@ -2926,7 +3018,7 @@ func (recv PtrPPPPStruct) DecodeFromStream(s *ggen.Stream) (result PtrPPPPStruct
 			seenPPPP = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, ggen.NewParseErr("pppp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					return result, ggen.NewParseErr("pppp", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
@@ -2961,7 +3053,12 @@ func (recv PtrPPPPStruct) DecodeFromStream(s *ggen.Stream) (result PtrPPPPStruct
 				(*(*(*(*result.PPPP)))) = v
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3084,7 +3181,10 @@ func (recv PtrAddr2Struct) DecodeFrom(data []byte) (result PtrAddr2Struct, i int
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"addr"}}
 			}
 			seenAddr = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("addr", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Addr = nil
 				break
@@ -3209,7 +3309,12 @@ func (recv PtrAddr2Struct) DecodeFromStream(s *ggen.Stream) (result PtrAddr2Stru
 				(*(*result.Addr)) = v
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3336,7 +3441,10 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"addr"}}
 			}
 			seenAddr = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("addr", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Addr = nil
 				break
@@ -3363,7 +3471,10 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"pp"}}
 			}
 			seenPP = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("pp", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.PP = nil
 				break
@@ -3428,7 +3539,10 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ppp"}}
 			}
 			seenPPP = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("ppp", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.PPP = nil
 				break
@@ -3495,7 +3609,10 @@ func (recv NPtrStruct) DecodeFrom(data []byte) (result NPtrStruct, i int, err er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"pppp"}}
 			}
 			seenPPPP = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("pppp", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.PPPP = nil
 				break
@@ -3666,7 +3783,7 @@ func (recv NPtrStruct) DecodeFromStream(s *ggen.Stream) (result NPtrStruct, err 
 			seenPP = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, ggen.NewParseErr("pp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					return result, ggen.NewParseErr("pp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadNumber))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
@@ -3707,7 +3824,7 @@ func (recv NPtrStruct) DecodeFromStream(s *ggen.Stream) (result NPtrStruct, err 
 			seenPPP = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, ggen.NewParseErr("ppp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					return result, ggen.NewParseErr("ppp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadNumber))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
@@ -3750,7 +3867,7 @@ func (recv NPtrStruct) DecodeFromStream(s *ggen.Stream) (result NPtrStruct, err 
 			seenPPPP = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, ggen.NewParseErr("pppp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					return result, ggen.NewParseErr("pppp", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
@@ -3785,7 +3902,12 @@ func (recv NPtrStruct) DecodeFromStream(s *ggen.Stream) (result NPtrStruct, err 
 				(*(*(*(*result.PPPP)))) = v
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3968,7 +4090,10 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"items"}}
 			}
 			seenItems = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("items", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Items = nil
 				break
@@ -3993,7 +4118,10 @@ func (recv PtrSliceItemsStruct) DecodeFrom(data []byte) (result PtrSliceItemsStr
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							return result, i, ggen.NewParseErr("items", i, ggen.ErrBadLiteral)
+						}
 						i += 4
 						result.Items = append(result.Items, nil)
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4233,7 +4361,12 @@ func (recv PtrSliceItemsStruct) DecodeFromStream(s *ggen.Stream) (result PtrSlic
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -4376,9 +4509,12 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 3 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: idx0}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: 4}
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							return result, i, ggen.NewParseErr("tuple", i, ggen.ErrBadLiteral)
+						}
 						i += 4
 						result.Tuple[idx0] = nil
 						idx0++
@@ -4512,7 +4648,7 @@ func (recv PtrSliceTupleStruct) DecodeFromStream(s *ggen.Stream) (result PtrSlic
 			slab0 := make([]Address, 3)
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 3 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"tuple"}, Want: 3, Got: idx0}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"tuple"}, Want: 3, Got: 4}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -4591,7 +4727,12 @@ func (recv PtrSliceTupleStruct) DecodeFromStream(s *ggen.Stream) (result PtrSlic
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -4720,7 +4861,10 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"nodes"}}
 			}
 			seenNodes = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("nodes", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Nodes = nil
 				break
@@ -4745,7 +4889,10 @@ func (recv PtrSliceNodesStruct) DecodeFrom(data []byte) (result PtrSliceNodesStr
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							return result, i, ggen.NewParseErr("nodes", i, ggen.ErrBadLiteral)
+						}
 						i += 4
 						result.Nodes = append(result.Nodes, nil)
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -4986,7 +5133,12 @@ func (recv PtrSliceNodesStruct) DecodeFromStream(s *ggen.Stream) (result PtrSlic
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -5126,7 +5278,10 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"items"}}
 			}
 			seenItems = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("items", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Items = nil
 				break
@@ -5151,7 +5306,10 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							return result, i, ggen.NewParseErr("items", i, ggen.ErrBadLiteral)
+						}
 						i += 4
 						result.Items = append(result.Items, nil)
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5206,7 +5364,10 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"nodes"}}
 			}
 			seenNodes = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("nodes", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Nodes = nil
 				break
@@ -5231,7 +5392,10 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							return result, i, ggen.NewParseErr("nodes", i, ggen.ErrBadLiteral)
+						}
 						i += 4
 						result.Nodes = append(result.Nodes, nil)
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -5298,9 +5462,12 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 3 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: idx0}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: 4}
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							return result, i, ggen.NewParseErr("tuple", i, ggen.ErrBadLiteral)
+						}
 						i += 4
 						result.Tuple[idx0] = nil
 						idx0++
@@ -5711,7 +5878,7 @@ func (recv PtrSliceStruct) DecodeFromStream(s *ggen.Stream) (result PtrSliceStru
 			slab0 := make([]Address, 3)
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 3 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"tuple"}, Want: 3, Got: idx0}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"tuple"}, Want: 3, Got: 4}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -5790,7 +5957,12 @@ func (recv PtrSliceStruct) DecodeFromStream(s *ggen.Stream) (result PtrSliceStru
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -6021,9 +6193,12 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 3 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"app"}, Want: 3, Got: idx0}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"app"}, Want: 3, Got: 4}
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							return result, i, ggen.NewParseErr("app[]", i, ggen.ErrBadLiteral)
+						}
 						i += 4
 						result.APP[idx0] = nil
 					} else {
@@ -6106,7 +6281,10 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"mp"}}
 			}
 			seenMP = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("mp", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.MP = nil
 				break
@@ -6159,7 +6337,10 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						if reuse {
 							mv = carried[mk]
 						}
-						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("mp.value", i, ggen.ErrBadLiteral)
+							}
 							i += 4
 							mv = nil
 						} else {
@@ -6244,7 +6425,10 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"mpa"}}
 			}
 			seenMPA = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("mpa", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.MPA = nil
 				break
@@ -6297,7 +6481,10 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						if reuse {
 							mv = carried[mk]
 						}
-						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("mpa.value", i, ggen.ErrBadLiteral)
+							}
 							i += 4
 							mv = nil
 						} else {
@@ -6344,7 +6531,10 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"mpp"}}
 			}
 			seenMPP = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("mpp", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.MPP = nil
 				break
@@ -6397,7 +6587,10 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 						if reuse {
 							mv = carried[mk]
 						}
-						if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("mpp.value", i, ggen.ErrBadLiteral)
+							}
 							i += 4
 							mv = nil
 						} else {
@@ -6484,7 +6677,10 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"nspp"}}
 			}
 			seenNSPP = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("nspp", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.NSPP = nil
 				break
@@ -6512,7 +6708,10 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					} else {
 						result.NSPP = append(result.NSPP, nil)
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							return result, i, ggen.NewParseErr("nspp", i, ggen.ErrBadLiteral)
+						}
 						i += 4
 						result.NSPP[len(result.NSPP)-1] = nil
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6557,7 +6756,10 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 							} else {
 								row0 = append(row0, nil)
 							}
-							if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+							if i < len(data) && data[i] == 'n' {
+								if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+									return result, i, ggen.NewParseErr("nspp[][]", i, ggen.ErrBadLiteral)
+								}
 								i += 4
 								row0[len(row0)-1] = nil
 							} else {
@@ -6663,7 +6865,10 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"spp"}}
 			}
 			seenSPP = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("spp", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.SPP = nil
 				break
@@ -6691,7 +6896,10 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 					} else {
 						result.SPP = append(result.SPP, nil)
 					}
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							return result, i, ggen.NewParseErr("spp[]", i, ggen.ErrBadLiteral)
+						}
 						i += 4
 						result.SPP[len(result.SPP)-1] = nil
 					} else {
@@ -6883,7 +7091,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *ggen.Stream) (result NPtrCo
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 3 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"app"}, Want: 3, Got: idx0}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"app"}, Want: 3, Got: 4}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -7669,7 +7877,12 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *ggen.Stream) (result NPtrCo
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -7967,24 +8180,6 @@ func (s NPtrContainersStruct) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, err error) {
 	result = recv
-	if result.Deep != nil && *result.Deep != nil && **result.Deep != nil {
-		(***result.Deep) = (***result.Deep)[:0]
-	}
-	if result.Elems != nil {
-		(*result.Elems) = (*result.Elems)[:0]
-	}
-	if result.M1 != nil {
-		clear((*result.M1))
-	}
-	if result.M3 != nil && *result.M3 != nil && **result.M3 != nil {
-		clear((***result.M3))
-	}
-	if result.MElem != nil && *result.MElem != nil {
-		clear((**result.MElem))
-	}
-	if result.One != nil {
-		(*result.One) = (*result.One)[:0]
-	}
 	if result.Plain != nil {
 		result.Plain = result.Plain[:0]
 	}
@@ -8061,16 +8256,22 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"deep"}}
 			}
 			seenDeep = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Deep = nil
 				break
 			}
 			var v []int
 			if result.Deep != nil && (*result.Deep) != nil && (*(*result.Deep)) != nil {
-				v = (*(*(*result.Deep)))
+				v = (*(*(*result.Deep)))[:0]
 			}
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				v = nil
 			} else {
@@ -8181,16 +8382,22 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"elems"}}
 			}
 			seenElems = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("elems", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Elems = nil
 				break
 			}
 			var v []PtrContainerElem
 			if result.Elems != nil {
-				v = (*result.Elems)
+				v = (*result.Elems)[:0]
 			}
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("elems", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				v = nil
 			} else {
@@ -8254,7 +8461,10 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"m1"}}
 			}
 			seenM1 = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("m1", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.M1 = nil
 				break
@@ -8262,8 +8472,12 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 			var v map[string]int
 			if result.M1 != nil {
 				v = (*result.M1)
+				clear(v)
 			}
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("m1", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				v = nil
 			} else {
@@ -8396,7 +8610,10 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"m3"}}
 			}
 			seenM3 = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("m3", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.M3 = nil
 				break
@@ -8404,8 +8621,12 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 			var v map[string]int
 			if result.M3 != nil && (*result.M3) != nil && (*(*result.M3)) != nil {
 				v = (*(*(*result.M3)))
+				clear(v)
 			}
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("m3", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				v = nil
 			} else {
@@ -8542,7 +8763,10 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"melem"}}
 			}
 			seenMElem = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("melem", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.MElem = nil
 				break
@@ -8550,8 +8774,12 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 			var v map[string]PtrContainerElem
 			if result.MElem != nil && (*result.MElem) != nil {
 				v = (*(*result.MElem))
+				clear(v)
 			}
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("melem", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				v = nil
 			} else {
@@ -8645,16 +8873,22 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"one"}}
 			}
 			seenOne = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("one", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.One = nil
 				break
 			}
 			var v []int
 			if result.One != nil {
-				v = (*result.One)
+				v = (*result.One)[:0]
 			}
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("one", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				v = nil
 			} else {
@@ -8761,7 +8995,10 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"plain"}}
 			}
 			seenPlain = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("plain", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Plain = nil
 				break
@@ -8902,24 +9139,6 @@ func (recv PtrContainers) DecodeFrom(data []byte) (result PtrContainers, i int, 
 
 func (recv PtrContainers) DecodeFromStream(s *ggen.Stream) (result PtrContainers, err error) {
 	result = recv
-	if result.Deep != nil && *result.Deep != nil && **result.Deep != nil {
-		(***result.Deep) = (***result.Deep)[:0]
-	}
-	if result.Elems != nil {
-		(*result.Elems) = (*result.Elems)[:0]
-	}
-	if result.M1 != nil {
-		clear((*result.M1))
-	}
-	if result.M3 != nil && *result.M3 != nil && **result.M3 != nil {
-		clear((***result.M3))
-	}
-	if result.MElem != nil && *result.MElem != nil {
-		clear((**result.MElem))
-	}
-	if result.One != nil {
-		(*result.One) = (*result.One)[:0]
-	}
 	if result.Plain != nil {
 		result.Plain = result.Plain[:0]
 	}
@@ -9004,7 +9223,7 @@ func (recv PtrContainers) DecodeFromStream(s *ggen.Stream) (result PtrContainers
 			}
 			var v []int
 			if result.Deep != nil && (*result.Deep) != nil && (*(*result.Deep)) != nil {
-				v = (*(*(*result.Deep)))
+				v = (*(*(*result.Deep)))[:0]
 			}
 			err = s.SkipSpace()
 			if err != nil {
@@ -9126,7 +9345,7 @@ func (recv PtrContainers) DecodeFromStream(s *ggen.Stream) (result PtrContainers
 			}
 			var v []PtrContainerElem
 			if result.Elems != nil {
-				v = (*result.Elems)
+				v = (*result.Elems)[:0]
 			}
 			err = s.SkipSpace()
 			if err != nil {
@@ -9247,6 +9466,7 @@ func (recv PtrContainers) DecodeFromStream(s *ggen.Stream) (result PtrContainers
 			var v map[string]int
 			if result.M1 != nil {
 				v = (*result.M1)
+				clear(v)
 			}
 			err = s.SkipSpace()
 			if err != nil {
@@ -9386,6 +9606,7 @@ func (recv PtrContainers) DecodeFromStream(s *ggen.Stream) (result PtrContainers
 			var v map[string]int
 			if result.M3 != nil && (*result.M3) != nil && (*(*result.M3)) != nil {
 				v = (*(*(*result.M3)))
+				clear(v)
 			}
 			err = s.SkipSpace()
 			if err != nil {
@@ -9529,6 +9750,7 @@ func (recv PtrContainers) DecodeFromStream(s *ggen.Stream) (result PtrContainers
 			var v map[string]PtrContainerElem
 			if result.MElem != nil && (*result.MElem) != nil {
 				v = (*(*result.MElem))
+				clear(v)
 			}
 			err = s.SkipSpace()
 			if err != nil {
@@ -9669,7 +9891,7 @@ func (recv PtrContainers) DecodeFromStream(s *ggen.Stream) (result PtrContainers
 			}
 			var v []int
 			if result.One != nil {
-				v = (*result.One)
+				v = (*result.One)[:0]
 			}
 			err = s.SkipSpace()
 			if err != nil {
@@ -9846,7 +10068,12 @@ func (recv PtrContainers) DecodeFromStream(s *ggen.Stream) (result PtrContainers
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -10275,7 +10502,12 @@ func (recv PtrContainerElem) DecodeFromStream(s *ggen.Stream) (result PtrContain
 				return result, ggen.NewParseErr("k", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -10377,7 +10609,10 @@ func (recv PtrMapHeavy) DecodeFrom(data []byte) (result PtrMapHeavy, i int, err 
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"m"}}
 			}
 			seenM = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("m", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.M = nil
 				break
@@ -10386,7 +10621,10 @@ func (recv PtrMapHeavy) DecodeFrom(data []byte) (result PtrMapHeavy, i int, err 
 			if result.M != nil {
 				v = (*result.M)
 			}
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("m", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				v = nil
 			} else {
@@ -10500,9 +10738,6 @@ func (recv PtrMapHeavy) DecodeFrom(data []byte) (result PtrMapHeavy, i int, err 
 func (recv PtrMapHeavy) DecodeFromStream(s *ggen.Stream) (result PtrMapHeavy, err error) {
 	result = recv
 	const depth = 0
-	if result.M != nil {
-		clear((*result.M))
-	}
 	seenM := false
 	err = s.ObjectOpen()
 	if err != nil {
@@ -10564,6 +10799,7 @@ func (recv PtrMapHeavy) DecodeFromStream(s *ggen.Stream) (result PtrMapHeavy, er
 			var v map[string]Node
 			if result.M != nil {
 				v = (*result.M)
+				clear(v)
 			}
 			err = s.SkipSpace()
 			if err != nil {
@@ -10672,7 +10908,12 @@ func (recv PtrMapHeavy) DecodeFromStream(s *ggen.Stream) (result PtrMapHeavy, er
 				(*result.M) = v
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

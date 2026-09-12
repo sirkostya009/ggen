@@ -192,7 +192,12 @@ func (recv Money) DecodeFromStream(s *ggen.Stream) (result Money, err error) {
 			}
 			result.Amount = int(iv)
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -388,7 +393,7 @@ func (recv LooseThing) DecodeFrom(data []byte) (result LooseThing, i int, err er
 				return result, i, ggen.NewParseErr("count", i, ggen.ErrBadValue)
 			}
 			if result.Count < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"count"}, Limit: 0, Value: result.Count}
+				return result, i, &ggen.GTEError{Pos: i, Path: []string{"count"}, Limit: int(0), Value: result.Count}
 			}
 		case "opt":
 			if seenOpt {
@@ -671,7 +676,7 @@ func (recv LooseThing) DecodeFromStream(s *ggen.Stream) (result LooseThing, err 
 				return result, ggen.NewParseErr("count", s.Offset(), ggen.ErrBadValue)
 			}
 			if result.Count < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"count"}, Limit: 0, Value: result.Count}
+				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"count"}, Limit: int(0), Value: result.Count}
 			}
 		case "opt":
 			err = s.ConsumeColon()
@@ -755,7 +760,12 @@ func (recv LooseThing) DecodeFromStream(s *ggen.Stream) (result LooseThing, err 
 				return result, ggen.NewParseErr("price", s.Offset(), ggen.ErrBadValue)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -865,7 +875,10 @@ func (recv ElemInterleave) DecodeFrom(data []byte) (result ElemInterleave, i int
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"nums"}}
 			}
 			seenNums = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("nums", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Nums = nil
 				break
@@ -943,7 +956,7 @@ func (recv ElemInterleave) DecodeFrom(data []byte) (result ElemInterleave, i int
 					}
 					result.Nums[len(result.Nums)-1] = int(n)
 					if result.Nums[len(result.Nums)-1] > 10 {
-						return result, i, &ggen.LTEError{Pos: i, Path: []string{"nums[]"}, Limit: 10, Value: result.Nums[len(result.Nums)-1]}
+						return result, i, &ggen.LTEError{Pos: i, Path: []string{"nums[]"}, Limit: int(10), Value: result.Nums[len(result.Nums)-1]}
 					}
 					result.Nums[len(result.Nums)-1] = DoubleInt(result.Nums[len(result.Nums)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1085,7 +1098,7 @@ func (recv ElemInterleave) DecodeFromStream(s *ggen.Stream) (result ElemInterlea
 				}
 				result.Nums[len(result.Nums)-1] = int(iv)
 				if result.Nums[len(result.Nums)-1] > 10 {
-					return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"nums[]"}, Limit: 10, Value: result.Nums[len(result.Nums)-1]}
+					return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"nums[]"}, Limit: int(10), Value: result.Nums[len(result.Nums)-1]}
 				}
 				result.Nums[len(result.Nums)-1] = DoubleInt(result.Nums[len(result.Nums)-1])
 				err = s.SkipSpace()
@@ -1115,7 +1128,12 @@ func (recv ElemInterleave) DecodeFromStream(s *ggen.Stream) (result ElemInterlea
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1246,7 +1264,10 @@ func (recv ConvNamed) DecodeFrom(data []byte) (result ConvNamed, i int, err erro
 				i += 4
 				result.N = nil
 			case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-				if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+				if i < len(data) && data[i] == 'n' {
+					if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+						return result, i, ggen.NewParseErr("n", i, ggen.ErrBadLiteral)
+					}
 					i += 4
 					result.N = nil
 					break
@@ -1601,7 +1622,12 @@ func (recv ConvNamed) DecodeFromStream(s *ggen.Stream) (result ConvNamed, err er
 				return result, ggen.NewParseErr("s", s.Offset(), ggen.ErrBadValue)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1658,5 +1684,1185 @@ func (s ConvNamed) AppendJSON(dst []byte) ([]byte, error) {
 	}
 	dst = append(dst, ",\"s\":"...)
 	dst = strconv.AppendInt(dst, int64(int(s.S)), 10)
+	return append(dst, '}'), nil
+}
+
+func (recv R10Money) DecodeFrom(data []byte) (result R10Money, i int, err error) {
+	result = recv
+	seenCents := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenCents {
+			result.Cents = 0
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "cents":
+			if seenCents {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"cents"}}
+			}
+			seenCents = true
+			neg := false
+			if i < len(data) && data[i] == '-' {
+				neg = true
+				i++
+			}
+			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, ggen.NewParseErr("cents", i, ggen.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, ggen.NewParseErr("cents", i, ggen.ErrBadNumber)
+			}
+			limit := uint64(math.MaxInt64)
+			if neg {
+				limit = ggen.SignedNeg
+			}
+			var u uint64
+			de := i + 18
+			if de > len(data) {
+				de = len(data)
+			}
+			for i < de && data[i] >= '0' && data[i] <= '9' {
+				u = u*10 + uint64(data[i]-'0')
+				i++
+			}
+			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+				d := uint64(data[i] - '0')
+				if u > limit/10 || (u == limit/10 && d > limit%10) {
+					return result, i, ggen.NewParseErr("cents", i, ggen.ErrNumberOverflow)
+				}
+				u = u*10 + d
+				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, ggen.NewParseErr("cents", i, ggen.ErrBadNumber)
+				}
+			}
+			var n int64
+			if neg {
+				if u == ggen.SignedNeg {
+					n = math.MinInt64
+				} else {
+					n = -int64(u)
+				}
+			} else {
+				n = int64(u)
+			}
+			result.Cents = n
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenCents {
+				result.Cents = 0
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv R10Money) DecodeFromStream(s *ggen.Stream) (result R10Money, err error) {
+	result = recv
+	seenCents := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenCents {
+			result.Cents = 0
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "cents":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("cents", s.Offset(), err)
+			}
+			if seenCents {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"cents"}}
+			}
+			seenCents = true
+			result.Cents, err = s.Int64()
+			if err != nil {
+				return result, ggen.NewParseErr("cents", s.Offset(), err)
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenCents {
+				result.Cents = 0
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s R10Money) JSONSize() int {
+	size := 30
+	return size
+}
+
+func (s R10Money) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"cents\":"...)
+	dst = strconv.AppendInt(dst, s.Cents, 10)
+	return append(dst, '}'), nil
+}
+
+func (recv R10ConvInputs) DecodeFrom(data []byte) (result R10ConvInputs, i int, err error) {
+	result = recv
+	seenLabel := false
+	seenNamed := false
+	seenPtr := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenLabel {
+			result.Label = ""
+		}
+		if !seenNamed {
+			result.Named = R10Money{}
+		}
+		if !seenPtr {
+			result.Ptr = R10Money{}
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "label":
+			if seenLabel {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"label"}}
+			}
+			seenLabel = true
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i >= len(data) {
+				return result, i, ggen.NewParseErr("label", i, ggen.ErrUnexpectedEnd)
+			}
+			switch data[i] {
+			case '"':
+				if i >= len(data) || data[i] != '"' {
+					return result, i, ggen.NewParseErr("label", i, ggen.ErrExpectString)
+				}
+				ke := i + 1
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+					ke++
+				}
+				if ke < len(data) && data[ke] == '"' {
+					result.Label = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Label, i, err = ggen.String(data, i, true)
+					if err != nil {
+						return result, i, ggen.NewParseErr("label", i, err)
+					}
+				}
+			case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'n':
+				var conv1 *int
+				if i < len(data) && data[i] == 'n' {
+					if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+						return result, i, ggen.NewParseErr("label", i, ggen.ErrBadLiteral)
+					}
+					i += 4
+					conv1 = nil
+				} else {
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
+					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, ggen.NewParseErr("label", i, ggen.ErrBadNumber)
+					}
+					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+						return result, i, ggen.NewParseErr("label", i, ggen.ErrBadNumber)
+					}
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = ggen.SignedNeg
+					}
+					var u uint64
+					de := i + 18
+					if de > len(data) {
+						de = len(data)
+					}
+					for i < de && data[i] >= '0' && data[i] <= '9' {
+						u = u*10 + uint64(data[i]-'0')
+						i++
+					}
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, ggen.NewParseErr("label", i, ggen.ErrNumberOverflow)
+						}
+						u = u*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, ggen.NewParseErr("label", i, ggen.ErrBadNumber)
+						}
+					}
+					var n int64
+					if neg {
+						if u == ggen.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
+					}
+					conv1 = new(int(n))
+				}
+				result.Label = R10PtrLabel(conv1)
+			default:
+				return result, i, ggen.NewParseErr("label", i, ggen.ErrBadValue)
+			}
+		case "named":
+			if seenNamed {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"named"}}
+			}
+			seenNamed = true
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i >= len(data) {
+				return result, i, ggen.NewParseErr("named", i, ggen.ErrUnexpectedEnd)
+			}
+			switch data[i] {
+			case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+				var conv0 R10Score
+				neg := false
+				if i < len(data) && data[i] == '-' {
+					neg = true
+					i++
+				}
+				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+					return result, i, ggen.NewParseErr("named", i, ggen.ErrBadNumber)
+				}
+				if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+					return result, i, ggen.NewParseErr("named", i, ggen.ErrBadNumber)
+				}
+				limit := uint64(math.MaxInt64)
+				if neg {
+					limit = ggen.SignedNeg
+				}
+				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
+				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+					d := uint64(data[i] - '0')
+					if u > limit/10 || (u == limit/10 && d > limit%10) {
+						return result, i, ggen.NewParseErr("named", i, ggen.ErrNumberOverflow)
+					}
+					u = u*10 + d
+					i++
+				}
+				if i < len(data) {
+					c := data[i]
+					if c == '.' || c == 'e' || c == 'E' {
+						return result, i, ggen.NewParseErr("named", i, ggen.ErrBadNumber)
+					}
+				}
+				var n int64
+				if neg {
+					if u == ggen.SignedNeg {
+						n = math.MinInt64
+					} else {
+						n = -int64(u)
+					}
+				} else {
+					n = int64(u)
+				}
+				conv0 = R10Score(int(n))
+				result.Named = R10FromScore(conv0)
+			case 'n':
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("named", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.Named = R10Money{}
+			default:
+				return result, i, ggen.NewParseErr("named", i, ggen.ErrBadValue)
+			}
+		case "ptr":
+			if seenPtr {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ptr"}}
+			}
+			seenPtr = true
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i >= len(data) {
+				return result, i, ggen.NewParseErr("ptr", i, ggen.ErrUnexpectedEnd)
+			}
+			switch data[i] {
+			case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'n':
+				var conv0 *int64
+				if i < len(data) && data[i] == 'n' {
+					if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+						return result, i, ggen.NewParseErr("ptr", i, ggen.ErrBadLiteral)
+					}
+					i += 4
+					conv0 = nil
+				} else {
+					neg := false
+					if i < len(data) && data[i] == '-' {
+						neg = true
+						i++
+					}
+					if i >= len(data) || data[i] < '0' || data[i] > '9' {
+						return result, i, ggen.NewParseErr("ptr", i, ggen.ErrBadNumber)
+					}
+					if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+						return result, i, ggen.NewParseErr("ptr", i, ggen.ErrBadNumber)
+					}
+					limit := uint64(math.MaxInt64)
+					if neg {
+						limit = ggen.SignedNeg
+					}
+					var u uint64
+					de := i + 18
+					if de > len(data) {
+						de = len(data)
+					}
+					for i < de && data[i] >= '0' && data[i] <= '9' {
+						u = u*10 + uint64(data[i]-'0')
+						i++
+					}
+					for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+						d := uint64(data[i] - '0')
+						if u > limit/10 || (u == limit/10 && d > limit%10) {
+							return result, i, ggen.NewParseErr("ptr", i, ggen.ErrNumberOverflow)
+						}
+						u = u*10 + d
+						i++
+					}
+					if i < len(data) {
+						c := data[i]
+						if c == '.' || c == 'e' || c == 'E' {
+							return result, i, ggen.NewParseErr("ptr", i, ggen.ErrBadNumber)
+						}
+					}
+					var n int64
+					if neg {
+						if u == ggen.SignedNeg {
+							n = math.MinInt64
+						} else {
+							n = -int64(u)
+						}
+					} else {
+						n = int64(u)
+					}
+					conv0 = new(n)
+				}
+				result.Ptr = R10FromPtr(conv0)
+			case '{':
+				var consumed int
+				result.Ptr, consumed, err = result.Ptr.DecodeFrom(data[i:])
+				i += consumed
+				if err != nil {
+					return result, i, ggen.NewParseErrShift("ptr", i, consumed, err)
+				}
+			default:
+				return result, i, ggen.NewParseErr("ptr", i, ggen.ErrBadValue)
+			}
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenLabel {
+				result.Label = ""
+			}
+			if !seenNamed {
+				result.Named = R10Money{}
+			}
+			if !seenPtr {
+				result.Ptr = R10Money{}
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv R10ConvInputs) DecodeFromStream(s *ggen.Stream) (result R10ConvInputs, err error) {
+	result = recv
+	seenLabel := false
+	seenNamed := false
+	seenPtr := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenLabel {
+			result.Label = ""
+		}
+		if !seenNamed {
+			result.Named = R10Money{}
+		}
+		if !seenPtr {
+			result.Ptr = R10Money{}
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "label":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("label", s.Offset(), err)
+			}
+			if seenLabel {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"label"}}
+			}
+			seenLabel = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("label", s.Offset(), ggen.NotEOF(err, ggen.ErrUnexpectedEnd))
+				}
+			}
+			switch s.Bytes()[s.Pos] {
+			case '"':
+				result.Label, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("label", s.Offset(), err)
+				}
+			case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'n':
+				var conv1 *int
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("label", s.Offset(), ggen.NotEOF(err, ggen.ErrBadNumber))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("label", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr("label", s.Offset(), ggen.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					conv1 = nil
+				} else {
+					var v int64
+					v, err = s.Int64()
+					if err != nil {
+						return result, ggen.NewParseErr("label", s.Offset(), err)
+					}
+					conv1 = new(int(v))
+				}
+				result.Label = R10PtrLabel(conv1)
+			default:
+				return result, ggen.NewParseErr("label", s.Offset(), ggen.ErrBadValue)
+			}
+		case "named":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("named", s.Offset(), err)
+			}
+			if seenNamed {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"named"}}
+			}
+			seenNamed = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("named", s.Offset(), ggen.NotEOF(err, ggen.ErrUnexpectedEnd))
+				}
+			}
+			switch s.Bytes()[s.Pos] {
+			case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+				var conv0 R10Score
+				var iv int64
+				iv, err = s.Int64()
+				if err != nil {
+					return result, ggen.NewParseErr("named", s.Offset(), err)
+				}
+				conv0 = R10Score(int(iv))
+				result.Named = R10FromScore(conv0)
+			case 'n':
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("named", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("named", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Named = R10Money{}
+			default:
+				return result, ggen.NewParseErr("named", s.Offset(), ggen.ErrBadValue)
+			}
+		case "ptr":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("ptr", s.Offset(), err)
+			}
+			if seenPtr {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ptr"}}
+			}
+			seenPtr = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("ptr", s.Offset(), ggen.NotEOF(err, ggen.ErrUnexpectedEnd))
+				}
+			}
+			switch s.Bytes()[s.Pos] {
+			case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'n':
+				var conv0 *int64
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("ptr", s.Offset(), ggen.NotEOF(err, ggen.ErrBadNumber))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("ptr", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr("ptr", s.Offset(), ggen.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					conv0 = nil
+				} else {
+					var v int64
+					v, err = s.Int64()
+					if err != nil {
+						return result, ggen.NewParseErr("ptr", s.Offset(), err)
+					}
+					conv0 = new(v)
+				}
+				result.Ptr = R10FromPtr(conv0)
+			case '{':
+				result.Ptr, err = result.Ptr.DecodeFromStream(s)
+				if err != nil {
+					return result, ggen.NewParseErr("ptr", s.Offset(), err)
+				}
+			default:
+				return result, ggen.NewParseErr("ptr", s.Offset(), ggen.ErrBadValue)
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenLabel {
+				result.Label = ""
+			}
+			if !seenNamed {
+				result.Named = R10Money{}
+			}
+			if !seenPtr {
+				result.Ptr = R10Money{}
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s R10ConvInputs) JSONSize() int {
+	size := 28
+	size += len(s.Label) * 2
+	size += s.Named.JSONSize()
+	size += s.Ptr.JSONSize()
+	return size
+}
+
+func (s R10ConvInputs) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"label\":\""...)
+	dst = ggen.AppendStringNoHTML(dst, s.Label)
+	dst = append(dst, ",\"named\":"...)
+	if dst, err = s.Named.AppendJSON(dst); err != nil {
+		return dst, err
+	}
+	dst = append(dst, ",\"ptr\":"...)
+	if dst, err = s.Ptr.AppendJSON(dst); err != nil {
+		return dst, err
+	}
+	return append(dst, '}'), nil
+}
+
+func (recv R10BConvPtr) DecodeFrom(data []byte) (result R10BConvPtr, i int, err error) {
+	result = recv
+	seenN := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenN {
+			result.N = nil
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "n":
+			if seenN {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"n"}}
+			}
+			seenN = true
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i >= len(data) {
+				return result, i, ggen.NewParseErr("n", i, ggen.ErrUnexpectedEnd)
+			}
+			switch data[i] {
+			case 'n':
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("n", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.N = nil
+			case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+				if i < len(data) && data[i] == 'n' {
+					if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+						return result, i, ggen.NewParseErr("n", i, ggen.ErrBadLiteral)
+					}
+					i += 4
+					result.N = nil
+					break
+				}
+				neg := false
+				if i < len(data) && data[i] == '-' {
+					neg = true
+					i++
+				}
+				if i >= len(data) || data[i] < '0' || data[i] > '9' {
+					return result, i, ggen.NewParseErr("n", i, ggen.ErrBadNumber)
+				}
+				if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+					return result, i, ggen.NewParseErr("n", i, ggen.ErrBadNumber)
+				}
+				limit := uint64(math.MaxInt64)
+				if neg {
+					limit = ggen.SignedNeg
+				}
+				var u uint64
+				de := i + 18
+				if de > len(data) {
+					de = len(data)
+				}
+				for i < de && data[i] >= '0' && data[i] <= '9' {
+					u = u*10 + uint64(data[i]-'0')
+					i++
+				}
+				for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+					d := uint64(data[i] - '0')
+					if u > limit/10 || (u == limit/10 && d > limit%10) {
+						return result, i, ggen.NewParseErr("n", i, ggen.ErrNumberOverflow)
+					}
+					u = u*10 + d
+					i++
+				}
+				if i < len(data) {
+					c := data[i]
+					if c == '.' || c == 'e' || c == 'E' {
+						return result, i, ggen.NewParseErr("n", i, ggen.ErrBadNumber)
+					}
+				}
+				var n int64
+				if neg {
+					if u == ggen.SignedNeg {
+						n = math.MinInt64
+					} else {
+						n = -int64(u)
+					}
+				} else {
+					n = int64(u)
+				}
+				if result.N == nil {
+					result.N = new(int(n))
+				} else {
+					(*result.N) = int(n)
+				}
+			case '"':
+				var conv2 string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, ggen.NewParseErr("n", i, ggen.ErrExpectString)
+				}
+				ke := i + 1
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+					ke++
+				}
+				if ke < len(data) && data[ke] == '"' {
+					conv2 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					conv2, i, err = ggen.String(data, i, true)
+					if err != nil {
+						return result, i, ggen.NewParseErr("n", i, err)
+					}
+				}
+				if cv, err := R10BAtoiPtr(conv2); err != nil {
+					return result, i, ggen.NewParseErr("n", i, err)
+				} else {
+					result.N = cv
+				}
+			default:
+				return result, i, ggen.NewParseErr("n", i, ggen.ErrBadValue)
+			}
+			if result.N != nil {
+				if (*result.N) < 2 {
+					return result, i, &ggen.GTEError{Pos: i, Path: []string{"n"}, Limit: int(2), Value: (*result.N)}
+				}
+			}
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenN {
+				result.N = nil
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv R10BConvPtr) DecodeFromStream(s *ggen.Stream) (result R10BConvPtr, err error) {
+	result = recv
+	seenN := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenN {
+			result.N = nil
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "n":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("n", s.Offset(), err)
+			}
+			if seenN {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"n"}}
+			}
+			seenN = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("n", s.Offset(), ggen.NotEOF(err, ggen.ErrUnexpectedEnd))
+				}
+			}
+			switch s.Bytes()[s.Pos] {
+			case 'n':
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("n", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("n", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.N = nil
+			case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("n", s.Offset(), ggen.NotEOF(err, ggen.ErrBadNumber))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("n", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr("n", s.Offset(), ggen.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.N = nil
+					break
+				}
+				var v int64
+				v, err = s.Int64()
+				if err != nil {
+					return result, ggen.NewParseErr("n", s.Offset(), err)
+				}
+				if result.N == nil {
+					result.N = new(int(v))
+				} else {
+					(*result.N) = int(v)
+				}
+			case '"':
+				var conv2 string
+				conv2, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("n", s.Offset(), err)
+				}
+				if cv, err := R10BAtoiPtr(conv2); err != nil {
+					return result, ggen.NewParseErr("n", s.Offset(), err)
+				} else {
+					result.N = cv
+				}
+			default:
+				return result, ggen.NewParseErr("n", s.Offset(), ggen.ErrBadValue)
+			}
+			if result.N != nil {
+				if (*result.N) < 2 {
+					return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: int(2), Value: (*result.N)}
+				}
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenN {
+				result.N = nil
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s R10BConvPtr) JSONSize() int {
+	size := 6
+	if s.N == nil {
+		size += 4
+	} else {
+		size += 20
+	}
+	return size
+}
+
+func (s R10BConvPtr) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"n\":"...)
+	if s.N == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = strconv.AppendInt(dst, int64((*s.N)), 10)
+	}
 	return append(dst, '}'), nil
 }

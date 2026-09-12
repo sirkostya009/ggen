@@ -31,7 +31,7 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 		}
 		fmt.Fprintf(b, "var v string\nv, i, err = "+scanStringFn+"(data, i, "+vArgS(s)+")\n%s\n%sresult = %s(v)\n", wrap, detach, s.Name)
 	case KindBool:
-		fmt.Fprintf(b, "var v bool\nv, i, err = ggen.Bool(data, i)\n%s\nresult = %s(v)\n", wrap, s.Name)
+		fmt.Fprintf(b, "var v bool\nv, i, err = ggen.Bool(data, i)\nif err != nil { i = ggen.BoolEnd(data, i) }\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
 		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, i, ggen.NewParseErr("", i, ggen.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v int64\nv, i, err = ggen.Int64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
@@ -39,8 +39,7 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, i, ggen.NewParseErr("", i, ggen.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v uint64\nv, i, err = ggen.Uint64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	case KindFloat32, KindFloat64:
-		guard := narrowFloatGuard("v", s.AliasUnderlying, `return result, i, ggen.NewParseErr("", i, ggen.ErrNumberOverflow)`)
-		fmt.Fprintf(b, "var v float64\nv, i, err = ggen.Float64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
+		fmt.Fprintf(b, "var v %s\nv, i, err = ggen.%s(data, i)\n%s\nresult = %s(v)\n", s.AliasUnderlying, floatScanFn(s.AliasKind), wrap, s.Name)
 	}
 	b.WriteString("return result, i, nil\n")
 }
@@ -70,8 +69,7 @@ func renderAliasStreamDecode(b *bytes.Buffer, s StructInfo) {
 		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, ggen.NewParseErr("", s.Offset(), ggen.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v uint64\nv, err = s.Uint64()\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
 	case KindFloat32, KindFloat64:
-		guard := narrowFloatGuard("v", s.AliasUnderlying, `return result, ggen.NewParseErr("", s.Offset(), ggen.ErrNumberOverflow)`)
-		fmt.Fprintf(b, "var v float64\nv, err = s.Float64()\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
+		fmt.Fprintf(b, "var v %s\nv, err = s.%s()\n%s\nresult = %s(v)\n", s.AliasUnderlying, floatScanFn(s.AliasKind), wrap, s.Name)
 	}
 	b.WriteString("return result, nil\n")
 }

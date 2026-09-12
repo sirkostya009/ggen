@@ -8,6 +8,7 @@ package integrationtests
 
 import (
 	"database/sql"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -343,4 +344,38 @@ func TestSQLNull_Composite(t *testing.T) {
 		}
 		assertFullSQLNull(t, got)
 	})
+}
+
+// Narrow sql.Null* inners reject out-of-range values with ErrNumberOverflow on
+// both paths instead of wrapping (NullByte ← 300 used to decode as 44).
+func TestSQLNull_NarrowOverflow(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name    string
+		payload string
+		reject  bool
+		run     func(string) (error, error)
+	}{
+		{"int16_over", `{"i16":40000}`, true, decodeBothPaths[SQLNullInt16Struct]},
+		{"int16_under", `{"i16":-40000}`, true, decodeBothPaths[SQLNullInt16Struct]},
+		{"int16_max", `{"i16":32767}`, false, decodeBothPaths[SQLNullInt16Struct]},
+		{"int32_over", `{"i32":3000000000}`, true, decodeBothPaths[SQLNullInt32Struct]},
+		{"int32_under", `{"i32":-3000000000}`, true, decodeBothPaths[SQLNullInt32Struct]},
+		{"int32_min", `{"i32":-2147483648}`, false, decodeBothPaths[SQLNullInt32Struct]},
+		{"byte_over", `{"b":300}`, true, decodeBothPaths[SQLNullByteStruct]},
+		{"byte_max", `{"b":255}`, false, decodeBothPaths[SQLNullByteStruct]},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			bytesErr, streamErr := c.run(c.payload)
+			for path, err := range map[string]error{"bytes": bytesErr, "stream": streamErr} {
+				if (err != nil) != c.reject {
+					t.Errorf("%s: reject=%v want %v (err=%v)", path, err != nil, c.reject, err)
+				}
+				if c.reject && err != nil && !errors.Is(err, ggen.ErrNumberOverflow) {
+					t.Errorf("%s: err=%v, want ErrNumberOverflow", path, err)
+				}
+			}
+		})
+	}
 }

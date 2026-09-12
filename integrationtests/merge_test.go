@@ -10,6 +10,7 @@ import (
 	"unsafe"
 
 	"github.com/sirkostya009/ggen"
+	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
 )
 
 // Decode-into-receiver tests. The result is what a fresh decode would give —
@@ -500,6 +501,14 @@ func TestMerge_omittedKeysZeroEveryKind(t *testing.T) {
 		t.Fatal(err)
 	}
 	check(t, sg)
+
+	// Through the Stream API too: a receiver only lends its memory, as its
+	// godoc says — the result equals a fresh decode.
+	sv, err := st.Reset(bytes.NewReader([]byte(`{"s":"keep"}`)), make([]byte, 0, 8)).Value(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, sv)
 }
 
 // The hard case for element reuse: a LEANER second payload. Recycled element
@@ -733,5 +742,163 @@ func TestMerge_slicePointerChainReused(t *testing.T) {
 	}
 	if *got.SPP[0] != inner {
 		t.Error("inner pointer reallocated — carried chain was not reused")
+	}
+}
+
+// R10CrossPkgFallback holds thirdparty.External — no ggen methods, so every
+// position decodes through encoding/json, which MERGES into the value it is
+// handed. The target is zeroed first at the value field, the pointer (not
+// seeded from the receiver), the swapped map pointee and the fixed-array
+// slot; a key the re-decode omits must not resurrect the old value.
+//
+//ggen:generate
+type R10CrossPkgFallback struct {
+	Ext  thirdparty.External             `json:"ext"`
+	PExt *thirdparty.External            `json:"pext"`
+	MExt map[string]*thirdparty.External `json:"mext"`
+	MVal map[string]thirdparty.External  `json:"mval"`
+	Arr  [1]thirdparty.External          `json:"arr"`
+}
+
+func TestMerge_crossPkgFallbackDecodesFresh(t *testing.T) {
+	t.Parallel()
+	const full = `{"ext":{"key":"a","value":1},"pext":{"key":"a","value":1},"mext":{"k":{"key":"a","value":1}},"mval":{"k":{"key":"a","value":1}},"arr":[{"key":"a","value":1}]}`
+	const partial = `{"ext":{"value":2},"pext":{"value":2},"mext":{"k":{"value":2}},"mval":{"k":{"value":2}},"arr":[{"value":2}]}`
+	first, _, err := R10CrossPkgFallback{}.DecodeFrom([]byte(full))
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(path string, got R10CrossPkgFallback) {
+		t.Helper()
+		for name, ext := range map[string]thirdparty.External{
+			"ext": got.Ext, "pext": *got.PExt, "mext": *got.MExt["k"], "mval": got.MVal["k"], "arr": got.Arr[0],
+		} {
+			if ext.Key != "" || ext.Value != 2 {
+				t.Errorf("%s %s: %+v, want the fresh decode {Value:2}", path, name, ext)
+			}
+		}
+	}
+	got, _, err := first.DecodeFrom([]byte(partial))
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("bytes", got)
+	var s ggen.Stream
+	s.Reset(bytes.NewReader([]byte(partial)), nil)
+	sgot, err := first.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check("stream", sgot)
+}
+
+// A slice or map leaf the receiver carries somewhere other than a top-level
+// field — a pointer map value, a []**T element, a *[N]map or [N][]byte slot —
+// is emptied before it refills, so a smaller payload replaces rather than
+// appends or merges; only the backing is recycled.
+//
+//ggen:generate
+type R10CarriedLeaves struct {
+	MPS  map[string]*[]int          `json:"mps"`
+	MPM  map[string]*map[string]int `json:"mpm"`
+	MPPS map[string]**[]int         `json:"mpps"`
+	SPS  []**[]int                  `json:"sps"`
+	SPM  []**map[string]int         `json:"spm"`
+	PMS  *map[string][]int          `json:"pms"`
+	AM   [2]map[string]int          `json:"am"`
+	PAM  *[2]map[string]int         `json:"pam"`
+	AB   [2][]byte                  `json:"ab"`
+}
+
+func TestMerge_pointerContainerLeavesReset(t *testing.T) {
+	t.Parallel()
+	first, _, err := R10CarriedLeaves{}.DecodeFrom([]byte(`{"mps":{"a":[1,2,3]},"mpm":{"a":{"x":1,"y":2}},"mpps":{"a":[1,2,3]},"sps":[[1,2,3]],"spm":[{"x":1,"y":2}],"pms":{"a":[1,2,3]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	pmsRow := unsafe.SliceData((*first.PMS)["a"])
+	got, _, err := first.DecodeFrom([]byte(`{"mps":{"a":[9]},"mpm":{"a":{"z":3}},"mpps":{"a":[9]},"sps":[[9]],"spm":[{"z":3}],"pms":{"a":[9]}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	nine, z3 := []int{9}, map[string]int{"z": 3}
+	if v := *got.MPS["a"]; !reflect.DeepEqual(v, nine) {
+		t.Errorf("map[string]*[]int: %v", v)
+	}
+	if v := *got.MPM["a"]; !reflect.DeepEqual(v, z3) {
+		t.Errorf("map[string]*map: %v", v)
+	}
+	if v := **got.MPPS["a"]; !reflect.DeepEqual(v, nine) {
+		t.Errorf("map[string]**[]int: %v", v)
+	}
+	if v := **got.SPS[0]; !reflect.DeepEqual(v, nine) {
+		t.Errorf("[]**[]int: %v", v)
+	}
+	if v := **got.SPM[0]; !reflect.DeepEqual(v, z3) {
+		t.Errorf("[]**map: %v", v)
+	}
+	if v := (*got.PMS)["a"]; !reflect.DeepEqual(v, nine) {
+		t.Errorf("*map[string][]int: %v", v)
+	} else if unsafe.SliceData(v) != pmsRow {
+		t.Error("*map[string][]int: carried row backing not reused")
+	}
+
+	var s ggen.Stream
+	s.Reset(bytes.NewReader([]byte(`{"sps":[[1,2,3]],"spm":[{"x":1,"y":2}]}`)), make([]byte, 0, 8))
+	sf, err := R10CarriedLeaves{}.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Reset(bytes.NewReader([]byte(`{"sps":[[9]],"spm":[{"z":3}]}`)), make([]byte, 0, 8))
+	sg, err := sf.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v := **sg.SPS[0]; !reflect.DeepEqual(v, nine) {
+		t.Errorf("stream []**[]int: %v", v)
+	}
+	if v := **sg.SPM[0]; !reflect.DeepEqual(v, z3) {
+		t.Errorf("stream []**map: %v", v)
+	}
+}
+
+func TestMerge_arrayContainerSlotsReset(t *testing.T) {
+	t.Parallel()
+	first, _, err := R10CarriedLeaves{}.DecodeFrom([]byte(`{"am":[{"x":1},{"y":2}],"pam":[{"x":1},{"y":2}],"ab":["aGVsbG8=","d29ybGQ="]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := first.DecodeFrom([]byte(`{"am":[{"z":3},{}],"pam":[{"z":3},{}],"ab":["aGk=","eA=="]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantM := [2]map[string]int{{"z": 3}, {}}
+	wantB := [2][]byte{[]byte("hi"), []byte("x")}
+	if !reflect.DeepEqual(got.AM, wantM) {
+		t.Errorf("[2]map: %v", got.AM)
+	}
+	if !reflect.DeepEqual(*got.PAM, wantM) {
+		t.Errorf("*[2]map: %v", *got.PAM)
+	}
+	if !reflect.DeepEqual(got.AB, wantB) {
+		t.Errorf("[2][]byte: %q", got.AB)
+	}
+
+	var s ggen.Stream
+	s.Reset(bytes.NewReader([]byte(`{"am":[{"x":1},{"y":2}],"ab":["aGVsbG8=","d29ybGQ="]}`)), make([]byte, 0, 8))
+	sf, err := R10CarriedLeaves{}.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.Reset(bytes.NewReader([]byte(`{"am":[{"z":3},{}],"ab":["aGk=","eA=="]}`)), make([]byte, 0, 8))
+	sg, err := sf.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(sg.AM, wantM) {
+		t.Errorf("stream [2]map: %v", sg.AM)
+	}
+	if !reflect.DeepEqual(sg.AB, wantB) {
+		t.Errorf("stream [2][]byte: %q", sg.AB)
 	}
 }

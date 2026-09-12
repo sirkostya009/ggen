@@ -10,6 +10,8 @@ buffer-append helpers generated code calls, and the `AppendAny` walker for `any`
 - `any.go` — `AppendAny` walker + concrete-type fast paths.
 - `url.go` — net/url.URL helpers.
 - `netip_addr.go` — `AppendNetipAddr` (zone-aware netip.Addr string emit).
+- `rfc3339.go` — `AppendRFC3339` (+ the decode twin `ParseRFC3339`, .claude/scan.md).
+- `empty.go` — `AnyIsEmpty`, the `omitempty` predicate for `any` fields.
 
 ## Surface
 
@@ -31,8 +33,10 @@ func BytesToString(buf []byte) string                // unsafe.String over buffe
 func AppendString(dst []byte, s string) []byte       // HTML-safe variant
 func AppendNetipAddr(dst []byte, a netip.Addr) []byte // addr text + closing `"`; zoned text re-escapes (zones are arbitrary bytes)
 func AppendNetipAddrHTML(dst []byte, a netip.Addr) []byte // htmlescape variant
-func AppendURL(dst []byte, u url.URL) []byte          // wire-form text + closing `"`, re-escapes when needed
+func AppendURL(dst []byte, u url.URL) []byte          // wire-form text + closing `"`, re-escapes when needed; byte-for-byte url.URL.String() — path presence is tracked explicitly (hasPath := raw || u.Path != ""), so a Path starting with a NUL byte still gets the authority/path '/'
 func AppendURLHTML(dst []byte, u url.URL) []byte      // htmlescape variant
+func AppendRFC3339(dst []byte, t time.Time, layout string) ([]byte, error) // RFC3339/RFC3339Nano AppendFormat + the year ∈ [0,9999] / zone hour < 24 check time.Time.AppendText and jsonv2 apply — a bare AppendFormat wrote strings no RFC 3339 parser reads back
+func AnyIsEmpty(v any) bool                          // omitempty for `any`: nil / "" / empty []any / empty map[string]any by type switch, other slices/maps/arrays/nil pointers by reflect; structs never inspected
 func CloseJSONString(dst []byte, from int) []byte     // close raw-appended text (TextAppender output), re-escaping iff dirty
 func CloseJSONStringHTML(dst []byte, from int) []byte // htmlescape variant
 func AppendStringNoHTML(dst []byte, s string) []byte // jsonv2-default variant
@@ -197,13 +201,19 @@ that would otherwise catch them:
    `float*`/`bool`/`string`/`any`) → generic helpers (`appendMapInt[V]`,
    `appendSliceFloat[V]`, …): one strconv per entry, no reflect.
 4. **Concrete stdlib hooks** — `json.RawMessage` (verbatim), `big.Int`/`*big.Int`
-   (bare digits), `time.Time` (AppendText), pointer-to-primitive
+   (bare digits), `time.Time` (AppendText), `time.Duration` (`"` +
+   `esc(x.String())` — the units string a bare Duration field emits by
+   default, so one document holds one shape of the type; the reflect Int64
+   arm emitted bare nanoseconds), pointer-to-primitive
    (`*string`/`*bool`/`*int*`/`*uint*`/`*float*`, nil → `null`). MUST sit
    before `case json.Marshaler`. **`big.Int` is there because go1.24 gave it an
    `AppendText`**, so the `encoding.TextAppender` dispatch started QUOTING its
    digits while v1, jsonv2 and ggen's own `KindBigInt` field wire all emit a
    bare number — exactly the hazard this ordering rule exists for.
-   `big.Float`/`big.Rat` need no case: their text form IS their quoted wire.
+   `big.Float`/`big.Rat` have no concrete case: a VALUE reaches `AppendText`
+   through the pointer re-dispatch in step 6 (their text form IS their quoted
+   wire), so `big.Rat`/`big.Float` values inside `any` marshal `"1/2"`/`"1.5"`
+   like the typed field emitters and jsonv2.
 5. **Interface fallbacks** — ggen `Marshaler` / `json.Marshaler` /
    `encoding.TextAppender` / `encoding.TextMarshaler`. All four arms guard a
    typed-nil pointer (`isNilPtr`) before invoking the method and emit `null`
@@ -236,13 +246,80 @@ that would otherwise catch them:
    types duplicated for `resolveFieldConflicts`. Pinned by
    `TestAppendAny_RecursiveEmbedNoOverflow`.
 
+   **Pointer-receiver marshalers are reached for VALUES** (jsonv2 semantics;
+   v1 only called pointer methods on addressable values). The type switch
+   only sees the boxed value's method set, so a `MarshalJSON`/`MarshalText`/
+   `AppendText`/`AppendJSON` declared on `*T` fell through to the reflect
+   field dump for a `T` value. `needsAddr(t)` (per named type, memoised in a
+   `sync.Map`: `!hasMarshaler(t) && hasMarshaler(PointerTo(t))`; unnamed
+   types short-circuit) and `addrOf(rv)` (`Addr().Interface()` when
+   addressable, else `reflect.New` + `Set` copy) box a pointer that re-enters
+   the type switch and lands in the interface arms — ggen's own arm priority
+   preserved, termination guaranteed. Consulted once per struct type in
+   `collectFields` (`fieldInfo.addr`), once per container in the reflect
+   Slice/Array/Map arms (hoisted `elemAddr` handed into `appendReflectValue`,
+   so slice elements and the addressable map scratch box a pointer with no
+   copy), and once in the reflect fallback for top-level / `[]any` /
+   `map[string]any` values (a copy, as jsonv2 does regardless of
+   addressability). Pinned by `TestAppendAny_PointerReceiverMarshalers` +
+   `TestAny_PointerReceiverValueMarshals` (integ).
+
+   **Map keys with a text marshaler.** Once per map, when the key type is
+   named, the addressable key scratch's pointer (`kv.Addr().Interface()`,
+   whose method set covers both receiver kinds) is asserted to
+   `encoding.TextAppender` then `TextMarshaler` (ggen's priority); per entry
+   the key routes through `AppendText` + `closeText` (raw body, re-escaped
+   through the active `esc` iff dirty — the TextAppender arm's logic,
+   factored out and shared) or `MarshalText` + `esc`, else `kv.String()`.
+   Such a key type is accepted regardless of kind (`type K int` with
+   `MarshalText` — jsonv2 and Go 1.27 v1 both marshal it); a bare non-string
+   key type is still `UnsupportedTypeError`. Zero per-entry allocation.
+   Pinned by `TestAppendAny_MapKeyTextMarshaler` + `TestAppendAny_NonStringMapKey`.
+
+   **`omitempty` is decided on the encoded bytes**: the struct walk records
+   `mark` before the member, writes key + value, and rewinds to `mark` when
+   `emptyWire(value)` — `null`, `""`, `{}` or `[]` (a 2-byte value opening
+   with `"`/`{`/`[`, or a 4-byte value opening with `n`); `first` is cleared
+   only on commit. Zero numbers and `false` are emitted; an empty map, an
+   empty slice and a RawMessage/marshaler that came out empty are dropped; a
+   `"\""` string is 4 bytes and kept. A STRUCT value is never rewound
+   (`structWire`, which peels pointers and interfaces so a nil one still
+   omits): the generator refuses `omitempty` on a struct field outright, so
+   the option is meaningless there — a deliberate divergence from jsonv2,
+   which drops a struct encoding `{}`. One length compare per omitempty
+   field, reflect path only. **`omitzero`** classifies each field once in `collectFields`
+   (`fieldInfo.zero`: `zeroMethod` when the field type implements
+   `IsZero() bool` — value receivers, pointer types, interface types;
+   `zeroAddrMethod` when only `*T` does; else structural) and
+   `(*fieldInfo).isZero` applies jsonv2's rules: nil pointer / nil interface /
+   interface holding a nil pointer are zero, a value-receiver method is
+   reached through `Addr()` when addressable (no copy), a pointer-only method
+   through `addrOf`, otherwise `fv.IsZero()` — so a zero `time.Time` carrying
+   a location is omitted, as generated `KindTime` and v1 1.24+ do. The
+   catch-all splice keys on the `embed` option (`fieldInfo.embed`), like the
+   generator and jsonv2; `,inline` is an ordinary unknown option there. It
+   runs as a SECOND pass after the named-member loop, carrying the same
+   `first` comma state, so the entries land after every named member wherever
+   the field is declared — jsonv2's order, and the one generated `AppendJSON`
+   already produced (splicing at the declaration position put a
+   first-declared catch-all's keys ahead of the named ones). `structInfo`
+   caches a `hasEmbed` flag beside the conflict resolution, so a struct
+   without one runs neither the test's body nor the extra loop; field
+   resolution and the "is this actually a string-keyed map" test are shared
+   by both passes (`fieldValue`/`embedSplices`) so they cannot drift.
+   Pinned by `TestAppendAny_OmitEmptyJSONv2Semantics`,
+   `TestAppendAny_OmitZeroIsZeroMethod`, `TestAppendAny_EmbedSplices` (all
+   byte-compared against jsonv2).
+
 ### `,string` on `json.Number`
 
 `quotableKind` gates `,string` to numeric reflect kinds, but `json.Number` is a
 named STRING whose wire shape is a NUMBER — the one string kind both stdlib
 versions still quote (unlike bool, which jsonv2 deliberately stopped quoting).
-It is allowed through by type identity, not kind. Pinned by
-`TestAppendAny_NumberStringTag`.
+It is allowed through by type identity, not kind. The converse exclusion is
+`time.Duration`: a named int64 whose wire is already a string, refused by type
+identity so `,string` cannot double-wrap it. Pinned by
+`TestAppendAny_NumberStringTag` + `TestAppendAny_DurationUnits`.
 
 ### `usenumber` mode
 
@@ -261,6 +338,10 @@ pointer-to-primitive precedes `case reflect.Pointer` (else the fallback boxes vi
 
 - `any_test.go` — `AppendAny` correctness + `BenchmarkAppendAny` /
   `_Presized`, alongside the scan-side `Any` walker tests.
-- `encode_test.go` — append helpers: strings, floats, unix time, net/url.URL,
+- `encode_test.go` — append helpers: strings, floats, unix time, net/url.URL
+  (`TestAppendURL_Construction`, `String()` parity over hand-built structs),
   netip.Addr, nil-pointer handling.
+- `empty_test.go` — `AnyIsEmpty`, cross-checked against `AppendAny`'s output.
+- `rfc3339_test.go` — `AppendRFC3339` rejects unrepresentable / matches
+  `AppendFormat`, `ParseRFC3339` jsonv2 parity.
 - `encode_simd_test.go` — escape-scan tier parity + benches (goexperiment.simd).

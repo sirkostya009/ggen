@@ -62,7 +62,7 @@ func TestAny_StdlibParity(t *testing.T) {
 			if err := json.Unmarshal([]byte(tc.in), &want); err != nil {
 				t.Fatalf("stdlib: %v", err)
 			}
-			got, _, err := Any([]byte(tc.in), 0)
+			got, _, err := Any([]byte(tc.in), 0, true)
 			if err != nil {
 				t.Fatalf("Any: %v", err)
 			}
@@ -84,7 +84,7 @@ func TestAnyNumber_StdlibParity(t *testing.T) {
 			if err := dec.Decode(&want); err != nil {
 				t.Fatalf("stdlib UseNumber: %v", err)
 			}
-			got, _, err := AnyNumber([]byte(tc.in), 0)
+			got, _, err := AnyNumber([]byte(tc.in), 0, true)
 			if err != nil {
 				t.Fatalf("AnyNumber: %v", err)
 			}
@@ -108,7 +108,7 @@ func TestAnyCopy_ParityAndDecoupled(t *testing.T) {
 				t.Fatalf("stdlib: %v", err)
 			}
 			buf := []byte(tc.in)
-			got, _, err := AnyCopy(buf, 0)
+			got, _, err := AnyCopy(buf, 0, true)
 			if err != nil {
 				t.Fatalf("AnyCopy: %v", err)
 			}
@@ -139,7 +139,7 @@ func TestAnyNumberCopy_ParityAndDecoupled(t *testing.T) {
 				t.Fatalf("stdlib UseNumber: %v", err)
 			}
 			buf := []byte(tc.in)
-			got, _, err := AnyNumberCopy(buf, 0)
+			got, _, err := AnyNumberCopy(buf, 0, true)
 			if err != nil {
 				t.Fatalf("AnyNumberCopy: %v", err)
 			}
@@ -186,7 +186,7 @@ func BenchmarkAny_scan(b *testing.B) {
 	b.SetBytes(int64(len(anyPayload)))
 	b.ReportAllocs()
 	for b.Loop() {
-		_, _, err := Any(anyPayload, 0)
+		_, _, err := Any(anyPayload, 0, true)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -197,7 +197,7 @@ func BenchmarkAny_scanNumber(b *testing.B) {
 	b.SetBytes(int64(len(anyPayload)))
 	b.ReportAllocs()
 	for b.Loop() {
-		_, _, err := AnyNumber(anyPayload, 0)
+		_, _, err := AnyNumber(anyPayload, 0, true)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -213,8 +213,8 @@ func BenchmarkAny_Shapes(b *testing.B) {
 		fn   func([]byte) error
 	}{
 		{"stdjson", func(p []byte) error { var v any; return json.Unmarshal(p, &v) }},
-		{"ggen", func(p []byte) error { _, _, err := Any(p, 0); return err }},
-		{"ggen_number", func(p []byte) error { _, _, err := AnyNumber(p, 0); return err }},
+		{"ggen", func(p []byte) error { _, _, err := Any(p, 0, true); return err }},
+		{"ggen_number", func(p []byte) error { _, _, err := AnyNumber(p, 0, true); return err }},
 	}
 	for _, sh := range anyShapeInputs {
 		b.Run(sh.name, func(b *testing.B) {
@@ -1484,7 +1484,7 @@ func TestAppendAny_DepthCapMatchesDecode(t *testing.T) {
 	for name, mk := range shapes {
 		t.Run(name, func(t *testing.T) {
 			for _, n := range []int{maxDepth - 1, maxDepth} {
-				v, _, err := Any(mk(n), 0)
+				v, _, err := Any(mk(n), 0, true)
 				if err != nil {
 					t.Fatalf("depth %d: decode rejected below the cap: %v", n, err)
 				}
@@ -1492,9 +1492,320 @@ func TestAppendAny_DepthCapMatchesDecode(t *testing.T) {
 					t.Errorf("depth %d: decodes but does not re-encode: %v", n, err)
 				}
 			}
-			if _, _, err := Any(mk(maxDepth+1), 0); !errors.Is(err, ErrMaxDepth) {
+			if _, _, err := Any(mk(maxDepth+1), 0, true); !errors.Is(err, ErrMaxDepth) {
 				t.Errorf("depth %d: want ErrMaxDepth, got %v", maxDepth+1, err)
 			}
 		})
+	}
+}
+
+// Marshal methods declared on *T are called for a T value wherever it sits,
+// addressable (struct field, slice/array element, map value) or not
+// (top-level value, []any / map[string]any element) — jsonv2 semantics; v1
+// skipped pointer-receiver methods on unaddressable values, which turned a
+// big.Rat VALUE inside an any into {}.
+type r10PtrJSON struct{ V int }
+
+func (p *r10PtrJSON) MarshalJSON() ([]byte, error) { return []byte(`"ptr-json"`), nil }
+
+type r10PtrText struct{ V int }
+
+func (p *r10PtrText) MarshalText() ([]byte, error) { return []byte("ptr-text"), nil }
+
+type r10PtrLevel int
+
+func (l *r10PtrLevel) MarshalText() ([]byte, error) { return []byte("lvl"), nil }
+
+func TestAppendAny_PointerReceiverMarshalers(t *testing.T) {
+	t.Parallel()
+	type holder struct {
+		M r10PtrJSON  `json:"m"`
+		T r10PtrText  `json:"t"`
+		L r10PtrLevel `json:"l"`
+	}
+	for _, v := range []any{
+		r10PtrJSON{1},
+		r10PtrText{1},
+		r10PtrLevel(1),
+		holder{M: r10PtrJSON{1}, T: r10PtrText{2}, L: 3},
+		&holder{M: r10PtrJSON{1}, T: r10PtrText{2}, L: 3},
+		[]r10PtrJSON{{1}, {2}},
+		[2]r10PtrText{{1}, {2}},
+		[]r10PtrLevel{1, 2},
+		map[string]r10PtrJSON{"k": {1}},
+		[]any{r10PtrJSON{1}, r10PtrText{2}, r10PtrLevel(3)},
+		map[string]any{"k": r10PtrJSON{1}},
+		*big.NewRat(1, 2),
+		*big.NewFloat(1.5),
+		[]any{*big.NewRat(1, 2)},
+		map[string]any{"k": *big.NewFloat(1.5)},
+	} {
+		got, err := AppendAny(nil, v)
+		if err != nil {
+			t.Fatalf("%T: %v", v, err)
+		}
+		want, err := jsonv2.Marshal(v)
+		if err != nil {
+			t.Fatalf("%T: jsonv2: %v", v, err)
+		}
+		if string(got) != string(want) {
+			t.Errorf("%T:\n ggen   %s\n jsonv2 %s", v, got, want)
+		}
+	}
+}
+
+// omitempty drops a field whose value ENCODES as null, "", {} or [] — never
+// for a zero number or false, always for an empty map, slice or string and a
+// raw/marshaled value that came out empty. jsonv2 agrees on every shape here;
+// struct fields are the one divergence, pinned separately below.
+func TestAppendAny_OmitEmptyJSONv2Semantics(t *testing.T) {
+	t.Parallel()
+	type inner struct {
+		S string `json:"s,omitempty"`
+	}
+	type s struct {
+		N  int             `json:"n,omitempty"`
+		B  bool            `json:"b,omitempty"`
+		F  float64         `json:"f,omitempty"`
+		St struct{}        `json:"st"`
+		In inner           `json:"in"`
+		P  *int            `json:"p,omitempty"`
+		A  []int           `json:"a,omitempty"`
+		M  map[string]int  `json:"m,omitempty"`
+		S  string          `json:"s,omitempty"`
+		I  any             `json:"i,omitempty"`
+		Ar [0]int          `json:"ar,omitempty"`
+		R  json.RawMessage `json:"r,omitempty"`
+		Q  string          `json:"q,omitempty"`
+	}
+	n := 0
+	for _, v := range []any{
+		s{},
+		s{N: 1, B: true, F: 0.5, In: inner{S: "x"}, P: &n, A: []int{}, M: map[string]int{"k": 0},
+			S: "s", I: map[string]any{}, R: json.RawMessage(`{}`), Q: `"`},
+		s{A: []int{0}, I: []any{}, R: json.RawMessage(`null`)},
+	} {
+		got, err := AppendAny(nil, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := jsonv2.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != string(want) {
+			t.Errorf("%+v:\n ggen   %s\n jsonv2 %s", v, got, want)
+		}
+	}
+}
+
+// omitempty never drops a struct: it is meaningless there, which is why the
+// generator refuses the option on a struct field outright. A nil pointer or a
+// nil interface still omits — that is the pointer being absent, not the
+// struct being empty. This is a deliberate divergence from jsonv2, which
+// drops a struct that encodes {}.
+func TestAppendAny_OmitEmptyKeepsStruct(t *testing.T) {
+	t.Parallel()
+	type inner struct {
+		S string `json:"s,omitempty"`
+	}
+	type s struct {
+		St struct{}       `json:"st"`
+		In inner          `json:"in"`
+		P  *inner         `json:"p,omitempty"`
+		I  any            `json:"i,omitempty"`
+		M  map[string]int `json:"m,omitempty"`
+	}
+	cases := []struct {
+		name string
+		v    s
+		want string
+	}{
+		{"all_empty", s{}, `{"st":{},"in":{}}`},
+		{"nil_pointer_omits", s{P: nil}, `{"st":{},"in":{}}`},
+		{"empty_pointee_kept", s{P: &inner{}}, `{"st":{},"in":{},"p":{}}`},
+		{"any_struct_kept", s{I: inner{}}, `{"st":{},"in":{},"i":{}}`},
+		{"any_nil_pointer_omits", s{I: (*inner)(nil)}, `{"st":{},"in":{}}`},
+		{"empty_map_omits", s{M: map[string]int{}}, `{"st":{},"in":{}}`},
+		{"populated", s{In: inner{S: "x"}, M: map[string]int{"k": 1}}, `{"st":{},"in":{"s":"x"},"m":{"k":1}}`},
+	}
+	for _, c := range cases {
+		got, err := AppendAny(nil, c.v)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		if string(got) != c.want {
+			t.Errorf("%s:\n got  %s\n want %s", c.name, got, c.want)
+		}
+	}
+}
+
+// omitzero consults an IsZero method when the field type (or the value an
+// interface field holds, or the pointer type) has one, nil-guarding
+// pointers and interfaces, else falls back to the structural test —
+// jsonv2 semantics. A zero time.Time carrying a location is the stdlib
+// case: reflect-nonzero, IsZero() true.
+type r10Zeroer struct{ A, B int }
+
+func (z r10Zeroer) IsZero() bool { return z.A == z.B }
+
+type r10PtrZeroer struct{ A int }
+
+func (z *r10PtrZeroer) IsZero() bool { return z.A < 0 }
+
+type r10IsZeroer interface{ IsZero() bool }
+
+func TestAppendAny_OmitZeroIsZeroMethod(t *testing.T) {
+	t.Parallel()
+	type s struct {
+		Z  r10Zeroer    `json:"z,omitzero"`
+		PZ *r10Zeroer   `json:"pz,omitzero"`
+		AZ r10PtrZeroer `json:"az,omitzero"`
+		IZ r10IsZeroer  `json:"iz,omitzero"`
+		T  time.Time    `json:"t,omitzero"`
+		N  int          `json:"n,omitzero"`
+	}
+	for _, v := range []any{
+		s{},
+		s{Z: r10Zeroer{3, 3}, PZ: &r10Zeroer{1, 1}, AZ: r10PtrZeroer{-1}, IZ: r10Zeroer{2, 2},
+			T: time.Time{}.In(time.FixedZone("X", 0))},
+		s{Z: r10Zeroer{1, 2}, PZ: &r10Zeroer{1, 2}, AZ: r10PtrZeroer{5}, IZ: (*r10Zeroer)(nil),
+			T: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), N: 1},
+		&s{Z: r10Zeroer{1, 2}, IZ: &r10Zeroer{1, 2}},
+	} {
+		got, err := AppendAny(nil, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := jsonv2.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != string(want) {
+			t.Errorf("%+v:\n ggen   %s\n jsonv2 %s", v, got, want)
+		}
+	}
+}
+
+// The catch-all map is spelled `json:",embed"` (jsonv2); its entries splice
+// into the parent, after every named member whatever the field's declaration
+// position (embedFirst — the emitter orders it that way too). The old
+// `,inline` spelling is an unknown option and the map stays under its own
+// key, as jsonv2 treats it.
+func TestAppendAny_EmbedSplices(t *testing.T) {
+	t.Parallel()
+	type embed struct {
+		A     int            `json:"a"`
+		Extra map[string]any `json:",embed"`
+	}
+	type embedFirst struct {
+		Extra map[string]any `json:",embed"`
+		A     int            `json:"a"`
+		B     int            `json:"b"`
+	}
+	type inline struct {
+		A     int            `json:"a"`
+		Extra map[string]any `json:",inline"`
+	}
+	for _, v := range []any{
+		embed{A: 1, Extra: map[string]any{"x": 2.0}},
+		embedFirst{A: 1, B: 3, Extra: map[string]any{"x": 2.0}},
+		inline{A: 1, Extra: map[string]any{"x": 2.0}},
+	} {
+		got, err := AppendAny(nil, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := jsonv2.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(got) != string(want) {
+			t.Errorf("%T:\n ggen   %s\n jsonv2 %s", v, got, want)
+		}
+	}
+}
+
+// Map keys route through a text marshaler on the key type (either
+// receiver), escaped like any other key; a plain string kind uses the
+// bytes. A key type with a marshaler needs no string kind — only a bare
+// non-string key is rejected (TestAppendAny_NonStringMapKey).
+type r10TextKey string
+
+func (k r10TextKey) MarshalText() ([]byte, error) { return []byte("T:" + string(k)), nil }
+
+type r10AppendKey string
+
+func (k *r10AppendKey) AppendText(b []byte) ([]byte, error) {
+	return append(append(b, "A:"...), *k...), nil
+}
+
+type r10IntKey int
+
+func (k r10IntKey) MarshalText() ([]byte, error) { return []byte("i" + strconv.Itoa(int(k))), nil }
+
+type r10PlainKey string
+
+func TestAppendAny_MapKeyTextMarshaler(t *testing.T) {
+	t.Parallel()
+	for _, v := range []any{
+		map[r10TextKey]int{"a": 1},
+		map[r10AppendKey]int{"a": 1},
+		map[r10IntKey]int{7: 1},
+		map[r10PlainKey]int{"a": 1},
+		map[r10TextKey]string{`q"\`: "v"},
+		map[r10AppendKey]bool{"<x>": true},
+	} {
+		got, err := AppendAny(nil, v)
+		if err != nil {
+			t.Fatalf("%T: %v", v, err)
+		}
+		want, err := jsonv2.Marshal(v)
+		if err != nil {
+			t.Fatalf("%T: jsonv2: %v", v, err)
+		}
+		if string(got) != string(want) {
+			t.Errorf("%T:\n ggen   %s\n jsonv2 %s", v, got, want)
+		}
+	}
+	// HTML mode escapes the marshaled key text like every other key.
+	got, err := AppendAnyHTML(nil, map[r10AppendKey]bool{"<x>": true})
+	if err != nil || string(got) != `{"A:\u003cx\u003e":true}` {
+		t.Errorf("html key: got %s err %v", got, err)
+	}
+}
+
+// time.Duration inside an any carries the units string a Duration FIELD
+// emits by default, so one document never holds two shapes of one Go type.
+// (jsonv2 has no Duration representation at all and errors, so there is
+// no oracle here.) `,string` does not double-wrap it: its wire is already a
+// string.
+func TestAppendAny_DurationUnits(t *testing.T) {
+	t.Parallel()
+	d := 90 * time.Second
+	for _, tc := range []struct {
+		in   any
+		want string
+	}{
+		{d, `"1m30s"`},
+		{&d, `"1m30s"`},
+		{(*time.Duration)(nil), `null`},
+		{[]time.Duration{time.Second, 0}, `["1s","0s"]`},
+		{map[string]time.Duration{"d": time.Minute}, `{"d":"1m0s"}`},
+		{[]any{d}, `["1m30s"]`},
+		{struct {
+			D time.Duration `json:"d,string"`
+		}{time.Hour}, `{"d":"1h0m0s"}`},
+		{struct {
+			D time.Duration `json:"d,omitzero"`
+		}{}, `{}`},
+	} {
+		got, err := AppendAny(nil, tc.in)
+		if err != nil {
+			t.Fatalf("%T: %v", tc.in, err)
+		}
+		if string(got) != tc.want {
+			t.Errorf("%T: got %s, want %s", tc.in, got, tc.want)
+		}
 	}
 }

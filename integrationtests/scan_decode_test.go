@@ -4,6 +4,7 @@ package integrationtests
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	jsonv2 "encoding/json/v2"
 	"errors"
@@ -900,12 +901,13 @@ type NarrowFloats struct {
 	Fs []float32          `json:"fs"`
 	Fm map[string]float32 `json:"fm"`
 	Fp *float32           `json:"fp"`
+	Fq float32            `json:"fq,string"`
 }
 
 func TestNarrowFloatOverflow(t *testing.T) {
 	t.Parallel()
 	bad := []string{
-		`{"f":1e39}`, `{"f":-1e39}`, `{"fs":[1,1e39]}`, `{"fm":{"k":1e39}}`, `{"fp":1e39}`,
+		`{"f":1e39}`, `{"f":-1e39}`, `{"fs":[1,1e39]}`, `{"fm":{"k":1e39}}`, `{"fp":1e39}`, `{"fq":"1e39"}`,
 	}
 	for _, in := range bad {
 		if _, _, err := (NarrowFloats{}).DecodeFrom([]byte(in)); !errors.Is(err, ggen.ErrNumberOverflow) {
@@ -927,6 +929,57 @@ func TestNarrowFloatOverflow(t *testing.T) {
 	got, _, err := (NarrowFloats{}).DecodeFrom([]byte(`{"f":3.4028235e38}`))
 	if err != nil || got.F != math.MaxFloat32 {
 		t.Errorf("boundary: got %v, %v", got.F, err)
+	}
+}
+
+// TestNarrowFloat_RoundsDecimalOnce pins single rounding at every float32
+// site (field, slice, map, pointer, `,string`; bytes + stream). Narrowing a
+// float64 scan rounds the decimal twice: the first three tokens are the
+// shortest float64 forms of float32 rounding midpoints — what json.Marshal of
+// such a float64 emits — and landed one ulp off; the last sits just below
+// the overflow midpoint and was rejected as an overflow. Both stdlibs parse
+// at 32 bits.
+func TestNarrowFloat_RoundsDecimalOnce(t *testing.T) {
+	t.Parallel()
+	pick := func(v NarrowFloats) float32 {
+		switch {
+		case v.Fp != nil:
+			return *v.Fp
+		case len(v.Fs) == 1:
+			return v.Fs[0]
+		case len(v.Fm) == 1:
+			return v.Fm["k"]
+		case v.Fq != 0:
+			return v.Fq
+		}
+		return v.F
+	}
+	for _, tok := range []string{"1.0000000596046448", "1.0000001788139343", "1.0000002980232239", "3.4028235677973366e38"} {
+		for _, payload := range []string{
+			`{"f":` + tok + `}`, `{"fs":[` + tok + `]}`, `{"fm":{"k":` + tok + `}}`, `{"fp":` + tok + `}`, `{"fq":"` + tok + `"}`,
+		} {
+			var v1, v2 NarrowFloats
+			if err := json.Unmarshal([]byte(payload), &v1); err != nil {
+				t.Fatalf("encoding/json rejects %s: %v", payload, err)
+			}
+			if err := jsonv2.Unmarshal([]byte(payload), &v2); err != nil {
+				t.Fatalf("jsonv2 rejects %s: %v", payload, err)
+			}
+			want := pick(v1)
+			if pick(v2) != want {
+				t.Fatalf("oracles disagree on %s: %v vs %v", payload, want, pick(v2))
+			}
+			got, _, err := (NarrowFloats{}).DecodeFrom([]byte(payload))
+			if err != nil || pick(got) != want {
+				t.Errorf("bytes %s: got %v (%v), want %v", payload, pick(got), err, want)
+			}
+			var s ggen.Stream
+			s.Reset(&chunkReader{data: []byte(payload), max: 1}, nil)
+			sgot, err := (NarrowFloats{}).DecodeFromStream(&s)
+			if err != nil || pick(sgot) != want {
+				t.Errorf("stream %s: got %v (%v), want %v", payload, pick(sgot), err, want)
+			}
+		}
 	}
 }
 
@@ -1094,53 +1147,73 @@ func TestTruncationSentinelParity(t *testing.T) {
 	}
 }
 
-// Stream scan primitives rebase s.Pos onto the value head on every error
-// return, so a compacting refill can no longer leave a stale cursor behind.
-// The user-visible contract that buys: the reported payload offset and the
-// sentinel are the SAME at every chunk size. Integer overflow used to report
-// 236/239/218 at chunk 1/7/64 for one payload.
+// decodeBothChunked is decodeBothPaths with the stream fed chunk bytes per
+// Read through a small window, so the window compacts mid-value.
+func decodeBothChunked[T interface {
+	ggen.Decoder[T]
+	ggen.StreamDecoder[T]
+}](payload string, chunk int) (bytesErr, streamErr error) {
+	var zb T
+	_, _, bytesErr = zb.DecodeFrom([]byte(payload))
+	var s ggen.Stream
+	s.Reset(&chunkReader{data: []byte(payload), max: chunk}, make([]byte, 0, 64))
+	_, streamErr = s.Value[T]()
+	return bytesErr, streamErr
+}
+
+// Stream scan primitives rebase s.Pos on every error return, so a compacting
+// refill cannot leave a stale cursor behind, and the rebased cursor is the
+// bytes-path error position (where scanning stopped). The user-visible
+// contract that buys: ParseError.Pos and the sentinel are the SAME on both
+// paths and at every chunk size. Integer overflow used to report 236/239/218
+// at chunk 1/7/64 for one payload; a malformed number under an ignoreunknown
+// key stamped a position past the document; a RawMessage span malformed deep
+// inside reported the span's first byte on the stream only.
 func TestParseError_StreamPosChunkInvariant(t *testing.T) {
 	t.Parallel()
 	pad := `{"tags":["` + strings.Repeat("a", 200) + `"],`
-	cases := map[string]string{
-		"ctrl_in_string":   `{"name":"` + strings.Repeat("a", 200) + "\x01" + `x"}`,
-		"int_bad_digit":    pad + `"id":12x3}`,
-		"int_leading_zero": pad + `"id":0123}`,
-		"int_overflow":     pad + `"id":99999999999999999999}`,
-		"float_bad":        pad + `"score":1.2.3}`,
-		"float_trail_dot":  pad + `"score":1.}`,
-		"bad_key":          pad + `5:1}`,
-		"unterminated_str": pad + `"name":"abc`,
-		"bad_literal":      pad + `"id":tru}`,
+	rawPad := `{"raw":{"nested":[1,2,3],"s":"` + strings.Repeat("b", 200) + `"`
+	cases := []struct {
+		name, payload string
+		run           func(string, int) (error, error)
+	}{
+		{"ctrl_in_string", `{"name":"` + strings.Repeat("a", 200) + "\x01" + `x"}`, decodeBothChunked[Node]},
+		{"int_bad_digit", pad + `"id":12x3}`, decodeBothChunked[Node]},
+		{"int_leading_zero", pad + `"id":0123}`, decodeBothChunked[Node]},
+		{"int_overflow", pad + `"id":99999999999999999999}`, decodeBothChunked[Node]},
+		{"int_sign_only", pad + `"id":-}`, decodeBothChunked[Node]},
+		{"float_bad", pad + `"score":1.2.3}`, decodeBothChunked[Node]},
+		{"float_trail_dot", pad + `"score":1.}`, decodeBothChunked[Node]},
+		{"bad_key", pad + `5:1}`, decodeBothChunked[Node]},
+		{"unterminated_str", pad + `"name":"abc`, decodeBothChunked[Node]},
+		{"ctrl_in_open_tail", pad + "\"name\":\"abc\x01", decodeBothChunked[Node]},
+		{"truncated_escape", pad + `"name":"a\u12`, decodeBothChunked[Node]},
+		{"bad_literal", pad + `"id":tru}`, decodeBothChunked[Node]},
+		{"bad_bool", pad + `"active":tru}`, decodeBothChunked[Node]},
+		{"bad_bool_byte", pad + `"active":trux}`, decodeBothChunked[Node]},
+		{"ignored_key_bad_number", `{"name":"x","zz":1.}`, decodeBothChunked[IgnoreUnknownStruct]},
+		{"ignored_key_bad_literal", pad + `"zz":nulx}`, decodeBothChunked[IgnoreUnknownStruct]},
+		{"raw_span_malformed", rawPad + `, "x":}}`, decodeBothChunked[RawOnly]},
+		{"raw_span_truncated", rawPad, decodeBothChunked[RawOnly]},
+		{"embed_raw_span", `{"name":"a","k":{"x":[1,2,]}}`, decodeBothChunked[EmbedRawStruct]},
 	}
-	for name, payload := range cases {
-		t.Run(name, func(t *testing.T) {
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			_, _, bytesErr := Node{}.DecodeFrom([]byte(payload))
-			var bpe *ggen.ParseError
-			if !errors.As(bytesErr, &bpe) {
-				t.Fatalf("bytes: got %T %v, want *ggen.ParseError", bytesErr, bytesErr)
-			}
-			wantPos, firstChunk := -1, 0
 			for _, chunk := range []int{1, 7, 64, 512, 4096} {
-				var s ggen.Stream
-				s.Reset(&chunkReader{data: []byte(payload), max: chunk}, make([]byte, 0, 64))
-				_, streamErr := Node{}.DecodeFromStream(&s)
-				var spe *ggen.ParseError
+				bytesErr, streamErr := tc.run(tc.payload, chunk)
+				var bpe, spe *ggen.ParseError
+				if !errors.As(bytesErr, &bpe) {
+					t.Fatalf("bytes: got %T %v, want *ggen.ParseError", bytesErr, bytesErr)
+				}
 				if !errors.As(streamErr, &spe) {
 					t.Fatalf("stream chunk=%d: got %T %v, want *ggen.ParseError", chunk, streamErr, streamErr)
 				}
 				if !errors.Is(streamErr, bpe.Err) {
 					t.Errorf("stream chunk=%d: sentinel %v, bytes says %v", chunk, spe.Err, bpe.Err)
 				}
-				if spe.Pos < 0 || spe.Pos > len(payload) {
-					t.Errorf("stream chunk=%d: Pos = %d, outside payload [0,%d]", chunk, spe.Pos, len(payload))
-				}
-				if wantPos < 0 {
-					wantPos, firstChunk = spe.Pos, chunk
-				} else if spe.Pos != wantPos {
-					t.Errorf("stream chunk=%d: Pos = %d, chunk=%d reported %d (must not vary with chunk size)",
-						chunk, spe.Pos, firstChunk, wantPos)
+				if spe.Pos != bpe.Pos || spe.Pos > len(tc.payload) {
+					t.Errorf("stream chunk=%d: Pos = %d, bytes %d (payload len %d)", chunk, spe.Pos, bpe.Pos, len(tc.payload))
 				}
 			}
 		})
@@ -1155,6 +1228,172 @@ func TestFormatArray_ByteOverflow(t *testing.T) {
 	for path, err := range map[string]error{"bytes": bytesErr, "stream": streamErr} {
 		if !errors.Is(err, ggen.ErrNumberOverflow) {
 			t.Errorf("%s: got %v, want ErrNumberOverflow", path, err)
+		}
+	}
+}
+
+// decodeBothPathsChunked is decodeBothPaths with the stream fed chunk bytes
+// per Read through a small window.
+func decodeBothPathsChunked[T interface {
+	ggen.Decoder[T]
+	ggen.StreamDecoder[T]
+}](payload string, chunk int) (bytesErr, streamErr error) {
+	var zb T
+	_, _, bytesErr = zb.DecodeFrom([]byte(payload))
+	var s ggen.Stream
+	s.Reset(&chunkReader{data: []byte(payload), max: chunk}, make([]byte, 0, 16))
+	_, streamErr = s.Value[T]()
+	return bytesErr, streamErr
+}
+
+// A control byte inside a string whose closing quote never arrives is a
+// final malformation, not a truncation: both paths report ErrBadString at
+// the same offset. The bytes path used to say ErrUnterminated at the end of
+// input while the stream said ErrBadString at the span start.
+func TestParseError_CtrlInOpenTailParity(t *testing.T) {
+	t.Parallel()
+	for _, payload := range []string{"{\"name\":\"ab\x01}", "{\"na\x01:1}", "{\"props\":{\"a\":\"b\x01}}", "{\"tags\":[\"a\x01]}"} {
+		for _, chunk := range []int{1, 3, 64} {
+			berr, serr := decodeBothPathsChunked[Node](payload, chunk)
+			var bpe, spe *ggen.ParseError
+			if !errors.As(berr, &bpe) || !errors.As(serr, &spe) {
+				t.Fatalf("%q chunk=%d: bytes=%v stream=%v, want ParseErrors", payload, chunk, berr, serr)
+			}
+			if bpe.Err != ggen.ErrBadString {
+				t.Errorf("%q: bytes sentinel %v, want ErrBadString", payload, bpe.Err)
+			}
+			if spe.Err != bpe.Err || spe.Pos != bpe.Pos {
+				t.Errorf("%q chunk=%d: stream (%v pos=%d), bytes (%v pos=%d)",
+					payload, chunk, spe.Err, spe.Pos, bpe.Err, bpe.Pos)
+			}
+		}
+	}
+}
+
+// R10BoolShapes carries a bool at every generated Bool emit site: field,
+// slice element, array element, map value.
+//
+//ggen:generate
+type R10BoolShapes struct {
+	Flag  bool            `json:"flag"`
+	Flags []bool          `json:"flags"`
+	Pair  [2]bool         `json:"pair"`
+	ByKey map[string]bool `json:"byKey"`
+}
+
+// Every generated Bool site stamps the give-up byte — the first byte that
+// breaks the literal, or the end of a truncated one — on both paths and at
+// every chunk size (jsonv2's offset). ggen.Bool itself reports the literal
+// start; the emitted error branch derives the position with ggen.BoolEnd,
+// and Stream.Bool leaves Pos there.
+func TestParseError_BoolGiveUpPos(t *testing.T) {
+	t.Parallel()
+	shapes := func(p string, c int) (error, error) { return decodeBothPathsChunked[R10BoolShapes](p, c) }
+	cases := []struct {
+		name    string
+		payload string
+		want    int
+		run     func(string, int) (error, error)
+	}{
+		{"field_truncated", `{"flag":tru}`, 11, shapes},
+		{"field_bad_byte", `{"flag":trux}`, 11, shapes},
+		{"field_false", `{"flag":fals}`, 12, shapes},
+		{"slice_elem", `{"flags":[true,fals]}`, 19, shapes},
+		{"array_elem", `{"pair":[tru,true]}`, 12, shapes},
+		{"map_value", `{"byKey":{"a":trux}}`, 17, shapes},
+		{"any_field", `{"name":"a","body":falsy}`, 23,
+			func(p string, c int) (error, error) { return decodeBothPathsChunked[AnyStruct](p, c) }},
+		{"alias", `trux`, 3,
+			func(p string, c int) (error, error) { return decodeBothPathsChunked[AliasBool](p, c) }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			for _, chunk := range []int{1, 3, 64} {
+				berr, serr := tc.run(tc.payload, chunk)
+				for path, err := range map[string]error{"bytes": berr, "stream": serr} {
+					var pe *ggen.ParseError
+					if !errors.As(err, &pe) || pe.Err != ggen.ErrBadBool {
+						t.Fatalf("%s chunk=%d: got %v, want an ErrBadBool ParseError", path, chunk, err)
+					}
+					if pe.Pos != tc.want {
+						t.Errorf("%s chunk=%d: Pos = %d, want %d", path, chunk, pe.Pos, tc.want)
+					}
+				}
+			}
+		})
+	}
+}
+
+// The value-head refill sentinel follows the WIRE shape, not the field's Go
+// kind: a pointer chain's leaf, sql.Null*'s inner, the quote a `,string`
+// value opens with, the bracket of a format:array []byte.
+//
+//ggen:generate
+type R10HeadShapes struct {
+	PP **int          `json:"pp"`
+	PG *sql.Null[int] `json:"pg"`
+	BA []byte         `json:"ba,format:array"`
+	PS *int           `json:"ps,string"`
+}
+
+//ggen:generate nullzero
+type R10HeadShapesNZ struct {
+	IS int `json:"is,string"`
+}
+
+func TestTruncationSentinelParity_WireShape(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		payload string
+		run     func(string) (error, error)
+	}{
+		{`{"pp":`, decodeBothPaths[R10HeadShapes]},
+		{`{"pg":`, decodeBothPaths[R10HeadShapes]},
+		{`{"ba":`, decodeBothPaths[R10HeadShapes]},
+		{`{"ps":`, decodeBothPaths[R10HeadShapes]},
+		{`{"is":`, decodeBothPaths[R10HeadShapesNZ]},
+	}
+	for _, c := range cases {
+		bytesErr, streamErr := c.run(c.payload)
+		var bpe, spe *ggen.ParseError
+		if !errors.As(bytesErr, &bpe) || !errors.As(streamErr, &spe) {
+			t.Fatalf("%q: bytes=%v stream=%v", c.payload, bytesErr, streamErr)
+		}
+		if bpe.Err != spe.Err {
+			t.Errorf("%q: bytes sentinel %v, stream sentinel %v", c.payload, bpe.Err, spe.Err)
+		}
+	}
+}
+
+// An `n` that does not spell `null` is ErrBadLiteral at every null-accepting
+// kind on both paths (jsonv2 reports a literal error there too), including
+// input that runs out mid-literal.
+func TestNullPeekSentinelParity(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		run  func(string) (error, error)
+		in   string
+	}{
+		{"slice", decodeBothPaths[Node], `{"tags":nulx}`},
+		{"slice_short", decodeBothPaths[Node], `{"tags":n}`},
+		{"slice_truncated", decodeBothPaths[Node], `{"tags":nul`},
+		{"map", decodeBothPaths[Node], `{"props":nul}`},
+		{"struct_slice", decodeBothPaths[Node], `{"children":nx}`},
+		{"ptr_string", decodeBothPaths[PointerStruct], `{"name":nope}`},
+		{"ptr_bool", decodeBothPaths[PointerStruct], `{"enabled":nay}`},
+		{"sqlnull_int", decodeBothPaths[SQLNullStruct], `{"i":nan}`},
+		{"nullzero_int", decodeBothPaths[NullZeroTags], `{"nzInt":nix}`},
+		{"bytes", decodeBothPaths[NativeTypes], `{"blob":nb}`},
+	}
+	for _, c := range cases {
+		bytesErr, streamErr := c.run(c.in)
+		if !errors.Is(bytesErr, ggen.ErrBadLiteral) {
+			t.Errorf("%s bytes: %v", c.name, bytesErr)
+		}
+		if !errors.Is(streamErr, ggen.ErrBadLiteral) {
+			t.Errorf("%s stream: %v", c.name, streamErr)
 		}
 	}
 }

@@ -372,6 +372,10 @@ func TestAppendURL_Construction(t *testing.T) {
 		{"rawpath_no_leading_slash", url.URL{Scheme: "https", Host: "ex.com", Path: "a b", RawPath: "a%20b"}},
 		{"asterisk_with_host", url.URL{Scheme: "http", Host: "ex.com", Path: "*"}},
 		{"asterisk_no_host", url.URL{Path: "*"}},
+		// Path presence, not its first byte, decides the authority/path
+		// '/' — a NUL-leading path is still a path.
+		{"nul_leading_path", url.URL{Scheme: "http", Host: "h", Path: "\x00x"}},
+		{"nul_leading_rawpath", url.URL{Scheme: "http", Host: "h", Path: "\x00x", RawPath: "%00x"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

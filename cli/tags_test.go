@@ -40,6 +40,30 @@ func TestParseJSONTag(t *testing.T) {
 		{"-,omitempty", "", JSONOptions{}, false, true},
 		{"a,", "", JSONOptions{}, false, true},
 		{"a,,omitempty", "", JSONOptions{}, false, true},
+		// The name is verbatim — encoding/json v1 and v2 both keep the
+		// whitespace — while a whitespace-padded OPTION is malformed (v2:
+		// "invalid character ' ' at start of option").
+		{" a", " a", JSONOptions{}, false, false},
+		{"a ", "a ", JSONOptions{}, false, false},
+		{"' a '", " a ", JSONOptions{}, false, false},
+		{"a, omitempty", "", JSONOptions{}, false, true},
+		{"a,omitempty ", "", JSONOptions{}, false, true},
+		// `case:` (case-insensitive matching) is not implemented, so it is
+		// refused rather than silently matching exactly; near-miss spellings
+		// of a known option are rejected the way jsonv2 rejects them; a
+		// genuinely unknown word still passes.
+		{"a,case:ignore", "", JSONOptions{}, false, true},
+		{"a,case:strict", "", JSONOptions{}, false, true},
+		{"a,case", "", JSONOptions{}, false, true},
+		{"a,omitEmpty", "", JSONOptions{}, false, true},
+		{"a,omit_empty", "", JSONOptions{}, false, true},
+		{"a,OMITZERO", "", JSONOptions{}, false, true},
+		{"a,String", "", JSONOptions{}, false, true},
+		{"a,Embed", "", JSONOptions{}, false, true},
+		{"a,Inline", "", JSONOptions{}, false, true},
+		{"a,Format:hex", "", JSONOptions{}, false, true},
+		{"a,format", "", JSONOptions{}, false, true},
+		{"a,nocase", "a", JSONOptions{}, false, false},
 	}
 	for _, tt := range tests {
 		name, opts, ignored, err := parseJSONTag(tt.input)

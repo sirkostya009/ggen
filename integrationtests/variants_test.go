@@ -5,8 +5,10 @@ package integrationtests
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"strconv"
 	"testing"
+	"testing/iotest"
 
 	"github.com/sirkostya009/ggen"
 )
@@ -188,5 +190,125 @@ func TestVariant_converterErrorCarriesPathAndPos(t *testing.T) {
 	}
 	if len(spe.Path) == 0 || spe.Path[0] != "count" {
 		t.Errorf("stream: Path = %v, want [count]", spe.Path)
+	}
+}
+
+// Converter INPUTS resolve like a field of that type would: a pointer input
+// takes the pointer scan (null → nil, so the variant claims 'n' too) and an
+// unannotated named primitive resolves through its underlying kind. Both
+// used to claim the object shape `{` and fall to the encoding/json
+// fallback, so the wire number every such converter exists for hit the
+// dispatch default.
+type R10Score int
+
+//ggen:generate
+type R10Money struct {
+	Cents int64 `json:"cents"`
+}
+
+func R10FromScore(s R10Score) R10Money { return R10Money{Cents: int64(s) * 100} }
+
+func R10FromPtr(p *int64) R10Money {
+	if p == nil {
+		return R10Money{Cents: -1}
+	}
+	return R10Money{Cents: *p}
+}
+
+func R10PtrLabel(p *int) string {
+	if p == nil {
+		return "nil"
+	}
+	return "ptr"
+}
+
+//ggen:generate
+type R10ConvInputs struct {
+	Named R10Money `json:"named" pipe:"@R10FromScore/nullzero"`
+	Ptr   R10Money `json:"ptr" pipe:"@R10FromPtr/."`
+	Label string   `json:"label" pipe:". / @R10PtrLabel"`
+}
+
+func TestVariants_R10ConverterInputs(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		in    string
+		named int64
+		ptr   int64
+		label string
+	}{
+		{"numbers", `{"named":5,"ptr":7,"label":9}`, 500, 7, "ptr"},
+		{"nulls", `{"named":null,"ptr":null,"label":null}`, 0, -1, "nil"},
+		{"natives", `{"named":-2,"ptr":{"cents":3},"label":"x"}`, -200, 3, "x"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			check := func(path string, got R10ConvInputs, err error) {
+				if err != nil {
+					t.Fatalf("%s: %v", path, err)
+				}
+				if got.Named.Cents != c.named || got.Ptr.Cents != c.ptr || got.Label != c.label {
+					t.Errorf("%s: got {%d %d %q}, want {%d %d %q}", path,
+						got.Named.Cents, got.Ptr.Cents, got.Label, c.named, c.ptr, c.label)
+				}
+			}
+			got, _, err := R10ConvInputs{}.DecodeFrom([]byte(c.in))
+			check("bytes", got, err)
+			for _, chunk := range []int{1, 3, 64} {
+				var s ggen.Stream
+				s.Reset(iotest.OneByteReader(bytes.NewReader([]byte(c.in))), make([]byte, 0, chunk))
+				got, err := R10ConvInputs{}.DecodeFromStream(&s)
+				check(fmt.Sprintf("stream/%d", chunk), got, err)
+			}
+		})
+	}
+	if _, _, err := (R10ConvInputs{}).DecodeFrom([]byte(`{"label":true}`)); err == nil {
+		t.Error("a shape no variant claims must still fail")
+	}
+}
+
+// R10BConvPtr: a POINTER field whose decode stage dispatches on shape still
+// runs its value steps split by target — built-ins on the pointee (guarded, a
+// variant may leave the pointer nil), `@Func` steps on the pointer itself.
+//
+//ggen:generate
+type R10BConvPtr struct {
+	N *int `json:"n" pipe:"nullzero / . / @R10BAtoiPtr gte=2"`
+}
+
+func R10BAtoiPtr(s string) (*int, error) {
+	n, err := strconv.Atoi(s)
+	if err != nil {
+		return nil, err
+	}
+	return &n, nil
+}
+
+func TestVariants_pointerFieldValueSteps(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   string
+		ok   bool
+		want func(v R10BConvPtr) bool
+	}{
+		{`{"n":5}`, true, func(v R10BConvPtr) bool { return *v.N == 5 }},
+		{`{"n":"7"}`, true, func(v R10BConvPtr) bool { return *v.N == 7 }},
+		{`{"n":1}`, false, nil},
+		{`{"n":"1"}`, false, nil},
+		{`{"n":null}`, true, func(v R10BConvPtr) bool { return v.N == nil }},
+	}
+	for _, c := range cases {
+		got, _, err := R10BConvPtr{}.DecodeFrom([]byte(c.in))
+		if (err == nil) != c.ok || (c.want != nil && err == nil && !c.want(got)) {
+			t.Errorf("bytes %s: %+v (%v), want ok=%v", c.in, got, err, c.ok)
+		}
+		var s ggen.Stream
+		s.Reset(bytes.NewReader([]byte(c.in)), nil)
+		sgot, err := R10BConvPtr{}.DecodeFromStream(&s)
+		if (err == nil) != c.ok || (c.want != nil && err == nil && !c.want(sgot)) {
+			t.Errorf("stream %s: %+v (%v), want ok=%v", c.in, sgot, err, c.ok)
+		}
 	}
 }

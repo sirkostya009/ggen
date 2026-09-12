@@ -83,6 +83,7 @@ func (recv FallbackStruct) DecodeFrom(data []byte) (result FallbackStruct, i int
 			if err != nil {
 				return result, i, ggen.NewParseErr("extra", i, err)
 			}
+			result.Extra = (FallbackStruct{}).Extra
 			err = json.Unmarshal(data[start:i], &result.Extra)
 			if err != nil {
 				return result, i, ggen.NewParseErr("extra", i, err)
@@ -190,6 +191,7 @@ func (recv FallbackStruct) DecodeFromStream(s *ggen.Stream) (result FallbackStru
 			if err != nil {
 				return result, ggen.NewParseErr("extra", s.Offset(), err)
 			}
+			result.Extra = (FallbackStruct{}).Extra
 			err = json.Unmarshal(span, &result.Extra)
 			if err != nil {
 				return result, ggen.NewParseErr("extra", s.Offset(), err)
@@ -208,7 +210,12 @@ func (recv FallbackStruct) DecodeFromStream(s *ggen.Stream) (result FallbackStru
 				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -446,7 +453,12 @@ func (recv FastFallbackStruct) DecodeFromStream(s *ggen.Stream) (result FastFall
 				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -589,6 +601,7 @@ func (recv TextFallbackStruct) DecodeFrom(data []byte) (result TextFallbackStruc
 			if err != nil {
 				return result, i, ggen.NewParseErr("tag", i, err)
 			}
+			result.Tag = (TextFallbackStruct{}).Tag
 			err = result.Tag.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 			if err != nil {
 				return result, i, ggen.NewParseErr("tag", i, err)
@@ -685,12 +698,18 @@ func (recv TextFallbackStruct) DecodeFromStream(s *ggen.Stream) (result TextFall
 			if err != nil {
 				return result, ggen.NewParseErr("tag", s.Offset(), err)
 			}
+			result.Tag = (TextFallbackStruct{}).Tag
 			err = result.Tag.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 			if err != nil {
 				return result, ggen.NewParseErr("tag", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -837,7 +856,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"arr"}, Want: 2, Got: idx0}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"arr"}, Want: 2, Got: 3}
 					}
 					result.Arr[idx0] = thirdparty2.External2{}
 					var consumed int
@@ -875,7 +894,10 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"dict"}}
 			}
 			seenDict = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("dict", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Dict = nil
 				break
@@ -962,7 +984,10 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"many"}}
 			}
 			seenMany = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("many", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Many = nil
 				break
@@ -1028,15 +1053,15 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"pptr"}}
 			}
 			seenPPtr = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("pptr", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.PPtr = nil
 				break
 			}
 			var v thirdparty2.External2
-			if result.PPtr != nil && (*result.PPtr) != nil {
-				v = (*(*result.PPtr))
-			}
 			var consumed int
 			v, consumed, err = v.DecodeFrom(data[i:])
 			i += consumed
@@ -1055,15 +1080,15 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ptr"}}
 			}
 			seenPtr = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("ptr", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Ptr = nil
 				break
 			}
 			var v thirdparty2.External2
-			if result.Ptr != nil {
-				v = (*result.Ptr)
-			}
 			var consumed int
 			v, consumed, err = v.DecodeFrom(data[i:])
 			i += consumed
@@ -1080,7 +1105,10 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"slab"}}
 			}
 			seenSlab = true
-			if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("slab", i, ggen.ErrBadLiteral)
+				}
 				i += 4
 				result.Slab = nil
 				break
@@ -1105,7 +1133,10 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					if i+4 <= len(data) && data[i] == 'n' && data[i+1] == 'u' && data[i+2] == 'l' && data[i+3] == 'l' {
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							return result, i, ggen.NewParseErr("slab", i, ggen.ErrBadLiteral)
+						}
 						i += 4
 						result.Slab = append(result.Slab, nil)
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -1267,7 +1298,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *ggen.Stream) (result CrossPkgShap
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"arr"}, Want: 2, Got: idx0}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"arr"}, Want: 2, Got: 3}
 				}
 				result.Arr[idx0] = thirdparty2.External2{}
 				result.Arr[idx0], err = result.Arr[idx0].DecodeFromStream(s)
@@ -1544,9 +1575,6 @@ func (recv CrossPkgShapes) DecodeFromStream(s *ggen.Stream) (result CrossPkgShap
 				break
 			}
 			var v thirdparty2.External2
-			if result.PPtr != nil && (*result.PPtr) != nil {
-				v = (*(*result.PPtr))
-			}
 			v, err = v.DecodeFromStream(s)
 			if err != nil {
 				return result, ggen.NewParseErr("pptr", s.Offset(), err)
@@ -1588,9 +1616,6 @@ func (recv CrossPkgShapes) DecodeFromStream(s *ggen.Stream) (result CrossPkgShap
 				break
 			}
 			var v thirdparty2.External2
-			if result.Ptr != nil {
-				v = (*result.Ptr)
-			}
 			v, err = v.DecodeFromStream(s)
 			if err != nil {
 				return result, ggen.NewParseErr("ptr", s.Offset(), err)
@@ -1731,7 +1756,12 @@ func (recv CrossPkgShapes) DecodeFromStream(s *ggen.Stream) (result CrossPkgShap
 			}
 			s.Pos++
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1994,6 +2024,7 @@ func (recv TextAppenderStruct) DecodeFrom(data []byte) (result TextAppenderStruc
 			if err != nil {
 				return result, i, ggen.NewParseErr("t", i, err)
 			}
+			result.T = (TextAppenderStruct{}).T
 			err = result.T.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 			if err != nil {
 				return result, i, ggen.NewParseErr("t", i, err)
@@ -2070,12 +2101,18 @@ func (recv TextAppenderStruct) DecodeFromStream(s *ggen.Stream) (result TextAppe
 			if err != nil {
 				return result, ggen.NewParseErr("t", s.Offset(), err)
 			}
+			result.T = (TextAppenderStruct{}).T
 			err = result.T.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 			if err != nil {
 				return result, ggen.NewParseErr("t", s.Offset(), err)
 			}
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2122,5 +2159,513 @@ func (s TextAppenderStruct) AppendJSON(dst []byte) ([]byte, error) {
 		return dst, err
 	}
 	dst = ggen.CloseJSONString(dst, taT)
+	return append(dst, '}'), nil
+}
+
+func (recv R10WrapHost) DecodeFrom(data []byte) (result R10WrapHost, i int, err error) {
+	result = recv
+	seenPad := false
+	seenW := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenPad {
+			result.Pad = ""
+		}
+		if !seenW {
+			result.W = (R10WrapHost{}).W
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "pad":
+			if seenPad {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"pad"}}
+			}
+			seenPad = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("pad", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.Pad = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Pad, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("pad", i, err)
+				}
+			}
+		case "w":
+			if seenW {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"w"}}
+			}
+			seenW = true
+			start := i
+			i, err = ggen.SkipValue(data, start)
+			if err != nil {
+				return result, i, ggen.NewParseErr("w", i, err)
+			}
+			result.W = (R10WrapHost{}).W
+			err = result.W.UnmarshalJSON(data[start:i])
+			if err != nil {
+				return result, i, ggen.NewParseErrShift("w", i, i-start, err)
+			}
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenPad {
+				result.Pad = ""
+			}
+			if !seenW {
+				result.W = (R10WrapHost{}).W
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv R10WrapHost) DecodeFromStream(s *ggen.Stream) (result R10WrapHost, err error) {
+	result = recv
+	seenPad := false
+	seenW := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenPad {
+			result.Pad = ""
+		}
+		if !seenW {
+			result.W = (R10WrapHost{}).W
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "pad":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("pad", s.Offset(), err)
+			}
+			if seenPad {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"pad"}}
+			}
+			seenPad = true
+			result.Pad, err = s.String(true)
+			if err != nil {
+				return result, ggen.NewParseErr("pad", s.Offset(), err)
+			}
+		case "w":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("w", s.Offset(), err)
+			}
+			if seenW {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"w"}}
+			}
+			seenW = true
+			span, err := s.CaptureValue()
+			if err != nil {
+				return result, ggen.NewParseErr("w", s.Offset(), err)
+			}
+			result.W = (R10WrapHost{}).W
+			err = result.W.UnmarshalJSON(span)
+			if err != nil {
+				return result, ggen.NewParseErrShift("w", s.Offset(), len(span), err)
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenPad {
+				result.Pad = ""
+			}
+			if !seenW {
+				result.W = (R10WrapHost{}).W
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s R10WrapHost) JSONSize() int {
+	size := 143
+	size += len(s.Pad) * 2
+	return size
+}
+
+func (s R10WrapHost) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"pad\":\""...)
+	dst = ggen.AppendStringNoHTML(dst, s.Pad)
+	dst = append(dst, ",\"w\":"...)
+	var bW []byte
+	bW, err = json.Marshal(s.W)
+	if err != nil {
+		return dst, err
+	}
+	dst = append(dst, bW...)
+	return append(dst, '}'), nil
+}
+
+func (recv R10SamePkgCodecHost) DecodeFrom(data []byte) (result R10SamePkgCodecHost, i int, err error) {
+	result = recv
+	seenT := false
+	seenJ := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenT {
+			result.T = R10TextCodec{}
+		}
+		if !seenJ {
+			result.J = R10JSONCodec{}
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "t":
+			if seenT {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"t"}}
+			}
+			seenT = true
+			var ts string
+			ts, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("t", i, err)
+			}
+			result.T = (R10SamePkgCodecHost{}).T
+			err = result.T.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
+			if err != nil {
+				return result, i, ggen.NewParseErr("t", i, err)
+			}
+		case "j":
+			if seenJ {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"j"}}
+			}
+			seenJ = true
+			start := i
+			i, err = ggen.SkipValue(data, start)
+			if err != nil {
+				return result, i, ggen.NewParseErr("j", i, err)
+			}
+			result.J = (R10SamePkgCodecHost{}).J
+			err = result.J.UnmarshalJSON(data[start:i])
+			if err != nil {
+				return result, i, ggen.NewParseErrShift("j", i, i-start, err)
+			}
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenT {
+				result.T = R10TextCodec{}
+			}
+			if !seenJ {
+				result.J = R10JSONCodec{}
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv R10SamePkgCodecHost) DecodeFromStream(s *ggen.Stream) (result R10SamePkgCodecHost, err error) {
+	result = recv
+	seenT := false
+	seenJ := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenT {
+			result.T = R10TextCodec{}
+		}
+		if !seenJ {
+			result.J = R10JSONCodec{}
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "t":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("t", s.Offset(), err)
+			}
+			if seenT {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"t"}}
+			}
+			seenT = true
+			var ts string
+			ts, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("t", s.Offset(), err)
+			}
+			result.T = (R10SamePkgCodecHost{}).T
+			err = result.T.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
+			if err != nil {
+				return result, ggen.NewParseErr("t", s.Offset(), err)
+			}
+		case "j":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("j", s.Offset(), err)
+			}
+			if seenJ {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"j"}}
+			}
+			seenJ = true
+			span, err := s.CaptureValue()
+			if err != nil {
+				return result, ggen.NewParseErr("j", s.Offset(), err)
+			}
+			result.J = (R10SamePkgCodecHost{}).J
+			err = result.J.UnmarshalJSON(span)
+			if err != nil {
+				return result, ggen.NewParseErrShift("j", s.Offset(), len(span), err)
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenT {
+				result.T = R10TextCodec{}
+			}
+			if !seenJ {
+				result.J = R10JSONCodec{}
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s R10SamePkgCodecHost) JSONSize() int {
+	size := 267
+	return size
+}
+
+func (s R10SamePkgCodecHost) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"t\":"...)
+	var bT []byte
+	bT, err = s.T.MarshalText()
+	if err != nil {
+		return dst, err
+	}
+	dst = append(dst, '"')
+	dst = ggen.AppendStringNoHTML(dst, ggen.BytesToString(bT))
+	dst = append(dst, ",\"j\":"...)
+	var bJ []byte
+	bJ, err = s.J.MarshalJSON()
+	if err != nil {
+		return dst, err
+	}
+	if len(bJ) == 0 {
+		return dst, ggen.ErrEmptyMarshalJSON
+	}
+	dst = append(dst, bJ...)
 	return append(dst, '}'), nil
 }

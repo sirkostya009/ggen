@@ -156,9 +156,9 @@ func (s *Stream) skipSpaceSlowAVX512() error {
 func (s *Stream) skipStringStreamTail(start, bs int) (int, int, error) {
 	if bs+1 >= len(s.buf) {
 		if err := s.ReadMore(bs); err != nil {
-			// ReadMore compacted from bs — rebase or Offset() runs past the
-			// end of the document.
-			s.Pos = 0
+			// ReadMore compacted from bs: a truncated escape reports the end
+			// of what arrived, like the bytes path's len(data).
+			s.Pos = len(s.buf)
 			return 0, 0, NotEOF(err, ErrBadString)
 		}
 		start = 0
@@ -168,9 +168,14 @@ func (s *Stream) skipStringStreamTail(start, bs int) (int, int, error) {
 	case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
 		return bs + 2, start, nil
 	case 'u':
+		// Refill only while the tail can still become \uXXXX — see scalar.
 		for bs+6 > len(s.buf) {
+			if !uEscapePrefix(s.buf[bs:]) {
+				s.Pos = bs
+				return 0, 0, ErrBadString
+			}
 			if err := s.ReadMore(bs); err != nil {
-				s.Pos = 0
+				s.Pos = len(s.buf)
 				return 0, 0, NotEOF(err, ErrBadString)
 			}
 			start = 0
@@ -229,7 +234,8 @@ func (s *Stream) skipStringAVX() error {
 			}
 			j, start = nj, nstart
 		default:
-			s.Pos = j
+			// The ctrl byte's own index — see skipStringAVX.
+			s.Pos = j + k
 			return ErrBadString
 		}
 	}
@@ -277,7 +283,8 @@ func (s *Stream) skipStringAVX2() error {
 			}
 			j, start = nj, nstart
 		default:
-			s.Pos = j
+			// The ctrl byte's own index — see skipStringAVX.
+			s.Pos = j + k
 			return ErrBadString
 		}
 	}
@@ -325,29 +332,11 @@ func (s *Stream) skipStringAVX512() error {
 			}
 			j, start = nj, nstart
 		default:
-			s.Pos = j
+			// The ctrl byte's own index — see skipStringAVX.
+			s.Pos = j + k
 			return ErrBadString
 		}
 	}
-}
-
-// skipNull consumes the "ull" tail of a null literal — shared by the
-// SkipValue tiers (byte-identical to the scalar SkipValue's `n` arm).
-func (s *Stream) skipNull() error {
-	j := s.Pos
-	for k := range 3 {
-		pos := j + 1 + k
-		if pos >= len(s.buf) {
-			if err := s.ReadMore(0); err != nil {
-				return NotEOF(err, ErrBadLiteral)
-			}
-		}
-		if s.buf[pos] != "ull"[k] {
-			return ErrBadLiteral
-		}
-	}
-	s.Pos = j + 4
-	return nil
 }
 
 // SkipValueAVX is Stream.SkipValue over the fused AVX skip tree.
@@ -368,11 +357,12 @@ func (s *Stream) skipValueAVX(depth int) error {
 	switch s.buf[s.Pos] {
 	case '"':
 		return s.skipStringAVX()
-	case 't', 'f':
-		_, err := s.Bool()
-		return err
+	case 't':
+		return s.skipLiteral("true", ErrBadBool)
+	case 'f':
+		return s.skipLiteral("false", ErrBadBool)
 	case 'n':
-		return s.skipNull()
+		return s.skipLiteral("null", ErrBadLiteral)
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return s.skipNumber()
 	case '[':
@@ -511,11 +501,12 @@ func (s *Stream) skipValueAVX2(depth int) error {
 	switch s.buf[s.Pos] {
 	case '"':
 		return s.skipStringAVX2()
-	case 't', 'f':
-		_, err := s.Bool()
-		return err
+	case 't':
+		return s.skipLiteral("true", ErrBadBool)
+	case 'f':
+		return s.skipLiteral("false", ErrBadBool)
 	case 'n':
-		return s.skipNull()
+		return s.skipLiteral("null", ErrBadLiteral)
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return s.skipNumber()
 	case '[':
@@ -654,11 +645,12 @@ func (s *Stream) skipValueAVX512(depth int) error {
 	switch s.buf[s.Pos] {
 	case '"':
 		return s.skipStringAVX512()
-	case 't', 'f':
-		_, err := s.Bool()
-		return err
+	case 't':
+		return s.skipLiteral("true", ErrBadBool)
+	case 'f':
+		return s.skipLiteral("false", ErrBadBool)
 	case 'n':
-		return s.skipNull()
+		return s.skipLiteral("null", ErrBadLiteral)
 	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
 		return s.skipNumber()
 	case '[':

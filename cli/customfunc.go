@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/types"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -164,12 +165,13 @@ func classifyValueFunc(ref string, wt types.Type, file *ast.File, pkg *types.Pac
 // classifyConverter resolves a decode-stage converter variant `@Conv`. Unlike
 // a value func it is OUTPUT-anchored: the first result must equal the field
 // type T; the single parameter W is the type ggen scans natively (its wire
-// shape decides the JSON shape this variant claims). Returns W's Go type
-// literal. W must be builtin or same-package; foreign inputs are unsupported.
-func classifyConverter(ref string, fieldType types.Type, qualifier types.Qualifier, file *ast.File, pkg *types.Package) (cf customFunc, inType string, boolForm bool, err error) {
+// shape decides the JSON shape this variant claims). Returns W. W must be
+// builtin or same-package, optionally pointer-wrapped (a `*W` input claims
+// W's shape plus null); foreign inputs are unsupported.
+func classifyConverter(ref string, fieldType types.Type, file *ast.File, pkg *types.Package) (cf customFunc, w types.Type, boolForm bool, err error) {
 	fn, pkgImp, pkgName, err := lookupFunc(ref, file, pkg)
 	if err != nil {
-		return customFunc{}, "", false, err
+		return customFunc{}, nil, false, err
 	}
 	_, funcPart, hasDot := strings.Cut(ref, ".")
 	if !hasDot {
@@ -177,15 +179,15 @@ func classifyConverter(ref string, fieldType types.Type, qualifier types.Qualifi
 	}
 	sig, ok := fn.Type().(*types.Signature)
 	if !ok {
-		return customFunc{}, "", false, fmt.Errorf("not a function signature")
+		return customFunc{}, nil, false, fmt.Errorf("not a function signature")
 	}
 	if sig.Recv() != nil {
-		return customFunc{}, "", false, fmt.Errorf("must be a top-level function, not a method")
+		return customFunc{}, nil, false, fmt.Errorf("must be a top-level function, not a method")
 	}
 	if sig.Params().Len() != 1 {
-		return customFunc{}, "", false, fmt.Errorf("converter must take exactly one parameter (the scanned input)")
+		return customFunc{}, nil, false, fmt.Errorf("converter must take exactly one parameter (the scanned input)")
 	}
-	w := sig.Params().At(0).Type()
+	w = sig.Params().At(0).Type()
 	// Peel pointer levels first: `*[]int` or `*other.T` must not dodge the
 	// checks below (a pointer-wrapped container still emits broken code).
 	base := w
@@ -197,7 +199,7 @@ func classifyConverter(ref string, fieldType types.Type, qualifier types.Qualifi
 		base = p.Elem()
 	}
 	if named, isNamed := base.(*types.Named); isNamed && named.Obj().Pkg() != nil && named.Obj().Pkg() != pkg {
-		return customFunc{}, "", false, fmt.Errorf("converter input %s is from another package; only builtin or same-package input types are supported", w)
+		return customFunc{}, nil, false, fmt.Errorf("converter input %s is from another package; only builtin or same-package input types are supported", w)
 	}
 	// The documented contract is "primitive or ggen-decodable struct" — a
 	// container input synthesizes a FieldInfo with no element shape and the
@@ -205,20 +207,20 @@ func classifyConverter(ref string, fieldType types.Type, qualifier types.Qualifi
 	// interface inputs have no wire shape at all.
 	switch base.Underlying().(type) {
 	case *types.Slice, *types.Array, *types.Map:
-		return customFunc{}, "", false, fmt.Errorf("converter input %s must be a primitive or a ggen-decodable struct — container inputs are not supported", w)
+		return customFunc{}, nil, false, fmt.Errorf("converter input %s must be a primitive or a ggen-decodable struct — container inputs are not supported", w)
 	case *types.Chan, *types.Signature, *types.Interface:
-		return customFunc{}, "", false, fmt.Errorf("converter input %s must be a primitive or a ggen-decodable struct", w)
+		return customFunc{}, nil, false, fmt.Errorf("converter input %s must be a primitive or a ggen-decodable struct", w)
 	}
 	cf = customFunc{PkgImport: pkgImp, PkgName: pkgName, FuncName: funcPart}
 	res := sig.Results()
 	switch res.Len() {
 	case 1:
 		if !types.Identical(res.At(0).Type(), fieldType) {
-			return customFunc{}, "", false, fmt.Errorf("converter output %s must equal field type %s", res.At(0).Type(), fieldType)
+			return customFunc{}, nil, false, fmt.Errorf("converter output %s must equal field type %s", res.At(0).Type(), fieldType)
 		}
 	case 2:
 		if !types.Identical(res.At(0).Type(), fieldType) {
-			return customFunc{}, "", false, fmt.Errorf("converter first result %s must equal field type %s", res.At(0).Type(), fieldType)
+			return customFunc{}, nil, false, fmt.Errorf("converter first result %s must equal field type %s", res.At(0).Type(), fieldType)
 		}
 		cf.Fallible = true
 		switch {
@@ -226,12 +228,12 @@ func classifyConverter(ref string, fieldType types.Type, qualifier types.Qualifi
 		case isBoolType(res.At(1).Type()):
 			boolForm = true
 		default:
-			return customFunc{}, "", false, fmt.Errorf("converter second result must be error or bool, got %s", res.At(1).Type())
+			return customFunc{}, nil, false, fmt.Errorf("converter second result must be error or bool, got %s", res.At(1).Type())
 		}
 	default:
-		return customFunc{}, "", false, fmt.Errorf("converter must return T or (T, error) or (T, bool), got %d results", res.Len())
+		return customFunc{}, nil, false, fmt.Errorf("converter must return T or (T, error) or (T, bool), got %d results", res.Len())
 	}
-	return cf, types.TypeString(w, qualifier), boolForm, nil
+	return cf, w, boolForm, nil
 }
 
 // isBoolType reports whether t is the predeclared bool.
@@ -357,16 +359,21 @@ func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldTy
 	}
 	file := s.structFile[structName]
 	pkg := s.typesPkg
-	qualifier := types.RelativeTo(pkg)
+	qualifier := s.pkgQualifier()
 	var errs []error
 
 	// Decode-stage converter variants: resolve OUTPUT==T, capture input W.
+	// W is described the way a FIELD of that type would be — the pointer
+	// peeled off, Kind from the base spelling, and a named primitive
+	// registered in NamedPrims so the shape dispatch and the inline scan
+	// resolve it to its underlying kind — since the emitters scan it through
+	// the same field renderers.
 	for i := range fi.Variants {
 		v := &fi.Variants[i]
 		if v.Kind != VariantConvert {
 			continue
 		}
-		cf, inType, boolForm, err := classifyConverter(v.FuncName, fieldType, qualifier, file, pkg)
+		cf, w, boolForm, err := classifyConverter(v.FuncName, fieldType, file, pkg)
 		if err != nil {
 			errs = append(errs, &richError{Msg: err.Error(), CodeSpan: "@" + v.FuncName})
 			continue
@@ -381,8 +388,23 @@ func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldTy
 		v.FuncName = cf.FuncName
 		v.Fallible = cf.Fallible
 		v.BoolForm = boolForm
-		v.InType = inType
-		v.InKind = resolveKind(inType)
+		v.InType = types.TypeString(w, qualifier)
+		base := w
+		for {
+			p, isPtr := base.(*types.Pointer)
+			if !isPtr {
+				break
+			}
+			v.InPointer = true
+			base = p.Elem()
+		}
+		v.InKind = resolveKind(types.TypeString(base, qualifier))
+		if np := s.namedPrims(w); len(np) > 0 {
+			if fi.NamedPrims == nil {
+				fi.NamedPrims = map[string]TypeKind{}
+			}
+			maps.Copy(fi.NamedPrims, np)
+		}
 	}
 
 	resolve := func(steps []Step, wt types.Type) {

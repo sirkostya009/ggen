@@ -38,6 +38,218 @@ shaves routinely vanish in wall clock.
   compaction pass, which deliberately skipped these). Perf only, house-rule
   bench-gated (SkipHeavy stream rows + B/op).
 
+Round-10 audit candidates (2026-09). Prepared patches live outside the tree in
+`~/audit-round10/work/perf_{scan,stream,gen}.patch` — nothing landed, all
+UNMEASURED (the box was on powersave during the audit); house-rule A/B before
+any of them moves:
+
+- **`[]*T` slab allocated fresh on every decode-into-receiver (bytes +
+  stream).** The depth-1 `[]*T` arm emits `slabN = make([]E, 0, cap)`
+  unconditionally in the non-empty arm while the receiver reset only
+  reslices the pointer slice, so the carried pointees are orphaned and
+  `append(dst, &slab[len-1])` overwrites the carried pointers — the one
+  reuse shape that recycles neither pointee nor slab (`*T` fields, `[]T`
+  elements and `[]**T` chains all reuse). Mega: 2426 of the 5337 allocs left
+  on a reused-receiver decode are these slabs (45%); stream `Value(prev)`
+  7 allocs/value where 6 are the inherent string copies. Fix shape: when
+  `directStruct` and the carried `dst[k]` (within the old len) is non-nil,
+  decode into `*dst[k]` (its `DecodeFrom` self-resets, opt #74's gate),
+  allocating a slab lazily for nil/past-cap slots only. Bench: needs a
+  `[]*T` `_reuse` row (only MapValues/MapValuesHeavy carry one today),
+  Mega_Reader via Seq/Value(prev). Allocation counts proven, wall clock not
+  — Mega is memory-bound.
+
+- **Scalar slice elements pay a dead zero store + a len-1 re-index bounds
+  check per element.** Opt #27's `dst = append(dst, <zero>)` pre-grow then
+  `dst[len(dst)-1] = int(n)` is emitted for kinds whose value is ALREADY in a
+  temp (the inline int/uint scanners) or an expression (the string fast
+  path); gc cannot dead-store the zero across the inline scan nor prove
+  `len >= 1` (check_bce: `mega_ggen.go:850 Found IsInBounds`, plus the tags
+  element). `dst = append(dst, int(n))` is a pure restructure — one store,
+  no re-index, the `panicBounds` site drops; the in-place multi-assign stays
+  only for call-returning kinds (`Float64`) and the `ggen.String` fall path.
+  ~280k elements per Mega_Unmarshal at ~2 instructions + 1 predicted branch
+  each, so likely below the 3-6% control drift on Mega — the "never-taken
+  bounds checks are ~free" caveat applies; would show, if at all, on a
+  cache-resident numeric-array micro. Bench: Mega_Unmarshal, stream twin.
+
+- **Nested map swap defeated by the outer seed's `clear()`.** For
+  `map[string]map[string]V` with allocation-owning inner values,
+  `renderMap`'s `reusesMapValues && ElemKind == KindMap` arm seeds `mv =
+  carried[mk]; clear(mv)`, then the inner level emits `carried1 := mv;
+  reuse1 := len(carried1) != 0; mv = make(..., len(carried1))` — `reuse1` is
+  constantly false, every inner value allocates fresh AND the just-cleared
+  bucket array is discarded by the make: strictly worse than either pure
+  clear-and-fill or pure swap (an unnoticed interaction from the bcaa594
+  nested-map compile fix; the clear IS right for an inner map that fills in
+  place). Fix: `clear(mv)` only when `!reusesMapValues(sliceElemField(f))`,
+  else seed bare so the inner swap reads the live entries. Bench: none
+  covers nested maps — a nested MapValues variant, allocs/op + B/op on the
+  reuse row; the reproducer is an allocation-identity test.
+
+- **`String` copies an entire unterminated escaped string before returning
+  `ErrUnterminated`.** In the no-closing-quote branch `closeIdx < 0` already
+  proves the value cannot complete, yet with a backslash present it hands
+  off to `stringSlow` (capHint `bsIdx+16`) purely to classify the error, and
+  `stringSlow` appends every remaining payload byte through the growth chain
+  before failing at `len(data)`: a truncated 8 MiB payload whose last string
+  carries one escape allocates ~41.7 MB across ~50 mallocs to return the
+  same `(pos, err)`. `classifyStructural`/`classifyStructural64` carry the
+  same shape. Fix must be a NON-COPYING `stringSlow` walk (a `copy bool` /
+  `capHint < 0` mode running the same ctrl/escape/hex/surrogate checks) —
+  NOT a `skipString` call: skipped spans are deliberately not
+  surrogate-validated, so `String("\ud800abc)` = `(7, ErrInvalidUTF8)` vs
+  `skipString` = `(10, ErrUnterminated)`. Error-path only, memory
+  amplification hardening (~5× the input in garbage per failure) rather than
+  throughput; pin with `AllocsPerRun`. No bench family exercises truncated
+  payloads.
+
+- **SWAR string kernels carry two bounds checks per 8-byte word + one in the
+  tail.** `checkSpan`/`ctrlOrHigh`/`CheckUTF8`/`hasCtrlByte` use
+  `for ; i+8 <= len(b); i += 8 { x := Uint64(b[i:]) … }` + `for ; i < len(b);
+  i++`; check_bce reports IsSliceInBounds + IsInBounds on the word load and
+  IsInBounds on the tail index in all four. The head-reslice shape `p := b;
+  for len(p) >= 8 { x := Uint64(p); …; p = p[8:] }; for _, c := range p`
+  compiles with zero bounds checks (verified as a real package file — a
+  `_test.go` twin proves nothing, `go build` skips it): ~25 → ~20
+  instructions per word, one branch per tail byte; `b` must be kept for the
+  trailing `utf8.Valid`. Scalar tier only (the SIMD tiers classify ctrl
+  in-vector), and Mega/Small/NoAlloc strings are 4-13 B so the word loop runs
+  0-1 iterations — expect noise-to-small; only long clean strings (scalar
+  SkipHeavy via `hasCtrlByte`, RuneGated) could show it. Bench: NoAlloc /
+  SkipHeavy scalar rows.
+
+- **`ReadMore(keep)` with a small `keep` on a full window memmoves nearly the
+  whole buffer to reclaim `keep` bytes, then Reads at most `keep` bytes
+  before growing anyway.** The compaction arm always memmoves `buf[keep:]`
+  down and Reads into the freed tail, which is exactly `keep` bytes when
+  the window was full — the state every refill reaches with an eager
+  reader. When the value head sits near the window head (`stringView`/
+  `KeyView`/the number scanners/`CaptureValue`'s first `ReadMore(start)`),
+  the first refill memmoves `len-keep` bytes, issues a tiny Read (a 2-byte
+  `read()` on a file/socket), and the next refill has `start` rebased to 0
+  and takes the doubling arm — so the memmove and the tiny Read bought
+  nothing, and `CaptureValue` re-skips the value once more. Reproduced: Read
+  destinations `[1024 2 1024 2048]` for a 3000 B string at offset 2; fires
+  in situ on Small_Reader/ggen_stream_512 (the 2800 B Bio at payload offset
+  17: `[512 17 512 1024 2048]`), cannot fire on Mega_Reader (raw snippets
+  ≤ ~400 B vs a 4196 B window). Fix: fuse the grow into the compaction arm
+  when the post-compaction tail is small (`cap-(len-keep) < cap/4`) —
+  allocate the doubled backing and copy `buf[keep:]` into it instead of
+  memmoving in place. Passed every bounded-buffer pin in the worktree, but
+  it is a TRADEOFF: 2× residency for values between 3/4 and 1× of the
+  window to save one memmove + one short Read (+ one re-skip); expected
+  wall clock well under 1-2% on Small_Reader_512, the syscall count on real
+  readers is the visible part. Bench: `*_Reader` rows.
+
+- **gc's big-function inliner budget defeats the `SkipSpace`/`Bool`/`Detach`/
+  `StringView` shells inside the six largest generated decoders** — the
+  doc half is in .claude/scan.md ("Inlinable two-tier SkipSpace"); the perf
+  half (emit a one-compare guard `if !(s.Pos < len(s.Bytes()) &&
+  s.Bytes()[s.Pos] > ' ') { err = s.SkipSpace() }` into generated stream
+  dispatch, distinct from the rejected `inlineStreamSkipWS` full-loop
+  inliner which kept `Ensure` in the loop) is ALREADY covered by measured
+  rejections below ("Stream-path `_s.SkipSpace` inliner", "Window-gated
+  inline stream int digit loops", "Inlining `ggen.Bool`"): Mega_Reader is
+  malloc/ReadMore-bound. The analogous evidence that it is not zero is the
+  −9.7% SkipHeavy compact from the SAME shell inlining into the runtime
+  skip tree. Don't emit the guard without a house-rule A/B on Mega_Reader /
+  NoAlloc_Reader / Small_Reader.
+
+- **Stream `stringSlow` scratch starts at a fixed 32 B.** `(*Stream).stringSlow`
+  does `make([]byte, 0, 32)` regardless of what is buffered, then appends the
+  raw prefix and every decoded byte; the bytes twin sizes the scratch
+  exactly from `stringSpanEnd`. Every escaped string over ~32 B runs the
+  growth chain on the stream: 9 scratch allocs + copies on the 4.8 KiB
+  EscapeHeavy field vs 1 on bytes. Fix: pass a capHint — `stringSpanEnd(
+  s.buf, start)-start` when the closing quote is already in the window
+  (`stringView`/`KeyView` and the `stringViewAVX*` cores know whether
+  IndexByte found it), else `len(s.buf)-start`, floored at 32. Caveat: the
+  only rows exercising it (EscapeHeavy/EscapeSparse `ggen_stream`) use a
+  512 B window, so the exact arm never fires there and the window-remainder
+  hint trims the chain to ~5 allocs, not 1; the 9→1 win needs a window at
+  least as large as the string. Bench: EscapeHeavy/EscapeSparse ggen_stream
+  (allocs/op, B/op).
+
+- **`(*Stream).skipNumber`'s cursor is address-taken for `refillSkip(*int,
+  *error)`, so every digit iteration loads/stores it through the stack.**
+  `refillSkip` (cost 97, not inlinable — it calls ReadMore) takes `&i`/`&rerr`
+  at 10 sites, so the compiler cannot registerize them: the -S listing shows
+  `MOVQ i+24(SP)` / `LEAQ 1(SI)` / `MOVQ DX, i+24(SP)` per digit in all three
+  digit runs, where the bytes `skipNumber` and the stream `Int64`/`Float64`
+  keep the cursor in a register (they hoist `buf := s.buf` and only call
+  ReadMore at loop exit — scan.md "Buffer-header hoist"; `skipNumber` is the
+  odd refill loop out). Fix: value-returning `refillSkip(i int, rerr error)
+  (int, error, bool)`, the ten sites rewritten as `if i >= len(s.buf) { if
+  i, rerr, ok = s.refillSkip(i, rerr); !ok { … } }`; asm-verified in a
+  prototype: 0 address-of sites, cursor in BX, ~7 → 4 memory ops per digit,
+  `refillSkip` stays out-of-line (cost 95) so the inline-check/cold-helper
+  split is preserved; full root suite + simd + the Stream/Skip/Reader/Seq
+  integrationtests passed. Distinct from the rejected window-gated inline
+  int loops (generated Int64 sites) and the vector skipNumber tier (bytes
+  path): no new kernel, no new call, only the address-taking removed. Reach:
+  SkipHeavy `ggen_stream` rows (compact + pretty, scalar and avx512 — all
+  tiers call `s.skipNumber()`); Mega_Reader does not reach it
+  (`CaptureValue` uses the bytes SkipValue). Zen 3+ memory renaming can hide
+  the SP-relative store→load latency, so the win may be small. Update the
+  scan.md `refillSkip(&i)` sentence if it lands.
+
+Smaller UNMEASURED notes from the round-10 fix wave (benches were forbidden
+there; check when a bench pass is next scheduled):
+
+- The avx512 no-over-read tail shapes are expected flat-to-faster: the
+  overlapping reload replaces KMOVQ+VMOVDQU64+VMOVDQU8.Z with one VMOVDQU64
+  and runs once per document (only last string values within 64 bytes of
+  EOF that are ≥32 B or escape/non-ASCII bearing reach the tier call); the
+  <64-byte stack copy runs only when the string body itself starts within
+  64 bytes of EOF; `validUTF8x64` lost four masked loads and its duplicated
+  tail body. NoAlloc/Small avx512 rows.
+- `(*Stream).skipLiteral` is not inlinable (cost 141): scalar
+  `skipValueDepth`'s null arm and the `anyValueDepth`/`anyNumberValueDepth`
+  null arms went from an inline 3-byte loop to a call; the bool skip arms
+  (scalar + tiers) swapped a `Bool()` call (cost 277) for the cheaper
+  `skipLiteral` call; the tiers' null arm was already a call. Expected
+  neutral on mixed payloads; if a SkipHeavy stream row or an `Any`
+  null-heavy row moves, re-inline the null arm keeping the `s.Pos = pos`
+  give-up writes.
+- `(*Stream).ensureSpan` costs 86 (not inlinable). The `\X`/`\uXXXX` arms of
+  `stringSlow` guard it with an inline `j+n > len(s.buf)` compare so the
+  EscapeHeavy stream path pays only the compare it paid before and calls
+  only at a window edge; the surrogate arm calls it unconditionally (cold).
+  If EscapeHeavy ggen_stream moves, the guard is the first thing to check.
+- Bytes `String`/`skipString` run `hasCtrlByte` over an unterminated
+  no-backslash tail — error path only (an unterminated string is always an
+  error), one SWAR walk over bytes IndexByte already touched.
+- `AppendAny`'s pointer-marshaler re-dispatch: every NAMED value reaching the
+  reflect fallback pays one `PkgPath()` + one `sync.Map` load (`needsAddr`);
+  containers hoist it to once per container and structs to once per type,
+  but a named-primitive element (`[]MyEnum`) re-enters the fallback per
+  element and re-checks (cached false). Struct fields with a `*T`-only
+  marshaler reached through the reflect fallback copy once per field
+  (the `reflect.Pointer` arm boxes `rv.Elem().Interface()`, so the fields
+  are never addressable) — avoiding it means a `reflect.Value` entry point
+  beside the type switch; not worth it unless a profile shows it.
+- `AppendAny` omitempty is write-then-unwrite (jsonv2's slow path only).
+  jsonv2 also has a fast pre-check (`len==0` / `IsNil` for string/map/array/
+  slice/pointer/interface kinds, gated on the type having no custom
+  marshaler); adding it would save boxing + emitting the empty value + the
+  key on the reflect path, at the cost of a per-field "plain type" flag.
+  Candidate if `AppendAny` on omitempty-heavy structs ever shows up.
+- Float number-span assembly is now duplicated: `Stream.Float32` mirrors
+  `Stream.Float64`'s refill loop verbatim, and the bytes grammar walk exists
+  three times (`skipNumber`, `Float64`, `Float32`). A shared stream
+  `numberSpan()` helper is a plausible dedupe (the stream path is
+  ReadMore-bound) but bench-gated; the bytes duplication is deliberate
+  (`skipNumber` CALL cost DeepNested +25%).
+- Pointer seed / map pointee reuse skips cross-package ggen-generated leaves
+  (`*thirdparty2.T`): `leafResets` uses `isGenerated`, which is
+  package-local, so a ByteDecoder-rung leaf allocates a fresh pointee under
+  receiver reuse (correctness unaffected — the `DecodeFrom` rung resets
+  itself per opt #74). Extending `leafResets` to accept
+  `f.Iface.ByteDecoder && f.Iface.StreamDecoder` would restore it for
+  `elemPtrReusable`, `reusesMapValues` and `emitPointerSeed` alike; needs the
+  leaf's `Iface` threaded through `elemPtrReusable`.
+
 - **`AppendAny` output prealloc via size precalc.** ggen ties/barely beats
   jsonv2/stdjson on typed slice marshal (`[]int`) but wins 2-4× on maps. Cause:
   bench passes `nil` dst, so `AppendAny` runs the growth chain (0→…→1024), 7-8
@@ -216,13 +428,22 @@ surface pinned by `Decoder[T]`).
 ## Tooling / coverage
 
 - **Improve fuzz coverage.** Current surface (`integrationtests/fuzz_test.go`):
-  three fuzzers over `Node` — `FuzzScanNoPanic` (panic safety), `FuzzRoundtrip`
-  (encode→decode fixed-point), `FuzzCompat` (ggen ↔ jsonv2 agreement). Gaps:
+  `FuzzStreamEqualsBytes` (bytes vs stream agreement over `Node` at every chunk
+  size), `FuzzBoundaryNoPanic` / `FuzzStreamHugeStringNoPanic` (panic safety),
+  `FuzzPrimitivesCompat` (typed values, ggen ↔ jsonv2 agreement). Gaps:
   per-feature fuzzers for alias types, every validation rule (oneof/runes/
-  alphanum/…) with rule-specific generators, streaming path (chunked reader, varied
-  chunk sizes), `[N]T` strict-length arrays, `KindAny`/`KindRawJSON` edge cases,
+  alphanum/…) with rule-specific generators, `[N]T` strict-length arrays,
+  `KindAny`/`KindRawJSON` edge cases,
   `omitempty`/`omitzero` round-trip, multierr accumulation. Add seeds for tricky
   inputs (truncated `\uXXXX`, surrogate pairs, `null` mid-value, trailing-garbage).
+
+- **integrationtests has no `GOEXPERIMENT=simd` lane.** Nothing there is
+  generated with `-simd`, so the end-to-end shape of a `-simd avx512` struct
+  decoding a page-sized document is pinned only at the runtime level
+  (`TestSIMD_NoOverRead` covers the faulting call, `StringAVX512`; the emitted
+  inline classify only issues bound-checked full-lane loads). A simd-tagged
+  integration file would need its own `//go:generate ../ggen -simd avx512
+  $GOFILE` line and a `GOEXPERIMENT=simd` test invocation in the suite.
 
 - **Add more CLI flags.** Candidates: `-out-dir` for shared output (vs
   next-to-source), per-struct selectors beyond the trailing-name filter
@@ -248,9 +469,13 @@ surface pinned by `Decoder[T]`).
   `Null`/`Expect`/`SkipSpace`/`SkipValue`/`ArrayOpen`/`ObjectOpen`), the SIMD
   tiers (`StringAVX*`, `SkipSpaceAVX*`, `SkipValueAVX*`, `AppendString*AVX*`),
   encode plumbing (`CloseJSONString*`, `BytesToString`, `AppendFloat`,
-  `AppendUnixSeconds`, `AppendNetipAddr*`, `AppendURL*`), and glue
-  (`NotEOF`, `Detach`, `CheckUTF8`, `SignedNeg`, `Uint64Limit`,
-  `NewParseErr*`, `ShiftPos`). Exported only because generated code calls
+  `AppendUnixSeconds`, `AppendNetipAddr*`, `AppendURL*`, `AppendRFC3339`),
+  and glue (`NotEOF`, `Detach`, `CheckUTF8`, `SignedNeg`, `Uint64Limit`,
+  `NewParseErr*`, `ShiftPos`, `BoolEnd` — the bool error-branch give-up
+  position, `AnyIsEmpty` — the
+  `omitempty` predicate for `any`, `Float32`, `ParseRFC3339`; the `Any*`
+  families also carry a `validate bool` that only generated code has a
+  reason to pass). Exported only because generated code calls
   them; `internal/` cannot host any of it — generated files live in USER
   packages outside the `sirkostya009/ggen/` path prefix, so internal
   visibility excludes exactly the caller that matters (same reason the
@@ -398,13 +623,28 @@ surface pinned by `Decoder[T]`).
   byte offset). Open if ever wanted: a `Snippet []byte` around the failure offset
   (rejected for now — the caller has the input + `Pos`).
 
-- **`pipe:` tag follow-ups.** Foreign-package converter inputs (import plumbing);
-  top-level alias-type `pipe:` support (needs a non-dispatch null branch in the
-  alias renderers); CONTAINER converter inputs (`@Conv` with W = []T/map) —
-  currently rejected at parse (2026-08, was silently-broken codegen before), to
-  support: populate converterInputField's ElemType/ElemKind/ElemIface from
+- **`pipe:` tag follow-ups.** Foreign-package converter inputs (import
+  plumbing — `classifyConverter` still spells W via `types.RelativeTo`, the
+  full import path for a foreign W; the type-side `pkgQualifier` +
+  `TypeImport` table from the round-10 qualifier work is the natural
+  carrier); `@pkg.Func` references (`customfunc.go` `lookupFunc` → `PkgName`)
+  still spell the DECLARED package name and import by path, while the
+  type-side qualifier table renames a package to `leaf2` when two packages
+  of the pass share a declared name — a converter/validator from such a
+  package would mismatch its import line (route `PkgName` through
+  `structSet.qualifierFor` if anyone hits it); converter pointer inputs
+  deeper than one level (`func(**int) T`) take the multi-level pointer field
+  path but are untested (only `*int`/`*int64` are pinned); top-level
+  alias-type `pipe:` support (needs a non-dispatch null branch in the alias
+  renderers); CONTAINER converter inputs (`@Conv` with W = []T/map) —
+  currently rejected at parse (2026-08, was silently-broken codegen before),
+  to support: populate converterInputField's ElemType/ElemKind/ElemIface from
   go/types — the dedicated-kind element delegation (R3/R4, cbf0949/816fd3c)
-  makes the emit side workable now.
+  makes the emit side workable now. Cosmetic: `checkVariantShapes`'
+  diagnostics come out double-qualified ("Doc.M: Doc.M: decode variants …
+  both claim the same JSON shape") — the message already carries
+  Struct.Field and `resolvePipeCustoms`' caller prefixes it again via
+  `qualifyRichErrors`.
 
 - **`nullzero` follow-up.** Extend the per-field `nullzero` decode variant to
   top-level alias types (needs a non-dispatch null branch in the alias renderers).
@@ -414,10 +654,12 @@ surface pinned by `Decoder[T]`).
   fill a new one (opt #76) — heavy values measured −57% wall clock, 92% less
   garbage, GC eliminated. Two gaps remain, both deliberate:
     - **The stream path does not swap.** `emitReceiverReset` keeps its
-      `clear()` there, so stream decode still allocates every map value fresh.
-      The swap needs the same shape plus a check that nothing holds a
-      buffer-relative alias across the entry loop; worth doing only if a
-      stream consumer shows map values as a hotspot.
+      `clear()` there (and the pointer seed clears a stream map leaf), so
+      stream decode still allocates every map value fresh — a pointer-to-map
+      FIELD on the bytes path is handed to the swap intact through the seed
+      and does reuse its values. The swap needs the same shape plus a check
+      that nothing holds a buffer-relative alias across the entry loop; worth
+      doing only if a stream consumer shows map values as a hotspot.
     - **Light values trade bytes for allocation count.** With small values the
       swap is flat on time, collapses allocs (513 → 9), but roughly DOUBLES
       B/op — a fresh map where `clear()` recycled buckets. Which side wins is
@@ -459,7 +701,155 @@ surface pinned by `Decoder[T]`).
   its coverage, not a demonstrated bug. Revisit only if a time-slice realloc
   ever shows up.
 
+- **Generated `omitzero` ignores an `IsZero() bool` method (2026-09).** The
+  guard for a user struct is the structural `zeroCompare`, where jsonv2,
+  v1 1.24+ and `AppendAny` all call an `IsZero() bool` method when the type
+  has one — `KindTime` is the only kind ggen honours it for. An IsZero arm
+  when go/types says the type has the method is easy. Decide: fix the
+  emitter, or pin the divergence in the three surface docs. Related decision
+  already taken: `omitempty` on `url.URL` tests `!= (url.URL{})` — a non-zero
+  URL that still stringifies to `""` (e.g. only `OmitHost` set) is emitted as
+  `""`; exact parity would need `String()` (allocates) or a per-component
+  test, not worth it.
+
+- **`url.URL` `OmitHost` + `//`-path branch missing from `appendURLRaw`
+  (2026-09, unfixed).** Go 1.27's `url.URL.String` escapes the first `/` of a
+  path starting with `//` when `OmitHost && Host == "" && User == nil` so
+  re-parsing does not turn the path into an authority; ggen emits it raw:
+  `url.URL{Scheme:"file", OmitHost:true, Path:"//host/p"}` gives ggen
+  `file://host/p` vs stdlib `file:%2F/host/p`. A few lines after the
+  `hasPath` slash check; add a row to `TestAppendURL_Construction`.
+
+- **`case:ignore` could be implemented rather than refused.** A
+  `strings.EqualFold` fallback arm after the exact-match switch (jsonv2
+  semantics: exact match first, then case-insensitive). Refused for now
+  under the no-silent-no-op rule; no consumer has asked.
+
+- **Tag-grammar leftovers (2026-09).** `format:` with an empty value
+  (`json:"t,format:"`) is accepted with `Format=""` (silently no format)
+  where jsonv2 errors "cannot have empty value for `format` tag option".
+  `boundFits` (and the gt/gte/lt/lte gate) rejects an integer-valued float
+  spelling like `gt=1.0` on an int field as out of range although Go accepts
+  the constant (`oneof=1|1.0` is caught as a duplicate first) — over-strict,
+  harmless. `[0]byte` is unsupported: `foldByteArray` folds it onto KindBytes
+  with `ArrayLen 0`, indistinguishable from `[]byte`, so the nil-check emit
+  does not compile; jsonv2 base64s it as `""` — either skip the fold for a
+  zero-length array (then it is a `[]` tuple, diverging from v2) or teach the
+  byte-array emitters N==0; degenerate shape. `[N][M]byte` elements resolve
+  as KindArray and take the numeric-tuple route rather than base64, unlike a
+  `[M]byte` field — worth a look if anyone uses that shape.
+
+- **Output-name residuals (2026-09).** `emitScope` maps every non-alnum rune
+  to `_` via `sanitizeIdent`, so `a-b.go` and `a_b.go` in one package still
+  share the oneof scope `a_b` (loud at compile time as a redeclaration);
+  making the mapping injective would rename every `ggenCap`/`ggenOneof` in
+  every generated file for a layout nobody has. Single-file mode layout hole,
+  now explicit in `passTypes`: a dependency declared in file B and reached
+  only from file A's root is generated by nobody (A filters to its own file,
+  B has no root reaching it) and stays on the json fallback; package mode
+  generates it — `passTypes` is the seam if package-wide single-file
+  generation is ever wanted. AST-only (degraded, no go/types) mode still
+  spells foreign types by the source's local import name and cannot alias a
+  colliding `json`/`time` user package — cross-package types route to
+  `encoding/json` there anyway. The external-test bucket + `-pkg X` →
+  `package X_test`, and the hook half of `structSet.inspect`'s stale-method
+  masking (`MarshalJSON`/`UnmarshalJSON` from a previous run's `_ggen.go`),
+  are unpinned by tests.
+
+- **`AppendAny` accepts text-marshaler map keys of any kind; the generator
+  does not (2026-09).** `type K int` with `MarshalText` marshals through
+  `AppendAny` (jsonv2 + v1 both do); the decided rejection
+  (`TestAppendAny_NonStringMapKey`) now covers only key types WITHOUT a text
+  marshaler. The generator still rejects any named key type at parse
+  (`map key must be string`), so the accepted shape is reachable only
+  through `AppendAny`.
+
+- **`Float64` surfaces `*strconv.NumError` (ErrRange) for an out-of-range
+  float64 (`1e400`) while `Float32` maps the same condition to
+  `ggen.ErrNumberOverflow`** (the identity `TestNarrowFloatOverflow` pins).
+  Unifying `Float64` on `ErrNumberOverflow` is a small breaking change worth
+  doing if error identity is ever tidied.
+
+- **Generated `strings` import for a container ALIAS of `net.IP`/`netip`
+  elements.** The netip error clone relies on the same plumbing as
+  `renderStreamNetIP`'s clone — every non-alias struct adds `strings` for
+  `streamUnknownKey`; a container alias of those elements that emits a
+  stream decoder might lack the import. Pre-existing class, not verified,
+  cheap to probe.
+
+- **archsimd masked byte loads — re-audit trigger.** If archsimd ever exposes
+  a fault-suppressing k-masked byte load from memory (VMOVDQU8 with a
+  k-mask, which AVX-512BW guarantees suppresses faults on masked-off lanes),
+  the stack-copy arm in `StringAVX512`'s tail can go. On go1.27 the only
+  masked memory op for 8-bit lanes is `StoreArrayMasked`; `Uint8x64.Masked`
+  is documented "Emulated" (a vector-domain AND after an unmasked load),
+  which is exactly why `LoadUint8x64Part` over-reads.
+  `LoadUint8x16Part`/`LoadInt8x32Part` stay safe (scalar 8/4/2/1-byte
+  element loads).
+
+- **A NAMED func or channel field type is silently broken (2026-09,
+  unfixed).** A field whose type is `type Handler func()` is not rejected —
+  the parse-level refusal covers type LITERALS, and a named type stops the
+  walk — but every reset site emits `result.H = Handler{}` and the generated
+  file does not compile, even when the named type carries a
+  `MarshalJSON`/`UnmarshalJSON` pair. The fix is in the emitter, not the
+  parser: the zero-value form already emitted for interfaces,
+  `(Recv{}).Field`. Once that lands, the parse-time rejection of func/chan
+  LITERALS could be revisited too — and the diagnostic's remedy hint could
+  offer "declare a named type", which today it must not.
+
+- **gc internal compiler error on a dead store into a zero-length array
+  (Go 1.27.1, worth filing upstream).** Assigning into an element of a
+  `[0][3]int` — the shape a `map[string][0][3]int` decode loop produced —
+  makes the compiler abort with "can SSA LHS mv[idx0] but not RHS" instead of
+  dead-storing it. Nothing in ggen is blocked (the `[0]T` readers have no
+  element loop at all, cli opt #85), but the toolchain bug stands.
+  Reproducer kept at `~/audit-round10/work/probe1`.
+
 # Tried Rejected
+
+- **Folding the bool give-up walk into `ggen.Bool` — REJECTED, measured
+  (2026-09, inline cost).** `Bool` costs 54; every variant carrying the
+  give-up position — `litEnd` folded in (117), a call to a cold `boolEnd`
+  (114), unsafe loads (112), a true-only shell + slow call (95–96), a 4-byte
+  switch (108) — exceeds the 80 budget, and `Bool` IS inlined at all 12
+  reported generated call sites in bench today. The position lives in the
+  cold exported `BoolEnd` called on the error branch only (cli/CLAUDE.md
+  opt #82). Do not re-propose folding it in without a house-rule bench
+  showing the de-inlined call is free.
+
+- **The bytes verdict for a control byte in an unterminated string
+  (`ErrUnterminated`) — REJECTED as the unification target (2026-09).**
+  Bytes `String`/`skipString` located the closing quote first and, finding
+  none and no backslash, returned `ErrUnterminated` without classifying the
+  open tail, while every stream scanner judges each window before refilling
+  and reported `ErrBadString` — `"abc\x01` split bytes vs stream at every
+  chunk size, and even `CaptureValue` (bytes skip over the window) vs
+  `SkipValue` on one Stream. Resolved TOWARD the stream/jsonv2 verdict (a
+  ctrl byte before EOF is malformed whatever follows) by adding
+  `hasCtrlByte` to the bytes no-quote arms: the bytes quirk was an ordering
+  artifact, never a chosen contract, and deferring the stream's ctrl verdict
+  to EOF would read unbounded input on malformed data and break the lazy
+  fail-fast/liveness design. `ctrlHitErr`/`ctrlHitPos` deleted with it.
+
+- **The kind sentinel for `n`-prefixed garbage at a null-accepting value —
+  REJECTED as the unification target (2026-09).** The bytes null peek
+  reported the field's kind sentinel (ErrBadArray/ErrBadObject/
+  ErrExpectString/ErrBadBool/ErrBadNumber) for `nulx`/`n}`/`nope` while the
+  stream reported `ErrBadLiteral`. Unified on `ErrBadLiteral` by moving the
+  BYTES path: the stream's null-literal refill → ErrBadLiteral is the
+  round-9 shape, the pipe variants already reported it on both paths, and
+  jsonv2 reports a literal error there; the reshaped `inlineNullPeek` keeps
+  the same first compare on the non-null path. Don't re-open in the other
+  direction without a consumer that needs the kind sentinel.
+
+- **Promoted-field Go-name clash resolved stdlib-style (keep both) —
+  REJECTED for now (2026-09).** Full parity (keep `E1.A`/`E2.A` with distinct
+  JSON names) needs an embedding path on `FieldInfo` and emitter changes so
+  `result.<GoName>` / `seen<GoName>` / cap-const and temp names are spelled
+  through the path (`result.E1.A`, `seenE1_A`). Rejected at generate time
+  instead (cli/CLAUDE.md opt #78); revisit only if a consumer has such a
+  layout — the shape is uncommon.
 
 - **Duplicate-key detection in skipped / `any` / raw / nested scopes.** ggen's
   `DuplicateKeyError` comes from the per-field `seenX` flags, so it covers only

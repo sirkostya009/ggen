@@ -119,7 +119,7 @@ func skipStringTail(data []byte, bs int) (int, error) {
 		return bs + 2, nil
 	case 'u':
 		if bs+6 > len(data) {
-			return len(data), ErrBadString
+			return uEscapeEnd(data, bs), ErrBadString
 		}
 		if _, ok := parseHex4(data[bs+2 : bs+6]); !ok {
 			return bs, ErrBadString
@@ -148,12 +148,9 @@ func skipStringAVX(data []byte, i int) (int, error) {
 			}
 			j = nj
 		default:
-			// Scalar skipString reports its span start j on a ctrl hit,
-			// len(data) for the unterminated-no-backslash tail.
-			if err := ctrlHitErr(data[j+k:]); err == ErrUnterminated {
-				return len(data), err
-			}
-			return j, ErrBadString
+			// The structural locate landed on the ctrl byte itself, which is
+			// the position scalar skipString reports.
+			return j + k, ErrBadString
 		}
 	}
 }
@@ -176,12 +173,9 @@ func skipStringAVX2(data []byte, i int) (int, error) {
 			}
 			j = nj
 		default:
-			// Scalar skipString reports its span start j on a ctrl hit,
-			// len(data) for the unterminated-no-backslash tail.
-			if err := ctrlHitErr(data[j+k:]); err == ErrUnterminated {
-				return len(data), err
-			}
-			return j, ErrBadString
+			// The structural locate landed on the ctrl byte itself, which is
+			// the position scalar skipString reports.
+			return j + k, ErrBadString
 		}
 	}
 }
@@ -204,12 +198,9 @@ func skipStringAVX512(data []byte, i int) (int, error) {
 			}
 			j = nj
 		default:
-			// Scalar skipString reports its span start j on a ctrl hit,
-			// len(data) for the unterminated-no-backslash tail.
-			if err := ctrlHitErr(data[j+k:]); err == ErrUnterminated {
-				return len(data), err
-			}
-			return j, ErrBadString
+			// The structural locate landed on the ctrl byte itself, which is
+			// the position scalar skipString reports.
+			return j + k, ErrBadString
 		}
 	}
 }
@@ -230,11 +221,7 @@ func skipValueAVX(data []byte, i, depth int) (int, error) {
 	case 't', 'f':
 		_, j, err := Bool(data, i)
 		if err != nil {
-			want := "true"
-			if data[i] == 'f' {
-				want = "false"
-			}
-			return litEnd(data, i, want), err
+			return BoolEnd(data, i), err
 		}
 		return j, nil
 	case 'n':
@@ -336,11 +323,7 @@ func skipValueAVX2(data []byte, i, depth int) (int, error) {
 	case 't', 'f':
 		_, j, err := Bool(data, i)
 		if err != nil {
-			want := "true"
-			if data[i] == 'f' {
-				want = "false"
-			}
-			return litEnd(data, i, want), err
+			return BoolEnd(data, i), err
 		}
 		return j, nil
 	case 'n':
@@ -442,11 +425,7 @@ func skipValueAVX512(data []byte, i, depth int) (int, error) {
 	case 't', 'f':
 		_, j, err := Bool(data, i)
 		if err != nil {
-			want := "true"
-			if data[i] == 'f' {
-				want = "false"
-			}
-			return litEnd(data, i, want), err
+			return BoolEnd(data, i), err
 		}
 		return j, nil
 	case 'n':

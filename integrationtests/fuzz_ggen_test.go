@@ -119,6 +119,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			seenB = true
 			result.B, i, err = ggen.Bool(data, i)
 			if err != nil {
+				i = ggen.BoolEnd(data, i)
 				return result, i, ggen.NewParseErr("b", i, err)
 			}
 		case "f32":
@@ -126,15 +127,10 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f32"}}
 			}
 			seenF32 = true
-			var fv float64
-			fv, i, err = ggen.Float64(data, i)
+			result.F32, i, err = ggen.Float32(data, i)
 			if err != nil {
 				return result, i, ggen.NewParseErr("f32", i, err)
 			}
-			if math.IsInf(float64(float32(fv)), 0) {
-				return result, i, ggen.NewParseErr("f32", i, ggen.ErrNumberOverflow)
-			}
-			result.F32 = float32(fv)
 		case "f64":
 			if seenF64 {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f64"}}
@@ -803,15 +799,10 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f32"}}
 			}
 			seenF32 = true
-			var fv float64
-			fv, err = s.Float64()
+			result.F32, err = s.Float32()
 			if err != nil {
 				return result, ggen.NewParseErr("f32", s.Offset(), err)
 			}
-			if math.IsInf(float64(float32(fv)), 0) {
-				return result, ggen.NewParseErr("f32", s.Offset(), ggen.ErrNumberOverflow)
-			}
-			result.F32 = float32(fv)
 		case "f64":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -1003,7 +994,12 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 			}
 			result.U8 = uint8(uv)
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

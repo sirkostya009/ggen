@@ -200,11 +200,25 @@ func TestCheckOneValRule_ValueShape(t *testing.T) {
 		{"gt_empty", ValidationRule{Name: "gt"}, KindInt, "requires a numeric value", "int"},
 		{"gt_bad", ValidationRule{Name: "gt", Value: "abc"}, KindInt, "value is not a valid number", "int"},
 		{"lte_bad", ValidationRule{Name: "lte", Value: "abc"}, KindInt, "value is not a valid number", "int"},
+		// Integral bounds parse at the kind's width and sign: a uint64 may
+		// carry any bound up to 2^64-1; fractional and out-of-range bounds
+		// have their own diagnostics.
+		{"gte_uint64_above_int63", ValidationRule{Name: "gte", Value: "9223372036854775808"}, KindUint64, "", "uint64"},
+		{"eq_uint64_max", ValidationRule{Name: "eq", Value: "18446744073709551615"}, KindUint64, "", "uint64"},
+		{"lt_uint64_max", ValidationRule{Name: "lt", Value: "18446744073709551615"}, KindUint64, "", "uint64"},
+		{"gt_int64_overflow", ValidationRule{Name: "gt", Value: "9223372036854775808"}, KindInt64, "out of the field type's range", "int64"},
+		{"gt_fractional_int", ValidationRule{Name: "gt", Value: "1.5"}, KindInt, "integer field needs an integer bound", "int"},
+		{"gt_uint8_negative", ValidationRule{Name: "gt", Value: "-1"}, KindUint8, "out of the field type's range", "uint8"},
 
 		// multiple: integer required.
 		{"multiple_good", ValidationRule{Name: "multiple", Value: "2"}, KindInt, "", "int"},
 		{"multiple_empty", ValidationRule{Name: "multiple"}, KindInt, "requires an integer value", "int"},
 		{"multiple_bad", ValidationRule{Name: "multiple", Value: "abc"}, KindInt, "value is not a valid integer", "int"},
+		{"multiple_uint64_above_int63", ValidationRule{Name: "multiple", Value: "9223372036854775808"}, KindUint64, "", "uint64"},
+		{"multiple_uint64_zero", ValidationRule{Name: "multiple", Value: "0"}, KindUint64, "requires a positive integer", "uint64"},
+		{"multiple_int_negative", ValidationRule{Name: "multiple", Value: "-2"}, KindInt, "requires a positive integer", "int"},
+		{"multiple_int8_overflow", ValidationRule{Name: "multiple", Value: "300"}, KindInt8, "out of the field type's range", "int8"},
+		{"multiple_fractional", ValidationRule{Name: "multiple", Value: "1.5"}, KindInt, "value is not a valid integer", "int"},
 
 		// eq/neq numeric: must be valid number; string: any value OK.
 		{"eq_str_any_value", ValidationRule{Name: "eq", Value: "abc"}, KindString, "", "string"},
@@ -220,6 +234,27 @@ func TestCheckOneValRule_ValueShape(t *testing.T) {
 		{"oneof_num_trailing", ValidationRule{Name: "oneof", Value: " 1 | 2 "}, KindInt, "", "int"},
 		{"oneof_quoted_space", ValidationRule{Name: "oneof", Value: "'New York'|LA"}, KindString, "", "string"},
 		{"oneof_quoted_dup", ValidationRule{Name: "oneof", Value: "'LA'|LA"}, KindString, "is a duplicate", "string"},
+		// Numeric parts dedupe by VALUE on the kind: integral kinds key on
+		// the integer (a float64 key merged distinct integers above 2^53),
+		// integer-valued spellings still fold, floats fold -0 onto 0.
+		{"oneof_int64_above_2p53_distinct", ValidationRule{Name: "oneof", Value: "9007199254740993|9007199254740992"}, KindInt64, "", "int64"},
+		{"oneof_uint64_top_distinct", ValidationRule{Name: "oneof", Value: "18446744073709551615|18446744073709551614"}, KindUint64, "", "uint64"},
+		{"oneof_int_value_dup", ValidationRule{Name: "oneof", Value: "1|1.0"}, KindInt, "is a duplicate", "int"},
+		{"oneof_int_plus_dup", ValidationRule{Name: "oneof", Value: "1|+1"}, KindInt, "is a duplicate", "int"},
+		{"oneof_float_neg_zero_dup", ValidationRule{Name: "oneof", Value: "0|-0.0"}, KindFloat64, "is a duplicate", "float64"},
+		{"oneof_float_distinct", ValidationRule{Name: "oneof", Value: "1.5|2.5"}, KindFloat64, "", "float64"},
+
+		// len/minlen size the container's make(): a capacity make() cannot
+		// honour is rejected here instead of panicking at decode. maxlen is
+		// a bound only, and strings never preallocate.
+		{"len_slice_prealloc_ceiling", ValidationRule{Name: "len", Value: "4294967296"}, KindSlice, "prealloc ceiling", "[]int"},
+		{"minlen_map_prealloc_ceiling", ValidationRule{Name: "minlen", Value: "4294967296"}, KindMap, "prealloc ceiling", "map[string]int"},
+		// The ceiling is MaxInt32, so every accepted value is a legal int
+		// constant on a 32-bit target too.
+		{"len_slice_at_ceiling", ValidationRule{Name: "len", Value: "2147483647"}, KindSlice, "", "[]int"},
+		{"len_slice_over_ceiling", ValidationRule{Name: "len", Value: "2147483648"}, KindSlice, "prealloc ceiling", "[]int"},
+		{"maxlen_slice_no_ceiling", ValidationRule{Name: "maxlen", Value: "4294967296"}, KindSlice, "", "[]int"},
+		{"len_string_no_ceiling", ValidationRule{Name: "len", Value: "4294967296"}, KindString, "", "string"},
 
 		// starts/ends/contains: non-empty value required.
 		{"starts_good", ValidationRule{Name: "starts", Value: "x"}, KindString, "", "string"},
@@ -362,6 +397,9 @@ func TestCheckOneModRule_ValueShape(t *testing.T) {
 		{"clamp_bad_hi", ModRule{Name: "clamp", Value: "0|abc"}, KindInt, `hi "abc" is not a valid number`},
 		{"clamp_float_ok", ModRule{Name: "clamp", Value: "0.5|10.5"}, KindFloat64, ""},
 		{"clamp_whitespace", ModRule{Name: "clamp", Value: " 0 | 10 "}, KindInt, ""},
+		{"clamp_uint64_max_hi", ModRule{Name: "clamp", Value: "|18446744073709551615"}, KindUint64, ""},
+		{"clamp_fractional_int", ModRule{Name: "clamp", Value: "0|1.5"}, KindInt, "integer field needs integer bounds"},
+		{"clamp_int8_overflow", ModRule{Name: "clamp", Value: "0|300"}, KindInt8, "out of the field type's range"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -452,8 +490,10 @@ func TestCheckModRules_CustomSkipped(t *testing.T) {
 
 func TestCanDive(t *testing.T) {
 	t.Parallel()
+	// []byte / [N]byte decode as one base64 string: no element loop, so an
+	// `inner:` step there could never run.
 	accepted := map[TypeKind]bool{
-		KindSlice: true, KindArray: true, KindMap: true, KindBytes: true,
+		KindSlice: true, KindArray: true, KindMap: true,
 	}
 	for _, ke := range allKindEntries {
 		got := canDive(ke.kind)
@@ -615,7 +655,37 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 			"`gt` is inapplicable to string",
 		},
 
-		// inner: only on containers.
+		// inner: only on containers — and a byte slice/array is not one on
+		// the wire (one base64 string), folded or not.
+		{
+			"dive_on_bytes",
+			FieldInfo{
+				GoName: "B", GoType: "[]byte", JSONName: "b", Kind: KindBytes,
+				ElemMods: []ModRule{{Name: "trim"}},
+				HintLen:  -1,
+			},
+			"`inner:` tag prefix is only valid on slice/array/map fields",
+		},
+		{
+			"dive_on_byte_array_unfolded",
+			FieldInfo{
+				GoName: "B", GoType: "[3]byte", JSONName: "b",
+				Kind: KindArray, ArrayLen: 3, ElemKind: KindUint8, ElemType: "byte",
+				ElemValidation: []ValidationRule{{Name: "gt", Value: "1"}},
+				HintLen:        -1,
+			},
+			"`inner:` tag prefix is only valid on slice/array/map fields",
+		},
+		{
+			"dive_on_byte_array_format_array_ok",
+			FieldInfo{
+				GoName: "B", GoType: "[3]byte", JSONName: "b", Format: "array",
+				Kind: KindArray, ArrayLen: 3, ElemKind: KindUint8, ElemType: "byte",
+				ElemValidation: []ValidationRule{{Name: "gt", Value: "1"}},
+				HintLen:        -1,
+			},
+			"",
+		},
 		{
 			"dive_on_int",
 			FieldInfo{
@@ -760,6 +830,68 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 			"",
 		},
 
+		// `omitempty` on a struct: the option never omits one, so it is a
+		// reject instead of a silent no-op. UnderlyingStruct is the go/types
+		// verdict — a named primitive and a foreign array read as KindStruct
+		// too, and neither is a struct.
+		{
+			"omitempty_on_struct_rejects",
+			FieldInfo{
+				GoName: "In", GoType: "Nested", JSONName: "in", Kind: KindStruct,
+				OmitEmpty: true, UnderlyingStruct: true, HintLen: -1,
+			},
+			"`omitempty` is not applicable to a struct field (got Nested)",
+		},
+		{
+			"omitzero_on_struct_ok",
+			FieldInfo{
+				GoName: "In", GoType: "Nested", JSONName: "in", Kind: KindStruct,
+				OmitZero: true, UnderlyingStruct: true, HintLen: -1,
+			},
+			"",
+		},
+		{
+			"omitempty_on_pointer_to_struct_ok",
+			FieldInfo{
+				GoName: "In", GoType: "*Nested", JSONName: "in", Kind: KindStruct,
+				Pointer: true, PointeeType: "Nested", OmitEmpty: true, HintLen: -1,
+			},
+			"",
+		},
+		{
+			"omitempty_on_named_primitive_ok",
+			FieldInfo{
+				GoName: "P", GoType: "Pri", JSONName: "p", Kind: KindStruct,
+				NamedPrims: map[string]TypeKind{"Pri": KindString},
+				OmitEmpty:  true, HintLen: -1,
+			},
+			"",
+		},
+		{
+			"omitempty_on_foreign_array_ok",
+			FieldInfo{
+				GoName: "ID", GoType: "uuid.UUID", JSONName: "id", Kind: KindStruct,
+				OmitEmpty: true, HintLen: -1,
+			},
+			"",
+		},
+		{
+			"omitempty_on_time_ok",
+			FieldInfo{
+				GoName: "T", GoType: "time.Time", JSONName: "t", Kind: KindTime,
+				OmitEmpty: true, UnderlyingStruct: true, HintLen: -1,
+			},
+			"",
+		},
+		{
+			"omitempty_on_sqlnull_ok",
+			FieldInfo{
+				GoName: "N", GoType: "sql.NullString", JSONName: "n", Kind: KindSQLNull,
+				OmitEmpty: true, UnderlyingStruct: true, HintLen: -1,
+			},
+			"",
+		},
+
 		// pointer fields: rules apply to the pointee, fi.Kind == pointee kind.
 		{
 			"pointer_int_alphanum_rejects",
@@ -827,5 +959,49 @@ func TestCheckRuleApplicability_FieldNameInDiagnostic(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "cannot be applied") || strings.Contains(err.Error(), "rule \"alphanum\"") {
 		t.Errorf("error %q should use new `is inapplicable to` form", err.Error())
+	}
+}
+
+// A field with no elements gets exactly one diagnostic for its `inner:` tag.
+// The element pass has no element type to name a rule against, so it does not
+// run and cannot print `is inapplicable to ` with the type left blank.
+func TestCheckRuleApplicability_NonDiveableReportsOnce(t *testing.T) {
+	t.Parallel()
+	cases := []FieldInfo{
+		{
+			StructName: "A", GoName: "G", GoType: "[]byte", JSONName: "g", Kind: KindBytes,
+			ElemValidation: []ValidationRule{{Name: "gt", Value: "1"}},
+			HintLen:        -1,
+		},
+		{
+			StructName: "A", GoName: "G", GoType: "[3]byte", JSONName: "g",
+			Kind: KindArray, ArrayLen: 3, ElemKind: KindUint8, ElemType: "byte",
+			ElemMods: []ModRule{{Name: "trim"}},
+			HintLen:  -1,
+		},
+		{
+			StructName: "A", GoName: "N", GoType: "int", JSONName: "n", Kind: KindInt,
+			ElemValidation: []ValidationRule{{Name: "gt", Value: "1"}},
+			HintLen:        -1,
+		},
+	}
+	for _, fi := range cases {
+		t.Run(fi.GoType, func(t *testing.T) {
+			t.Parallel()
+			err := checkRuleApplicability(fi, true)
+			if err == nil {
+				t.Fatal("expected the `inner:` rejection")
+			}
+			n := 1
+			if u, ok := err.(interface{ Unwrap() []error }); ok {
+				n = len(u.Unwrap())
+			}
+			if n != 1 {
+				t.Errorf("got %d diagnostics, want 1:\n%v", n, err)
+			}
+			if strings.Contains(err.Error(), "element") {
+				t.Errorf("element-level diagnostic on a field with no elements:\n%v", err)
+			}
+		})
 	}
 }

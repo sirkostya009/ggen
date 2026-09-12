@@ -94,6 +94,24 @@ func TestJSONSize_NoReallocOnWorstCase(t *testing.T) {
 			},
 		},
 		{
+			// JSON-empty guards (text kinds, nested struct, any, pointer
+			// peel, [N]byte omitzero) all populated: every guarded budget
+			// must be reserved.
+			name: "R10OmitEmpty_all_populated",
+			v: R10OmitEmpty{
+				IP:   net.ParseIP("2001:db8:85a3::8a2e:370:7334"),
+				Addr: new(netip.MustParseAddr("2001:db8:85a3::8a2e:370:7334")),
+				Pfx:  new(netip.MustParsePrefix("2001:db8::/32")),
+				Site: &url.URL{Scheme: "https", Host: "x.io", Path: "/" + worstShort, RawQuery: worstShort},
+				In:   &R10OmitInner{A: worstShort, N: -1 << 62},
+				Any:  worstShort,
+				PS:   new(worstShort),
+				PL:   &[]int{-1 << 62, 1<<63 - 1},
+				PPS:  new(new(worstShort)),
+				Raw:  [16]byte{0xff, 1, 2, 3},
+			},
+		},
+		{
 			// Every format size path (time/duration/bytes) + IPv6 (the
 			// wider arm of the v4/v6 split), under one cap.
 			name: "NativeTypes_v6_max_formats",
@@ -377,6 +395,51 @@ func TestJSONSize_TupleStruct_NoRealloc(t *testing.T) {
 		Segments: [][2]int{{math.MaxInt, math.MinInt}, {0, 0}, {7, -7}},
 		Pair:     [2][]string{{"aaaa", "bbbb"}, {"cccc"}},
 	}
+	size := in.JSONSize()
+	got, err := in.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	if cap(got) != size {
+		t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+	}
+	if len(got) > size {
+		t.Errorf("undersized: len=%d > size=%d", len(got), size)
+	}
+}
+
+// `[0]T` in a container budgets the two bytes it encodes as, per element and
+// per map entry.
+func TestJSONSize_ZeroTupleContainers_NoRealloc(t *testing.T) {
+	t.Parallel()
+	in := R10BZeroTupleContainers{
+		M: map[string][0]int{"k": {}, "kk": {}},
+		S: [][0]int{{}, {}},
+		N: map[string][0][3]int{"k": {}},
+	}
+	size := in.JSONSize()
+	got, err := in.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	if cap(got) != size {
+		t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+	}
+	if len(got) > size {
+		t.Errorf("undersized: len=%d > size=%d", len(got), size)
+	}
+}
+
+// A POINTER to a fixed byte array budgets the encoded pointee, not a tuple.
+func TestJSONSize_PtrByteArray_NoRealloc(t *testing.T) {
+	t.Parallel()
+	p := [8]byte{1, 2, 3, 4, 5, 6, 7, 8}
+	q4 := [4]byte{9, 9, 9, 9}
+	q := &q4
+	h := [4]byte{0xde, 0xad, 0xbe, 0xef}
+	a := [3]byte{1, 2, 3}
+	o := [2]byte{7, 7}
+	in := R10BPtrByteArray{P: &p, Q: &q, H: &h, A: &a, O: &o}
 	size := in.JSONSize()
 	got, err := in.AppendJSON(make([]byte, 0, size))
 	if err != nil {

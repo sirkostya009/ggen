@@ -55,8 +55,11 @@ func kindShapeBytes(k TypeKind, format string) []string {
 // that really decodes as a number — the native variant became unreachable for
 // its own type, and a converter with a named-primitive input W likewise.
 // FieldInfo.NamedPrims is the PARSE-time source (checkVariantShapes runs
-// before namedKinds is seeded); namedKinds covers render time.
+// before namedKinds is seeded; resolvePipeCustoms registers a converter's W
+// there too); namedKinds covers render time. Pointer spellings resolve
+// through the pointee.
 func variantShapeKind(f FieldInfo, goType string, kind TypeKind) TypeKind {
+	goType = strings.TrimLeft(goType, "*")
 	if k, ok := f.NamedPrims[goType]; ok {
 		return k
 	}
@@ -78,19 +81,23 @@ func variantCaseBytes(f FieldInfo, v Variant) []string {
 		}
 		return bs
 	case VariantConvert:
-		return kindShapeBytes(variantShapeKind(f, v.InType, v.InKind), "")
+		bs := kindShapeBytes(variantShapeKind(f, v.InType, v.InKind), "")
+		if v.InPointer {
+			bs = append(bs, "'n'")
+		}
+		return bs
 	}
 	return nil
 }
 
 // nativeAcceptsNull reports whether f's native decode path has a null branch
-// (the kind-gated null acceptance: pointer, slice, map, []byte, raw).
+// (the kind-gated null acceptance: pointer, slice, map, []byte, net.IP, raw).
 func nativeAcceptsNull(f FieldInfo) bool {
 	if f.Pointer {
 		return true
 	}
 	switch variantShapeKind(f, f.GoType, f.Kind) {
-	case KindSlice, KindMap, KindBytes, KindRawJSON:
+	case KindSlice, KindMap, KindBytes, KindNetIP, KindRawJSON:
 		return true
 	}
 	return false
@@ -158,17 +165,27 @@ func nativeVariantField(f FieldInfo) FieldInfo {
 }
 
 // converterInputField builds the synthetic FieldInfo describing a converter's
-// input type W, so renderField/renderStreamField can scan it into a temp.
+// input type W, so renderField/renderStreamField can scan it into a temp. It
+// is shaped like a field of type W: a pointer input takes the pointer path
+// (null → nil, else a fresh leaf — the temp is a known-nil local, hence
+// TargetNil) and NamedPrims carries W's named-primitive resolution.
 func converterInputField(f FieldInfo, v Variant) FieldInfo {
-	return FieldInfo{
+	in := FieldInfo{
 		GoName:           f.GoName,
 		StructName:       f.StructName,
 		JSONName:         f.JSONName,
 		GoType:           v.InType,
 		Kind:             v.InKind,
+		NamedPrims:       f.NamedPrims,
 		Copy:             f.Copy,
 		AllowInvalidUTF8: f.AllowInvalidUTF8,
 	}
+	if v.InPointer {
+		in.Pointer = true
+		in.PointeeType = strings.TrimPrefix(v.InType, "*")
+		in.TargetNil = true
+	}
+	return in
 }
 
 func convCall(v Variant) string {

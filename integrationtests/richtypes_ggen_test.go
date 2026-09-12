@@ -168,6 +168,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			if err != nil {
 				return result, i, ggen.NewParseErr("gofrsId", i, err)
 			}
+			result.GofrsID = (RichTypes{}).GofrsID
 			err = result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 			if err != nil {
 				return result, i, ggen.NewParseErr("gofrsId", i, err)
@@ -182,6 +183,7 @@ func (recv RichTypes) DecodeFrom(data []byte) (result RichTypes, i int, err erro
 			if err != nil {
 				return result, i, ggen.NewParseErr("id", i, err)
 			}
+			result.ID = (RichTypes{}).ID
 			err = result.ID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 			if err != nil {
 				return result, i, ggen.NewParseErr("id", i, err)
@@ -419,6 +421,7 @@ func (recv RichTypes) DecodeFromStream(s *ggen.Stream) (result RichTypes, err er
 			if err != nil {
 				return result, ggen.NewParseErr("gofrsId", s.Offset(), err)
 			}
+			result.GofrsID = (RichTypes{}).GofrsID
 			err = result.GofrsID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 			if err != nil {
 				return result, ggen.NewParseErr("gofrsId", s.Offset(), err)
@@ -437,6 +440,7 @@ func (recv RichTypes) DecodeFromStream(s *ggen.Stream) (result RichTypes, err er
 			if err != nil {
 				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
+			result.ID = (RichTypes{}).ID
 			err = result.ID.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 			if err != nil {
 				return result, ggen.NewParseErr("id", s.Offset(), err)
@@ -497,7 +501,12 @@ func (recv RichTypes) DecodeFromStream(s *ggen.Stream) (result RichTypes, err er
 			}
 			result.Site = *u
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -759,7 +768,12 @@ func (recv RawOnly) DecodeFromStream(s *ggen.Stream) (result RawOnly, err error)
 			}
 			result.Raw = append(result.Raw[:0], span...)
 		default:
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{strings.Clone(key)}}
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

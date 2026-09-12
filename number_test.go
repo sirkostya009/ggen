@@ -43,6 +43,50 @@ func TestFloat64_StdlibParity(t *testing.T) {
 	}
 }
 
+// TestFloat32_StdlibParity: Float32 rounds the decimal once, like
+// strconv.ParseFloat(s, 32). Narrowing a float64 parse instead rounds twice
+// and is one ulp off whenever the float64 result is a float32 rounding
+// midpoint, so the random cases sample decimals around such midpoints at
+// every digit count — bytes + stream, bit-exact.
+func TestFloat32_StdlibParity(t *testing.T) {
+	t.Parallel()
+	cases := append([]string{
+		"1.0000000596046448", "1.0000001788139343", "1.0000002980232239",
+		"3.4028235677973366e38", "3.4028235e38", "3.4028236e38", "1e39", "-1e39",
+		"1e-50", "1.4e-45", "1.17549435e-38",
+	}, floatCases...)
+	r := rand.New(rand.NewSource(1))
+	for range 20000 {
+		f := math.Float32frombits(r.Uint32() &^ (1 << 31))
+		if math.IsInf(float64(f), 0) || math.IsNaN(float64(f)) {
+			continue
+		}
+		mid := (float64(f) + float64(math.Nextafter32(f, math.MaxFloat32))) / 2
+		for _, prec := range []int{6, 8, 10, 12, 14, 15, 16, 17, -1} {
+			cases = append(cases, strconv.FormatFloat(mid, 'g', prec, 64))
+		}
+	}
+	for _, in := range cases {
+		want, werr := strconv.ParseFloat(in, 32)
+		got, j, err := Float32([]byte(in), 0)
+		var s Stream
+		s.Reset(strings.NewReader(in), make([]byte, 0, 3))
+		sgot, serr := s.Float32()
+		if werr != nil {
+			if !errors.Is(err, ErrNumberOverflow) || !errors.Is(serr, ErrNumberOverflow) {
+				t.Errorf("%s: strconv %v; bytes %v, stream %v, want ErrNumberOverflow", in, werr, err, serr)
+			}
+			continue
+		}
+		if err != nil || j != len(in) || got != float32(want) {
+			t.Errorf("%s: bytes %v (%v, end %d), want %v", in, got, err, j, float32(want))
+		}
+		if serr != nil || sgot != float32(want) {
+			t.Errorf("%s: stream %v (%v), want %v", in, sgot, serr, float32(want))
+		}
+	}
+}
+
 func TestFloat64_ErrorParity(t *testing.T) {
 	t.Parallel()
 	// Note: scan primitives expect the caller to have skipped leading

@@ -217,16 +217,24 @@ func TestTuple_StrictTooFew(t *testing.T) {
 	}
 }
 
-// More than N elements errors.
+// More than N elements errors; Got counts the element that overflowed, so it
+// reads as too-many next to the too-few case — on both paths.
 func TestTuple_StrictTooMany(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"point":[1.5,2.5,3.5]}`)
-	_, _, err := TupleStruct{}.DecodeFrom(in)
-	if err == nil {
-		t.Fatal("expected error on over-long tuple")
-	}
-	if _, ok := errors.AsType[*ggen.LenError](err); !ok {
-		t.Errorf("got %v, want *ggen.LenError", err)
+	_, _, bytesErr := TupleStruct{}.DecodeFrom(in)
+	var s ggen.Stream
+	s.Reset(bytes.NewReader(in), make([]byte, 0, 8))
+	_, streamErr := TupleStruct{}.DecodeFromStream(&s)
+	for path, err := range map[string]error{"bytes": bytesErr, "stream": streamErr} {
+		le, ok := errors.AsType[*ggen.LenError](err)
+		if !ok {
+			t.Errorf("%s: got %v, want *ggen.LenError", path, err)
+			continue
+		}
+		if le.Want != 2 || le.Got != 3 {
+			t.Errorf("%s: Want=%d Got=%d, want 2/3", path, le.Want, le.Got)
+		}
 	}
 }
 
@@ -364,6 +372,10 @@ type PreallocWidths struct {
 	// still fit a 512-byte span, ignored when they do not.
 	MaxFits   []PreallocRow  `json:"maxFits"   pipe:"maxlen=8"`
 	MaxTooBig []PreallocWide `json:"maxTooBig" pipe:"maxlen=8"`
+	// A bound past the span budget must not reach the emitted cap const:
+	// multiplied by the element size there it overflowed int and broke the
+	// build. Compiling is the test; the cap is the width default.
+	MaxHuge []PreallocWide `json:"maxHuge" pipe:"maxlen=9223372036854775807"`
 }
 
 //ggen:generate
@@ -384,7 +396,7 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 		`"ptrs":[{"c":"x"}],"nested":[[1]],"hinted":[{"c":"x"}],` +
 		`"lened":[{"c":"x"},{"c":"x"},{"c":"x"},{"c":"x"},{"c":"x"},{"c":"x"}],` +
 		`"minned":[{"c":"x"},{"c":"x"},{"c":"x"},{"c":"x"},{"c":"x"}],` +
-		`"maxFits":[{"c":"x"}],"maxTooBig":[{"c":"x"}]}`)
+		`"maxFits":[{"c":"x"}],"maxTooBig":[{"c":"x"}],"maxHuge":[{"c":"x"}]}`)
 	got, _, err := PreallocWidths{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatal(err)
@@ -418,6 +430,9 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 	}
 	if got, want := cap(got.MaxTooBig), prealloc.Cap(unsafe.Sizeof(*new(PreallocWide))); got != want {
 		t.Errorf("maxlen=8 that overshoots a span: cap = %d, want the width default %d", got, want)
+	}
+	if got, want := cap(got.MaxHuge), prealloc.Cap(unsafe.Sizeof(*new(PreallocWide))); got != want {
+		t.Errorf("maxlen=MaxInt64: cap = %d, want the width default %d", got, want)
 	}
 	// A numeric slice beats the width guess outright: scalar elements carry no
 	// `,`, so the comma pre-count (opt #42) sizes it exactly.
@@ -661,5 +676,166 @@ func TestQuotedNames_roundtrip(t *testing.T) {
 	back, _, err := QuotedNames{}.DecodeFrom(out)
 	if err != nil || back != in {
 		t.Fatalf("decode: %+v %v", back, err)
+	}
+}
+
+// R10ZeroTuple pins the degenerate `[0]T` tuple: it marshals as `[]` (the
+// unrolled first-element emit indexed a zero-length array) and, being a
+// strict tuple, decodes only `[]`.
+//
+//ggen:generate
+type R10ZeroTuple struct {
+	Arr [0]int `json:"arr"`
+}
+
+func TestTuple_ZeroLength(t *testing.T) {
+	t.Parallel()
+	out, err := ggen.Marshal(R10ZeroTuple{})
+	if err != nil || string(out) != `{"arr":[]}` {
+		t.Fatalf("marshal: %s, %v", out, err)
+	}
+	if _, _, err := (R10ZeroTuple{}).DecodeFrom(out); err != nil {
+		t.Errorf("bytes decode: %v", err)
+	}
+	var st ggen.Stream
+	st.Reset(bytes.NewReader(out), nil)
+	if _, err := (R10ZeroTuple{}).DecodeFromStream(&st); err != nil {
+		t.Errorf("stream decode: %v", err)
+	}
+	var le *ggen.LenError
+	if _, _, err := (R10ZeroTuple{}).DecodeFrom([]byte(`{"arr":[1]}`)); !errors.As(err, &le) {
+		t.Errorf("one element into [0]int: want LenError, got %v", err)
+	}
+}
+
+// R10BZeroTupleContainers puts the degenerate `[0]T` in every container
+// position. Each value marshals as the constant `[]`, so the map emit must
+// bind keys only, and the decode has no slot to write — a nested `[0][N]T`
+// element store does not even compile.
+//
+//ggen:generate
+type R10BZeroTupleContainers struct {
+	M map[string][0]int    `json:"m"`
+	S [][0]int             `json:"s"`
+	A [2][0]int            `json:"a"`
+	N map[string][0][3]int `json:"n"`
+}
+
+func TestTuple_ZeroLengthContainers(t *testing.T) {
+	t.Parallel()
+	in := `{"a":[[],[]],"m":{"k":[]},"n":{"k":[]},"s":[[],[]]}`
+	got, _, err := (R10BZeroTupleContainers{}).DecodeFrom([]byte(in))
+	if err != nil {
+		t.Fatalf("bytes decode: %v", err)
+	}
+	out, err := ggen.Marshal(got)
+	if err != nil || string(out) != in {
+		t.Fatalf("marshal: %s, %v", out, err)
+	}
+	var st ggen.Stream
+	st.Reset(bytes.NewReader([]byte(in)), nil)
+	sgot, err := (R10BZeroTupleContainers{}).DecodeFromStream(&st)
+	if err != nil {
+		t.Fatalf("stream decode: %v", err)
+	}
+	if sout, err := ggen.Marshal(sgot); err != nil || string(sout) != in {
+		t.Fatalf("stream marshal: %s, %v", sout, err)
+	}
+	// A tuple that carries an element is one too many, on both paths.
+	for _, bad := range []string{`{"m":{"k":[1]}}`, `{"s":[[1]]}`, `{"a":[[1],[]]}`, `{"n":{"k":[[1,2,3]]}}`} {
+		var le *ggen.LenError
+		if _, _, err := (R10BZeroTupleContainers{}).DecodeFrom([]byte(bad)); !errors.As(err, &le) {
+			t.Errorf("bytes %s: want LenError, got %v", bad, err)
+		}
+		var st ggen.Stream
+		st.Reset(bytes.NewReader([]byte(bad)), nil)
+		if _, err := (R10BZeroTupleContainers{}).DecodeFromStream(&st); !errors.As(err, &le) {
+			t.Errorf("stream %s: want LenError, got %v", bad, err)
+		}
+	}
+}
+
+// Integral bounds parse at the field's width and sign, so a uint64 may carry
+// any bound up to 2^64-1 and an int64 oneof may list distinct integers above
+// 2^53 (an Atoi gate and a float64 dedupe key used to refuse both).
+//
+//ggen:generate
+type R10WideBounds struct {
+	A uint64 `json:"a" pipe:"gte=9223372036854775808"`
+	B uint64 `json:"b" pipe:"eq=18446744073709551615"`
+	C uint64 `json:"c" pipe:"clamp=|18446744073709551615"`
+	D uint64 `json:"d" pipe:"multiple=9223372036854775808"`
+	E uint64 `json:"e" pipe:"lt=18446744073709551615"`
+	F int64  `json:"f" pipe:"oneof=9007199254740993|9007199254740992"`
+}
+
+func TestR10WideBounds(t *testing.T) {
+	t.Parallel()
+	ok := `{"a":9223372036854775808,"b":18446744073709551615,"c":18446744073709551615,"d":9223372036854775808,"e":18446744073709551614,"f":9007199254740993}`
+	got, _, err := R10WideBounds{}.DecodeFrom([]byte(ok))
+	if err != nil {
+		t.Fatalf("valid payload: %v", err)
+	}
+	if got.A != 1<<63 || got.B != 1<<64-1 || got.C != 1<<64-1 || got.D != 1<<63 || got.E != 1<<64-2 || got.F != 9007199254740993 {
+		t.Errorf("decoded %+v", got)
+	}
+	for name, bad := range map[string]string{
+		"gte":      `{"a":9223372036854775807,"b":18446744073709551615,"c":1,"d":9223372036854775808,"e":1,"f":9007199254740993}`,
+		"eq":       `{"a":9223372036854775808,"b":18446744073709551614,"c":1,"d":9223372036854775808,"e":1,"f":9007199254740993}`,
+		"multiple": `{"a":9223372036854775808,"b":18446744073709551615,"c":1,"d":9223372036854775809,"e":1,"f":9007199254740993}`,
+		"lt":       `{"a":9223372036854775808,"b":18446744073709551615,"c":1,"d":9223372036854775808,"e":18446744073709551615,"f":9007199254740993}`,
+		"oneof":    `{"a":9223372036854775808,"b":18446744073709551615,"c":1,"d":9223372036854775808,"e":1,"f":9007199254740991}`,
+	} {
+		if _, _, err := (R10WideBounds{}).DecodeFrom([]byte(bad)); err == nil {
+			t.Errorf("%s: expected a validation error", name)
+		}
+	}
+}
+
+// R10BParenTypes: Go keeps redundant parentheses in a type expression through
+// gofmt, so every field here has the shape its unparenthesized type asks for.
+//
+//ggen:generate
+type R10BParenTypes struct {
+	Deep  []([]bool)        `json:"deep"`
+	Ptr   *(int)            `json:"ptr"`
+	Vals  map[string](*int) `json:"vals"`
+	Bytes ([]byte)          `json:"bytes"`
+	Ints  ([]int)           `json:"ints"`
+}
+
+func TestR10BParenthesizedTypes(t *testing.T) {
+	t.Parallel()
+	// Bytes is base64 (a byte slice, not a tuple) and Ints is a JSON array.
+	const payload = `{"deep":[[true,false],[]],"ptr":7,"vals":{"a":1},"bytes":"aGk=","ints":[1,2,3]}`
+	got, n, err := R10BParenTypes{}.DecodeFrom([]byte(payload))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if n != len(payload) {
+		t.Errorf("consumed %d of %d", n, len(payload))
+	}
+	if !reflect.DeepEqual(got.Deep, [][]bool{{true, false}, {}}) {
+		t.Errorf("Deep = %v", got.Deep)
+	}
+	if got.Ptr == nil || *got.Ptr != 7 {
+		t.Errorf("Ptr = %v", got.Ptr)
+	}
+	if p := got.Vals["a"]; p == nil || *p != 1 {
+		t.Errorf("Vals = %v", got.Vals)
+	}
+	if string(got.Bytes) != "hi" {
+		t.Errorf("Bytes = %q", got.Bytes)
+	}
+	if !reflect.DeepEqual(got.Ints, []int{1, 2, 3}) {
+		t.Errorf("Ints = %v", got.Ints)
+	}
+	out, err := got.AppendJSON(nil)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	const want = `{"bytes":"aGk=","deep":[[true,false],[]],"ints":[1,2,3],"ptr":7,"vals":{"a":1}}`
+	if string(out) != want {
+		t.Errorf("roundtrip:\n got %s\nwant %s", out, want)
 	}
 }

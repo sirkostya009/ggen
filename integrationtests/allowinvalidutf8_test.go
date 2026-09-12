@@ -4,6 +4,7 @@ package integrationtests
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -98,5 +99,67 @@ func TestAllowInvalidUTF8(t *testing.T) {
 	// Control: the strict default still rejects the same bytes.
 	if _, _, err := (Address{}).DecodeFrom([]byte("{\"street\":\"a\xffb\",\"city\":\"Y\",\"zipCode\":\"1\"}")); err == nil {
 		t.Error("strict struct accepted invalid UTF-8")
+	}
+}
+
+// R10PermissiveAny: the opt-out reaches `any` values too — every string and
+// key inside an any field, map[string]any values and the json:",embed"
+// catch-all — on both the float64 and usenumber shapes. AnyStruct (strict)
+// is the control.
+//
+//ggen:generate allowinvalidutf8
+type R10PermissiveAny struct {
+	Body  any            `json:"body"`
+	M     map[string]any `json:"m"`
+	Extra map[string]any `json:",embed"`
+}
+
+//ggen:generate allowinvalidutf8 usenumber
+type R10PermissiveAnyNumber struct {
+	Body any `json:"body"`
+}
+
+func TestAllowInvalidUTF8_anyValues(t *testing.T) {
+	t.Parallel()
+	const bad = "\xff"
+	cases := []struct {
+		name    string
+		payload string
+		check   func(v R10PermissiveAny) bool
+	}{
+		{"any_string", `{"body":"` + bad + `"}`, func(v R10PermissiveAny) bool { return v.Body == bad }},
+		{"any_object_key", `{"body":{"k` + bad + `":1}}`, func(v R10PermissiveAny) bool {
+			m, _ := v.Body.(map[string]any)
+			return m["k"+bad] == 1.0
+		}},
+		{"any_nested", `{"body":[{"k":"` + bad + `"}]}`, func(v R10PermissiveAny) bool {
+			a, _ := v.Body.([]any)
+			m, _ := a[0].(map[string]any)
+			return m["k"] == bad
+		}},
+		{"map_any_value", `{"m":{"k":"` + bad + `"}}`, func(v R10PermissiveAny) bool { return v.M["k"] == bad }},
+		{"embed_any_value", `{"zz":"` + bad + `"}`, func(v R10PermissiveAny) bool { return v.Extra["zz"] == bad }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, _, err := R10PermissiveAny{}.DecodeFrom([]byte(c.payload))
+			if err != nil || !c.check(got) {
+				t.Errorf("bytes: %+v (%v)", got, err)
+			}
+			var s ggen.Stream
+			s.Reset(&chunkReader{data: []byte(c.payload), max: 3}, make([]byte, 0, 16))
+			sgot, err := R10PermissiveAny{}.DecodeFromStream(&s)
+			if err != nil || !c.check(sgot) {
+				t.Errorf("stream: %+v (%v)", sgot, err)
+			}
+		})
+	}
+	num, _, err := R10PermissiveAnyNumber{}.DecodeFrom([]byte(`{"body":"` + bad + `"}`))
+	if err != nil || num.Body != bad {
+		t.Errorf("usenumber: %+v (%v)", num, err)
+	}
+	// Strict control: the same bytes into a validating any field still reject.
+	if _, _, err := (AnyStruct{}).DecodeFrom([]byte(`{"body":"` + bad + `"}`)); !errors.Is(err, ggen.ErrInvalidUTF8) {
+		t.Errorf("strict any accepted invalid UTF-8: %v", err)
 	}
 }

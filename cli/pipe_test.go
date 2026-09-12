@@ -3,6 +3,7 @@ package main
 import (
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
 )
 
@@ -159,6 +160,16 @@ func TestParsePipeTag(t *testing.T) {
 			},
 		},
 		{
+			// The lift is top-level only: a presence word inside a group is
+			// the group's problem (rejected), not the outer field's marker.
+			name: "presence lifted around an inner group",
+			tag:  "required inner:(minlen=1)",
+			want: ParsedPipe{
+				Presence: PresenceRequired,
+				Levels:   [][]Step{{{V: ValidationRule{Name: "minlen", Value: "1"}}}},
+			},
+		},
+		{
 			name: "converter-first needs slash to read as variant",
 			tag:  "@FromMoney / . gte=0",
 			want: ParsedPipe{
@@ -218,11 +229,34 @@ func TestParsePipeTagErrors(t *testing.T) {
 		"inner:(trim maxlen=1",  // unbalanced paren
 		"inner:",                // prefix with nothing following
 		"(trim)",                // stray group
+		// presence belongs to the field's key, never to an element or map
+		// key: bare, spaced and grouped spellings all reject instead of
+		// emitting nothing (bare) or re-scoping to the outer key (grouped)
+		"inner:required",
+		"inner: optional",
+		"inner:(required minlen=1)",
+		"keys:required",
+		"keys:(optional maxlen=3)",
 	}
 	for _, tag := range bad {
 		if _, err := parsePipeTag(tag); err == nil {
 			t.Errorf("parsePipeTag(%q) expected error, got nil", tag)
 		}
+	}
+}
+
+// A capacity make() cannot honour is a parse error, not a decode-time
+// makeslice panic. The ceiling is the largest int a 32-bit target can hold,
+// so every accepted value is a legal constant on any target.
+func TestParseHintTag_Ceiling(t *testing.T) {
+	t.Parallel()
+	for _, tag := range []string{"9223372036854775807", "2147483648", "4 inner:2147483648"} {
+		if _, err := parseHintTag(tag); err == nil || !strings.Contains(err.Error(), "prealloc ceiling") {
+			t.Errorf("parseHintTag(%q) = %v, want prealloc-ceiling error", tag, err)
+		}
+	}
+	if _, err := parseHintTag("2147483647"); err != nil {
+		t.Errorf("parseHintTag at the ceiling: %v", err)
 	}
 }
 

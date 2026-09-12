@@ -392,7 +392,11 @@ func TestString_CtrlBeforeEscapeRejected(t *testing.T) {
 func stringSlowRef(data []byte, start, j, capHint int, validate bool) (string, int, error) {
 	bad, rawHigh := ctrlOrHigh(data[start:j])
 	if bad {
-		return "", start, ErrBadString
+		for k := start; k < j; k++ {
+			if data[k] < 0x20 {
+				return "", k, ErrBadString
+			}
+		}
 	}
 	buf := make([]byte, 0, capHint)
 	buf = append(buf, data[start:j]...)
@@ -431,7 +435,10 @@ func stringSlowRef(data []byte, start, j, capHint int, validate bool) (string, i
 				j += 2
 			case 'u':
 				if j+6 > len(data) {
-					return "", len(data), ErrBadString
+					if uEscapePrefixRef(data[j:]) {
+						return "", len(data), ErrBadString
+					}
+					return "", j, ErrBadString
 				}
 				r, ok := parseHex4(data[j+2 : j+6])
 				if !ok {
@@ -439,13 +446,17 @@ func stringSlowRef(data []byte, start, j, capHint int, validate bool) (string, i
 				}
 				j += 6
 				if utf16.IsSurrogate(r) {
-					if j+6 <= len(data) && data[j] == '\\' && data[j+1] == 'u' {
-						if r2, ok := parseHex4(data[j+2 : j+6]); ok {
-							if dec := utf16.DecodeRune(r, r2); dec != utf8.RuneError {
-								r = dec
-								j += 6
+					if j+6 <= len(data) {
+						if data[j] == '\\' && data[j+1] == 'u' {
+							if r2, ok := parseHex4(data[j+2 : j+6]); ok {
+								if dec := utf16.DecodeRune(r, r2); dec != utf8.RuneError {
+									r = dec
+									j += 6
+								}
 							}
 						}
+					} else if validate && uEscapePrefixRef(data[j:]) {
+						return "", len(data), ErrInvalidUTF8
 					}
 					if validate && utf16.IsSurrogate(r) {
 						return "", j, ErrInvalidUTF8
@@ -465,6 +476,20 @@ func stringSlowRef(data []byte, start, j, capHint int, validate bool) (string, i
 		j++
 	}
 	return "", len(data), ErrUnterminated
+}
+
+// uEscapePrefixRef is the reference's own prefix-of-\uXXXX test (byte
+// positions spelled out, no shared helper).
+func uEscapePrefixRef(tail []byte) bool {
+	for k, c := range tail {
+		switch {
+		case k == 0 && c == '\\', k == 1 && c == 'u':
+		case k >= 2 && (c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'):
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // escapeAlphabet: fragments that stress every boundary the escRunWindow gate
@@ -628,5 +653,62 @@ func BenchmarkStringUTF8Cost(b *testing.B) {
 				_ = utf8.Valid(body)
 			}
 		})
+	}
+}
+
+// TestString_MalformedTailIsFinal pins the error-position contract at the
+// end of the data: a malformation sitting before bytes already held reports
+// a position strictly inside data; only a tail that more bytes could still
+// complete reports len(data). String and skipString agree. A `\u` escape
+// used to demand its 6 bytes before looking at the buffered hex digits, and
+// an open-tail control byte read as ErrUnterminated — both marked a final
+// malformation as truncated, which CaptureValue turns into a refill (a live
+// reader then blocked forever) and the stream reported differently.
+func TestString_MalformedTailIsFinal(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in  string
+		pos int
+		err error
+	}{
+		// A non-hex byte among the buffered \u digits: final, at the backslash.
+		{`"\u12"`, 1, ErrBadString},
+		{`"\u1"`, 1, ErrBadString},
+		{`"\u"`, 1, ErrBadString},
+		{`"ab\uZ"`, 3, ErrBadString},
+		{`"abc\u00"`, 4, ErrBadString},
+		{`"\u00ZZ"`, 1, ErrBadString},
+		// Every buffered byte is still a valid prefix: truncated.
+		{`"\u00`, 5, ErrBadString},
+		{`"\u`, 3, ErrBadString},
+		{`"\`, 2, ErrBadString},
+		// A control byte in an open tail: final, at the byte itself — never
+		// ErrUnterminated.
+		{"\"ab\x01}", 3, ErrBadString},
+		{"\"ab\x01", 3, ErrBadString},
+		{"\"ab\x01\\n", 3, ErrBadString},
+		{`"ab`, 3, ErrUnterminated},
+	}
+	for _, tc := range cases {
+		data := []byte(tc.in)
+		if _, p, err := String(data, 0, true); err != tc.err || p != tc.pos {
+			t.Errorf("String(%q) = (%d, %v), want (%d, %v)", tc.in, p, err, tc.pos, tc.err)
+		}
+		if p, err := skipString(data, 0); err != tc.err || p != tc.pos {
+			t.Errorf("skipString(%q) = (%d, %v), want (%d, %v)", tc.in, p, err, tc.pos, tc.err)
+		}
+	}
+	// The surrogate low-half probe: a tail that can still become \uXXXX is
+	// truncated; anything else is a lone surrogate at the cursor.
+	for _, tc := range []struct {
+		in  string
+		pos int
+	}{
+		{`"\ud83d\uDE`, 11}, {`"\ud83d\u`, 9}, {`"\ud83d`, 7},
+		{`"\ud83d"`, 7}, {`"\ud83d\n"`, 7}, {`"\ud83dx"`, 7},
+	} {
+		if _, p, err := String([]byte(tc.in), 0, true); err != ErrInvalidUTF8 || p != tc.pos {
+			t.Errorf("String(%q) = (%d, %v), want (%d, %v)", tc.in, p, err, tc.pos, ErrInvalidUTF8)
+		}
 	}
 }

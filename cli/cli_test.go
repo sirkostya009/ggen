@@ -1821,6 +1821,113 @@ type Outer struct {
 				t.Errorf("promoted non-shadowed field lost")
 			}
 		})
+		// Promoted fields sharing a Go NAME but not a JSON name: stdlib keeps
+		// both (it addresses by index path); ggen addresses `result.A`, which
+		// is ambiguous, so it must refuse rather than silently drop the pair
+		// (the old behaviour marshalled `{"own":5}`).
+		t.Run("promoted_go_name_clash_rejected", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+//ggen:generate
+type Parent struct {
+	E1
+	E2
+	Own int `+"`"+`json:"own"`+"`"+`
+}
+
+type E1 struct {
+	A int `+"`"+`json:"a1"`+"`"+`
+}
+
+type E2 struct {
+	A int `+"`"+`json:"a2"`+"`"+`
+}
+`)
+			out, err := runCLI(t, bin, dir, "msg.go")
+			if err == nil {
+				t.Fatalf("expected rejection, got success:\n%s", out)
+			}
+			if !strings.Contains(out, "share Go name A") {
+				t.Errorf("diagnostic missing:\n%s", out)
+			}
+		})
+		// Same clash between an own field and a promoted one: the own field
+		// wins the selector in Go, but stdlib would still emit both keys.
+		t.Run("own_vs_promoted_go_name_clash_rejected", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+type Base struct {
+	A int `+"`"+`json:"base_a"`+"`"+`
+}
+
+//ggen:generate
+type Outer struct {
+	Base
+	A int `+"`"+`json:"a"`+"`"+`
+}
+`)
+			out, err := runCLI(t, bin, dir, "msg.go")
+			if err == nil {
+				t.Fatalf("expected rejection, got success:\n%s", out)
+			}
+			if !strings.Contains(out, "share Go name A") {
+				t.Errorf("diagnostic missing:\n%s", out)
+			}
+		})
+		// Two catch-all maps in one struct: jsonv2 refuses, and the emitters
+		// only ever fed the first one (the second was a silent decode no-op
+		// while marshal spliced both).
+		t.Run("two_embed_maps_rejected", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+//ggen:generate
+type TwoOwn struct {
+	A     int            `+"`"+`json:"a"`+"`"+`
+	Extra map[string]any `+"`"+`json:",embed"`+"`"+`
+	More  map[string]any `+"`"+`json:",embed"`+"`"+`
+}
+`)
+			out, err := runCLI(t, bin, dir, "msg.go")
+			if err == nil {
+				t.Fatalf("expected rejection, got success:\n%s", out)
+			}
+			if !strings.Contains(out, "cannot both be the json:\",embed\" catch-all map") {
+				t.Errorf("diagnostic missing:\n%s", out)
+			}
+		})
+		// An own catch-all dominates a promoted one (jsonv2's rule); the
+		// emitters must see exactly the own field on both paths.
+		t.Run("embed_own_dominates_promoted", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+type Inner struct {
+	Extra map[string]any `+"`"+`json:",embed"`+"`"+`
+}
+
+//ggen:generate
+type Promoted struct {
+	Inner
+	A    int            `+"`"+`json:"a"`+"`"+`
+	More map[string]any `+"`"+`json:",embed"`+"`"+`
+}
+`)
+			out, err := runCLI(t, bin, dir, "msg.go")
+			if err != nil {
+				t.Fatalf("ggen failed: %v\n%s", err, out)
+			}
+			gen := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
+			if !strings.Contains(gen, "result.More[") || strings.Contains(gen, "result.Extra[") {
+				t.Errorf("own catch-all must dominate the promoted one:\n%s", gen)
+			}
+		})
 		// Two of the parent's OWN fields sharing a JSON name is a hard error.
 		t.Run("own_duplicate_tags_rejected", func(t *testing.T) {
 			t.Parallel()
@@ -1868,6 +1975,52 @@ type Msg struct {
 				t.Fatalf("expected rejection, got success:\n%s", out)
 			}
 			if !strings.Contains(out, "container inputs are not supported") {
+				t.Errorf("diagnostic missing:\n%s", out)
+			}
+		})
+		// A pointer converter input claims null as well as its pointee's
+		// shape, so it cannot share a decode stage with nullzero.
+		t.Run("converter_pointer_input_null_clash", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeMod(t, dir)
+			writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+func FromPtr(p *int) string { return "" }
+
+//ggen:generate
+type Msg struct {
+	S string `+"`"+`json:"s" pipe:"nullzero / @FromPtr"`+"`"+`
+}
+`)
+			out, err := runCLI(t, bin, dir, "msg.go")
+			if err == nil {
+				t.Fatalf("expected rejection, got success:\n%s", out)
+			}
+			if !strings.Contains(out, "both claim the same JSON shape") {
+				t.Errorf("diagnostic missing:\n%s", out)
+			}
+		})
+		// The go/types field extractor (struct aliases) rejects the same
+		// unnameable type literals the AST one does.
+		t.Run("struct_alias_anonymous_field", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeMod(t, dir)
+			writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+type Inner struct {
+	S struct{ A int } `+"`"+`json:"s"`+"`"+`
+}
+
+//ggen:generate
+type Al Inner
+`)
+			out, err := runCLI(t, bin, dir, "msg.go")
+			if err == nil {
+				t.Fatalf("expected rejection, got success:\n%s", out)
+			}
+			if !strings.Contains(out, "anonymous struct field types are not supported") {
 				t.Errorf("diagnostic missing:\n%s", out)
 			}
 		})
@@ -2071,6 +2224,34 @@ type Msg struct {
 			{"string_tag_on_string", "S string", `json:"s,string"`, "only valid on numeric fields"},
 			{"inner_depth2_mismatch", "M [][]int", `json:"m" pipe:"inner:(inner:(trim))"`, "is inapplicable to int"},
 			{"inner_deeper_than_type", "X []int", `json:"x" pipe:"inner:(inner:(gte=0))"`, "no element at that depth"},
+
+			// ----- round-10 parse-layer holes -----
+			// a byte slice/array decodes as one base64 string: no element loop
+			// for an inner: step to run in (only [N]byte + format:array keeps one)
+			{"inner_on_bytes", "B []byte", `json:"b" pipe:"inner:trim"`, "`inner:` tag prefix is only valid on slice/array/map fields"},
+			{"inner_on_byte_array", "B [3]byte", `json:"b" pipe:"inner:gt=1"`, "`inner:` tag prefix is only valid on slice/array/map fields"},
+			// presence is the field's, never an element's or a key's: bare was
+			// a silent no-op, grouped silently re-scoped to the OUTER key
+			{"inner_required", "X []string", `json:"x" pipe:"inner:required"`, "not valid under `inner:`/`keys:`"},
+			{"inner_group_required", "X []string", `json:"x" pipe:"inner:(required minlen=1)"`, "not valid under `inner:`/`keys:`"},
+			{"keys_required", "M map[string]int", `json:"m" pipe:"keys:required keys:optional"`, "not valid under `inner:`/`keys:`"},
+			// a make() capacity the runtime cannot honour panics at decode
+			{"hint_huge", "X []int", `json:"x" hint:"9223372036854775807"`, "prealloc ceiling"},
+			{"len_huge_on_slice", "X []int", `json:"x" pipe:"len=4294967296"`, "prealloc ceiling"},
+			// json tag options ggen cannot honour or jsonv2 itself rejects
+			{"json_case_ignore", "S string", `json:"s,case:ignore"`, "`case:` is not supported"},
+			{"json_omitempty_mutant", "S string", `json:"s,omitEmpty"`, "invalid appearance of `omitEmpty` tag option; specify `omitempty` instead"},
+			{"json_option_whitespace", "S string", `json:"s, omitempty"`, "padded with whitespace"},
+			// the catch-all emitters make/index/range the field itself
+			{"embed_on_pointer_map", "Extra *map[string]any", `json:",embed"`, "not a pointer to one"},
+			// field types with no generated shape: an anonymous struct has no
+			// spelling in the output at all, and json.Marshal rejects a func
+			// or a channel for every value, so AppendJSON could never succeed
+			{"anon_struct_field", "S struct{ A int }", `json:"s"`, "anonymous struct field types are not supported"},
+			{"anon_struct_elem", "L []struct{ Q int }", `json:"l"`, "anonymous struct field types are not supported"},
+			{"anon_struct_map_value", "M map[string]*struct{ Q int }", `json:"m"`, "anonymous struct field types are not supported"},
+			{"func_field", "F func()", `json:"f"`, "func field types are not supported"},
+			{"chan_field", "C chan int", `json:"c"`, "chan field types are not supported"},
 		}
 
 		for _, tc := range cases {
@@ -2094,6 +2275,124 @@ type Msg struct {
 						tc.name, tc.wantDiag, out)
 				}
 			})
+		}
+	})
+}
+
+// `omitempty` on a struct field is refused at generate time: ggen emits a
+// struct as `{}`, so the option could only ever be a silent no-op there.
+// Pointers to a struct, `omitzero`, and every kind carrying a wire shape of
+// its own keep working.
+func TestOmitEmptyOnStructField(t *testing.T) {
+	t.Parallel()
+	bin := buildCLI(t)
+	base := t.TempDir()
+	writeGoMod(t, base, "omitempties")
+	writeFixture(t, filepath.Join(base, "ext", "ext.go"), `package ext
+
+type Plain struct {
+	A int `+"`"+`json:"a,omitempty"`+"`"+`
+}
+`)
+
+	t.Run("rejected", func(t *testing.T) {
+		t.Parallel()
+		writeFixture(t, filepath.Join(base, "reject", "msg.go"), `package reject
+
+import "omitempties/ext"
+
+type Nested struct {
+	A string `+"`"+`json:"a,omitempty"`+"`"+`
+}
+
+type Named Nested
+
+//ggen:generate
+type Msg struct {
+	Inner Nested    `+"`"+`json:"inner,omitempty"`+"`"+`
+	Alias Named     `+"`"+`json:"alias,omitempty"`+"`"+`
+	Cross ext.Plain `+"`"+`json:"cross,omitempty"`+"`"+`
+}
+`)
+		out, err := runCLI(t, bin, base, "./reject")
+		if err == nil {
+			t.Fatalf("expected rejection, got success:\n%s", out)
+		}
+		for _, want := range []string{
+			"Msg.Inner: `omitempty` is not applicable to a struct field (got Nested)",
+			"Msg.Alias: `omitempty` is not applicable to a struct field (got Named)",
+			"Msg.Cross: `omitempty` is not applicable to a struct field (got ext.Plain)",
+		} {
+			if !strings.Contains(out, want) {
+				t.Errorf("diagnostic missing %q:\n%s", want, out)
+			}
+		}
+		mustNotHaveFile(t, filepath.Join(base, "reject", "reject_ggen.go"))
+	})
+
+	t.Run("accepted", func(t *testing.T) {
+		t.Parallel()
+		writeFixture(t, filepath.Join(base, "accept", "msg.go"), `package accept
+
+import (
+	"database/sql"
+	"encoding/json"
+	"math/big"
+	"net"
+	"net/netip"
+	"net/url"
+	"time"
+
+	"omitempties/ext"
+)
+
+type Nested struct {
+	A string `+"`"+`json:"a,omitempty"`+"`"+`
+}
+
+//ggen:generate
+type Msg struct {
+	P   *Nested         `+"`"+`json:"p,omitempty"`+"`"+`
+	PP  **Nested        `+"`"+`json:"pp,omitempty"`+"`"+`
+	Cp  *ext.Plain      `+"`"+`json:"cp,omitempty"`+"`"+`
+	Z   Nested          `+"`"+`json:"z,omitzero"`+"`"+`
+	T   time.Time       `+"`"+`json:"t,omitempty"`+"`"+`
+	D   time.Duration   `+"`"+`json:"d,omitempty"`+"`"+`
+	U   url.URL         `+"`"+`json:"u,omitempty"`+"`"+`
+	Ad  netip.Addr      `+"`"+`json:"ad,omitempty"`+"`"+`
+	Pf  netip.Prefix    `+"`"+`json:"pf,omitempty"`+"`"+`
+	IP  net.IP          `+"`"+`json:"ip,omitempty"`+"`"+`
+	NS  sql.NullString  `+"`"+`json:"ns,omitempty"`+"`"+`
+	NG  sql.Null[int]   `+"`"+`json:"ng,omitempty"`+"`"+`
+	BI  big.Int         `+"`"+`json:"bi,omitempty"`+"`"+`
+	BF  big.Float       `+"`"+`json:"bf,omitempty"`+"`"+`
+	BR  big.Rat         `+"`"+`json:"br,omitempty"`+"`"+`
+	Raw json.RawMessage `+"`"+`json:"raw,omitempty"`+"`"+`
+	Any any             `+"`"+`json:"any,omitempty"`+"`"+`
+	S   []int           `+"`"+`json:"s,omitempty"`+"`"+`
+	M   map[string]int  `+"`"+`json:"m,omitempty"`+"`"+`
+	B   []byte          `+"`"+`json:"b,omitempty"`+"`"+`
+	Arr [3]int          `+"`"+`json:"arr,omitempty"`+"`"+`
+	Str string          `+"`"+`json:"str,omitempty"`+"`"+`
+	N   int             `+"`"+`json:"n,omitempty"`+"`"+`
+}
+`)
+		out, err := runCLI(t, bin, base, "./accept")
+		if err != nil {
+			t.Fatalf("ggen ./accept: %v\n%s", err, out)
+		}
+		body := mustReadOutput(t, filepath.Join(base, "accept", "accept_ggen.go"))
+		// A pointer to a struct omits on nil and nothing else.
+		for _, want := range []string{
+			"if s.P != nil {", "if s.PP != nil {", "if s.Cp != nil {",
+			"if s.Z != (Nested{}) {",
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("guard missing %q:\n%s", want, body)
+			}
+		}
+		if strings.Contains(body, "if s.P != nil &&") {
+			t.Errorf("pointer-to-struct guard still peels into the pointee:\n%s", body)
 		}
 	})
 }
@@ -2186,5 +2485,270 @@ type Holder struct {
 		if !strings.Contains(body, want) {
 			t.Errorf("missing %s in:\n%s", want, body)
 		}
+	}
+}
+
+// fixtureGoMod writes a go.mod that resolves the ggen runtime to this
+// checkout, so a fixture's generated output can be compiled.
+func fixtureGoMod(t *testing.T, dir, module string) {
+	t.Helper()
+	root, err := filepath.Abs("..")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, filepath.Join(dir, "go.mod"), "module "+module+"\n\ngo 1.27\n\nrequire github.com/sirkostya009/ggen v0.0.0\n\nreplace github.com/sirkostya009/ggen => "+root+"\n")
+}
+
+// goBuild compiles the fixture module in dir, failing with the compiler output.
+func goBuild(t *testing.T, dir string) {
+	t.Helper()
+	cmd := exec.Command("go", "build", "./...")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod", "GOTOOLCHAIN=local")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("generated code does not compile:\n%s", out)
+	}
+}
+
+// TestGeneratedCompiles builds the output for shapes the generator accepted
+// but whose output did not compile — one package per shape, one `go build`.
+func TestGeneratedCompiles(t *testing.T) {
+	t.Parallel()
+	bin := buildCLI(t)
+	base := t.TempDir()
+	fixtureGoMod(t, base, "fixture")
+	// A field name ending in a package qualifier (`Uptime` → `time.`) must
+	// not import that package: the scan matches qualifiers, not substrings.
+	writeFixture(t, filepath.Join(base, "uptime", "uptime.go"), `package uptime
+
+//ggen:generate
+type Status struct {
+	Ok bool `+"`json:\"ok\"`"+`
+}
+
+//ggen:generate
+type Host struct {
+	Uptime   Status `+"`json:\"uptime\"`"+`
+	Datetime Status `+"`json:\"datetime\"`"+`
+}
+`)
+	// A user package declared under a name an emitter literal claims binds
+	// under an alias, so its types and the stdlib fallback coexist.
+	writeFixture(t, filepath.Join(base, "jsonpkg", "json", "json.go"), `package json
+
+type Val string
+
+type Obj struct {
+	N int `+"`json:\"n\"`"+`
+}
+`)
+	writeFixture(t, filepath.Join(base, "jsonpkg", "doc.go"), `package jsonpkg
+
+import "fixture/jsonpkg/json"
+
+//ggen:generate
+type Doc struct {
+	Vals []json.Val `+"`json:\"vals\"`"+`
+	One  json.Obj   `+"`json:\"one\"`"+`
+}
+
+//ggen:generate
+type Local json.Obj
+`)
+	// [0]T: the unrolled first element indexed a zero-length array, the map
+	// value emit never named the range var, and a nested `[0][N]T` element
+	// store is not even compilable (gc gives up on the dead index).
+	writeFixture(t, filepath.Join(base, "zeroarr", "zeroarr.go"), `package zeroarr
+
+//ggen:generate
+type Empty struct {
+	Arr    [0]int               `+"`json:\"arr\"`"+`
+	Named  [0]string            `+"`json:\"named,omitempty\"`"+`
+	Nested [][0]int             `+"`json:\"nested\"`"+`
+	Fixed  [2][0]int            `+"`json:\"fixed\"`"+`
+	Mapped map[string][0]int    `+"`json:\"mapped\"`"+`
+	Deep   map[string][0][3]int `+"`json:\"deep\"`"+`
+	Ptrs   map[string]*[0]int   `+"`json:\"ptrs\"`"+`
+}
+`)
+	// [N]byte + omitzero compared an array against nil; a POINTER to one
+	// re-read its leaf kind off the type string and emitted a tuple of
+	// strings (and an unused base64 import).
+	writeFixture(t, filepath.Join(base, "bytearr", "bytearr.go"), `package bytearr
+
+//ggen:generate
+type ID struct {
+	Raw  [16]byte  `+"`json:\"raw,omitzero\"`"+`
+	Opt  [4]byte   `+"`json:\"opt,omitempty\"`"+`
+	Ptr  *[8]byte  `+"`json:\"ptr\"`"+`
+	Deep **[4]byte `+"`json:\"deep\"`"+`
+	Hex  *[4]byte  `+"`json:\"hex,format:hex\"`"+`
+	Tup  *[3]byte  `+"`json:\"tup,format:array\"`"+`
+}
+`)
+	if out, err := runCLI(t, bin, base, "./..."); err != nil {
+		t.Fatalf("ggen ./...: %v\n%s", err, out)
+	}
+	if body := mustReadOutput(t, filepath.Join(base, "jsonpkg", "jsonpkg_ggen.go")); !strings.Contains(body, `json_ "fixture/jsonpkg/json"`) || !strings.Contains(body, "[]json_.Val") {
+		t.Errorf("user package `json` not aliased:\n%s", body)
+	}
+	goBuild(t, base)
+}
+
+// TestOneofScope_TestFileDistinct pins that the oneof frozen slices of a
+// package's `_ggen.go` and `_ggen_test.go` never share a name — both files
+// belong to one package, and each output restarts the counter.
+func TestOneofScope_TestFileDistinct(t *testing.T) {
+	t.Parallel()
+	bin := buildCLI(t)
+	const prod = "package p\n\n//ggen:generate\ntype Prod struct {\n\tLevel string `json:\"level\" pipe:\"oneof=low|high\"`\n}\n"
+	const fixture = "package p\n\n//ggen:generate\ntype Fixture struct {\n\tMode string `json:\"mode\" pipe:\"oneof=a|b\"`\n}\n"
+	oneofRe := regexp.MustCompile(`var (ggenOneof_\w+) =`)
+	for _, mode := range []struct {
+		name string
+		runs [][]string
+		outs []string
+	}{
+		{"package", [][]string{{"."}}, []string{"p_ggen.go", "p_ggen_test.go"}},
+		{"single_file", [][]string{{"a.go"}, {"a_test.go"}}, []string{"a_ggen.go", "a_ggen_test.go"}},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			t.Parallel()
+			dir := filepath.Join(t.TempDir(), "p")
+			writeGoMod(t, dir, "p")
+			writeFixture(t, filepath.Join(dir, "a.go"), prod)
+			writeFixture(t, filepath.Join(dir, "a_test.go"), fixture)
+			for _, args := range mode.runs {
+				if out, err := runCLI(t, bin, dir, args...); err != nil {
+					t.Fatalf("ggen %v: %v\n%s", args, err, out)
+				}
+			}
+			declared := map[string]string{}
+			for _, out := range mode.outs {
+				for _, m := range oneofRe.FindAllStringSubmatch(mustReadOutput(t, filepath.Join(dir, out)), -1) {
+					if prev, dup := declared[m[1]]; dup {
+						t.Errorf("%s declared in both %s and %s", m[1], prev, out)
+					}
+					declared[m[1]] = out
+				}
+			}
+			if len(declared) != 2 {
+				t.Errorf("want one oneof slice per file, got %v", declared)
+			}
+		})
+	}
+}
+
+// A failed render leaves the previous output untouched: the file is replaced
+// only once the whole thing has formatted.
+func TestWriteGenerated_KeepsPreviousOnFailure(t *testing.T) {
+	genGlobalsMu.Lock()
+	defer genGlobalsMu.Unlock()
+	reset := func() {
+		generatedTypes, generatedFields, namedKinds, multiErrTypes, cyclicTypes = nil, nil, nil, nil, nil
+	}
+	reset()
+	defer reset()
+	prevLog := cliLog
+	cliLog = NewLogger(LevelQuiet)
+	defer func() { cliLog = prevLog }()
+
+	out := filepath.Join(t.TempDir(), "p_ggen.go")
+	const prev = "package p\n\n// previous good output\n"
+	writeFixture(t, out, prev)
+	bad := []StructInfo{{Name: "V", Fields: []FieldInfo{{
+		GoName: "S", JSONName: "s", GoType: "[]bad type", Kind: KindSlice, ElemType: "bad type", ElemKind: KindStruct,
+	}}}}
+	if err := writeGenerated(out, "p", bad); err == nil {
+		t.Fatal("expected the render to fail")
+	}
+	if got := mustReadOutput(t, out); got != prev {
+		t.Fatalf("failed run replaced the previous output with %d bytes:\n%s", len(got), got)
+	}
+	reset()
+	good := []StructInfo{{Name: "V", Fields: []FieldInfo{{GoName: "S", JSONName: "s", GoType: "string", Kind: KindString}}}}
+	if err := writeGenerated(out, "p", good); err != nil {
+		t.Fatal(err)
+	}
+	if got := mustReadOutput(t, out); !strings.Contains(got, "func (recv V) DecodeFrom(") {
+		t.Errorf("successful run did not replace the output:\n%s", got)
+	}
+}
+
+// Explicit targets are one post-order walk: `ggen ./b ./a` (b imports a)
+// generates a before b, so b's a.T fields route to a.T's own methods instead
+// of the encoding/json fallback — the same output as `./a ./b` and `./...`.
+func TestTargetOrder_CrossPackageRouting(t *testing.T) {
+	t.Parallel()
+	bin := buildCLI(t)
+	base := t.TempDir()
+	fixtureGoMod(t, base, "ord")
+	writeFixture(t, filepath.Join(base, "a", "a.go"), "package a\n\n//ggen:generate\ntype T struct {\n\tX int `json:\"x\"`\n}\n")
+	writeFixture(t, filepath.Join(base, "b", "b.go"), "package b\n\nimport \"ord/a\"\n\n//ggen:generate\ntype U struct {\n\tT  a.T   `json:\"t\"`\n\tTs []a.T `json:\"ts\"`\n}\n")
+	gen := func(args ...string) string {
+		t.Helper()
+		_ = os.Remove(filepath.Join(base, "a", "a_ggen.go"))
+		_ = os.Remove(filepath.Join(base, "b", "b_ggen.go"))
+		if out, err := runCLI(t, bin, base, args...); err != nil {
+			t.Fatalf("ggen %v: %v\n%s", args, err, out)
+		}
+		return mustReadOutput(t, filepath.Join(base, "b", "b_ggen.go"))
+	}
+	ref := gen("./...")
+	if strings.Contains(ref, "json.Unmarshal(") {
+		t.Fatalf("./... routed a.T through encoding/json:\n%s", ref)
+	}
+	for _, args := range [][]string{{"./b", "./a"}, {"./a", "./b"}, {"./b/...", "./a/..."}} {
+		if got := gen(args...); got != ref {
+			t.Errorf("ggen %v differs from ./... (%d json.Unmarshal/json.Marshal sites)", args,
+				strings.Count(got, "json.Unmarshal(")+strings.Count(got, "json.Marshal("))
+		}
+	}
+}
+
+// Numeric bound errors carry Limit/Of/Want as `any`, so the emitted literal
+// has to spell the field's kind: a bare untyped constant above MaxInt64
+// defaults to int (overflow) and a float64 field would round the report.
+func TestNumericBoundLiteralsCarryFieldKind(t *testing.T) {
+	gen := func(goType string, kind TypeKind, rules ...ValidationRule) string {
+		t.Helper()
+		// generate() seeds the globals only when nil — reset between calls.
+		generatedTypes, namedKinds, cyclicTypes = nil, nil, nil
+		var steps []Step
+		for _, r := range rules {
+			steps = append(steps, Step{V: r})
+		}
+		code, err := generate("p", []StructInfo{{
+			Name:   "V",
+			Fields: []FieldInfo{{GoName: "N", JSONName: "n", GoType: goType, Kind: kind, Pipe: steps}},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(code)
+	}
+	const big = "9223372036854775809"
+	u := gen("uint64", KindUint64,
+		ValidationRule{Name: "gt", Value: big},
+		ValidationRule{Name: "gte", Value: big},
+		ValidationRule{Name: "lt", Value: big},
+		ValidationRule{Name: "lte", Value: big},
+		ValidationRule{Name: "multiple", Value: big},
+		ValidationRule{Name: "eq", Value: big},
+		ValidationRule{Name: "neq", Value: big},
+	)
+	for _, want := range []string{
+		"ggen.GTError{", "ggen.GTEError{", "ggen.LTError{", "ggen.LTEError{",
+		"Limit: uint64(" + big + ")",
+		"Of: uint64(" + big + ")",
+		"Want: uint64(" + big + ")",
+	} {
+		if !strings.Contains(u, want) {
+			t.Errorf("missing %q:\n%s", want, u)
+		}
+	}
+	f := gen("float64", KindFloat64, ValidationRule{Name: "lte", Value: "1.5"})
+	if !strings.Contains(f, "Limit: float64(1.5)") {
+		t.Errorf("float bound lost its kind:\n%s", f)
 	}
 }

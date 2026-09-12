@@ -177,18 +177,22 @@ func structuralIndexHighAVX512(b []byte) (int, bool) {
 }
 
 // stringViewAVX is (*Stream).stringView with the fused AVX locate. The
-// refill/compaction bookkeeping mirrors the scalar loop exactly; only the
-// window scan differs. Kept as three near-identical per-tier copies rather
-// than a func-pointer core — the tier callee must be a direct call.
+// refill/compaction bookkeeping and the error-position writes mirror the
+// scalar loop exactly; only the window scan differs. Kept as three
+// near-identical per-tier copies rather than a func-pointer core — the tier
+// callee must be a direct call.
 func (s *Stream) stringViewAVX(validate bool) (v string, owned bool, err error) {
 	i := s.Pos
 	if i >= len(s.buf) {
-		if err := s.ReadMore(i); err != nil {
+		err := s.ReadMore(i)
+		i = 0
+		if err != nil {
+			s.Pos = i
 			return "", false, NotEOF(err, ErrExpectString)
 		}
-		i = 0
 	}
 	if s.buf[i] != '"' {
+		s.Pos = i
 		return "", false, ErrExpectString
 	}
 	start := i + 1
@@ -203,6 +207,7 @@ func (s *Stream) stringViewAVX(validate bool) (v string, owned bool, err error) 
 			j -= start
 			start = 0
 			if err != nil {
+				s.Pos = len(s.buf)
 				return "", false, NotEOF(err, ErrUnterminated)
 			}
 			continue
@@ -213,6 +218,7 @@ func (s *Stream) stringViewAVX(validate bool) (v string, owned bool, err error) 
 			// Full-span check — a rune may straddle the window cursor j, so
 			// per-window validation would false-error (see scalar stringView).
 			if validate && sawHigh && !validUTF8x16(s.buf[start:end]) {
+				s.Pos = start
 				return "", false, ErrInvalidUTF8
 			}
 			s.Pos = end + 1
@@ -221,6 +227,9 @@ func (s *Stream) stringViewAVX(validate bool) (v string, owned bool, err error) 
 			v, err := s.stringSlow(start, j+k, validate)
 			return v, true, err
 		default:
+			// The structural locate landed on the control byte itself —
+			// where the scalar stringView reports it.
+			s.Pos = j + k
 			return "", false, ErrBadString
 		}
 	}
@@ -230,12 +239,15 @@ func (s *Stream) stringViewAVX(validate bool) (v string, owned bool, err error) 
 func (s *Stream) stringViewAVX2(validate bool) (v string, owned bool, err error) {
 	i := s.Pos
 	if i >= len(s.buf) {
-		if err := s.ReadMore(i); err != nil {
+		err := s.ReadMore(i)
+		i = 0
+		if err != nil {
+			s.Pos = i
 			return "", false, NotEOF(err, ErrExpectString)
 		}
-		i = 0
 	}
 	if s.buf[i] != '"' {
+		s.Pos = i
 		return "", false, ErrExpectString
 	}
 	start := i + 1
@@ -250,6 +262,7 @@ func (s *Stream) stringViewAVX2(validate bool) (v string, owned bool, err error)
 			j -= start
 			start = 0
 			if err != nil {
+				s.Pos = len(s.buf)
 				return "", false, NotEOF(err, ErrUnterminated)
 			}
 			continue
@@ -258,6 +271,7 @@ func (s *Stream) stringViewAVX2(validate bool) (v string, owned bool, err error)
 		case '"':
 			end := j + k
 			if validate && sawHigh && !validUTF8x16(s.buf[start:end]) {
+				s.Pos = start
 				return "", false, ErrInvalidUTF8
 			}
 			s.Pos = end + 1
@@ -266,6 +280,9 @@ func (s *Stream) stringViewAVX2(validate bool) (v string, owned bool, err error)
 			v, err := s.stringSlow(start, j+k, validate)
 			return v, true, err
 		default:
+			// The structural locate landed on the control byte itself —
+			// where the scalar stringView reports it.
+			s.Pos = j + k
 			return "", false, ErrBadString
 		}
 	}
@@ -275,12 +292,15 @@ func (s *Stream) stringViewAVX2(validate bool) (v string, owned bool, err error)
 func (s *Stream) stringViewAVX512(validate bool) (v string, owned bool, err error) {
 	i := s.Pos
 	if i >= len(s.buf) {
-		if err := s.ReadMore(i); err != nil {
+		err := s.ReadMore(i)
+		i = 0
+		if err != nil {
+			s.Pos = i
 			return "", false, NotEOF(err, ErrExpectString)
 		}
-		i = 0
 	}
 	if s.buf[i] != '"' {
+		s.Pos = i
 		return "", false, ErrExpectString
 	}
 	start := i + 1
@@ -295,6 +315,7 @@ func (s *Stream) stringViewAVX512(validate bool) (v string, owned bool, err erro
 			j -= start
 			start = 0
 			if err != nil {
+				s.Pos = len(s.buf)
 				return "", false, NotEOF(err, ErrUnterminated)
 			}
 			continue
@@ -314,6 +335,7 @@ func (s *Stream) stringViewAVX512(validate bool) (v string, owned bool, err erro
 					ok = validUTF8x64(span)
 				}
 				if !ok {
+					s.Pos = start
 					return "", false, ErrInvalidUTF8
 				}
 			}
@@ -323,6 +345,9 @@ func (s *Stream) stringViewAVX512(validate bool) (v string, owned bool, err erro
 			v, err := s.stringSlow(start, j+k, validate)
 			return v, true, err
 		default:
+			// The structural locate landed on the control byte itself —
+			// where the scalar stringView reports it.
+			s.Pos = j + k
 			return "", false, ErrBadString
 		}
 	}

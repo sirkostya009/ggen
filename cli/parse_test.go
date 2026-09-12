@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
 	"strings"
@@ -776,6 +778,160 @@ type Inner struct{ N int ` + "`json:\"n\"`" + ` }
 		}
 		if !found {
 			t.Fatalf("map-valued Inner not queued: %+v", structs)
+		}
+	})
+}
+
+// A file's name constrains it the way go/build reads it; `_ggen` in the
+// output name masks that rule, so the bucket key has to carry it.
+func TestFilenameConstraint(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		src, file, want string
+	}{
+		{"package p\n", "os_linux.go", "linux"},
+		{"package p\n", "cpu_amd64.go", "amd64"},
+		{"package p\n", "os_linux_amd64.go", "linux && amd64"},
+		{"package p\n", "os_linux_test.go", "linux"},
+		{"package p\n", "os_linux_amd64_test.go", "linux && amd64"},
+		{"package p\n", "linux.go", ""},
+		{"package p\n", "amd64.go", ""},
+		{"package p\n", "not_an_os.go", ""},
+		{"package p\n", "p_linux_ggen.go", ""},
+		{"//go:build cgo\n\npackage p\n", "os_darwin.go", "cgo && darwin"},
+		{"// +build foo\n\npackage p\n", "cpu_arm64.go", "foo && arm64"},
+		{"package p\n\nimport \"C\"\n", "native.go", "cgo"},
+		{"package p\n\nimport \"C\"\n", "native_linux.go", "linux && cgo"},
+	}
+	for _, tc := range cases {
+		af, err := parser.ParseFile(token.NewFileSet(), tc.file, tc.src, parser.ParseComments|parser.ImportsOnly)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got := fileBuildConstraint(af, filepath.Join("some", "dir", tc.file)); got != tc.want {
+			t.Errorf("%s: got %q, want %q", tc.file, got, tc.want)
+		}
+	}
+}
+
+func TestParseFile_round10(t *testing.T) {
+	embedFields := func(t *testing.T, structs []StructInfo, name string) []FieldInfo {
+		t.Helper()
+		for _, st := range structs {
+			if st.Name != name {
+				continue
+			}
+			var out []FieldInfo
+			for _, f := range st.Fields {
+				if f.Embed {
+					out = append(out, f)
+				}
+			}
+			return out
+		}
+		t.Fatalf("%s not returned", name)
+		return nil
+	}
+
+	t.Run("embed_own_dominates_promoted", func(t *testing.T) {
+		// jsonv2 keeps the shallowest catch-all; the emitters read exactly
+		// one, so the promoted one must be gone.
+		src := `package test
+type Inner struct{ Extra map[string]any ` + "`json:\",embed\"`" + ` }
+//ggen:generate
+type Outer struct {
+	Inner
+	More map[string]any ` + "`json:\",embed\"`" + `
+}
+`
+		structs, _, _, _, _, _, err := parseFile(writeGoFile(t, src), []string{"Outer"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fs := embedFields(t, structs, "Outer"); len(fs) != 1 || fs[0].GoName != "More" {
+			t.Fatalf("want exactly the own catch-all More, got %+v", fs)
+		}
+	})
+
+	t.Run("embed_promoted_tie_drops_both", func(t *testing.T) {
+		src := `package test
+//ggen:generate
+type Top struct {
+	A
+	B
+	N int ` + "`json:\"n\"`" + `
+}
+type A struct{ Extra map[string]any ` + "`json:\",embed\"`" + ` }
+type B struct{ More map[string]any ` + "`json:\",embed\"`" + ` }
+`
+		structs, _, _, _, _, _, err := parseFile(writeGoFile(t, src), []string{"Top"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fs := embedFields(t, structs, "Top"); len(fs) != 0 {
+			t.Fatalf("a same-depth promoted tie keeps no catch-all, got %+v", fs)
+		}
+	})
+
+	t.Run("embed_two_own_rejected", func(t *testing.T) {
+		src := `package test
+//ggen:generate
+type Two struct {
+	Extra map[string]any ` + "`json:\",embed\"`" + `
+	More  map[string]any ` + "`json:\",embed\"`" + `
+}
+`
+		_, _, _, _, _, _, err := parseFile(writeGoFile(t, src), []string{"Two"})
+		if err == nil || !strings.Contains(err.Error(), "cannot both be the json:\",embed\" catch-all map") {
+			t.Fatalf("want two-catch-all diagnostic, got %v", err)
+		}
+	})
+
+	t.Run("promoted_go_name_clash_rejected", func(t *testing.T) {
+		// Distinct JSON names, one Go name: stdlib keeps both, ggen cannot
+		// address them and must say so instead of dropping the pair.
+		src := `package test
+//ggen:generate
+type Parent struct {
+	E1
+	E2
+}
+type E1 struct{ A int ` + "`json:\"a1\"`" + ` }
+type E2 struct{ A int ` + "`json:\"a2\"`" + ` }
+`
+		_, _, _, _, _, _, err := parseFile(writeGoFile(t, src), []string{"Parent"})
+		if err == nil || !strings.Contains(err.Error(), "share Go name A") {
+			t.Fatalf("want Go-name clash diagnostic, got %v", err)
+		}
+	})
+
+	t.Run("shapeless_field_types_rejected", func(t *testing.T) {
+		for _, decl := range []string{
+			"S struct{ X int }",
+			"P *struct{ X int }",
+			"L []struct{ X int }",
+			"M map[string]struct{ X int }",
+			"F func()",
+			"C chan int",
+		} {
+			src := "package test\n//ggen:generate\ntype A struct{ " + decl + " `json:\"v\"` }\n"
+			_, _, _, _, _, _, err := parseFile(writeGoFile(t, src), []string{"A"})
+			if err == nil || !strings.Contains(err.Error(), "field types are not supported") {
+				t.Errorf("%s: want unsupported-type diagnostic, got %v", decl, err)
+			}
+		}
+		// `json:"-"` drops the field before its type is judged.
+		src := "package test\n//ggen:generate\ntype A struct{ V int `json:\"v\"`; F func() `json:\"-\"` }\n"
+		if _, _, _, _, _, _, err := parseFile(writeGoFile(t, src), []string{"A"}); err != nil {
+			t.Errorf("ignored func field: %v", err)
+		}
+		// Interfaces keep their shape: `interface{}` is `any`, and one with
+		// methods carries whatever its dynamic value marshals as.
+		for _, decl := range []string{"V interface{}", "V interface{ M() }"} {
+			src := "package test\n//ggen:generate\ntype A struct{ " + decl + " `json:\"v\"` }\n"
+			if _, _, _, _, _, _, err := parseFile(writeGoFile(t, src), []string{"A"}); err != nil {
+				t.Errorf("%s field: %v", decl, err)
+			}
 		}
 	})
 }

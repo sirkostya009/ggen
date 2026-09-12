@@ -56,11 +56,12 @@ type Variant struct {
 	PkgImport string
 	PkgName   string
 	FuncName  string
-	Fallible  bool   // func(W)(T,error) / func(W)(T,bool) — vs infallible func(W)T
-	BoolForm  bool   // func(W)(T,bool) — message-capable failure
-	Msg       string // inline `:message` (bool-form only)
-	InType    string // Go type literal of the converter input W (the scanned type)
-	InKind    TypeKind
+	Fallible  bool     // func(W)(T,error) / func(W)(T,bool) — vs infallible func(W)T
+	BoolForm  bool     // func(W)(T,bool) — message-capable failure
+	Msg       string   // inline `:message` (bool-form only)
+	InType    string   // Go type literal of the converter input W (the scanned type)
+	InKind    TypeKind // kind of W with every pointer level peeled
+	InPointer bool     // W is `*T`: the scan yields nil on null, so the variant claims 'n' too
 }
 
 // ParsedPipe is the structured result of parsePipeTag, before it is stitched
@@ -218,11 +219,24 @@ func parsePipeTag(tag string) (ParsedPipe, error) {
 		return out, err
 	}
 
-	// Pass 1: lift presence markers (`required`/`optional`) from anywhere and
-	// drop them from the stream.
+	// Pass 1: lift presence markers (`required`/`optional`) out of the
+	// top-level stream. Inside an `inner:(…)`/`keys:(…)` group, or right
+	// after a bare prefix word, they stay put for parseStep to reject —
+	// presence belongs to the field's key, and an element or map key has
+	// none, so a lift from there would silently re-scope the marker to the
+	// outer field.
 	filtered := toks[:0:0]
-	for _, t := range toks {
-		if t.kind == ptWord {
+	depth := 0
+	for i, t := range toks {
+		switch t.kind {
+		case ptLParen:
+			depth++
+		case ptRParen:
+			depth--
+		case ptWord:
+			if depth != 0 || (i > 0 && isBarePrefix(toks[i-1])) {
+				break
+			}
 			switch t.text {
 			case "required":
 				if out.Presence == PresenceOptional {
@@ -275,6 +289,12 @@ func parsePipeTag(tag string) (ParsedPipe, error) {
 		return out, err
 	}
 	return out, nil
+}
+
+// isBarePrefix reports whether t is an `inner:`/`keys:` word whose step
+// follows as the next token.
+func isBarePrefix(t ptok) bool {
+	return t.kind == ptWord && (t.text == "inner:" || t.text == "keys:")
 }
 
 // leadingDecodeExtent returns how many leading tokens (including `/`
@@ -514,8 +534,13 @@ func parenText(k ptokKind) string {
 // (`@Func`, `@pkg.Func`, optional `:message`) are parked as validator-shaped
 // placeholders here; mod-vs-validator is decided later from the signature.
 func parseStep(word string) (Step, error) {
-	if word == "" {
+	switch word {
+	case "":
 		return Step{}, fmt.Errorf("empty pipe step")
+	case "required", "optional":
+		// parsePipeTag lifts every top-level presence word before the scope
+		// walk, so one reaching a step sits under `inner:`/`keys:`.
+		return Step{}, fmt.Errorf("`%s` marks the field's own presence and is not valid under `inner:`/`keys:` — an element or map key is never absent", word)
 	}
 	if strings.HasPrefix(word, "@") {
 		ref, msg := splitFuncMsg(word[1:])
@@ -583,6 +608,28 @@ func stepsFromLegacy(mods []ModRule, vals []ValidationRule) []Step {
 		steps = append(steps, Step{V: v})
 	}
 	return steps
+}
+
+// splitCustomSteps partitions an ordered step list into built-in and `@Func`
+// steps, each keeping its declared order — the pointer-field split, where
+// built-ins run on the deref'd leaf and customs on the pointer.
+func splitCustomSteps(steps []Step) (builtin, custom []Step) {
+	for _, st := range steps {
+		if stepIsCustom(st) {
+			custom = append(custom, st)
+		} else {
+			builtin = append(builtin, st)
+		}
+	}
+	return builtin, custom
+}
+
+// stepIsCustom reports whether a step calls a user `@Func`.
+func stepIsCustom(st Step) bool {
+	if st.IsMod {
+		return st.M.Custom
+	}
+	return st.V.Custom
 }
 
 // splitSteps partitions an ordered step list into separate validator/mod
@@ -697,6 +744,9 @@ func parseHintScope(toks []ptok, lvl int, out *HintTag) error {
 		}
 		if n < 0 {
 			return fmt.Errorf("hint %d must be ≥ 0", n)
+		}
+		if n > maxPrealloc {
+			return fmt.Errorf("hint %d exceeds the %d prealloc ceiling — it is pasted into make() and would panic at decode", n, maxPrealloc)
 		}
 		if lvl == 0 {
 			out.Outer = n

@@ -9,8 +9,12 @@
 // generate time (-simd flag). No runtime feature probing — calling a tier the
 // CPU lacks faults. Building this file requires GOEXPERIMENT=simd.
 //
-// Tail loads use Load*Part (zero-filled); padding zeroes register as
-// control bytes, filtered by the k < len(rest) position check.
+// The 16/32-lane tails load via Load*Part (zero-filled, composed from
+// scalar loads); padding zeroes register as control bytes, filtered by the
+// k < len(rest) position check. LoadUint8x64Part is NOT used: archsimd lowers
+// it to an unmasked full-width load that reads up to 63 bytes past the slice
+// and faults when the payload ends at a page edge (mmap'd files, foreign
+// buffers). StringAVX512 builds its own tail lane instead.
 
 package ggen
 
@@ -27,9 +31,8 @@ import (
 // byte; hasHigh may over-report bytes past k in the hit lane — utf8.Valid on
 // the exact span settles it), stringSlow handoff on '\\' (scratch sized off
 // the real unescaped closing quote via stringSpanEnd, as String does;
-// validates its own output), and on a control byte the scalar error split:
-// ErrUnterminated when the tail carries neither a closing quote nor a
-// backslash (scalar returns it without the ctrl check), ErrBadString otherwise.
+// validates its own output), and ErrBadString at the control byte itself,
+// which the structural locate already landed on (where String reports it).
 func classifyStructural(data, rest []byte, start, k int, hasHigh, validate bool) (string, int, error) {
 	switch rest[k] {
 	case '"':
@@ -47,8 +50,7 @@ func classifyStructural(data, rest []byte, start, k int, hasHigh, validate bool)
 		// the scratch into the growth chain (matches String).
 		return stringSlow(data, start, start+k, stringSpanEnd(data, start)-start, validate)
 	default:
-		p, err := ctrlHitPos(data, start, rest[k:])
-		return "", p, err
+		return "", start + k, ErrBadString
 	}
 }
 
@@ -85,30 +87,8 @@ func classifyStructural64(data, rest []byte, start, k int, hasHigh, validate boo
 		}
 		return stringSlow(data, start, start+k, stringSpanEnd(data, start)-start, validate)
 	default:
-		p, err := ctrlHitPos(data, start, rest[k:])
-		return "", p, err
+		return "", start + k, ErrBadString
 	}
-}
-
-// ctrlHitErr picks the scalar-identical error for a ctrl-byte hit: the
-// scalar scanners return ErrUnterminated for a truncated string with no
-// backslash before checking ctrl bytes. Cold path — malformed input only.
-func ctrlHitErr(rest []byte) error {
-	if bytes.IndexByte(rest, '"') < 0 && bytes.IndexByte(rest, '\\') < 0 {
-		return ErrUnterminated
-	}
-	return ErrBadString
-}
-
-// ctrlHitPos pairs ctrlHitErr with the scalar-identical error position:
-// ErrUnterminated ends at len(data) (ran off the end), ErrBadString at the
-// span start — where scalar String's checkSpan/stringSlow-prefix arms report.
-func ctrlHitPos(data []byte, start int, rest []byte) (int, error) {
-	err := ctrlHitErr(rest)
-	if err == ErrUnterminated {
-		return len(data), err
-	}
-	return start, err
 }
 
 // StringAVX is String scanning 16 bytes/iteration (128-bit vectors).
@@ -213,7 +193,20 @@ func StringAVX512(data []byte, i int, validate bool) (string, int, error) {
 		}
 	}
 	if j < len(rest) {
-		v, _ := archsimd.LoadUint8x64Part(rest[j:])
+		// Final partial lane, read without crossing len(rest): a body that
+		// spans a lane reloads the last 64 bytes (the overlap was already
+		// classified clean, so its mask bits are zero); a shorter one is
+		// copied into a zeroed stack lane, whose padding registers as ctrl
+		// bytes filtered by the k < len(rest) check.
+		var v archsimd.Uint8x64
+		if len(rest) >= 64 {
+			j = len(rest) - 64
+			v = archsimd.LoadUint8x64(rest[j:])
+		} else {
+			var lane [64]byte
+			copy(lane[:], rest[j:])
+			v = archsimd.LoadUint8x64(lane[:])
+		}
 		acc = acc.Or(v)
 		m := v.Equal(quote).ToBits() | v.Equal(bslash).ToBits() | v.Less(space).ToBits()
 		if m != 0 {

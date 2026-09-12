@@ -58,7 +58,8 @@ func (e *ParseError) AddPos(d int) {
 // Errors — carries sub-slice-relative offsets; rebase by the
 // value start before wrapping so every Pos is a full-payload offset, as
 // documented. Sentinels and foreign errors carry no Pos and pass through.
-// Stream call sites keep NewParseErr: stream positions are already global.
+// Stream call sites keep NewParseErr — stream positions are already global —
+// except the UnmarshalJSON rung, whose callee runs on a captured span.
 func NewParseErrShift(segment string, pos, n int, err error) error {
 	if ap, ok := err.(interface{ AddPos(int) }); ok {
 		ap.AddPos(pos - n)

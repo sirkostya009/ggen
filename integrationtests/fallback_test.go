@@ -4,6 +4,9 @@ package integrationtests
 
 import (
 	"encoding/json"
+	jsonv2 "encoding/json/v2"
+	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -239,5 +242,107 @@ func TestTextAppender_OutputEscaped(t *testing.T) {
 	out, _ = ggen.Marshal(clean)
 	if string(out) != `{"t":"plain"}` {
 		t.Errorf("clean = %s", out)
+	}
+}
+
+// R10WrapHost reaches thirdparty2.Wrap through the UnmarshalJSON rung. The
+// wrapper delegates to its package's generated decoder, so a positional
+// error comes back relative to the span the rung handed it and has to be
+// rebased onto the payload like every other nested-decode site.
+//
+//ggen:generate
+type R10WrapHost struct {
+	Pad string           `json:"pad"`
+	W   thirdparty2.Wrap `json:"w"`
+}
+
+func TestCrossPkg_unmarshalJSONRungRebasesPos(t *testing.T) {
+	t.Parallel()
+	payload := `{"pad":"` + strings.Repeat("p", 40) + `","w":{"key":"abc","value":"q"}}`
+	want := strings.Index(payload, `"q"`)
+	check := func(path string, err error) {
+		t.Helper()
+		pe, ok := errors.AsType[*ggen.ParseError](err)
+		if !ok {
+			t.Fatalf("%s: got %T %v", path, err, err)
+		}
+		if pe.Pos != want || strings.Join(pe.Path, ".") != "w.value" {
+			t.Errorf("%s: Pos=%d Path=%v, want Pos=%d Path=w.value (%v)", path, pe.Pos, pe.Path, want, err)
+		}
+	}
+	_, _, berr := R10WrapHost{}.DecodeFrom([]byte(payload))
+	check("bytes", berr)
+	var s ggen.Stream
+	s.Reset(&chunkReader{data: []byte(payload), max: 3}, make([]byte, 0, 16))
+	_, serr := R10WrapHost{}.DecodeFromStream(&s)
+	check("stream", serr)
+}
+
+// R10TextCodec / R10JSONCodec are same-package, unannotated structs with
+// exported fields AND their own text / JSON marshaler pair. They are never
+// generated as a dependency: the host calls their methods, exactly as it
+// would for the same type in another package (jsonv2 parity).
+type R10TextCodec struct{ V string }
+
+func (c R10TextCodec) MarshalText() ([]byte, error) { return []byte("T:" + c.V), nil }
+func (c *R10TextCodec) UnmarshalText(b []byte) error {
+	c.V = strings.TrimPrefix(string(b), "T:")
+	return nil
+}
+
+type R10JSONCodec struct{ V int }
+
+func (c R10JSONCodec) MarshalJSON() ([]byte, error) { return []byte(`"J"`), nil }
+func (c *R10JSONCodec) UnmarshalJSON(b []byte) error {
+	if string(b) == `"J"` {
+		c.V = 42
+	}
+	return nil
+}
+
+//ggen:generate nosortkeys
+type R10SamePkgCodecHost struct {
+	T R10TextCodec `json:"t"`
+	J R10JSONCodec `json:"j"`
+}
+
+func TestSamePkgCodec_MethodsHonoured(t *testing.T) {
+	for _, name := range []string{"DecodeFrom", "AppendJSON", "JSONSize"} {
+		if _, ok := reflect.TypeFor[R10TextCodec]().MethodByName(name); ok {
+			t.Errorf("R10TextCodec got a generated %s despite owning a text codec", name)
+		}
+		if _, ok := reflect.TypeFor[R10JSONCodec]().MethodByName(name); ok {
+			t.Errorf("R10JSONCodec got a generated %s despite owning a JSON codec", name)
+		}
+	}
+	v := R10SamePkgCodecHost{T: R10TextCodec{"x"}, J: R10JSONCodec{1}}
+	want, err := jsonv2.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := v.AppendJSON(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(want) {
+		t.Errorf("marshal:\n ggen   %s\n jsonv2 %s", got, want)
+	}
+	var w2 R10SamePkgCodecHost
+	if err := jsonv2.Unmarshal(want, &w2); err != nil {
+		t.Fatal(err)
+	}
+	g2, _, err := R10SamePkgCodecHost{}.DecodeFrom(want)
+	if err != nil {
+		t.Fatalf("decode of the jsonv2 wire: %v", err)
+	}
+	if g2 != w2 {
+		t.Errorf("decode: ggen %+v jsonv2 %+v", g2, w2)
+	}
+	s2, err := R10SamePkgCodecHost{}.DecodeFromStream(ggen.NewStream(strings.NewReader(string(want)), nil))
+	if err != nil {
+		t.Fatalf("stream decode: %v", err)
+	}
+	if s2 != w2 {
+		t.Errorf("stream decode: ggen %+v jsonv2 %+v", s2, w2)
 	}
 }

@@ -183,12 +183,13 @@ func (*MaxRunesError) Rule() Rule             { return MaxRunes }
 func (e *MaxRunesError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
 func (e *MaxRunesError) AddPos(d int)         { e.Pos += d }
 
-// --- numeric range. Limit is float64; Value holds the originating numeric type.
+// --- numeric range. Limit and Value are `any`: an integer bound above
+// float64's exact range would otherwise be reported rounded.
 
 type GTError struct {
 	Pos   int
 	Path  []string
-	Limit float64
+	Limit any
 	Value any
 }
 
@@ -202,7 +203,7 @@ func (e *GTError) AddPos(d int)         { e.Pos += d }
 type GTEError struct {
 	Pos   int
 	Path  []string
-	Limit float64
+	Limit any
 	Value any
 }
 
@@ -216,7 +217,7 @@ func (e *GTEError) AddPos(d int)         { e.Pos += d }
 type LTError struct {
 	Pos   int
 	Path  []string
-	Limit float64
+	Limit any
 	Value any
 }
 
@@ -230,7 +231,7 @@ func (e *LTError) AddPos(d int)         { e.Pos += d }
 type LTEError struct {
 	Pos   int
 	Path  []string
-	Limit float64
+	Limit any
 	Value any
 }
 
@@ -416,7 +417,7 @@ func (e *ContainsError) AddPos(d int)         { e.Pos += d }
 type MultipleError struct {
 	Pos   int
 	Path  []string
-	Of    float64
+	Of    any
 	Value any
 }
 

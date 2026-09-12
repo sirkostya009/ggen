@@ -186,3 +186,44 @@ func TestIgnoreUnknown_streamErrorKeepsKeyName(t *testing.T) {
 		}
 	}
 }
+
+// UnknownKeyError.Pos is the value head on both paths (the stream used to
+// stamp it before the colon), a key with no colon is the grammar error rather
+// than an unknown key on both, and the multierr aggregate carries the same Pos.
+func TestRead_unknownKey_streamParity(t *testing.T) {
+	t.Parallel()
+	for _, p := range []string{`{"zz":1}`, `{"id":1,"zz":2}`, `{ "zz" : 1 }`} {
+		_, _, bytesErr := Node{}.DecodeFrom([]byte(p))
+		var buk *ggen.UnknownKeyError
+		if !errors.As(bytesErr, &buk) {
+			t.Fatalf("%q bytes: %v", p, bytesErr)
+		}
+		for _, chunk := range []int{1, 64} {
+			var s ggen.Stream
+			s.Reset(&chunkReader{data: []byte(p), max: chunk}, make([]byte, 0, 16))
+			_, streamErr := Node{}.DecodeFromStream(&s)
+			var suk *ggen.UnknownKeyError
+			if !errors.As(streamErr, &suk) {
+				t.Fatalf("%q stream chunk=%d: %v", p, chunk, streamErr)
+			}
+			if suk.Pos != buk.Pos {
+				t.Errorf("%q chunk=%d: Pos bytes=%d stream=%d", p, chunk, buk.Pos, suk.Pos)
+			}
+		}
+	}
+	for _, p := range []string{`{"zz" 1}`, `{"zz"}`} {
+		bytesErr, streamErr := decodeBothPaths[Node](p)
+		if !errors.Is(bytesErr, ggen.ErrBadObject) || !errors.Is(streamErr, ggen.ErrBadObject) {
+			t.Errorf("%q: bytes=%v stream=%v", p, bytesErr, streamErr)
+		}
+	}
+	p := `{"name":"ab","zz":{"deep":[1]},"age":5,"role":"admin"}`
+	bytesErr, streamErr := decodeBothPaths[MultiErrStruct](p)
+	var buk, suk *ggen.UnknownKeyError
+	if !errors.As(bytesErr, &buk) || !errors.As(streamErr, &suk) {
+		t.Fatalf("multierr: bytes=%v stream=%v", bytesErr, streamErr)
+	}
+	if buk.Pos != suk.Pos {
+		t.Errorf("multierr: Pos bytes=%d stream=%d", buk.Pos, suk.Pos)
+	}
+}

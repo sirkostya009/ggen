@@ -235,19 +235,19 @@ func TestMaxDepth(t *testing.T) {
 	if j, err := SkipValue(under, 0); err != nil || j != len(under) {
 		t.Errorf("SkipValue at cap: err=%v j=%d", err, j)
 	}
-	if _, _, err := Any(over, 0); !errors.Is(err, ErrMaxDepth) {
+	if _, _, err := Any(over, 0, true); !errors.Is(err, ErrMaxDepth) {
 		t.Errorf("Any deep array: want ErrMaxDepth, got %v", err)
 	}
-	if _, _, err := AnyNumber(overObj, 0); !errors.Is(err, ErrMaxDepth) {
+	if _, _, err := AnyNumber(overObj, 0, true); !errors.Is(err, ErrMaxDepth) {
 		t.Errorf("AnyNumber deep object: want ErrMaxDepth, got %v", err)
 	}
-	if _, _, err := AnyCopy(over, 0); !errors.Is(err, ErrMaxDepth) {
+	if _, _, err := AnyCopy(over, 0, true); !errors.Is(err, ErrMaxDepth) {
 		t.Errorf("AnyCopy deep array: want ErrMaxDepth, got %v", err)
 	}
-	if _, _, err := AnyNumberCopy(over, 0); !errors.Is(err, ErrMaxDepth) {
+	if _, _, err := AnyNumberCopy(over, 0, true); !errors.Is(err, ErrMaxDepth) {
 		t.Errorf("AnyNumberCopy deep array: want ErrMaxDepth, got %v", err)
 	}
-	if v, _, err := Any(under, 0); err != nil || v == nil {
+	if v, _, err := Any(under, 0, true); err != nil || v == nil {
 		t.Errorf("Any at cap: err=%v", err)
 	}
 
@@ -257,15 +257,60 @@ func TestMaxDepth(t *testing.T) {
 		t.Errorf("stream SkipValue: want ErrMaxDepth, got %v", err)
 	}
 	s.Reset(strings.NewReader(string(over)), make([]byte, 0, 1024))
-	if _, err := s.Any(); !errors.Is(err, ErrMaxDepth) {
+	if _, err := s.Any(true); !errors.Is(err, ErrMaxDepth) {
 		t.Errorf("stream Any: want ErrMaxDepth, got %v", err)
 	}
 	s.Reset(strings.NewReader(string(overObj)), make([]byte, 0, 1024))
-	if _, err := s.AnyNumber(); !errors.Is(err, ErrMaxDepth) {
+	if _, err := s.AnyNumber(true); !errors.Is(err, ErrMaxDepth) {
 		t.Errorf("stream AnyNumber: want ErrMaxDepth, got %v", err)
 	}
 	s.Reset(strings.NewReader(string(under)), make([]byte, 0, 1024))
 	if err := s.SkipValue(); err != nil {
 		t.Errorf("stream SkipValue at cap: %v", err)
+	}
+}
+
+// TestBoolEnd_GiveUpPosition pins the literal give-up position: Bool itself
+// reports the literal start (it stays an inlinable probe), BoolEnd derives
+// where the scan stopped — the first breaking byte, or len(data) for a
+// proper prefix — and SkipValue plus every Any* family report that position,
+// as the null arm already does.
+func TestBoolEnd_GiveUpPosition(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   string
+		i    int
+		want int
+	}{
+		{"tru", 0, 3}, {"trux", 0, 3}, {"t", 0, 1}, {"fals", 0, 4}, {"falsy", 0, 4},
+		{"f", 0, 1}, {"fx", 0, 1}, {"  tru", 2, 5}, {"[fals", 1, 5}, {"x", 0, 0}, {"", 0, 0},
+	}
+	for _, tc := range cases {
+		data := []byte(tc.in)
+		if _, p, err := Bool(data, tc.i); err != ErrBadBool || p != tc.i {
+			t.Errorf("Bool(%q, %d) = (%d, %v), want (%d, ErrBadBool)", tc.in, tc.i, p, err, tc.i)
+		}
+		if got := BoolEnd(data, tc.i); got != tc.want {
+			t.Errorf("BoolEnd(%q, %d) = %d, want %d", tc.in, tc.i, got, tc.want)
+		}
+		if tc.i >= len(data) || (data[tc.i] != 't' && data[tc.i] != 'f') {
+			continue // the dispatchers never reach Bool
+		}
+		if p, err := SkipValue(data, tc.i); err != ErrBadBool || p != tc.want {
+			t.Errorf("SkipValue(%q, %d) = (%d, %v), want (%d, ErrBadBool)", tc.in, tc.i, p, err, tc.want)
+		}
+		for name, fn := range map[string]func([]byte, int, bool) (any, int, error){
+			"Any": Any, "AnyNumber": AnyNumber, "AnyCopy": AnyCopy, "AnyNumberCopy": AnyNumberCopy,
+		} {
+			if _, p, err := fn(data, tc.i, true); err != ErrBadBool || p != tc.want {
+				t.Errorf("%s(%q, %d) = (%d, %v), want (%d, ErrBadBool)", name, tc.in, tc.i, p, err, tc.want)
+			}
+		}
+	}
+	for _, in := range []string{"nul", "nulx"} {
+		sp, _ := SkipValue([]byte(in), 0)
+		if _, ap, _ := Any([]byte(in), 0, true); ap != sp {
+			t.Errorf("Any(%q) pos=%d, SkipValue pos=%d", in, ap, sp)
+		}
 	}
 }

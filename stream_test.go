@@ -38,7 +38,7 @@ func readStreamAny(t *testing.T, in string) any {
 	t.Helper()
 	var s Stream
 	s.Reset(&chunkedReader{data: []byte(in)}, nil)
-	v, err := s.Any()
+	v, err := s.Any(true)
 	if err != nil {
 		t.Fatalf("Stream.Any: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestStream_HintEquivalence(t *testing.T) {
 	for _, hint := range []int{0, 1, 4, 16, 1024} {
 		var s Stream
 		s.Reset(bytes.NewReader(in), make([]byte, 0, hint))
-		got, err := s.Any()
+		got, err := s.Any(true)
 		if err != nil {
 			t.Fatalf("hint=%d: %v", hint, err)
 		}
@@ -151,7 +151,7 @@ func TestStream_TruncatedInput(t *testing.T) {
 					t.Errorf("panicked: %v", r)
 				}
 			}()
-			_, err := s.Any()
+			_, err := s.Any(true)
 			if err == nil {
 				t.Error("expected error on truncated input")
 			}
@@ -499,13 +499,14 @@ func TestStreamTransientErrorNeverSilentNorMislabeled(t *testing.T) {
 		{"Int64", "12345", func(s *Stream) (any, error) { return s.Int64() }},
 		{"Uint64", "98765", func(s *Stream) (any, error) { return s.Uint64() }},
 		{"Float64", "123.5", func(s *Stream) (any, error) { return s.Float64() }},
+		{"Float32", "123.5", func(s *Stream) (any, error) { return s.Float32() }},
 		{"Number", "777", func(s *Stream) (any, error) { return s.Number() }},
 		{"String", `"abcdef"`, func(s *Stream) (any, error) { return s.String(true) }},
 		{"StringEscape", `"a\nb\u0041c"`, func(s *Stream) (any, error) { return s.String(true) }},
 		{"KeyView", `"key"`, func(s *Stream) (any, error) { return s.KeyView(true) }},
 		{"Bool", "true", func(s *Stream) (any, error) { return s.Bool() }},
-		{"Any", "123.5", func(s *Stream) (any, error) { return s.Any() }},
-		{"AnyObject", `{"a":[1,"x"]}`, func(s *Stream) (any, error) { return s.Any() }},
+		{"Any", "123.5", func(s *Stream) (any, error) { return s.Any(true) }},
+		{"AnyObject", `{"a":[1,"x"]}`, func(s *Stream) (any, error) { return s.Any(true) }},
 		{"SkipNumber", "12345", func(s *Stream) (any, error) { return nil, s.SkipValue() }},
 		{"SkipObject", `{"a":1,"b":2}`, func(s *Stream) (any, error) { return nil, s.SkipValue() }},
 		{"SkipString", `"abcdef"`, func(s *Stream) (any, error) { return nil, s.SkipValue() }},
@@ -764,8 +765,10 @@ func TestStreamSkipValue_MatchesBytes(t *testing.T) {
 			if gotErr != wantErr {
 				t.Fatalf("stream(%q, chunk=%d) err=%v, bytes err=%v", in, chunk, gotErr, wantErr)
 			}
-			if wantErr == nil && s.Offset() != wantPos {
-				t.Fatalf("stream(%q, chunk=%d) offset=%d, bytes pos=%d", in, chunk, s.Offset(), wantPos)
+			// On error too: the skip's give-up position is what generated
+			// ignoreunknown/allowdups decoders stamp into ParseError.Pos.
+			if s.Offset() != wantPos {
+				t.Fatalf("stream(%q, chunk=%d) offset=%d, bytes pos=%d (%v)", in, chunk, s.Offset(), wantPos, wantErr)
 			}
 		}
 	}
@@ -1050,7 +1053,7 @@ func TestStreamSeq(t *testing.T) {
 	sbuf := make([]byte, 0, 256)
 	drain := func(seed ...sliceT) (n int, last *intT) {
 		r.Reset("[1,2,3] [4,5,6] [7,8,9]")
-		for v := range st.Reset(&r, sbuf).Seq[sliceT](seed...) {
+		for v := range st.Reset(&r, sbuf).Seq(seed...) {
 			n++
 			last = &v.Vals[0]
 		}
@@ -1299,12 +1302,15 @@ func TestBytesStreamTruncationErrorParity(t *testing.T) {
 		"[", "[1,", "[1", "[[", "[ ",
 		"{", `{"a"`, `{"a":`, `{"a":1`, `{"a":1,`,
 		`"ab`, `"a\`, "-", "1.", "12.", "1e",
+		// Final malformations at the end of the data (never a truncation).
+		"\"ab\x01", "\"abc\x01", "{\"a\x01:1}", `"\u12"`, `"ab\uZ"`, `"\u00`, `"\ud83d"`, `"\ud83d\uDE`,
+		"trux", "falsy",
 	}
 	chunks := []int{1, 3, 64}
 	for _, in := range inputs {
 		_, wantSkip := SkipValue([]byte(in), 0)
-		_, _, wantAny := Any([]byte(in), 0)
-		_, _, wantAnyNum := AnyNumber([]byte(in), 0)
+		_, _, wantAny := Any([]byte(in), 0, true)
+		_, _, wantAnyNum := AnyNumber([]byte(in), 0, true)
 		for _, cs := range chunks {
 			var s Stream
 			s.Reset(&sizedChunkReader{data: []byte(in), n: cs}, nil)
@@ -1312,11 +1318,11 @@ func TestBytesStreamTruncationErrorParity(t *testing.T) {
 				t.Errorf("SkipValue(%q) chunk=%d: stream %v, bytes %v", in, cs, got, wantSkip)
 			}
 			s.Reset(&sizedChunkReader{data: []byte(in), n: cs}, nil)
-			if _, got := s.Any(); got != wantAny {
+			if _, got := s.Any(true); got != wantAny {
 				t.Errorf("Any(%q) chunk=%d: stream %v, bytes %v", in, cs, got, wantAny)
 			}
 			s.Reset(&sizedChunkReader{data: []byte(in), n: cs}, nil)
-			if _, got := s.AnyNumber(); got != wantAnyNum {
+			if _, got := s.AnyNumber(true); got != wantAnyNum {
 				t.Errorf("AnyNumber(%q) chunk=%d: stream %v, bytes %v", in, cs, got, wantAnyNum)
 			}
 		}
@@ -1428,7 +1434,9 @@ func TestStreamNumberLosslessRetry(t *testing.T) {
 // compacting refill: Pos is buffer-relative, so an error return that skips the
 // rebase leaves the pre-compaction cursor — generated stream decoders stamp it
 // straight into ParseError.Pos, where it reads as inflated by the discarded
-// prefix and can even exceed the document length.
+// prefix and can even exceed the document length. Every scanner reports the
+// control byte itself, as the bytes twins do — skipString discards windows as
+// it goes, so the offending byte is the only position all of them can name.
 func TestStreamString_ErrorPos(t *testing.T) {
 	t.Parallel()
 	// A leading string is consumed first so the scanner under test starts at a
@@ -1438,14 +1446,11 @@ func TestStreamString_ErrorPos(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		run  func(*Stream) error
-		// spanStart: the scanner reports the span start like bytes String
-		// (skipString discards the span head, so it reports its cursor).
-		spanStart bool
 	}{
-		{"String", func(s *Stream) error { _, err := s.String(true); return err }, true},
-		{"StringView", func(s *Stream) error { _, err := s.StringView(true); return err }, true},
-		{"KeyView", func(s *Stream) error { _, err := s.KeyView(true); return err }, true},
-		{"skipString", (*Stream).skipString, false},
+		{"String", func(s *Stream) error { _, err := s.String(true); return err }},
+		{"StringView", func(s *Stream) error { _, err := s.StringView(true); return err }},
+		{"KeyView", func(s *Stream) error { _, err := s.KeyView(true); return err }},
+		{"skipString", (*Stream).skipString},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -1461,11 +1466,8 @@ func TestStreamString_ErrorPos(t *testing.T) {
 				if s.Pos > len(s.Bytes()) {
 					t.Errorf("chunk=%d: Pos %d past len(buf) %d", chunk, s.Pos, len(s.Bytes()))
 				}
-				if got := s.Offset(); got > len(in) {
-					t.Errorf("chunk=%d: Offset %d past document length %d", chunk, got, len(in))
-				}
-				if got := s.Offset(); tc.spanStart && got != len(prefix)+1 {
-					t.Errorf("chunk=%d: Offset %d, want %d (the span start)", chunk, got, len(prefix)+1)
+				if got := s.Offset(); got != len(in)-2 {
+					t.Errorf("chunk=%d: Offset %d, want %d (the control byte)", chunk, got, len(in)-2)
 				}
 			}
 		})
@@ -1562,5 +1564,241 @@ func TestStreamCaptureValue_MaxDepthDoesNotHang(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Error("CaptureValue hung on a depth-capped value")
+	}
+}
+
+// A live (never-EOF) reader that delivered a complete string whose escape or
+// control byte is final must get an error, not a hang: the `\u` refill
+// demanded 6 bytes before looking at the buffered digits, the surrogate
+// probe waited for a low half the buffered `"` already ruled out, and an
+// open-tail control byte was classified as truncated — String, SkipValue and
+// CaptureValue all blocked in Read. Each op must return what the bytes path
+// returns; a truncated escape is the control and must still wait.
+func TestStreamString_LiveMalformedTailDoesNotHang(t *testing.T) {
+	t.Parallel()
+	ops := []struct {
+		name   string
+		bytes  func([]byte) error
+		stream func(*Stream) error
+	}{
+		{"String",
+			func(d []byte) error { _, _, err := String(d, 0, true); return err },
+			func(s *Stream) error { _, err := s.String(true); return err }},
+		{"SkipValue",
+			func(d []byte) error { _, err := SkipValue(d, 0); return err },
+			func(s *Stream) error { return s.SkipValue() }},
+		{"CaptureValue",
+			func(d []byte) error { _, err := SkipValue(d, 0); return err },
+			func(s *Stream) error { _, err := s.CaptureValue(); return err }},
+	}
+	payloads := []string{`"\u12"`, `"ab\uZ"`, `"\u"`, `"\ud83d"`, `"\ud83d\n"`, "\"ab\x01}"}
+	for _, payload := range payloads {
+		for _, op := range ops {
+			want := op.bytes([]byte(payload))
+			block := make(chan struct{})
+			done := make(chan error, 1)
+			go func() {
+				var s Stream
+				s.Reset(&liveReader{data: []byte(payload), block: block}, make([]byte, 0, 64))
+				done <- op.stream(&s)
+			}()
+			select {
+			case err := <-done:
+				if err != want {
+					t.Errorf("%s(%q) = %v, bytes path says %v", op.name, payload, err, want)
+				}
+			case <-time.After(2 * time.Second):
+				t.Errorf("%s(%q) hung on a live reader", op.name, payload)
+			}
+			close(block)
+		}
+	}
+	for _, op := range ops {
+		block := make(chan struct{})
+		done := make(chan error, 1)
+		go func() {
+			var s Stream
+			s.Reset(&liveReader{data: []byte(`"\u00`), block: block}, make([]byte, 0, 64))
+			done <- op.stream(&s)
+		}()
+		select {
+		case err := <-done:
+			t.Errorf("%s(truncated escape) returned %v; must keep waiting for bytes", op.name, err)
+		case <-time.After(100 * time.Millisecond):
+		}
+		close(block)
+	}
+}
+
+// Stream.Bool leaves Pos where the scan gave up on failure — the first byte
+// that breaks the literal, or the window end when the reader drained
+// mid-literal — so a generated ParseError.Pos matches the bytes path's
+// BoolEnd at every chunk size. A transient reader error keeps Pos on the
+// literal head so a retry re-scans the whole literal.
+func TestStreamBool_ErrorPosMatchesBytes(t *testing.T) {
+	t.Parallel()
+	for _, in := range []string{"tru", "trux", "fals", "falsy", "t", "f", "x", "", "true", "false"} {
+		data := []byte(in)
+		_, wantPos, wantErr := Bool(data, 0)
+		if wantErr != nil {
+			wantPos = BoolEnd(data, 0)
+		}
+		for _, cs := range []int{1, 3, 64} {
+			var s Stream
+			s.Reset(&sizedChunkReader{data: data, n: cs}, nil)
+			_, err := s.Bool()
+			if err != wantErr || s.Offset() != wantPos {
+				t.Errorf("Bool(%q) chunk=%d: stream (%v, off %d), bytes (%v, pos %d)",
+					in, cs, err, s.Offset(), wantErr, wantPos)
+			}
+		}
+	}
+	var s Stream
+	s.Reset(&hiccupReader{data: []byte("true"), hiccupAt: 3}, make([]byte, 0, 1))
+	if _, err := s.Bool(); !errors.Is(err, errTransientHiccup) {
+		t.Fatalf("got %v, want the transient reader error", err)
+	}
+	if s.Offset() != 0 {
+		t.Errorf("Offset after a transient error = %d, want 0 (the literal head)", s.Offset())
+	}
+	if v, err := s.Bool(); err != nil || !v {
+		t.Errorf("retry = (%v, %v), want (true, nil)", v, err)
+	}
+}
+
+// TestStreamStringSurrogate_LiveReader: after a high-surrogate escape the
+// low-surrogate lookahead used to demand six more bytes before checking whether
+// a backslash even followed — bytes that lie PAST the closing quote when the
+// escape is lone — so a live reader that had delivered the whole string blocked
+// in Read forever, where the bytes path answers at once (ErrInvalidUTF8, or
+// U+FFFD under allowinvalidutf8). The paired row is the control: pairing across
+// the lookahead must still complete.
+func TestStreamStringSurrogate_LiveReader(t *testing.T) {
+	t.Parallel()
+	type res struct {
+		v   string
+		err error
+	}
+	for _, tc := range []struct {
+		doc      string
+		validate bool
+	}{
+		{`"\ud83d"}`, true},
+		{`"\ud83d"}`, false},
+		{`"\ud83dab"`, false},
+		{`"😀"`, true},
+	} {
+		block := make(chan struct{})
+		done := make(chan res, 1)
+		go func() {
+			var s Stream
+			s.Reset(&liveReader{data: []byte(tc.doc), block: block}, make([]byte, 0, 64))
+			v, err := s.String(tc.validate)
+			done <- res{v, err}
+		}()
+		wantV, _, wantErr := String([]byte(tc.doc), 0, tc.validate)
+		select {
+		case r := <-done:
+			if r.err != wantErr || r.v != wantV {
+				t.Errorf("%q validate=%v: stream (%q, %v), bytes (%q, %v)", tc.doc, tc.validate, r.v, r.err, wantV, wantErr)
+			}
+		case <-time.After(2 * time.Second):
+			t.Errorf("%q validate=%v: String hung on a live reader after the whole value arrived", tc.doc, tc.validate)
+		}
+		close(block)
+	}
+}
+
+// TestStreamErrorPos_MatchesBytes pins the stream error-position contract to
+// the bytes path: whatever a primitive returns, Offset() is the position the
+// bytes twin returns for the same input, at every chunk size, and never runs
+// past the window or the document. A prefix is consumed first so the window
+// has compacted by the time the primitive under test runs — an error return
+// that skipped the post-compaction rebase left the pre-compaction cursor
+// behind, inflating Offset() by the discarded prefix (chunk == len(prefix) is
+// the sharpest shape: the primitive starts at Pos == len(buf) > 0, so its head
+// refill discards the whole window before the Read fails). Covers the number
+// scanners, Bool, String, the skip tree (numbers, literals, brackets,
+// truncated escapes), CaptureValue and both Any walkers.
+func TestStreamErrorPos_MatchesBytes(t *testing.T) {
+	t.Parallel()
+	const prefix = `"pre"`
+	numbers := []string{
+		"", "-", "x", "-x", "01", "-01", "1.", "-1.", "1e", "1e+", "1.e5", "1ee",
+		"12", "12.5", "1.5.5", "99999999999999999999", "-99999999999999999999",
+		"18446744073709551616", "1.5e", "0", "-0", "0x",
+	}
+	// A ctrl byte inside a SKIPPED string reports the byte's own index on
+	// both paths — the span head is gone by then on the stream (skipString
+	// discards windows as it goes), so the offending byte is the position
+	// both can name. The long rows put it past a chunk boundary.
+	skips := []string{
+		"", " ", "-", "1.", "1e", "1e+", "1.e5", "1ee", "01", "   1.", "x", "12",
+		"n", "nul", "nulx", "null", "t", "tru", "trux", "true", "f", "fals", "false",
+		"[", "[1", "[1,", "[1,]", "[1 2]", "[]", "[[[", "[1,[2,]]",
+		"{", `{"a"`, `{"a":`, `{"a":1`, `{"a":1,`, `{"a":1 "b":2}`, `{1:2}`, `{"a"}`, `{}`,
+		`"ab`, `"a\`, `"a\u12`, `"a\uzz"`, `"a\x"`, `"ab"`,
+		"\"abc\x01", "\"abc\x01\"", "\"ab\x01c\"", "\"a\\n\x01\"",
+		"\"abcdefghijklmnop\x01\"", "\"abcdefghij\\n" + strings.Repeat("k", 20) + "\x01\"",
+	}
+	// CaptureValue skips with the bytes tree over the buffered window, so
+	// its positions are the bytes positions even inside a string.
+	captures := skips
+	anys := append(append([]string{}, skips...), "\"\xff\"", `["a\`, `{"k":"v\u1"}`)
+	prims := []struct {
+		name   string
+		inputs []string
+		bytes  func([]byte, int) (int, error)
+		stream func(*Stream) error
+	}{
+		{"Int64", numbers, func(d []byte, i int) (int, error) { _, p, e := Int64(d, i); return p, e }, func(s *Stream) error { _, e := s.Int64(); return e }},
+		{"Uint64", numbers, func(d []byte, i int) (int, error) { _, p, e := Uint64(d, i); return p, e }, func(s *Stream) error { _, e := s.Uint64(); return e }},
+		{"Float64", numbers, func(d []byte, i int) (int, error) { _, p, e := Float64(d, i); return p, e }, func(s *Stream) error { _, e := s.Float64(); return e }},
+		{"Number", numbers, func(d []byte, i int) (int, error) { _, p, e := Number(d, i); return p, e }, func(s *Stream) error { _, e := s.Number(); return e }},
+		// Bool is a head probe; generated code stamps BoolEnd's give-up byte.
+		{"Bool", []string{"", "t", "tru", "trux", "true", "f", "fals", "false", "x", "null", "1"},
+			func(d []byte, i int) (int, error) {
+				_, p, e := Bool(d, i)
+				if e != nil {
+					p = BoolEnd(d, i)
+				}
+				return p, e
+			}, func(s *Stream) error { _, e := s.Bool(); return e }},
+		{"String", []string{"", "x", `"ab"`, `"ab`, `"a\`, `"a\u12`, `"a\uzzzz"`, `"a\x"`, "\"ab\x01c\"", "\"abc\x01", `"\ud83d"`, `"a\ud83d`, "\"a\\n\x01\"", "\"\xff\"", `"a\n"`, "\"a\\n\xff\"",
+			// A drained reader mid-`\uXXXX` is truncated, not a lone
+			// surrogate: both paths report the end of what arrived.
+			`"\ud83d\ude0`, `"\ud83d\`, `"\ud83d\u`, `"\ud83dx"`},
+			func(d []byte, i int) (int, error) { _, p, e := String(d, i, true); return p, e }, func(s *Stream) error { _, e := s.String(true); return e }},
+		{"SkipValue", skips, SkipValue, (*Stream).SkipValue},
+		{"CaptureValue", captures, SkipValue, func(s *Stream) error { _, e := s.CaptureValue(); return e }},
+		{"Any", anys, func(d []byte, i int) (int, error) { _, p, e := Any(d, i, true); return p, e }, func(s *Stream) error { _, e := s.Any(true); return e }},
+		{"AnyNumber", anys, func(d []byte, i int) (int, error) { _, p, e := AnyNumber(d, i, true); return p, e }, func(s *Stream) error { _, e := s.AnyNumber(true); return e }},
+	}
+	for _, p := range prims {
+		t.Run(p.name, func(t *testing.T) {
+			t.Parallel()
+			for _, in := range p.inputs {
+				doc := prefix + in
+				wantPos, wantErr := p.bytes([]byte(doc), len(prefix))
+				for _, chunk := range []int{1, len(prefix), 7, 64} {
+					var s Stream
+					s.Reset(&sizedChunkReader{data: []byte(doc), n: chunk}, make([]byte, 0, chunk))
+					if err := s.skipString(); err != nil {
+						t.Fatalf("%q chunk=%d: prefix: %v", in, chunk, err)
+					}
+					gotErr := p.stream(&s)
+					if gotErr != wantErr {
+						t.Errorf("%q chunk=%d: err %v, bytes %v", in, chunk, gotErr, wantErr)
+						continue
+					}
+					if s.Pos > len(s.Bytes()) {
+						t.Errorf("%q chunk=%d: Pos %d past len(buf) %d", in, chunk, s.Pos, len(s.Bytes()))
+					}
+					if got := s.Offset(); got != wantPos || got > len(doc) {
+						t.Errorf("%q chunk=%d (%v): Offset %d, bytes pos %d (doc len %d)", in, chunk, gotErr, got, wantPos, len(doc))
+					}
+				}
+			}
+		})
 	}
 }

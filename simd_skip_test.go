@@ -55,6 +55,9 @@ func TestSkipValueSIMD_Parity(t *testing.T) {
 	cases = append(cases,
 		[]byte("\"abc\x01def\""), []byte("\"abc\x01def"), []byte("\"abc\x01de\\n\""),
 		[]byte("\"abc\x01de\\n"), []byte("\"\x1f\""), []byte("\"\x00"),
+		// Final malformations at the end of data vs truncated prefixes.
+		[]byte(`"\u12"`), []byte(`"ab\uZ"`), []byte(`"\u00`), []byte(`"\ud83d\uDE`),
+		[]byte("\"ab\x01}"), []byte("trux"), []byte("fals"),
 	)
 	rng := rand.New(rand.NewSource(21))
 	for _, seed := range seeds {
@@ -113,9 +116,10 @@ func TestSkipSpaceSIMD_Parity(t *testing.T) {
 }
 
 // TestStreamSkipValueSIMD_Parity pins the stream tier skip trees against
-// scalar Stream.SkipValue: identical end Offset and error identity across
-// compact + indented values, truncations, malformed mutations, and chunked
-// readers forcing refills mid-string / mid-whitespace-run.
+// scalar Stream.SkipValue: identical Offset (the end, or the give-up byte on
+// error) and error identity across compact + indented values, truncations,
+// malformed mutations, and chunked readers forcing refills mid-string /
+// mid-whitespace-run.
 func TestStreamSkipValueSIMD_Parity(t *testing.T) {
 	t.Parallel()
 	tiers := []struct {
@@ -170,7 +174,7 @@ func TestStreamSkipValueSIMD_Parity(t *testing.T) {
 			wantOff, wantErr := run((*Stream).SkipValue, in, chunk)
 			for _, tier := range tiers {
 				gotOff, gotErr := run(tier.fn, in, chunk)
-				if wantErr != gotErr || (wantErr == nil && gotOff != wantOff) {
+				if wantErr != gotErr || gotOff != wantOff {
 					t.Fatalf("%s(%q, chunk=%d) = (%d, %v), scalar (%d, %v)",
 						tier.name, in, chunk, gotOff, gotErr, wantOff, wantErr)
 				}
@@ -274,8 +278,9 @@ func TestStreamSkipStringSIMD_ErrorPos(t *testing.T) {
 				if s.Pos > len(s.Bytes()) {
 					t.Errorf("chunk=%d: Pos %d past len(buf) %d", chunk, s.Pos, len(s.Bytes()))
 				}
-				if got := s.Offset(); got > len(in) {
-					t.Errorf("chunk=%d: Offset %d past document length %d", chunk, got, len(in))
+				// The control byte's own index, as scalar skipString reports.
+				if got := s.Offset(); got != len(in)-2 {
+					t.Errorf("chunk=%d: Offset %d, want %d (the control byte)", chunk, got, len(in)-2)
 				}
 			}
 		})

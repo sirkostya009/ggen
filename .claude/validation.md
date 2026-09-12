@@ -50,12 +50,23 @@ unknown-key literals):
 - **Stream path** — `ggen.Stream.Offset()` (= `consumed + Pos`), NOT the raw
   buffer-relative `s.Pos`: the stream buffer compacts as it slides, so only
   `Offset()` stays relative to the whole payload. Already global at every
-  depth — stream call sites keep plain `NewParseErr`.
+  depth — stream call sites keep plain `NewParseErr`, with one exception: the
+  cross-package `UnmarshalJSON` rung runs its callee on a CAPTURED span, so it
+  wraps with `NewParseErrShift(field, s.Offset(), len(span), err)` to rebase
+  the callee's span-relative positions (the span starts at
+  `Offset()-len(span)`).
 
 Validation runs *after* the value is scanned, so `Pos` lands just past the
 offending value, not at its first byte. The aggregate `Errors` slice has no
 `Pos` of its own — each leaf carries one. Pinned by
 `integrationtests/scan_decode_test.go` (`TestValidationError_Pos`).
+
+`UnknownKeyError.Pos` and `DuplicateKeyError.Pos` are the VALUE HEAD (after
+the colon and whitespace) on both paths, in the single-error and multierr
+arms alike — the stream builds the unknown-key error only after
+`ConsumeColon`. `ParseError.Pos` is likewise identical on both paths at every
+chunk size (.claude/scan.md, "Aggressive compaction"). Pinned by
+`TestRead_unknownKey_streamParity`.
 
 ## Concrete error structs (one per rule)
 
@@ -67,9 +78,12 @@ Pointer-receiver structs, all implement `ggen.Error`. Each carries a
 the remaining fields:
 
 - **presence**: `RequiredError`, `NotEmptyError`
-- **length**: `LenError{Want, Got int}`, `MinLenError`/`MaxLenError{Limit, Got int}`
+- **length**: `LenError{Want, Got int}`, `MinLenError`/`MaxLenError{Limit, Got int}`.
+  For a `[N]T` tuple `Got` is the real count when too few and `N+1` when too
+  many (the overflow guard fires at the top of the element loop before the
+  extra element is counted), so `Got > Want` reads as too-many
 - **runes**: `RunesError`, `MinRunesError`, `MaxRunesError` (same shape as length)
-- **numeric range**: `GTError`/`GTEError`/`LTError`/`LTEError{Limit float64, Value any}`
+- **numeric range**: `GTError`/`GTEError`/`LTError`/`LTEError{Limit any, Value any}`
 - **equality**: `EqError`/`NeqError{Want any, Value any}` (string + numeric)
 - **oneof**: `OneOfError{Allowed []string, Value any}` — `Allowed` points to a
   frozen package-level slice (see "Frozen OneOf slices")
@@ -77,11 +91,22 @@ the remaining fields:
   `UpperError`/`HexadecimalError{Value string}` (`URLError` also has
   `Cause error` + `Unwrap()`)
 - **prefix/suffix/contains**: `StartsError`/`EndsError`/`ContainsError{Want, Value string}`
-- **other**: `MultipleError{Of float64, Value any}`, `DuplicateKeyError`,
+- **other**: `MultipleError{Of any, Value any}`, `DuplicateKeyError`,
   `UnknownKeyError`, `CustomError{Name string, Value any, Cause error}` (exposes
   `Unwrap()`; `Name` is the bare func identifier). Custom bool-form validators
   fail with `PredicateError{Name, Msg, Value}`; fallible bool-form mods fail with
   `ggen.ModError` (a parse error — lives in the `decode` package, not here)
+
+Every numeric BOUND — `Limit` (gt/gte/lt/lte), `Of` (multiple), `Want`
+(eq/neq) — is `any`, and codegen spells the literal with the FIELD's own kind
+through one helper, `numBound(kind, value)`: `Limit: uint64(9223372036854775809)`,
+`Limit: float64(1.5)`, `Want: uint64(18446744073709551615)`. Untyped, the
+literal defaulted to `int` and overflowed above `MaxInt64`; as a `float64` a
+bound past 2^53 was rounded and printed in exponent form
+(`9.223372036854776e+18` for `gte=9223372036854775809`), which the width-aware
+bound parsing made reachable. Read them with a type switch or `%v`. Pinned by
+`TestNumericBoundLiteralsCarryFieldKind` (cli) +
+`TestBigUint64Bounds_reportedExactly` (integ).
 
 ## Inspecting failures
 

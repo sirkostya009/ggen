@@ -16,7 +16,13 @@
 //
 // The first block has no preceding bytes, so it runs one 16-lane classify with
 // prev = zero (no EOF check — the rune may continue into the wide region); the
-// wide loop then starts at 16, where every prevN load is in bounds.
+// wide loop then starts at 16, where every prevN load is in bounds. The final
+// block starts at len(b)-64 rather than loading zero-padded past the end:
+// archsimd's LoadUint8x64Part is an unmasked full-width load, which reads
+// past the span and faults at a page edge. Re-classifying the lanes it
+// overlaps is idempotent (each lane is a function of its own four bytes,
+// ORed into errAcc), and ending exactly at len(b) leaves a dangling rune to
+// the check_eof sub.
 
 package ggen
 
@@ -91,31 +97,19 @@ func validUTF8x64(b []byte) bool {
 	errAcc := zero
 	prev := zero
 
-	i := 16
-	// Full blocks: b[i-3:] always holds ≥ 64 bytes here, so every prevN load
-	// is a plain full load.
-	for ; i+64 <= len(b); i += 64 {
+	// Full blocks only: every load is a plain in-bounds full load (b[i-3:]
+	// holds ≥ 64 bytes). The last block is pulled back to end at len(b).
+	for i := 16; ; i += 64 {
+		if i+64 > len(b) {
+			if i >= len(b) {
+				break
+			}
+			i = len(b) - 64
+		}
 		c := archsimd.LoadUint8x64(b[i:])
 		p1 := archsimd.LoadUint8x64(b[i-1:])
 		p2 := archsimd.LoadUint8x64(b[i-2:])
 		p3 := archsimd.LoadUint8x64(b[i-3:])
-		prev1Hi := p1.AsUint16x32().ShiftAllRight(4).AsUint8x64().And(nib)
-		curHi := c.AsUint16x32().ShiftAllRight(4).AsUint8x64().And(nib)
-		sc := lut1.PermuteOrZeroGrouped(prev1Hi.AsInt8x64()).
-			And(lut2.PermuteOrZeroGrouped(p1.And(nib).AsInt8x64())).
-			And(lut3.PermuteOrZeroGrouped(curHi.AsInt8x64()))
-		must := p2.SubSaturated(sub3).Or(p3.SubSaturated(sub4)).And(high)
-		errAcc = errAcc.Or(must.Xor(sc))
-		prev = c
-	}
-	// Tail: zero-padded, so a rune truncated inside it fails its successor
-	// check in-block. prevN load the same way (their pad lanes only ever pair
-	// with padded cur lanes).
-	if i < len(b) {
-		c, _ := archsimd.LoadUint8x64Part(b[i:])
-		p1, _ := archsimd.LoadUint8x64Part(b[i-1:])
-		p2, _ := archsimd.LoadUint8x64Part(b[i-2:])
-		p3, _ := archsimd.LoadUint8x64Part(b[i-3:])
 		prev1Hi := p1.AsUint16x32().ShiftAllRight(4).AsUint8x64().And(nib)
 		curHi := c.AsUint16x32().ShiftAllRight(4).AsUint8x64().And(nib)
 		sc := lut1.PermuteOrZeroGrouped(prev1Hi.AsInt8x64()).

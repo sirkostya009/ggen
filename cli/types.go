@@ -86,7 +86,7 @@ type FieldInfo struct {
 	ElemType        string // for slices/arrays: element type (e.g. "string" for []string)
 	ElemKind        TypeKind
 	ArrayLen        int                // for KindArray: fixed array length N (peel sets it on nested inners)
-	ElemArrayLen    int                // when ElemKind == KindArray, N of the inner [N]T at this level
+	ElemArrayLen    int                // when ElemKind == KindArray, N of the inner [N]T at this level (slice/array elements; a map value leaves it 0 — read N from ElemType)
 	ElemPointer     bool               // true when the slice/array element is `*T`; ElemType is the pointee
 	Pointer         bool               // true when the field is *T; Kind describes the pointee
 	PointeeType     string             // for pointer fields: pointee Go type ("string", "Address")
@@ -127,6 +127,7 @@ type FieldInfo struct {
 	AllowInvalidUTF8 bool   // propagated from parent struct: skip decode UTF-8 validation (strings pass raw bytes through, unpaired surrogates → U+FFFD, raw spans unchecked)
 	Ignored          bool
 	NotComparable    bool // go/types says the field's type is not comparable (omitzero needs a reflect zero probe, `!= (T{})` would not compile)
+	UnderlyingStruct bool // go/types says the field's OWN type (pointers not peeled) has a struct underlying; only go/types separates a struct from the named containers and foreign array types that also read as KindStruct
 
 	// SQLNullInner, when non-nil, marks a generic database/sql.Null[T] (Go
 	// 1.22): the synthetic FieldInfo for T. Renderers delegate the V slot to
@@ -135,7 +136,7 @@ type FieldInfo struct {
 	// (this stays nil). SQLNullImports holds the foreign imports the emitted
 	// type literals reference.
 	SQLNullInner   *FieldInfo
-	SQLNullImports []string
+	SQLNullImports []TypeImport
 
 	// TypeImports holds every foreign package named anywhere in the field's
 	// type (the type itself, a slice/array element, a map key/value, a
@@ -178,6 +179,7 @@ type StructInfo struct {
 	Copy             bool   // bytes-path DecodeFrom copies retained strings/RawMessage/any out of data instead of aliasing it (matches the stream path's lifetime semantics)
 	AllowInvalidUTF8 bool   // opt out of decode UTF-8 validation (jsonv2 parity) for this struct's strings + raw spans
 	Test             bool   // declared in a *_test.go file — route output to *_ggen_test.go
+	XTest            bool   // declared in the external test package (`package foo_test`) — own output file + package clause
 
 	// IsAlias marks a top-level named type aliasing a primitive or struct
 	// (`type Count int`, `type LocalUUID uuid.UUID`). Aliases get the same
@@ -189,7 +191,7 @@ type StructInfo struct {
 	IsAlias               bool
 	AliasKind             TypeKind
 	AliasUnderlying       string          // Go type literal for the underlying (e.g. "string", "uuid.UUID")
-	AliasUnderlyingImport string          // import path when the underlying is from a foreign package; "" for same-pkg / stdlib basic types
+	AliasUnderlyingImport TypeImport      // the underlying's package when foreign; zero for same-pkg / stdlib basic types
 	AliasIface            FieldInterfaces // method-set probe on the underlying struct (KindStruct aliases only)
 
 	// AliasField captures the container shape for slice/map/array aliases
@@ -220,7 +222,7 @@ func SQLNullSpec(goType string) (SQLNullKind, bool) {
 	case "sql.NullInt16":
 		return SQLNullKind{Field: "Int16", Inner: KindInt16, Type: "int16"}, true
 	case "sql.NullByte":
-		return SQLNullKind{Field: "Byte", Inner: KindUint8, Type: "byte"}, true
+		return SQLNullKind{Field: "Byte", Inner: KindUint8, Type: "uint8"}, true
 	case "sql.NullBool":
 		return SQLNullKind{Field: "Bool", Inner: KindBool, Type: "bool"}, true
 	case "sql.NullFloat64":
@@ -244,18 +246,20 @@ func SQLNullSpec(goType string) (SQLNullKind, bool) {
 // (for cross-package / unannotated types).
 var generatedTypes map[string]struct{}
 
-// generatedFields carries each generated struct's fields alongside
-// generatedTypes, so a container emitter can ask what a value type OWNS —
-// whether decoding into a carried value would recycle any allocation, or
-// only overwrite scalars. Same lifetime as generatedTypes.
+// generatedFields carries each object-shaped generated struct's fields
+// alongside generatedTypes (aliases stay out — their methods delegate), so an
+// emitter can ask what a value type OWNS — whether decoding into a carried
+// value would recycle any allocation, or only overwrite scalars — and whether
+// a nested struct can encode as `{}`. Same lifetime as generatedTypes.
 var generatedFields map[string][]FieldInfo
 
 // TypeImport is one foreign package a field's type names, with the qualifier
-// the generated code uses for it (the package's declared name, which a plain
-// unaliased import binds).
+// the generated code spells it by. Explicit means the qualifier is not the
+// package's declared name, so the import line must bind it: `Name "Path"`.
 type TypeImport struct {
-	Path string
-	Name string
+	Path     string
+	Name     string
+	Explicit bool
 }
 
 // namedKinds maps every named type in the pass whose underlying type is a

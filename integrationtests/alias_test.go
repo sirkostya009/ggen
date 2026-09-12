@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -922,5 +923,54 @@ func TestAlias_elementStructGetsGenerated(t *testing.T) {
 	st.Reset(bytes.NewReader([]byte(`[{"a":1,"x":2}]`)), nil)
 	if _, err = (SoloList{}).DecodeFromStream(&st); !errors.As(err, &uke) {
 		t.Fatalf("unknown key (stream): want UnknownKeyError, got %v", err)
+	}
+}
+
+// R10IntroSrc is unannotated with no ggen methods, so R10IntroAlias takes the
+// field-introspection rung. Its `@Func` steps — a mod, a validator and a
+// converter variant — resolve against the alias's package like a struct's own
+// fields do; they used to vanish (the converter emitted `var conv0 ` and
+// killed the run).
+type R10IntroSrc struct {
+	A string `json:"a" pipe:"@R10Upper"`
+	B string `json:"b" pipe:"required @R10NonEmpty"`
+	N int64  `json:"n" pipe:"@R10ParseInt/nullzero"`
+}
+
+//ggen:generate
+type R10IntroAlias R10IntroSrc
+
+func R10Upper(s string) string { return strings.ToUpper(s) }
+
+func R10NonEmpty(s string) error {
+	if s == "" {
+		return errors.New("empty")
+	}
+	return nil
+}
+
+func R10ParseInt(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }
+
+func TestAlias_StructIntrospect_CustomSteps(t *testing.T) {
+	v, _, err := R10IntroAlias{}.DecodeFrom([]byte(`{"a":"x","b":"ok","n":"12"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.A != "X" || v.N != 12 {
+		t.Errorf("mod / converter dropped: %+v", v)
+	}
+	v, _, err = R10IntroAlias{}.DecodeFrom([]byte(`{"a":"x","b":"ok","n":null}`))
+	if err != nil || v.N != 0 {
+		t.Errorf("nullzero variant: v=%+v err=%v", v, err)
+	}
+	if _, _, err := (R10IntroAlias{}).DecodeFrom([]byte(`{"a":"x","b":""}`)); err == nil {
+		t.Error("@R10NonEmpty validator dropped: empty b accepted")
+	}
+	if _, _, err := (R10IntroAlias{}).DecodeFrom([]byte(`{"a":"x","b":"ok","n":"zz"}`)); err == nil || !strings.Contains(err.Error(), `parsing "zz"`) {
+		t.Errorf("converter error dropped: got %v", err)
+	}
+	s, err := R10IntroAlias{}.DecodeFromStream(ggen.NewStream(strings.NewReader(`{"a":"y","b":"ok","n":"3"}`), nil))
+	if err != nil || s.A != "Y" || s.N != 3 {
+		t.Errorf("stream: v=%+v err=%v", s, err)
 	}
 }
