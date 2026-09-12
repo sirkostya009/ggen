@@ -6779,7 +6779,8 @@ func (recv AnyWire) DecodeFromStream(s *ggen.Stream) (result AnyWire, err error)
 }
 
 func (s AnyWire) JSONSize() int {
-	size := 262
+	size := 6
+	size += ggen.AnySize(s.V)
 	return size
 }
 

@@ -5,8 +5,10 @@ import (
 	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
+	"math"
 	"math/big"
 	"math/rand"
+	"net/netip"
 	"reflect"
 	"strconv"
 	"strings"
@@ -1806,6 +1808,98 @@ func TestAppendAny_DurationUnits(t *testing.T) {
 		}
 		if string(got) != tc.want {
 			t.Errorf("%T: got %s, want %s", tc.in, got, tc.want)
+		}
+	}
+}
+
+type sizeText struct{ s string }
+
+func (t sizeText) MarshalText() ([]byte, error) { return []byte(t.s), nil }
+
+type sizeJSON struct{ n int }
+
+func (j sizeJSON) MarshalJSON() ([]byte, error) { return []byte(strings.Repeat("[1]", j.n)), nil }
+
+type sizeKey struct{ id int }
+
+func (k sizeKey) MarshalText() ([]byte, error) { return []byte("key-" + strconv.Itoa(k.id)), nil }
+
+type sizeInner struct {
+	A string  `json:"a"`
+	B []int   `json:"b,omitempty"`
+	C *string `json:"c,omitzero"`
+}
+
+type sizeOuter struct {
+	sizeInner
+	Name   string          `json:"na<me>"`
+	N      int64           `json:"n,string"`
+	F      float64         `json:"f,omitempty"`
+	P      *sizeInner      `json:"p"`
+	Any    any             `json:"any"`
+	Rows   []sizeInner     `json:"rows"`
+	Keys   map[sizeKey]int `json:"keys"`
+	Extra  map[string]any  `json:",embed"`
+	hidden int
+}
+
+// AnySize must bound what AppendAny writes for every dispatch arm, in both
+// escape modes. Control bytes and invalid UTF-8 are left out: JSONSize budgets
+// strings for decoded (legal) JSON text, as it does for typed string fields.
+func TestAnySize_BoundsAppendAny(t *testing.T) {
+	t.Parallel()
+	str := "q\"b\\n\n<>&h\u00e9😀"
+	long := strings.Repeat(str, 40)
+	ptrStr, ptrInt, ptrF := long, math.MinInt64, -math.MaxFloat64
+	bigHuge := new(big.Int).Exp(big.NewInt(10), big.NewInt(300), nil)
+	bigNeg := new(big.Int).Neg(bigHuge)
+	bigF := *big.NewFloat(-1.2345678901234567e300)
+	when := time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.FixedZone("", -7*3600))
+	type myInt int
+	type myStr string
+	type myBytes []byte
+	cases := []any{
+		nil, true, false, "", str, long, json.Number(""), json.Number("-123.456e-789"),
+		math.MaxFloat64, -math.SmallestNonzeroFloat64, 1e21, 999999999999999900000.0, -0.0000012345678901234567,
+		float32(math.MaxFloat32), int64(math.MinInt64), uint64(math.MaxUint64), int8(-128),
+		[]any{nil, str, 1.5, []any{map[string]any{long: []any{true}}}},
+		map[string]any{str: map[string]any{long: []string{str, ""}}},
+		[]string{str, "", long}, []int{math.MinInt, 0}, []uint64{math.MaxUint64}, []float64{-math.MaxFloat64},
+		[]bool{false, true}, []time.Time{when, {}}, []json.RawMessage{nil, json.RawMessage(`{"a":[1,2]}`)},
+		map[string]string{str: long}, map[string]int{long: math.MinInt}, map[string]float64{str: -math.MaxFloat64},
+		map[string]bool{str: false}, map[string]uint8{"x": 255},
+		json.RawMessage(nil), json.RawMessage(`[1,2,3]`),
+		*bigHuge, bigNeg, (*big.Int)(nil), bigF,
+		when, &when, (*time.Time)(nil), time.Duration(math.MinInt64),
+		&ptrStr, (*string)(nil), &ptrInt, (*int)(nil), &ptrF,
+		netip.MustParseAddr("fe80::1:2:3:4%eth0"), netip.MustParsePrefix("2001:db8::/32"),
+		sizeText{long}, sizeJSON{50}, myInt(math.MinInt), myStr(long), myBytes(long), [16]byte{1, 2, 3},
+		[]byte(nil), []byte(long),
+		map[sizeKey]int{{7}: 1, {123456}: math.MinInt},
+		sizeOuter{
+			A: long, B: []int{math.MinInt}, C: &ptrStr,
+			Name: str, N: math.MinInt64, F: -math.MaxFloat64,
+			P: &sizeInner{A: str}, Any: []any{sizeText{str}, &when},
+			Rows:  []sizeInner{{A: long}, {}},
+			Keys:  map[sizeKey]int{{1}: 2},
+			Extra: map[string]any{long: map[string]any{str: bigNeg}},
+		},
+		&sizeOuter{}, []sizeOuter{{}, {Name: long}},
+	}
+	for i, v := range cases {
+		b, err := AppendAny(nil, v)
+		if err != nil {
+			t.Fatalf("case %d %T: AppendAny: %v", i, v, err)
+		}
+		if got := AnySize(v); len(b) > got {
+			t.Errorf("case %d %T: AppendAny wrote %d bytes, AnySize reserved %d", i, v, len(b), got)
+		}
+		h, err := AppendAnyHTML(nil, v)
+		if err != nil {
+			t.Fatalf("case %d %T: AppendAnyHTML: %v", i, v, err)
+		}
+		if got := AnySizeHTML(v); len(h) > got {
+			t.Errorf("case %d %T: AppendAnyHTML wrote %d bytes, AnySizeHTML reserved %d", i, v, len(h), got)
 		}
 	}
 }

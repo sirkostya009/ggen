@@ -231,7 +231,8 @@ func (recv AnyStruct) DecodeFromStream(s *ggen.Stream) (result AnyStruct, err er
 }
 
 func (s AnyStruct) JSONSize() int {
-	size := 275
+	size := 19
+	size += ggen.AnySize(s.Body)
 	size += len(s.Name) * 2
 	return size
 }
@@ -469,7 +470,8 @@ func (recv AnyNumberStruct) DecodeFromStream(s *ggen.Stream) (result AnyNumberSt
 }
 
 func (s AnyNumberStruct) JSONSize() int {
-	size := 275
+	size := 19
+	size += ggen.AnySize(s.Body)
 	size += len(s.Name) * 2
 	return size
 }
@@ -717,7 +719,8 @@ func (recv R10DurationAny) DecodeFromStream(s *ggen.Stream) (result R10DurationA
 }
 
 func (s R10DurationAny) JSONSize() int {
-	size := 294
+	size := 38
+	size += ggen.AnySize(s.V)
 	return size
 }
 

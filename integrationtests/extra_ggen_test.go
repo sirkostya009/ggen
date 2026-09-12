@@ -8128,7 +8128,9 @@ func (s ElemKinds) JSONSize() int {
 	if n := len(s.Anys); n > 0 {
 		size += n - 1
 	}
-	size += len(s.Anys) * 256
+	for i0 := range s.Anys {
+		size += ggen.AnySize(s.Anys[i0])
+	}
 	if n := len(s.Blobs); n > 0 {
 		size += n - 1
 	}
@@ -10018,9 +10020,10 @@ func (recv MapVals) DecodeFromStream(s *ggen.Stream) (result MapVals, err error)
 
 func (s MapVals) JSONSize() int {
 	size := 75
-	size += len(s.Anys) * 68
-	for k := range s.Anys {
+	size += len(s.Anys) * 4
+	for k, v := range s.Anys {
 		size += len(k) * 2
+		size += ggen.AnySize(v)
 	}
 	size += len(s.Blobs) * 4
 	for k, v := range s.Blobs {

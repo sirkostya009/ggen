@@ -472,7 +472,8 @@ surface pinned by `Decoder[T]`).
   `AppendUnixSeconds`, `AppendNetipAddr*`, `AppendURL*`, `AppendRFC3339`),
   and glue (`NotEOF`, `Detach`, `CheckUTF8`, `SignedNeg`, `Uint64Limit`,
   `NewParseErr*`, `ShiftPos`, `BoolEnd` — the bool error-branch give-up
-  position, `AnyIsEmpty` — the
+  position, `AnySize`/`AnySizeHTML` — the `any` JSONSize budget,
+  `AnyIsEmpty` — the
   `omitempty` predicate for `any`, `Float32`, `ParseRFC3339`; the `Any*`
   families also carry a `validate bool` that only generated code has a
   reason to pass). Exported only because generated code calls
@@ -763,6 +764,14 @@ surface pinned by `Decoder[T]`).
   marshaler. The generator still rejects any named key type at parse
   (`map key must be string`), so the accepted shape is reachable only
   through `AppendAny`.
+
+- **A non-generated foreign struct still budgets a flat 128 in `JSONSize`**
+  (`sizeContribKind`, and `len×128` for its slice elements), so a large one
+  breaks the no-grow contract the `any` sizing (cli opt #88) now keeps.
+  `AnySize` is not a drop-in: those fields marshal through `encoding/json`,
+  whose default HTML escaping expands `<>&` 6× where `AnySize`'s non-HTML
+  factor is 2×. Needs a `json.Marshal`-shaped sizer, or `AnySizeHTML` as a
+  conservative stand-in.
 
 - **`Float64` surfaces `*strconv.NumError` (ErrRange) for an out-of-range
   float64 (`1e400`) while `Float32` maps the same condition to

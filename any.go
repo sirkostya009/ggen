@@ -1066,3 +1066,316 @@ func isNilPtr(v any) bool {
 	}
 	return reflect.ValueOf(v).Kind() == reflect.Pointer
 }
+
+// Per-kind budgets, the same the generator gives typed fields, so a value
+// costs JSONSize the same inside an `any` as in a field of its own kind.
+const (
+	anySizeBool     = 5
+	anySizeInt      = 20
+	anySizeFloat    = 25
+	anySizeTime     = 37 // quoted RFC3339Nano
+	anySizeDuration = 27 // quoted "-2562047h47m16.854775808s"
+)
+
+// AnySize is an upper bound on len(AppendAny(nil, v)), under the escape
+// factor JSONSize uses for strings. Typed leaves take the generator's
+// constant budgets; dynamic shapes are walked, a generated value reports its
+// own JSONSize, and a text or JSON marshaler is run to learn its length.
+func AnySize(v any) int { return anySize(v, 2, 0) }
+
+// AnySizeHTML is [AnySize] for [AppendAnyHTML], whose escapes run to 6 bytes.
+func AnySizeHTML(v any) int { return anySize(v, 6, 0) }
+
+func anySize(v any, mult, depth int) int {
+	if depth > maxDepth {
+		return 0
+	}
+	switch x := v.(type) {
+	case nil:
+		return 4
+	case bool:
+		return anySizeBool
+	case string:
+		return len(x)*mult + 2
+	case float64, float32:
+		return anySizeFloat
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64:
+		return anySizeInt
+	case json.Number:
+		return max(len(x), 1)
+	case []any:
+		n := listSize(len(x), 0)
+		for _, e := range x {
+			n += anySize(e, mult, depth+1)
+		}
+		return n
+	case []string:
+		n := listSize(len(x), 2)
+		for _, s := range x {
+			n += len(s) * mult
+		}
+		return n
+	case []int, []int8, []int16, []int32, []int64, []uint, []uint16, []uint32, []uint64:
+		return listSize(reflect.ValueOf(v).Len(), anySizeInt)
+	case []float32, []float64:
+		return listSize(reflect.ValueOf(v).Len(), anySizeFloat)
+	case []bool:
+		return listSize(len(x), anySizeBool)
+	case []time.Time:
+		return listSize(len(x), anySizeTime)
+	case []json.RawMessage:
+		n := listSize(len(x), 0)
+		for _, r := range x {
+			n += max(len(r), 4)
+		}
+		return n
+	case map[string]any:
+		n := 2
+		for k, e := range x {
+			n += len(k)*mult + 4 + anySize(e, mult, depth+1)
+		}
+		return n
+	case map[string]string:
+		n := 2
+		for k, e := range x {
+			n += (len(k)+len(e))*mult + 6
+		}
+		return n
+	case map[string]int:
+		return mapSize(x, mult, anySizeInt)
+	case map[string]int8:
+		return mapSize(x, mult, anySizeInt)
+	case map[string]int16:
+		return mapSize(x, mult, anySizeInt)
+	case map[string]int32:
+		return mapSize(x, mult, anySizeInt)
+	case map[string]int64:
+		return mapSize(x, mult, anySizeInt)
+	case map[string]uint:
+		return mapSize(x, mult, anySizeInt)
+	case map[string]uint8:
+		return mapSize(x, mult, anySizeInt)
+	case map[string]uint16:
+		return mapSize(x, mult, anySizeInt)
+	case map[string]uint32:
+		return mapSize(x, mult, anySizeInt)
+	case map[string]uint64:
+		return mapSize(x, mult, anySizeInt)
+	case map[string]float32:
+		return mapSize(x, mult, anySizeFloat)
+	case map[string]float64:
+		return mapSize(x, mult, anySizeFloat)
+	case map[string]bool:
+		return mapSize(x, mult, anySizeBool)
+	case json.RawMessage:
+		return max(len(x), 4)
+	case big.Int:
+		return x.BitLen()*1233>>12 + 3
+	case *big.Int:
+		if x == nil {
+			return 4
+		}
+		return x.BitLen()*1233>>12 + 3
+	case time.Time, *time.Time:
+		return anySizeTime
+	case time.Duration:
+		return anySizeDuration
+	case *string:
+		if x == nil {
+			return 4
+		}
+		return len(*x)*mult + 2
+	case *bool:
+		return anySizeBool
+	case *int, *int8, *int16, *int32, *int64, *uint, *uint8, *uint16, *uint32, *uint64:
+		return anySizeInt
+	case *float32, *float64:
+		return anySizeFloat
+	case Marshaler:
+		if isNilPtr(v) {
+			return 4
+		}
+		return x.JSONSize()
+	case encoding.TextAppender:
+		if isNilPtr(v) {
+			return 4
+		}
+		b, err := x.AppendText(nil)
+		if err != nil {
+			return 0
+		}
+		return len(b)*mult + 2
+	case encoding.TextMarshaler:
+		if isNilPtr(v) {
+			return 4
+		}
+		b, err := x.MarshalText()
+		if err != nil {
+			return 0
+		}
+		return len(b)*mult + 2
+	case json.Marshaler:
+		if isNilPtr(v) {
+			return 4
+		}
+		b, err := x.MarshalJSON()
+		if err != nil {
+			return 0
+		}
+		return len(b)
+	}
+	rv := reflect.ValueOf(v)
+	if needsAddr(rv.Type()) {
+		return anySize(addrOf(rv), mult, depth)
+	}
+	switch rv.Kind() {
+	case reflect.Pointer, reflect.Interface:
+		if rv.IsNil() {
+			return 4
+		}
+		return anySize(rv.Elem().Interface(), mult, depth+1)
+	case reflect.Bool:
+		return anySizeBool
+	case reflect.String:
+		return rv.Len()*mult + 2
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return anySizeInt
+	case reflect.Float32, reflect.Float64:
+		return anySizeFloat
+	case reflect.Struct:
+		return structSize(rv, mult, depth)
+	case reflect.Slice, reflect.Array:
+		et := rv.Type().Elem()
+		if et.Kind() == reflect.Uint8 {
+			return (rv.Len()+2)/3*4 + 2
+		}
+		n := listSize(rv.Len(), 0)
+		elemKind, elemAddr := et.Kind(), needsAddr(et)
+		for i := range rv.Len() {
+			n += reflectValueSize(rv.Index(i), elemKind, elemAddr, mult, depth+1)
+		}
+		return n
+	case reflect.Map:
+		return reflectMapSize(rv, mult, depth)
+	}
+	return 0
+}
+
+// listSize is the brackets and commas of an n-element list whose elements
+// each cost per.
+func listSize(n, per int) int {
+	return 2 + max(n-1, 0) + n*per
+}
+
+// mapSize budgets a string-keyed map of fixed-size values: per entry, the
+// escaped key, its quotes, the colon and the comma.
+func mapSize[V any](m map[string]V, mult, per int) int {
+	n := 2
+	for k := range m {
+		n += len(k)*mult + 4 + per
+	}
+	return n
+}
+
+// reflectValueSize mirrors appendReflectValue.
+func reflectValueSize(rv reflect.Value, kind reflect.Kind, addr bool, mult, depth int) int {
+	if addr {
+		return anySize(addrOf(rv), mult, depth)
+	}
+	if rv.Type().PkgPath() != "" {
+		return anySize(rv.Interface(), mult, depth)
+	}
+	switch kind {
+	case reflect.String:
+		return rv.Len()*mult + 2
+	case reflect.Bool:
+		return anySizeBool
+	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
+		return anySizeInt
+	case reflect.Float32, reflect.Float64:
+		return anySizeFloat
+	}
+	return anySize(rv.Interface(), mult, depth)
+}
+
+// reflectMapSize mirrors appendAny's reflect map arm, key marshalers included.
+func reflectMapSize(rv reflect.Value, mult, depth int) int {
+	kt, et := rv.Type().Key(), rv.Type().Elem()
+	kv := reflect.New(kt).Elem()
+	vv := reflect.New(et).Elem()
+	var keyApp encoding.TextAppender
+	var keyMar encoding.TextMarshaler
+	if kt.PkgPath() != "" {
+		switch kp := kv.Addr().Interface().(type) {
+		case encoding.TextAppender:
+			keyApp = kp
+		case encoding.TextMarshaler:
+			keyMar = kp
+		}
+	}
+	if keyApp == nil && keyMar == nil && kt.Kind() != reflect.String {
+		return 0
+	}
+	n := 2
+	elemKind, elemAddr := et.Kind(), needsAddr(et)
+	iter := rv.MapRange()
+	for iter.Next() {
+		kv.SetIterKey(iter)
+		vv.SetIterValue(iter)
+		switch {
+		case keyApp != nil:
+			b, err := keyApp.AppendText(nil)
+			if err != nil {
+				return 0
+			}
+			n += len(b) * mult
+		case keyMar != nil:
+			b, err := keyMar.MarshalText()
+			if err != nil {
+				return 0
+			}
+			n += len(b) * mult
+		default:
+			n += kv.Len() * mult
+		}
+		n += 4 + reflectValueSize(vv, elemKind, elemAddr, mult, depth+1)
+	}
+	return n
+}
+
+// structSize mirrors appendStruct, counting every member omitempty might
+// drop — the drop is decided on bytes not yet written.
+func structSize(rv reflect.Value, mult, depth int) int {
+	info := cachedStructInfo(rv.Type())
+	n := 2
+	for i := range info.fields {
+		f := &info.fields[i]
+		fv, ok := fieldValue(rv, f)
+		if !ok {
+			continue
+		}
+		if embedSplices(f, fv) {
+			kv := reflect.New(fv.Type().Key()).Elem()
+			iter := fv.MapRange()
+			for iter.Next() {
+				kv.SetIterKey(iter)
+				n += kv.Len()*mult + 4 + anySize(iter.Value().Interface(), mult, depth+1)
+			}
+			continue
+		}
+		n += len(f.name)*mult + 4
+		if f.quoted {
+			n += 2
+		}
+		var v any
+		if f.addr {
+			v = addrOf(fv)
+		} else {
+			v = fv.Interface()
+		}
+		n += anySize(v, mult, depth+1)
+	}
+	return n
+}

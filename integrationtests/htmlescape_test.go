@@ -19,7 +19,8 @@ type HTMLRawStruct struct {
 
 //ggen:generate htmlescape
 type HTMLEscapeStruct struct {
-	Note string `json:"note"`
+	Note    string `json:"note"`
+	Payload any    `json:"payload,omitempty"`
 }
 
 func TestHTMLEscape_DefaultLiteral(t *testing.T) {

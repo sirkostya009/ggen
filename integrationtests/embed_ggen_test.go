@@ -215,9 +215,10 @@ func (recv EmbedStruct) DecodeFromStream(s *ggen.Stream) (result EmbedStruct, er
 func (s EmbedStruct) JSONSize() int {
 	size := 11
 	size += len(s.Name) * 2
-	size += len(s.Extra) * 68
-	for k := range s.Extra {
+	size += len(s.Extra) * 4
+	for k, v := range s.Extra {
 		size += len(k) * 2
+		size += ggen.AnySize(v)
 	}
 	return size
 }

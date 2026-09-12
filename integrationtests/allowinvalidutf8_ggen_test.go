@@ -1143,14 +1143,17 @@ func (recv R10PermissiveAny) DecodeFromStream(s *ggen.Stream) (result R10Permiss
 }
 
 func (s R10PermissiveAny) JSONSize() int {
-	size := 274
-	size += len(s.M) * 68
-	for k := range s.M {
+	size := 18
+	size += ggen.AnySize(s.Body)
+	size += len(s.M) * 4
+	for k, v := range s.M {
 		size += len(k) * 2
+		size += ggen.AnySize(v)
 	}
-	size += len(s.Extra) * 68
-	for k := range s.Extra {
+	size += len(s.Extra) * 4
+	for k, v := range s.Extra {
 		size += len(k) * 2
+		size += ggen.AnySize(v)
 	}
 	return size
 }
@@ -1374,7 +1377,8 @@ func (recv R10PermissiveAnyNumber) DecodeFromStream(s *ggen.Stream) (result R10P
 }
 
 func (s R10PermissiveAnyNumber) JSONSize() int {
-	size := 265
+	size := 9
+	size += ggen.AnySize(s.Body)
 	return size
 }
 

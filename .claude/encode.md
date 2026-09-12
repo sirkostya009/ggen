@@ -7,7 +7,7 @@ buffer-append helpers generated code calls, and the `AppendAny` walker for `any`
 
 - `encode.go` — `Marshaler`, `Marshal`/`MarshalString`/`WriteTo` + slice variants, `BytesToString`.
 - `string.go` — `AppendString` (HTML-safe) + `AppendStringNoHTML` (jsonv2 default).
-- `any.go` — `AppendAny` walker + concrete-type fast paths.
+- `any.go` — `AppendAny` walker + concrete-type fast paths, and its sizing twin `AnySize`.
 - `url.go` — net/url.URL helpers.
 - `netip_addr.go` — `AppendNetipAddr` (zone-aware netip.Addr string emit).
 - `rfc3339.go` — `AppendRFC3339` (+ the decode twin `ParseRFC3339`, .claude/scan.md).
@@ -36,6 +36,8 @@ func AppendNetipAddrHTML(dst []byte, a netip.Addr) []byte // htmlescape variant
 func AppendURL(dst []byte, u url.URL) []byte          // wire-form text + closing `"`, re-escapes when needed; byte-for-byte url.URL.String() — path presence is tracked explicitly (hasPath := raw || u.Path != ""), so a Path starting with a NUL byte still gets the authority/path '/'
 func AppendURLHTML(dst []byte, u url.URL) []byte      // htmlescape variant
 func AppendRFC3339(dst []byte, t time.Time, layout string) ([]byte, error) // RFC3339/RFC3339Nano AppendFormat + the year ∈ [0,9999] / zone hour < 24 check time.Time.AppendText and jsonv2 apply — a bare AppendFormat wrote strings no RFC 3339 parser reads back
+func AnySize(v any) int                              // upper bound on len(AppendAny(nil, v)): generator's per-kind constants for typed leaves, walks dynamic shapes, generated values report JSONSize, text/JSON marshalers are run; mirrors appendAny's dispatch order + maxDepth
+func AnySizeHTML(v any) int                          // AnySize under AppendAnyHTML's 6× string escapes
 func AnyIsEmpty(v any) bool                          // omitempty for `any`: nil / "" / empty []any / empty map[string]any by type switch, other slices/maps/arrays/nil pointers by reflect; structs never inspected
 func CloseJSONString(dst []byte, from int) []byte     // close raw-appended text (TextAppender output), re-escaping iff dirty
 func CloseJSONStringHTML(dst []byte, from int) []byte // htmlescape variant

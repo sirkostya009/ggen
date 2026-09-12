@@ -3878,7 +3878,8 @@ func (s R10OmitEmpty) JSONSize() int {
 		}
 	}
 	if !ggen.AnyIsEmpty(s.Any) {
-		size += 263
+		size += 7
+		size += ggen.AnySize(s.Any)
 	}
 	if s.In != nil {
 		size += 6

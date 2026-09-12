@@ -1306,13 +1306,14 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 }
 
 func (s CopyDoc) JSONSize() int {
-	size := 350
+	size := 94
 	if n := len(s.Children); n > 0 {
 		size += n - 1
 	}
 	for i0 := range s.Children {
 		size += s.Children[i0].JSONSize()
 	}
+	size += ggen.AnySize(s.Extra)
 	size += len(s.Name) * 2
 	size += len(s.Props) * 4
 	for k, v := range s.Props {

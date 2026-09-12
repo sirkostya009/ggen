@@ -210,6 +210,7 @@ func (s HTMLRawStruct) AppendJSON(dst []byte) ([]byte, error) {
 func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i int, err error) {
 	result = recv
 	seenNote := false
+	seenPayload := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
 	}
@@ -224,6 +225,9 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 		i++
 		if !seenNote {
 			result.Note = ""
+		}
+		if !seenPayload {
+			result.Payload = nil
 		}
 		return result, i, nil
 	}
@@ -281,6 +285,15 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 					return result, i, ggen.NewParseErr("note", i, err)
 				}
 			}
+		case "payload":
+			if seenPayload {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"payload"}}
+			}
+			seenPayload = true
+			result.Payload, i, err = ggen.Any(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("payload", i, err)
+			}
 		default:
 			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
 		}
@@ -302,6 +315,9 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 			if !seenNote {
 				result.Note = ""
 			}
+			if !seenPayload {
+				result.Payload = nil
+			}
 			return result, i, nil
 		}
 		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
@@ -311,6 +327,7 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 func (recv HTMLEscapeStruct) DecodeFromStream(s *ggen.Stream) (result HTMLEscapeStruct, err error) {
 	result = recv
 	seenNote := false
+	seenPayload := false
 	err = s.ObjectOpen()
 	if err != nil {
 		return result, ggen.NewParseErr("", s.Offset(), err)
@@ -329,6 +346,9 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 		s.Pos++
 		if !seenNote {
 			result.Note = ""
+		}
+		if !seenPayload {
+			result.Payload = nil
 		}
 		return result, nil
 	}
@@ -351,6 +371,19 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 			result.Note, err = s.String(true)
 			if err != nil {
 				return result, ggen.NewParseErr("note", s.Offset(), err)
+			}
+		case "payload":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("payload", s.Offset(), err)
+			}
+			if seenPayload {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"payload"}}
+			}
+			seenPayload = true
+			result.Payload, err = s.Any(true)
+			if err != nil {
+				return result, ggen.NewParseErr("payload", s.Offset(), err)
 			}
 		default:
 			ownKey := strings.Clone(key)
@@ -385,6 +418,9 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 			if !seenNote {
 				result.Note = ""
 			}
+			if !seenPayload {
+				result.Payload = nil
+			}
 			return result, nil
 		}
 		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
@@ -394,13 +430,31 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 func (s HTMLEscapeStruct) JSONSize() int {
 	size := 11
 	size += len(s.Note) * 6
+	if !ggen.AnyIsEmpty(s.Payload) {
+		size += 11
+		size += ggen.AnySizeHTML(s.Payload)
+	}
 	return size
 }
 
 func (s HTMLEscapeStruct) AppendJSON(dst []byte) ([]byte, error) {
 	var err error
 	_ = err
-	dst = append(dst, "{\"note\":\""...)
+	dst = append(dst, '{')
+	start := len(dst)
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"note\":\""...)
 	dst = ggen.AppendString(dst, s.Note)
+	if !ggen.AnyIsEmpty(s.Payload) {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, "\"payload\":"...)
+		if dst, err = ggen.AppendAnyHTML(dst, s.Payload); err != nil {
+			return dst, err
+		}
+	}
 	return append(dst, '}'), nil
 }

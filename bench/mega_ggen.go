@@ -2403,7 +2403,7 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Node, 
 }
 
 func (s Node) JSONSize() int {
-	size := 563
+	size := 307
 	size += ((len(s.Blob) + 2) / 3) * 4
 	if n := len(s.Children); n > 0 {
 		size += n - 1
@@ -2415,6 +2415,7 @@ func (s Node) JSONSize() int {
 		size += n - 1
 	}
 	size += len(s.Coords) * 25
+	size += ggen.AnySize(s.Extra)
 	if n := len(s.Matrix); n > 0 {
 		size += n - 1
 	}
@@ -4991,7 +4992,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Co
 }
 
 func (s CopyNode) JSONSize() int {
-	size := 563
+	size := 307
 	size += ((len(s.Blob) + 2) / 3) * 4
 	if n := len(s.Children); n > 0 {
 		size += n - 1
@@ -5003,6 +5004,7 @@ func (s CopyNode) JSONSize() int {
 		size += n - 1
 	}
 	size += len(s.Coords) * 25
+	size += ggen.AnySize(s.Extra)
 	if n := len(s.Matrix); n > 0 {
 		size += n - 1
 	}

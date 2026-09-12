@@ -2318,6 +2318,14 @@ func appendAnyFn(htmlEscape bool) string {
 	return "ggen.AppendAny"
 }
 
+// anySizeFn is the JSONSize twin of appendAnyFn.
+func anySizeFn(htmlEscape bool) string {
+	if htmlEscape {
+		return "ggen.AnySizeHTML"
+	}
+	return "ggen.AnySize"
+}
+
 // foldLeadingQuote checks whether the field's value emit begins with a JSON
 // `"`. If so, it returns the prefix with `"` appended and the value-emit code
 // with the opening quote elided — saves one byte-append op per field.
@@ -2504,8 +2512,7 @@ func sizeContribKind(f FieldInfo, ref string) (int, string) {
 		// widen for !Valid → "null" (4); inner budgets <4 under-reserve otherwise.
 		return max(innerN, 4), code
 	case KindAny:
-		// Conservative upper bound; deeply nested any can overshoot.
-		return 256, ""
+		return 0, fmt.Sprintf("size += %s(%s)\n", anySizeFn(f.HTMLEscape), ref)
 	}
 	return 0, ""
 }
@@ -2641,7 +2648,8 @@ func sizeMapContrib(f FieldInfo, ref string) (int, string) {
 
 // constSizePerEntry reports whether a value of the given kind has a known
 // fixed upper-bound size, and returns it. format is honored for KindTime /
-// KindDuration so the budget tracks the actual layout.
+// KindDuration so the budget tracks the actual layout. Kinds sized at runtime
+// (KindAny, KindBigFloat) report false, leaving the per-entry sizeContrib loop.
 func constSizePerEntry(kind TypeKind, format string) (int, bool) {
 	switch kind {
 	case KindBool:
@@ -2656,11 +2664,6 @@ func constSizePerEntry(kind TypeKind, format string) (int, bool) {
 		return timeFormatSize(format), true
 	case KindDuration:
 		return durationFormatSize(format), true
-	// KindBigFloat has NO fixed bound — digit count scales with the value's
-	// user-settable precision (see sizeContribKind); callers fall to the
-	// per-element sizeContrib loop.
-	case KindAny:
-		return 64, true
 	}
 	return 0, false
 }

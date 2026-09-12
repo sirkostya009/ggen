@@ -2664,7 +2664,8 @@ func (recv AnyHolder) DecodeFromStream(s *ggen.Stream) (result AnyHolder, err er
 }
 
 func (s AnyHolder) JSONSize() int {
-	size := 265
+	size := 9
+	size += ggen.AnySize(s.Data)
 	return size
 }
 

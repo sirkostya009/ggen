@@ -471,6 +471,45 @@ func TestJSONSize_HTMLEscapeStruct_NoRealloc(t *testing.T) {
 	}
 }
 
+// An `any` is sized by walking the value it holds, so the bound holds for a
+// payload of any size at every position an `any` can occupy — including the
+// htmlescape escape factor and a generated struct reporting its own JSONSize.
+func TestJSONSize_AnyPositions_NoRealloc(t *testing.T) {
+	t.Parallel()
+	s := strings.Repeat("q\"b\\\n<>&é", 30)
+	worst := func() any {
+		return []any{
+			s, -math.MaxFloat64, int64(math.MinInt64), json.Number("-1.5e300"), nil, true,
+			map[string]any{s: []any{s, map[string]any{s: -math.SmallestNonzeroFloat64}}},
+			time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.FixedZone("", -7*3600)),
+			new(big.Int).Exp(big.NewInt(10), big.NewInt(200), nil),
+			Address{Street: s, City: s, ZipCode: "12345"},
+			[]string{s, s}, map[string]int{s: math.MinInt}, json.RawMessage(`{"k":[1,2,3]}`),
+		}
+	}
+	cases := []struct {
+		name string
+		v    ggen.Marshaler
+	}{
+		{"field", AnyStruct{Name: s, Body: worst()}},
+		{"omitempty field", R10OmitEmpty{Any: worst()}},
+		{"slice element", ElemKinds{Anys: []any{worst(), worst()}}},
+		{"map value", MapVals{Anys: map[string]any{"a": worst(), s: worst()}}},
+		{"embed catch-all", EmbedStruct{Name: s, Extra: map[string]any{"x": worst(), "y<>": worst()}}},
+		{"htmlescape field", HTMLEscapeStruct{Note: s, Payload: worst()}},
+	}
+	for _, tc := range cases {
+		size := tc.v.JSONSize()
+		got, err := tc.v.AppendJSON(make([]byte, 0, size))
+		if err != nil {
+			t.Fatalf("%s: AppendJSON: %v", tc.name, err)
+		}
+		if len(got) > size || cap(got) != size {
+			t.Errorf("%s: JSONSize=%d but AppendJSON wrote %d (cap %d)", tc.name, size, len(got), cap(got))
+		}
+	}
+}
+
 // The bound must cover the fixed field AND every spliced inline map entry.
 func TestJSONSize_InlineStruct_NoRealloc(t *testing.T) {
 	t.Parallel()

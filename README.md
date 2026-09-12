@@ -140,6 +140,11 @@ func (T) JSONSize() int
 func (T) AppendJSON(dst []byte) ([]byte, error)
 ```
 
+`JSONSize` is an upper bound on what `AppendJSON` writes, so a buffer presized
+with it never grows. `any` fields are measured from the value they hold at call
+time; escape budgets assume strings hold valid JSON text, so control bytes can
+still exceed it.
+
 `marshal` and `unmarshal` annotations generate methods that make struct implement
 `json.Marshaler` and `json.Unmarshaler` respectively:
 

@@ -959,7 +959,8 @@ Backlog and commit messages cite these by number — numbering is stable.
    ggen struct → its `DecodeFrom`/`DecodeFromStream`; else `ggen.SkipValue` +
    `json.Unmarshal` over the captured span.
 9. **Marshal output cap.** `JSONSize()` upper bound → single `make([]byte,0,cap)` +
-   `AppendJSON`. 1 alloc per top-level Marshal.
+   `AppendJSON`. 1 alloc per top-level Marshal. `any` values are sized at
+   runtime (#88); a non-generated foreign struct is still a flat 128.
 10. **Recursive nested-container emitter.** `emitByteSliceRead`/
     `emitStreamSliceRead`/`emitAppendSlice`/`sizeSliceContrib` take a depth param and
     unify slice+array. When `ElemKind` = KindSlice/KindArray they recurse via
@@ -2485,3 +2486,22 @@ benchmarks under `bench/`.
     encoding `{}`. Pinned by `TestOmitEmptyOnStructField` +
     `TestCheckRuleApplicability` rows (cli), `TestOmitEmpty_JSONEmptyKinds`
     (integ) and `TestAppendAny_OmitEmptyKeepsStruct` (root).
+88. **`any` values are sized at runtime.** `sizeContribKind`'s `KindAny` arm
+    emits `size += ggen.AnySize(ref)` (`AnySizeHTML` under `htmlescape`, via
+    `anySizeFn`, the twin of `appendAnyFn`), and `constSizePerEntry` has no
+    `KindAny` arm, so `map[string]any` values — the `,embed` catch-all
+    included — take the per-entry `sizeContrib` loop. The flat budgets it
+    replaces were guesses in both directions: 256 per field or element
+    over-reserved ~250 B for a scalar and under-reserved 15× for a flat
+    200-string slice (4009 written, 265 reserved); map values got 64. A
+    budget that undershoots breaks #9 silently, since `append` just grows.
+    `AnySize` mirrors `appendAny`'s dispatch and depth cap: typed leaves take
+    the generator's own constants (int 20, float 25, bool 5, time 37,
+    duration 27, strings `len×mult+2`), so a value costs the same inside an
+    `any` as in a typed field; dynamic shapes are walked; a generated value
+    reports its own `JSONSize`; a text or JSON marshaler is run to learn its
+    length (it runs again in `AppendJSON` — the one place sizing allocates).
+    Cost: `Marshal` walks each `any` twice, sizing then appending. Pinned by
+    `TestAnySize_BoundsAppendAny` (root, every dispatch arm, both escape
+    modes) and `TestJSONSize_AnyPositions_NoRealloc` (integ: field,
+    omitempty field, slice element, map value, catch-all, htmlescape).

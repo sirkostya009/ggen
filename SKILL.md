@@ -319,6 +319,8 @@ func (s T) JSONSize() int
 func (s T) AppendJSON(dst []byte) ([]byte, error)
 ```
 
+`JSONSize` = upper bound on `AppendJSON` output; presized buffer never grows. `any` fields measured from held value at call time. Control bytes in strings can exceed it (budget assumes valid JSON text).
+
 With `marshal` / `unmarshal` annotations:
 
 ```go
