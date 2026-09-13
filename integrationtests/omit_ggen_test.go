@@ -3173,7 +3173,7 @@ func (recv R10OmitEmpty) DecodeFrom(data []byte) (result R10OmitEmpty, i int, er
 				i++
 			}
 			if i < len(data) && data[i] != ']' {
-				return result, i, &ggen.LenError{Pos: i, Path: []string{"zero"}, Want: 0, Got: 1}
+				return result, i, &ggen.LenError{Pos: i, Path: []string{"zero"}, Want: 0, Got: 1, AtLeast: true}
 			}
 			if i >= len(data) || data[i] != ']' {
 				return result, i, ggen.NewParseErr("zero", i, ggen.ErrBadArray)
@@ -3792,7 +3792,7 @@ func (recv R10OmitEmpty) DecodeFromStream(s *ggen.Stream) (result R10OmitEmpty, 
 				}
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"zero"}, Want: 0, Got: 1}
+				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"zero"}, Want: 0, Got: 1, AtLeast: true}
 			}
 			s.Pos++
 		default:

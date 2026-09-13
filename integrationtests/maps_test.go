@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unsafe"
 
 	"github.com/sirkostya009/ggen"
 )
@@ -268,6 +269,29 @@ func TestNestedMaps_roundtripAndReset(t *testing.T) {
 	}
 	if len(lean.Inners) != 0 || len(lean.Lists) != 0 {
 		t.Errorf("omitted outer maps not emptied: %v %v", lean.Inners, lean.Lists)
+	}
+}
+
+// A carried nested map of allocation-owning values recycles the inner values
+// on the bytes path: the inner level swaps against the outer seed's live
+// entries, so a key present in both payloads keeps its slice backing, and a
+// key the second payload omits does not survive.
+func TestNestedMaps_innerValuesRecycled(t *testing.T) {
+	t.Parallel()
+	first, _, err := NestedMaps{}.DecodeFrom([]byte(`{"lists":{"c":{"w":[1,2,3],"gone":[4]}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	backing := unsafe.SliceData(first.Lists["c"]["w"])
+	got, _, err := first.DecodeFrom([]byte(`{"lists":{"c":{"w":[7,8]}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w := got.Lists["c"]["w"]; !reflect.DeepEqual(w, []int{7, 8}) || unsafe.SliceData(w) != backing {
+		t.Errorf("inner value not recycled: %v (backing reused %v)", w, unsafe.SliceData(w) == backing)
+	}
+	if _, ok := got.Lists["c"]["gone"]; ok || len(got.Lists["c"]) != 1 {
+		t.Errorf("omitted inner key survived: %v", got.Lists["c"])
 	}
 }
 

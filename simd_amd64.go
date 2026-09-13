@@ -31,7 +31,8 @@ import (
 // byte; hasHigh may over-report bytes past k in the hit lane — utf8.Valid on
 // the exact span settles it), stringSlow handoff on '\\' (scratch sized off
 // the real unescaped closing quote via stringSpanEnd, as String does;
-// validates its own output), and ErrBadString at the control byte itself,
+// validates its own output) or stringUnterminated when no quote follows, and
+// ErrBadString at the control byte itself,
 // which the structural locate already landed on (where String reports it).
 func classifyStructural(data, rest []byte, start, k int, hasHigh, validate bool) (string, int, error) {
 	switch rest[k] {
@@ -43,7 +44,7 @@ func classifyStructural(data, rest []byte, start, k int, hasHigh, validate bool)
 	case '\\':
 		closeIdx := bytes.IndexByte(rest[k:], '"')
 		if closeIdx < 0 {
-			return stringSlow(data, start, start+k, k+16, validate)
+			return stringUnterminated(data, start, start+k, validate)
 		}
 		// closeIdx is the FIRST '"', possibly an escaped `\"`; size off the real
 		// unescaped closing quote so an early escaped quote doesn't under-allocate
@@ -83,7 +84,7 @@ func classifyStructural64(data, rest []byte, start, k int, hasHigh, validate boo
 	case '\\':
 		closeIdx := bytes.IndexByte(rest[k:], '"')
 		if closeIdx < 0 {
-			return stringSlow(data, start, start+k, k+16, validate)
+			return stringUnterminated(data, start, start+k, validate)
 		}
 		return stringSlow(data, start, start+k, stringSpanEnd(data, start)-start, validate)
 	default:

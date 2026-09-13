@@ -605,7 +605,7 @@ func (recv Node) decodeFromDepth(data []byte, depth int) (result Node, i int, er
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"coords"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"coords"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					result.Coords[idx0], i, err = ggen.Float64(data, i)
 					if err != nil {
@@ -1611,7 +1611,7 @@ func (recv Node) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Node, 
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"coords"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"coords"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				result.Coords[idx0], err = s.Float64()
 				if err != nil {
@@ -3190,7 +3190,7 @@ func (recv CopyNode) decodeFromDepth(data []byte, depth int) (result CopyNode, i
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"coords"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"coords"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					result.Coords[idx0], i, err = ggen.Float64(data, i)
 					if err != nil {
@@ -4200,7 +4200,7 @@ func (recv CopyNode) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Co
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"coords"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"coords"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				result.Coords[idx0], err = s.Float64()
 				if err != nil {

@@ -3866,7 +3866,6 @@ func (recv NestedMaps) DecodeFrom(data []byte) (result NestedMaps, i int, err er
 						var mv map[string][]int
 						if reuse {
 							mv = carried[mk]
-							clear(mv)
 						}
 						if i < len(data) && data[i] == 'n' {
 							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {

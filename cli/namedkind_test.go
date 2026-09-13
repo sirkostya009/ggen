@@ -5,18 +5,6 @@ import (
 	"testing"
 )
 
-// valsOf mirrors the parse layer's derived Validation bucket, which some emit
-// paths read instead of the ordered Pipe.
-func valsOf(steps []Step) []ValidationRule {
-	var out []ValidationRule
-	for _, st := range steps {
-		if !st.IsMod {
-			out = append(out, st.V)
-		}
-	}
-	return out
-}
-
 // A named type over a primitive (`type Priority string`) reports KindStruct at
 // its use sites. Every rule emitter has to resolve the underlying kind through
 // effectiveKind, or the check either fails to compile (raw token / uncast

@@ -4259,7 +4259,7 @@ func (recv R10BoolShapes) DecodeFrom(data []byte) (result R10BoolShapes, i int, 
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"pair"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"pair"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					result.Pair[idx0], i, err = ggen.Bool(data, i)
 					if err != nil {
@@ -4598,7 +4598,7 @@ func (recv R10BoolShapes) DecodeFromStream(s *ggen.Stream) (result R10BoolShapes
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"pair"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"pair"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				result.Pair[idx0], err = s.Bool()
 				if err != nil {

@@ -4509,7 +4509,7 @@ func (recv PtrSliceTupleStruct) DecodeFrom(data []byte) (result PtrSliceTupleStr
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 3 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: 4}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: 4, AtLeast: true}
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
@@ -4648,7 +4648,7 @@ func (recv PtrSliceTupleStruct) DecodeFromStream(s *ggen.Stream) (result PtrSlic
 			slab0 := make([]Address, 3)
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 3 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"tuple"}, Want: 3, Got: 4}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"tuple"}, Want: 3, Got: 4, AtLeast: true}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -5462,7 +5462,7 @@ func (recv PtrSliceStruct) DecodeFrom(data []byte) (result PtrSliceStruct, i int
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 3 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: 4}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"tuple"}, Want: 3, Got: 4, AtLeast: true}
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
@@ -5878,7 +5878,7 @@ func (recv PtrSliceStruct) DecodeFromStream(s *ggen.Stream) (result PtrSliceStru
 			slab0 := make([]Address, 3)
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 3 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"tuple"}, Want: 3, Got: 4}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"tuple"}, Want: 3, Got: 4, AtLeast: true}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -6193,7 +6193,7 @@ func (recv NPtrContainersStruct) DecodeFrom(data []byte) (result NPtrContainersS
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 3 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"app"}, Want: 3, Got: 4}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"app"}, Want: 3, Got: 4, AtLeast: true}
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
@@ -7091,7 +7091,7 @@ func (recv NPtrContainersStruct) DecodeFromStream(s *ggen.Stream) (result NPtrCo
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 3 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"app"}, Want: 3, Got: 4}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"app"}, Want: 3, Got: 4, AtLeast: true}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {

@@ -515,7 +515,9 @@ quote or not (`"ab\x01}` → 3); an `n` / `t` / `f` that does not spell its
 literal is `ggen.ErrBadLiteral` / `ggen.ErrBadBool` with `Pos` on the first
 wrong byte; a `,string` number that is not JSON number grammar (`"NaN"`,
 `"+1"`, `"01"`) is `ggen.ErrBadNumber`; a `[N]T` tuple with too many elements
-reports `ggen.LenError{Want: N, Got: N+1}` (too few: the real count). A
+reports `ggen.LenError{Want: N, Got: N+1, AtLeast: true}` — decoding stops at
+the first extra element, so `Got` is a lower bound and the message says "at
+least" (too few: the exact count, `AtLeast` false). A
 malformed escape reports the backslash that opens it (`"ab\u00zz"` → 3),
 while input that simply ran out mid-escape reports the end of the input
 (`"ab\` → 4, `"ab\u00` → 7) — both the same on either path.

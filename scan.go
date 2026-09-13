@@ -94,10 +94,11 @@ func String(data []byte, i int, validate bool) (string, int, error) {
 	rest := data[start:]
 	closeIdx := bytes.IndexByte(rest, '"')
 	if closeIdx < 0 {
-		// No closing quote but a backslash present → stringSlow so a
-		// truncated `\u…` / trailing `\` surfaces as ErrBadString.
+		// No closing quote but a backslash present → walk the escape
+		// grammar so a truncated `\u…` / trailing `\` surfaces as
+		// ErrBadString.
 		if bsIdx := bytes.IndexByte(rest, '\\'); bsIdx >= 0 {
-			return stringSlow(data, start, start+bsIdx, bsIdx+16, validate)
+			return stringUnterminated(data, start, start+bsIdx, validate)
 		}
 		// A control byte before the end is malformed whatever follows —
 		// the stream scanners judge each window before waiting for more.
@@ -423,6 +424,62 @@ func stringSlow(data []byte, start, j, capHint int, validate bool) (string, int,
 		// A byte that is neither '"' nor '\\' can only appear here when the
 		// per-byte window ran out mid-run; the next iteration's bulk arm takes
 		// it (bulk was just set).
+	}
+	return "", len(data), ErrUnterminated
+}
+
+// stringUnterminated returns stringSlow's (pos, err) for a string with no
+// unescaped closing quote and a backslash at j, without copying: stringSlow
+// cannot succeed there, so its scratch would be garbage. skipString is not a
+// substitute, since skipped spans are not surrogate-validated.
+func stringUnterminated(data []byte, start, j int, validate bool) (string, int, error) {
+	if bad, _ := ctrlOrHigh(data[start:j]); bad {
+		return "", start + ctrlIndex(data[start:j]), ErrBadString
+	}
+	for j < len(data) {
+		c := data[j]
+		if c < 0x20 {
+			return "", j, ErrBadString
+		}
+		if c != '\\' {
+			j++
+			continue
+		}
+		if j+1 >= len(data) {
+			return "", len(data), ErrBadString
+		}
+		switch data[j+1] {
+		case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
+			j += 2
+		case 'u':
+			if j+6 > len(data) {
+				return "", uEscapeEnd(data, j), ErrBadString
+			}
+			r, ok := parseHex4(data[j+2 : j+6])
+			if !ok {
+				return "", j, ErrBadString
+			}
+			j += 6
+			if utf16.IsSurrogate(r) {
+				if j+6 <= len(data) {
+					if data[j] == '\\' && data[j+1] == 'u' {
+						if r2, ok := parseHex4(data[j+2 : j+6]); ok {
+							if utf16.DecodeRune(r, r2) != utf8.RuneError {
+								j += 6
+								continue
+							}
+						}
+					}
+				} else if validate && uEscapePrefix(data[j:]) {
+					return "", len(data), ErrInvalidUTF8
+				}
+				if validate {
+					return "", j, ErrInvalidUTF8
+				}
+			}
+		default:
+			return "", j, ErrBadString
+		}
 	}
 	return "", len(data), ErrUnterminated
 }

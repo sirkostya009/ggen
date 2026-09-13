@@ -1927,7 +1927,7 @@ func (recv AliasTuple) DecodeFrom(data []byte) (result AliasTuple, i int, err er
 	if i < len(data) && data[i] != ']' {
 		for {
 			if idx0 >= 3 {
-				return result, i, &ggen.LenError{Pos: i, Path: []string{""}, Want: 3, Got: 4}
+				return result, i, &ggen.LenError{Pos: i, Path: []string{""}, Want: 3, Got: 4, AtLeast: true}
 			}
 			neg := false
 			if i < len(data) && data[i] == '-' {
@@ -2023,7 +2023,7 @@ func (recv AliasTuple) DecodeFromStream(s *ggen.Stream) (result AliasTuple, err 
 	var idx0 int
 	for s.Bytes()[s.Pos] != ']' {
 		if idx0 >= 3 {
-			return result, &ggen.LenError{Pos: s.Offset(), Path: []string{""}, Want: 3, Got: 4}
+			return result, &ggen.LenError{Pos: s.Offset(), Path: []string{""}, Want: 3, Got: 4, AtLeast: true}
 		}
 		var iv int64
 		iv, err = s.Int64()
@@ -3149,7 +3149,7 @@ func (recv NPPositions) DecodeFrom(data []byte) (result NPPositions, i int, err 
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"a"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"a"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					var namedElem0 string
 					if i >= len(data) || data[i] != '"' {
@@ -3668,7 +3668,7 @@ func (recv NPPositions) DecodeFromStream(s *ggen.Stream) (result NPPositions, er
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"a"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"a"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				var namedElem0 string
 				namedElem0, err = s.String(true)

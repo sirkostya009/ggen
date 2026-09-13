@@ -1075,6 +1075,12 @@ func arrayLenErr(field string, want int, gotExpr, posVar string) string {
 	return withPos(fmt.Sprintf("&ggen.LenError{Path: []string{%q}, Want: %d, Got: %s}", field, want, gotExpr), posVar)
 }
 
+// tupleOverflowErr is the LenError for a tuple that bails at its first element
+// past want: the true length is only known to be at least want+1.
+func tupleOverflowErr(field string, want int, posVar string) string {
+	return withPos(fmt.Sprintf("&ggen.LenError{Path: []string{%q}, Want: %d, Got: %d, AtLeast: true}", field, want, want+1), posVar)
+}
+
 // requiredErr builds a typed *ggen.RequiredError literal.
 func requiredErr(field string) string {
 	return fmt.Sprintf("&ggen.RequiredError{Path: []string{%q}}", field)
@@ -4181,7 +4187,13 @@ if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 			// renderRawJSON appends over mv[:0] itself under -copy.
 			fmt.Fprintf(b, "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s] }\n", mvVar, f.ElemType, reuseVar, carriedVar, mkVar)
 		case reusesMapValues(f) && f.ElemKind == KindMap:
-			fmt.Fprintf(b, "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s]; clear(%[1]s) }\n", mvVar, f.ElemType, reuseVar, carriedVar, mkVar)
+			// An inner level that swaps reads the seed's live entries to
+			// recycle their values; only an in-place fill needs it emptied.
+			seed := "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s]; clear(%[1]s) }\n"
+			if reusesMapValues(vf) {
+				seed = "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s] }\n"
+			}
+			fmt.Fprintf(b, seed, mvVar, f.ElemType, reuseVar, carriedVar, mkVar)
 		default:
 			fmt.Fprintf(b, "{\nvar %s %s\n", mvVar, f.ElemType)
 		}
@@ -5778,7 +5790,7 @@ func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 		// `[0]T` holds no slots, so only `[]` parses and there is nothing to
 		// store: an element loop would index a zero-length array.
 		fmt.Fprintf(b, "if %[1]s < len(data) && data[%[1]s] != ']' { return result, %[1]s, %[2]s }\n",
-			kvar, arrayLenErr(f.JSONName, 0, "1", kvar))
+			kvar, tupleOverflowErr(f.JSONName, 0, kvar))
 		fmt.Fprintf(b, "if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadArray) }\n", kvar, fieldLit(f))
 		fmt.Fprintf(b, "%s++\n", posVar)
 		if topLevel {
@@ -5849,7 +5861,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 		// overflowed, so it reads as too-many next to the too-few case.
 		fmt.Fprintf(b, "if %s >= %d { return result, i, %s }\n",
 			ivar, arrayN,
-			arrayLenErr(f.JSONName, arrayN, strconv.Itoa(arrayN+1), "i"))
+			tupleOverflowErr(f.JSONName, arrayN, "i"))
 	}
 	if f.ElemPointer && !mptr {
 		// `null` element → nil pointer; skip the parse + slab work.
@@ -7249,7 +7261,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 %[1]s%[2]s`, chk, rm)
 	if isArray && arrayN == 0 {
 		// See emitByteSliceRead: no slots, so `[]` is the only tuple that fits.
-		fmt.Fprintf(b, "if s.Bytes()[s.Pos] != ']' { return result, %s }\n", arrayLenErr(f.JSONName, 0, "1", ""))
+		fmt.Fprintf(b, "if s.Bytes()[s.Pos] != ']' { return result, %s }\n", tupleOverflowErr(f.JSONName, 0, ""))
 		b.WriteString("s.Pos++\n")
 		return
 	}
@@ -7286,7 +7298,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 		// Excess element — see emitByteSliceRead.
 		fmt.Fprintf(b, "if %s >= %d { return result, %s }\n",
 			ivar, arrayN,
-			arrayLenErr(f.JSONName, arrayN, strconv.Itoa(arrayN+1), ""))
+			tupleOverflowErr(f.JSONName, arrayN, ""))
 	}
 	if f.ElemPointer && !mptr {
 		// `null` element → nil pointer; skip the parse + slab work.

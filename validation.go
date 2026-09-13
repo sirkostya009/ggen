@@ -102,9 +102,15 @@ type LenError struct {
 	Path []string
 	Want int
 	Got  int
+	// AtLeast marks Got as a lower bound: decoding stopped at the first
+	// element past Want rather than counting the rest.
+	AtLeast bool
 }
 
 func (e *LenError) Error() string {
+	if e.AtLeast {
+		return fmt.Sprintf("%s: length at least %d != required %d", strings.Join(e.Path, "."), e.Got, e.Want)
+	}
 	return fmt.Sprintf("%s: length %d != required %d", strings.Join(e.Path, "."), e.Got, e.Want)
 }
 func (*LenError) Rule() Rule             { return Len }

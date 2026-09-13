@@ -2022,7 +2022,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"named"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"named"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					neg := false
 					if i < len(data) && data[i] == '-' {
@@ -2141,7 +2141,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					if i < len(data) && data[i] != ']' {
 						for {
 							if idx1 >= 2 {
-								return result, i, &ggen.LenError{Pos: i, Path: []string{"nested[]"}, Want: 2, Got: 3}
+								return result, i, &ggen.LenError{Pos: i, Path: []string{"nested[]"}, Want: 2, Got: 3, AtLeast: true}
 							}
 							neg := false
 							if i < len(data) && data[i] == '-' {
@@ -2253,7 +2253,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"pair"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"pair"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
@@ -2381,7 +2381,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"point"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"point"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					result.Point[idx0], i, err = ggen.Float64(data, i)
 					if err != nil {
@@ -2427,7 +2427,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 3 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"rgb"}, Want: 3, Got: 4}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"rgb"}, Want: 3, Got: 4, AtLeast: true}
 					}
 					neg := false
 					if i < len(data) && data[i] == '-' {
@@ -2558,7 +2558,7 @@ func (recv TupleStruct) DecodeFrom(data []byte) (result TupleStruct, i int, err 
 					if i < len(data) && data[i] != ']' {
 						for {
 							if idx1 >= 2 {
-								return result, i, &ggen.LenError{Pos: i, Path: []string{"segments[]"}, Want: 2, Got: 3}
+								return result, i, &ggen.LenError{Pos: i, Path: []string{"segments[]"}, Want: 2, Got: 3, AtLeast: true}
 							}
 							neg := false
 							if i < len(data) && data[i] == '-' {
@@ -2766,7 +2766,7 @@ func (recv TupleStruct) DecodeFromStream(s *ggen.Stream) (result TupleStruct, er
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"named"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"named"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				var iv int64
 				iv, err = s.Int64()
@@ -2878,7 +2878,7 @@ func (recv TupleStruct) DecodeFromStream(s *ggen.Stream) (result TupleStruct, er
 				var idx1 int
 				for s.Bytes()[s.Pos] != ']' {
 					if idx1 >= 2 {
-						return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"nested[]"}, Want: 2, Got: 3}
+						return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"nested[]"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					var iv int64
 					iv, err = s.Int64()
@@ -2968,7 +2968,7 @@ func (recv TupleStruct) DecodeFromStream(s *ggen.Stream) (result TupleStruct, er
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"pair"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"pair"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -3125,7 +3125,7 @@ func (recv TupleStruct) DecodeFromStream(s *ggen.Stream) (result TupleStruct, er
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"point"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"point"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				result.Point[idx0], err = s.Float64()
 				if err != nil {
@@ -3186,7 +3186,7 @@ func (recv TupleStruct) DecodeFromStream(s *ggen.Stream) (result TupleStruct, er
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 3 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"rgb"}, Want: 3, Got: 4}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"rgb"}, Want: 3, Got: 4, AtLeast: true}
 				}
 				var iv int64
 				iv, err = s.Int64()
@@ -3310,7 +3310,7 @@ func (recv TupleStruct) DecodeFromStream(s *ggen.Stream) (result TupleStruct, er
 				var idx1 int
 				for s.Bytes()[s.Pos] != ']' {
 					if idx1 >= 2 {
-						return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"segments[]"}, Want: 2, Got: 3}
+						return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"segments[]"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					var iv int64
 					iv, err = s.Int64()
@@ -10522,7 +10522,7 @@ func (recv R10ZeroTuple) DecodeFrom(data []byte) (result R10ZeroTuple, i int, er
 				i++
 			}
 			if i < len(data) && data[i] != ']' {
-				return result, i, &ggen.LenError{Pos: i, Path: []string{"arr"}, Want: 0, Got: 1}
+				return result, i, &ggen.LenError{Pos: i, Path: []string{"arr"}, Want: 0, Got: 1, AtLeast: true}
 			}
 			if i >= len(data) || data[i] != ']' {
 				return result, i, ggen.NewParseErr("arr", i, ggen.ErrBadArray)
@@ -10609,7 +10609,7 @@ func (recv R10ZeroTuple) DecodeFromStream(s *ggen.Stream) (result R10ZeroTuple, 
 				}
 			}
 			if s.Bytes()[s.Pos] != ']' {
-				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"arr"}, Want: 0, Got: 1}
+				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"arr"}, Want: 0, Got: 1, AtLeast: true}
 			}
 			s.Pos++
 		default:
@@ -10743,7 +10743,7 @@ func (recv R10BZeroTupleContainers) DecodeFrom(data []byte) (result R10BZeroTupl
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"a"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"a"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					row0 := result.A[idx0]
 					if i >= len(data) || data[i] != '[' {
@@ -10754,7 +10754,7 @@ func (recv R10BZeroTupleContainers) DecodeFrom(data []byte) (result R10BZeroTupl
 						i++
 					}
 					if i < len(data) && data[i] != ']' {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"a[]"}, Want: 0, Got: 1}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"a[]"}, Want: 0, Got: 1, AtLeast: true}
 					}
 					if i >= len(data) || data[i] != ']' {
 						return result, i, ggen.NewParseErr("a[]", i, ggen.ErrBadArray)
@@ -10857,7 +10857,7 @@ func (recv R10BZeroTupleContainers) DecodeFrom(data []byte) (result R10BZeroTupl
 							i++
 						}
 						if i < len(data) && data[i] != ']' {
-							return result, i, &ggen.LenError{Pos: i, Path: []string{"m.value"}, Want: 0, Got: 1}
+							return result, i, &ggen.LenError{Pos: i, Path: []string{"m.value"}, Want: 0, Got: 1, AtLeast: true}
 						}
 						if i >= len(data) || data[i] != ']' {
 							return result, i, ggen.NewParseErr("m.value", i, ggen.ErrBadArray)
@@ -10957,7 +10957,7 @@ func (recv R10BZeroTupleContainers) DecodeFrom(data []byte) (result R10BZeroTupl
 							i++
 						}
 						if i < len(data) && data[i] != ']' {
-							return result, i, &ggen.LenError{Pos: i, Path: []string{"n.value"}, Want: 0, Got: 1}
+							return result, i, &ggen.LenError{Pos: i, Path: []string{"n.value"}, Want: 0, Got: 1, AtLeast: true}
 						}
 						if i >= len(data) || data[i] != ']' {
 							return result, i, ggen.NewParseErr("n.value", i, ggen.ErrBadArray)
@@ -11026,7 +11026,7 @@ func (recv R10BZeroTupleContainers) DecodeFrom(data []byte) (result R10BZeroTupl
 						i++
 					}
 					if i < len(data) && data[i] != ']' {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"s[]"}, Want: 0, Got: 1}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"s[]"}, Want: 0, Got: 1, AtLeast: true}
 					}
 					if i >= len(data) || data[i] != ']' {
 						return result, i, ggen.NewParseErr("s[]", i, ggen.ErrBadArray)
@@ -11148,7 +11148,7 @@ func (recv R10BZeroTupleContainers) DecodeFromStream(s *ggen.Stream) (result R10
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"a"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"a"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				row0 := result.A[idx0]
 				err = s.ArrayOpen()
@@ -11165,7 +11165,7 @@ func (recv R10BZeroTupleContainers) DecodeFromStream(s *ggen.Stream) (result R10
 					}
 				}
 				if s.Bytes()[s.Pos] != ']' {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"a[]"}, Want: 0, Got: 1}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"a[]"}, Want: 0, Got: 1, AtLeast: true}
 				}
 				s.Pos++
 				result.A[idx0] = row0
@@ -11293,7 +11293,7 @@ func (recv R10BZeroTupleContainers) DecodeFromStream(s *ggen.Stream) (result R10
 						}
 					}
 					if s.Bytes()[s.Pos] != ']' {
-						return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"m.value"}, Want: 0, Got: 1}
+						return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"m.value"}, Want: 0, Got: 1, AtLeast: true}
 					}
 					s.Pos++
 					result.M[mk] = mv
@@ -11418,7 +11418,7 @@ func (recv R10BZeroTupleContainers) DecodeFromStream(s *ggen.Stream) (result R10
 						}
 					}
 					if s.Bytes()[s.Pos] != ']' {
-						return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"n.value"}, Want: 0, Got: 1}
+						return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"n.value"}, Want: 0, Got: 1, AtLeast: true}
 					}
 					s.Pos++
 					result.N[mk] = mv
@@ -11521,7 +11521,7 @@ func (recv R10BZeroTupleContainers) DecodeFromStream(s *ggen.Stream) (result R10
 					}
 				}
 				if s.Bytes()[s.Pos] != ']' {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"s[]"}, Want: 0, Got: 1}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"s[]"}, Want: 0, Got: 1, AtLeast: true}
 				}
 				s.Pos++
 				result.S[len(result.S)-1] = row0

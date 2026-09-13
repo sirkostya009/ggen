@@ -116,7 +116,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"ai"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"ai"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					var consumed int
 					result.AI[idx0], consumed, err = result.AI[idx0].DecodeFrom(data[i:])
@@ -164,7 +164,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"am"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"am"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
@@ -223,7 +223,7 @@ func (recv ArrMerge) DecodeFrom(data []byte) (result ArrMerge, i int, err error)
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"ap"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"ap"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
@@ -441,7 +441,7 @@ func (recv ArrMerge) DecodeFromStream(s *ggen.Stream) (result ArrMerge, err erro
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"ai"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"ai"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				result.AI[idx0], err = result.AI[idx0].DecodeFromStream(s)
 				if err != nil {
@@ -502,7 +502,7 @@ func (recv ArrMerge) DecodeFromStream(s *ggen.Stream) (result ArrMerge, err erro
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"am"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"am"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -586,7 +586,7 @@ func (recv ArrMerge) DecodeFromStream(s *ggen.Stream) (result ArrMerge, err erro
 			slab0 := make([]MergeInner, 2)
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"ap"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"ap"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -1287,7 +1287,7 @@ func (recv OmitZeroed) DecodeFrom(data []byte) (result OmitZeroed, i int, err er
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"a"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"a"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					neg := false
 					if i < len(data) && data[i] == '-' {
@@ -1667,7 +1667,7 @@ func (recv OmitZeroed) DecodeFromStream(s *ggen.Stream) (result OmitZeroed, err 
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"a"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"a"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				var iv int64
 				iv, err = s.Int64()
@@ -2875,7 +2875,7 @@ func (recv R10CrossPkgFallback) DecodeFrom(data []byte) (result R10CrossPkgFallb
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 1 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"arr"}, Want: 1, Got: 2}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"arr"}, Want: 1, Got: 2, AtLeast: true}
 					}
 					result.Arr[idx0] = thirdparty.External{}
 					start := i
@@ -3257,7 +3257,7 @@ func (recv R10CrossPkgFallback) DecodeFromStream(s *ggen.Stream) (result R10Cros
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 1 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"arr"}, Want: 1, Got: 2}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"arr"}, Want: 1, Got: 2, AtLeast: true}
 				}
 				result.Arr[idx0] = thirdparty.External{}
 				span, err := s.CaptureValue()
@@ -3878,7 +3878,7 @@ func (recv R10CarriedLeaves) DecodeFrom(data []byte) (result R10CarriedLeaves, i
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"ab"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"ab"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					result.AB[idx0] = result.AB[idx0][:0]
 					if i < len(data) && data[i] == 'n' {
@@ -3960,7 +3960,7 @@ func (recv R10CarriedLeaves) DecodeFrom(data []byte) (result R10CarriedLeaves, i
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"am"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"am"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					clear(result.AM[idx0])
 					if i < len(data) && data[i] == 'n' {
@@ -4750,7 +4750,7 @@ func (recv R10CarriedLeaves) DecodeFrom(data []byte) (result R10CarriedLeaves, i
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"pam"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"pam"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					clear(v[idx0])
 					if i < len(data) && data[i] == 'n' {
@@ -5608,7 +5608,7 @@ func (recv R10CarriedLeaves) DecodeFromStream(s *ggen.Stream) (result R10Carried
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"ab"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"ab"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				result.AB[idx0] = result.AB[idx0][:0]
 				if s.Pos >= len(s.Bytes()) {
@@ -5701,7 +5701,7 @@ func (recv R10CarriedLeaves) DecodeFromStream(s *ggen.Stream) (result R10Carried
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"am"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"am"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				clear(result.AM[idx0])
 				err = s.SkipSpace()
@@ -6523,7 +6523,7 @@ func (recv R10CarriedLeaves) DecodeFromStream(s *ggen.Stream) (result R10Carried
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"pam"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"pam"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				clear(v[idx0])
 				err = s.SkipSpace()

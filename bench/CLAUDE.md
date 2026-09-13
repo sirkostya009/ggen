@@ -312,6 +312,22 @@ iteration count, single-threaded. That is the run for every number quoted in any
 doc, the README, or a chat reply. Anything else wastes minutes and is not what
 this repo expects.
 
+**Exception: sub-µs families need `-benchtime=5000x`.** 500x of a ~200 ns op
+is ~0.1 ms of timing, so one interrupt swamps it. Measured 2026-09 on
+Small_Unmarshal (simd, 3 GHz cap, count=2 per binary): at 500x the untouched
+jsonv2 control moved 33% between two iterations of ONE process and a single
+row read +75% on a change that never ran on its path; at 5000x the control held
+within 1.6% and `ggen` repeated to ±0.7%. Use 5000x for Small, Tiny and any
+other family whose ops are under ~1 µs; Mega, Reader and SkipHeavy stay at 500x.
+
+**Allocating rows only read at GC steady state.** A short run allocates too
+little for a collection to land reliably inside the timed window, so the row
+reports GC-free cost when it misses and swings when it hits: Small/ggen_copy
+(8 allocs, 3.2 KB/op) moved 24% between its own two iterations at 5000x (~16 MB
+allocated) while reading ~680 ns stable at 200000x (~640 MB), where GC cost
+averages in. Judge an allocating micro row from a run long enough to reach that
+steady state, not from its 500x or 5000x number.
+
 **Noise floor (measured 2026-07 on a non-busy box).** A core-pinned Mega
 `-benchtime=500x -count=10` pass on an otherwise-idle machine spreads ~1%
 min→max on the ggen rows (Unmarshal 0.8%, Marshal 0.8%, stream/readall ~1%);
@@ -329,32 +345,27 @@ relevant ones" — show ALL of them. A truncated benchmark result is worse than
 none: it hides regressions in the rows you dropped. If the output is long, it is
 long; emit it whole.
 
-**ALWAYS check the machine's power profile, warm up, and use a CONTROL ROW.**
-Learned the hard way (2026-07): under a capped power profile (`scaling_max_freq`
-pinned to 3 GHz with a 2 GHz floor, core idling at 625 MHz) the FIRST binary
-measured eats the frequency ramp and reads up to **50% slow** — which silently
-inverts A/B results. DeepNested/ggen swung 16.8 → 24.6 µs on an UNCHANGED
-binary; a depth-cap "+10.3% avx512 regression" and a number-grammar "+25%
-regression" were both pure artifact, and one even got a plausible-sounding
-mechanistic explanation written for it before re-measurement killed it.
+**ALWAYS warm up and use a CONTROL ROW; never wait on the machine.** Bench
+before/after head-to-head at whatever the box gives you: the `power-saver`
+3 GHz cap and a busy box are fine, and the ceiling cannot be lifted reliably
+here anyway (asusd and powerdevil re-pin `scaling_max_freq`, root-owned). What
+makes a capped or loaded run trustworthy is the protocol, because the FIRST
+binary measured eats the frequency ramp and can read up to **50% slow** —
+DeepNested/ggen once swung 16.8 → 24.6 µs on an UNCHANGED binary, and two
+"regressions" (depth cap +10.3% avx512, number grammar +25%) were pure artifact.
 
 Protocol, in order:
 
-1. `cat /sys/firmware/acpi/platform_profile` and
-   `/sys/devices/system/cpu/cpu24/cpufreq/{scaling_governor,scaling_max_freq}` —
-   want `performance` and the full boost ceiling (~5187 MHz here, NOT 3000). If
-   it isn't, `powerprofilesctl set performance` (check current with
-   `powerprofilesctl get`/`list`) — the box defaults to `power-saver`
-   (governor `powersave`, freq capped at 3000000), which is the exact trap
-   this section exists to catch. Set it back to `power-saver` when done if
-   you want the machine to idle quiet again; it isn't required for
-   correctness, only for not cooking the fans all day.
-2. Run one throwaway pass and DISCARD it, so no side eats the ramp.
+1. Run one throwaway pass and DISCARD it, so no side eats the ramp.
+2. Run each binary ONCE, back to back (`-count=2` at most per binary) — never
+   an alternating old/new loop.
 3. Include an **untouched third-party row as an in-run control** — the
    `jsonv2` row of the same bench family is ideal: ggen changes can't affect it,
-   so if it differs between the two binaries, the comparison is INVALID and the
-   ggen delta means nothing. Every A/B below is control-checked this way.
-   (`-bench='DeepNested_Unmarshal/(jsonv2|ggen)$'` gets both rows.)
+   so if it differs between the two binaries by more than ~3%, the comparison
+   is INVALID and the ggen delta means nothing. Every A/B below is
+   control-checked this way. (`-bench='DeepNested_Unmarshal/(jsonv2|ggen)$'`
+   gets both rows.) Record the cap and load next to the numbers; they are
+   context, not a gate.
 
 Only after the control matches is a delta real.
 
@@ -427,3 +438,25 @@ gone. Light values come out flat on time with the allocation COUNT collapsed
 `clear()` used to recycle buckets — the size of the values decides which of
 those two matters, and the generator cannot know it, so both are accepted.
 Fresh decode is flat, which it was NOT before the `_reuse` hoist (+6.5…+9.6%).
+
+## Stream `skipNumber` cursor off the stack (2026-09)
+
+`(*Stream).refillSkip` took `&i` / `&rerr`, and an address-taken cursor across
+that non-inlinable call forced every digit iteration of `skipNumber` through a
+stack load and store. Passing both by value and returning them keeps the
+cursor in a register (10 address-of sites → 0); `refillSkip` stays out of line.
+
+Core-pinned, 500x, count=2 (two separate passes, one per binary each), 3 GHz
+power-saver cap:
+
+| `ggen_stream` row | scalar pass 1 / 2 | simd pass 1 / 2 |
+| --- | --- | --- |
+| SkipHeavy/compact | −3.3% / −3.9% | −2.6% / −2.4% |
+| SkipHeavy/pretty | −3.1% / −1.3% | −2.6% / −2.1% |
+| bytes `ggen` rows (path untouched) | −0.1…+0.5% / −0.3…−0.2% | −1.3…−0.4% / −0.1…+0.1% |
+| jsonv2 control drift | 0.8% / 1.1% | 2.1% / 1.1% |
+
+About −2.5% on stream skip. All eight target measurements are negative while
+the bytes rows from the same two binaries stay within ±0.3% on pass 2, which
+makes a layout shift between the builds unlikely. Mega_Reader (does not reach
+`skipNumber`) flat. B/op and allocs unchanged.

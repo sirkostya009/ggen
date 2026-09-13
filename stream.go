@@ -1069,29 +1069,31 @@ scan:
 }
 
 // refillSkip refills the window mid-skip. Skip-path exclusive: bytes
-// before *i are consumed and discardable, so the refill compacts from *i
-// and rebases *i — without compaction every mid-number refill lands with
-// len == cap (readers fill the whole window) and doubles the buffer.
+// before i are consumed and discardable, so the refill compacts from i
+// and rebases it to 0 — without compaction every mid-number refill lands
+// with len == cap (readers fill the whole window) and doubles the buffer.
 // Callers keep the hot `i < len(s.buf)` bounds check inline and call this
-// only on exhaustion.
-func (s *Stream) refillSkip(i *int, rerr *error) bool {
-	if *rerr != nil {
+// only on exhaustion. Cursor and recorded error are passed and returned BY
+// VALUE: an address-taken cursor across this (non-inlinable) call would
+// force every digit iteration through the stack.
+func (s *Stream) refillSkip(i int, rerr error) (int, error, bool) {
+	if rerr != nil {
 		// A recorded reader error ends the scan: retrying would issue fresh
 		// blocking Reads on a reader that already failed, wedging the decode
 		// where every sibling value scanner returns at once.
-		return false
+		return i, rerr, false
 	}
-	err := s.ReadMore(*i)
-	*i = 0
+	err := s.ReadMore(i)
+	i = 0
 	if err != nil {
 		// A drained window legitimately ends the value; a real reader error
 		// must abort the skip rather than read as "number ended here".
 		if err != io.ErrUnexpectedEOF {
-			*rerr = err
+			rerr = err
 		}
-		return false
+		return i, rerr, false
 	}
-	return *i < len(s.buf)
+	return i, rerr, i < len(s.buf)
 }
 
 // NotEOF keeps a real reader error intact and maps only the drained-window
@@ -1123,15 +1125,20 @@ func orBadNumber(rerr error) error {
 func (s *Stream) skipNumber() error {
 	i := s.Pos
 	var rerr error // set by refillSkip on a real (non-drained) reader error
-	if i >= len(s.buf) && !s.refillSkip(&i, &rerr) {
-		s.Pos = i
-		return orBadNumber(rerr)
+	var ok bool
+	if i >= len(s.buf) {
+		if i, rerr, ok = s.refillSkip(i, rerr); !ok {
+			s.Pos = i
+			return orBadNumber(rerr)
+		}
 	}
 	if s.buf[i] == '-' {
 		i++
-		if i >= len(s.buf) && !s.refillSkip(&i, &rerr) {
-			s.Pos = i
-			return orBadNumber(rerr)
+		if i >= len(s.buf) {
+			if i, rerr, ok = s.refillSkip(i, rerr); !ok {
+				s.Pos = i
+				return orBadNumber(rerr)
+			}
 		}
 	}
 	if s.buf[i] == '0' {
@@ -1139,8 +1146,10 @@ func (s *Stream) skipNumber() error {
 	} else if s.buf[i] >= '1' && s.buf[i] <= '9' {
 		i++
 		for {
-			if i >= len(s.buf) && !s.refillSkip(&i, &rerr) {
-				break
+			if i >= len(s.buf) {
+				if i, rerr, ok = s.refillSkip(i, rerr); !ok {
+					break
+				}
 			}
 			if s.buf[i] < '0' || s.buf[i] > '9' {
 				break
@@ -1151,16 +1160,27 @@ func (s *Stream) skipNumber() error {
 		s.Pos = i
 		return orBadNumber(rerr)
 	}
-	if (i < len(s.buf) || s.refillSkip(&i, &rerr)) && s.buf[i] == '.' {
+	ok = i < len(s.buf)
+	if !ok {
+		i, rerr, ok = s.refillSkip(i, rerr)
+	}
+	if ok && s.buf[i] == '.' {
 		i++
-		if (i >= len(s.buf) && !s.refillSkip(&i, &rerr)) || s.buf[i] < '0' || s.buf[i] > '9' {
+		if i >= len(s.buf) {
+			i, rerr, ok = s.refillSkip(i, rerr)
+		} else {
+			ok = true
+		}
+		if !ok || s.buf[i] < '0' || s.buf[i] > '9' {
 			s.Pos = i
 			return orBadNumber(rerr)
 		}
 		i++
 		for {
-			if i >= len(s.buf) && !s.refillSkip(&i, &rerr) {
-				break
+			if i >= len(s.buf) {
+				if i, rerr, ok = s.refillSkip(i, rerr); !ok {
+					break
+				}
 			}
 			if s.buf[i] < '0' || s.buf[i] > '9' {
 				break
@@ -1168,19 +1188,35 @@ func (s *Stream) skipNumber() error {
 			i++
 		}
 	}
-	if (i < len(s.buf) || s.refillSkip(&i, &rerr)) && (s.buf[i] == 'e' || s.buf[i] == 'E') {
+	ok = i < len(s.buf)
+	if !ok {
+		i, rerr, ok = s.refillSkip(i, rerr)
+	}
+	if ok && (s.buf[i] == 'e' || s.buf[i] == 'E') {
 		i++
-		if (i < len(s.buf) || s.refillSkip(&i, &rerr)) && (s.buf[i] == '+' || s.buf[i] == '-') {
+		if i >= len(s.buf) {
+			i, rerr, ok = s.refillSkip(i, rerr)
+		} else {
+			ok = true
+		}
+		if ok && (s.buf[i] == '+' || s.buf[i] == '-') {
 			i++
 		}
-		if (i >= len(s.buf) && !s.refillSkip(&i, &rerr)) || s.buf[i] < '0' || s.buf[i] > '9' {
+		if i >= len(s.buf) {
+			i, rerr, ok = s.refillSkip(i, rerr)
+		} else {
+			ok = true
+		}
+		if !ok || s.buf[i] < '0' || s.buf[i] > '9' {
 			s.Pos = i
 			return orBadNumber(rerr)
 		}
 		i++
 		for {
-			if i >= len(s.buf) && !s.refillSkip(&i, &rerr) {
-				break
+			if i >= len(s.buf) {
+				if i, rerr, ok = s.refillSkip(i, rerr); !ok {
+					break
+				}
 			}
 			if s.buf[i] < '0' || s.buf[i] > '9' {
 				break

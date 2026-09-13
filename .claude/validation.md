@@ -78,10 +78,11 @@ Pointer-receiver structs, all implement `ggen.Error`. Each carries a
 the remaining fields:
 
 - **presence**: `RequiredError`, `NotEmptyError`
-- **length**: `LenError{Want, Got int}`, `MinLenError`/`MaxLenError{Limit, Got int}`.
-  For a `[N]T` tuple `Got` is the real count when too few and `N+1` when too
-  many (the overflow guard fires at the top of the element loop before the
-  extra element is counted), so `Got > Want` reads as too-many
+- **length**: `LenError{Want, Got int; AtLeast bool}`, `MinLenError`/`MaxLenError{Limit, Got int}`.
+  `AtLeast` marks `Got` as a lower bound and changes the message to "length at
+  least N". A `[N]T` tuple sets it on overflow — the guard fires at the top of
+  the element loop, before the extra element is counted, so `Got` is `N+1` —
+  and leaves it false when too few, where `Got` is the exact count
 - **runes**: `RunesError`, `MinRunesError`, `MaxRunesError` (same shape as length)
 - **numeric range**: `GTError`/`GTEError`/`LTError`/`LTEError{Limit any, Value any}`
 - **equality**: `EqError`/`NeqError{Want any, Value any}` (string + numeric)

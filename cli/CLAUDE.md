@@ -795,11 +795,12 @@ import path per pass (see "Foreign type spelling" under Cross-package types).
   Encode via `ggen.AppendAny` (type-switch ordering —
   see `.claude/encode.md`)
 - `[N]T` (fixed-length array) — JSON tuple with **strict count**: decode errors
-  with `ggen.LenError{Want:N, Got:…}` when count ≠ N — `Got` is the real count
-  when too few, and the literal `N+1` when too many (the guard fires at the
-  top of the element loop while `idx == N`, before the extra element is
-  counted, so both paths emit `strconv.Itoa(arrayN+1)` there; `Got > Want`
-  reads as too-many). `[0]T` marshals as the constant `[]` at EVERY position
+  with `ggen.LenError{Want:N, Got:…}` when count ≠ N — `Got` is the exact count
+  when too few; when too many the guard fires at the top of the element loop
+  while `idx == N`, before the extra element is counted, so the true length is
+  only known to be ≥ N+1 and both paths emit `tupleOverflowErr` (`Got: N+1,
+  AtLeast: true`, message "length at least N+1"). Counting the rest would
+  walk the whole tail of input already known to be invalid. `[0]T` marshals as the constant `[]` at EVERY position
   — field, slice element, array slot, map value — and the loop that carries
   it binds no value variable (`for range ref[1:]` + `,[]` for a container of
   them, `for k := range ref` for a `map[string][0]T`), since the element emit
@@ -812,7 +813,8 @@ import path per pass (see "Foreign type spelling" under Cross-package types).
   element (`map[string]*[0]int`) is excluded — it still binds its variable,
   since it can be `null`. Decode is the
   mirror — a no-slot tuple read that takes `[]` and nothing else,
-  `LenError{Want: 0, Got: 1}` for a first element, identical error and
+  `LenError{Want: 0, Got: 1, AtLeast: true}` for a first element (via
+  `tupleOverflowErr`), identical error and
   position on both paths. There is no element loop at all, which also keeps
   the emitter clear of a store into a zero-length array — gc itself fails on
   one, with an internal compiler error (backlog). Combines/nests freely
@@ -2231,7 +2233,9 @@ benchmarks under `bench/`.
       replacement for nothing.
     What `reusesMapValues` accepts, i.e. what owns something worth recycling:
     a generated struct value that `ownsAllocations`; a slice or map value
-    (seeded `_mold[mk][:0]` / `clear`); a `[]byte` value (seeded `[:0]` — its
+    (seeded `_mold[mk][:0]` / `clear` — the map seed drops the `clear` when
+    the inner level swaps too, since the swap reads the seed's live entries);
+    a `[]byte` value (seeded `[:0]` — its
     `AppendDecode` would otherwise land after the carried bytes); a
     `json.RawMessage` value ONLY under `-copy`, since a raw span otherwise
     ALIASES the input and owns nothing; and a POINTER value at any depth,
@@ -2365,7 +2369,7 @@ benchmarks under `bench/`.
 
 81. **Round-10 stream + receiver fixes.** All detailed in place: the pointer
     seed empties slice/map leaves and `emitArraySlotBlank` blanks merging
-    array slots (Decode-into-receiver), `LenError.Got = N+1` on tuple overflow
+    array slots (Decode-into-receiver), `LenError{Got: N+1, AtLeast: true}` on tuple overflow
     (`[N]T` kind), `headSentinel` (#69), `renderStreamNetipParse`'s detached
     error re-parse (net kinds), the `SQLNullSpec` `uint8` spelling + stream
     `narrowIntGuard` (sql.Null kind), `UnknownKeyError` stamped after

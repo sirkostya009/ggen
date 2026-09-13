@@ -1363,7 +1363,7 @@ func (recv ByteArrays) DecodeFrom(data []byte) (result ByteArrays, i int, err er
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 4 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"arr"}, Want: 4, Got: 5}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"arr"}, Want: 4, Got: 5, AtLeast: true}
 					}
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
 						return result, i, ggen.NewParseErr("arr", i, ggen.ErrBadNumber)
@@ -1588,7 +1588,7 @@ func (recv ByteArrays) DecodeFromStream(s *ggen.Stream) (result ByteArrays, err 
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 4 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"arr"}, Want: 4, Got: 5}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"arr"}, Want: 4, Got: 5, AtLeast: true}
 				}
 				var uv uint64
 				uv, err = s.Uint64()
@@ -1815,7 +1815,7 @@ func (recv R10ByteSliceTuple) DecodeFrom(data []byte) (result R10ByteSliceTuple,
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"ab"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"ab"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					result.AB[idx0] = result.AB[idx0][:0]
 					if i < len(data) && data[i] == 'n' {
@@ -1964,7 +1964,7 @@ func (recv R10ByteSliceTuple) DecodeFromStream(s *ggen.Stream) (result R10ByteSl
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"ab"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"ab"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				result.AB[idx0] = result.AB[idx0][:0]
 				if s.Pos >= len(s.Bytes()) {
@@ -2202,7 +2202,7 @@ func (recv R10BPtrByteArray) DecodeFrom(data []byte) (result R10BPtrByteArray, i
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 3 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"a"}, Want: 3, Got: 4}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"a"}, Want: 3, Got: 4, AtLeast: true}
 					}
 					if i >= len(data) || data[i] < '0' || data[i] > '9' {
 						return result, i, ggen.NewParseErr("a", i, ggen.ErrBadNumber)
@@ -2600,7 +2600,7 @@ func (recv R10BPtrByteArray) DecodeFromStream(s *ggen.Stream) (result R10BPtrByt
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 3 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"a"}, Want: 3, Got: 4}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"a"}, Want: 3, Got: 4, AtLeast: true}
 				}
 				var uv uint64
 				uv, err = s.Uint64()

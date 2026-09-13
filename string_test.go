@@ -712,3 +712,56 @@ func TestString_MalformedTailIsFinal(t *testing.T) {
 		}
 	}
 }
+
+// String's no-closing-quote branch classifies the error without copying the
+// payload.
+func TestStringUnterminatedEscapedNoAlloc(t *testing.T) {
+	data := append([]byte(`"a\n`), bytes.Repeat([]byte("x"), 1<<20)...)
+	var pos int
+	var err error
+	if allocs := testing.AllocsPerRun(5, func() {
+		_, pos, err = String(data, 0, true)
+	}); allocs != 0 {
+		t.Errorf("String(unterminated escaped) allocates %v per call, want 0", allocs)
+	}
+	if pos != len(data) || err != ErrUnterminated {
+		t.Errorf("String = (%d, %v), want (%d, %v)", pos, err, len(data), ErrUnterminated)
+	}
+}
+
+// stringUnterminated must be (pos, err)-identical to the stringSlow walk it
+// replaces, for every escape/surrogate/ctrl shape and both validate modes.
+func TestStringUnterminatedParity(t *testing.T) {
+	bodies := []string{
+		`a\n`, `a\`, `a\u`, `a\u12`, `a\u12zz`, `a\q`, `a\nx`, `\ud800`, `\ud800abc`,
+		"\xf0\x90\x80\x80\\n", `\ud800\udc0`, `\ud800A`, "x\xc3\xa9y\\t", `\/\b\f\r\t`,
+		"a\\n\x01b", "\x01a\\n", "ab\x01\\n", `\ud800\ud800`, `\ud83d\ude00tail`, `\uD83D\uDE00`,
+		`\u0041`, `\u00`, "\\n\xff\xfe", `\ud800\u0041`,
+	}
+	alpha := []byte{'\\', 'u', 'n', 'q', '/', '0', '1', 'a', 'f', 'd', '8', 'D', 'A', 'x', 0x01, 0x1f, 0x80, 0xc3, 0xa9, 0xf0}
+	rng := uint64(12345)
+	next := func() uint64 { rng ^= rng << 13; rng ^= rng >> 7; rng ^= rng << 17; return rng }
+	for range 20000 {
+		body := []byte{'\\'}
+		for i, l := 0, int(next()%14)+1; i < l; i++ {
+			body = append(body, alpha[next()%uint64(len(alpha))])
+		}
+		if bytes.IndexByte(body, '"') < 0 {
+			bodies = append(bodies, string(body))
+		}
+	}
+	for _, body := range bodies {
+		data := []byte(`"` + body)
+		bs := bytes.IndexByte(data[1:], '\\')
+		if bs < 0 || bytes.IndexByte(data[1:], '"') >= 0 {
+			t.Fatalf("bad case %q", body)
+		}
+		for _, validate := range []bool{true, false} {
+			_, wp, we := stringSlow(data, 1, 1+bs, bs+16, validate)
+			_, gp, ge := stringUnterminated(data, 1, 1+bs, validate)
+			if wp != gp || we != ge {
+				t.Errorf("%q validate=%v: stringSlow (%d,%v), stringUnterminated (%d,%v)", body, validate, wp, we, gp, ge)
+			}
+		}
+	}
+}

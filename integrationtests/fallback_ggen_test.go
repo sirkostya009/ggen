@@ -856,7 +856,7 @@ func (recv CrossPkgShapes) DecodeFrom(data []byte) (result CrossPkgShapes, i int
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Path: []string{"arr"}, Want: 2, Got: 3}
+						return result, i, &ggen.LenError{Pos: i, Path: []string{"arr"}, Want: 2, Got: 3, AtLeast: true}
 					}
 					result.Arr[idx0] = thirdparty2.External2{}
 					var consumed int
@@ -1298,7 +1298,7 @@ func (recv CrossPkgShapes) DecodeFromStream(s *ggen.Stream) (result CrossPkgShap
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"arr"}, Want: 2, Got: 3}
+					return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"arr"}, Want: 2, Got: 3, AtLeast: true}
 				}
 				result.Arr[idx0] = thirdparty2.External2{}
 				result.Arr[idx0], err = result.Arr[idx0].DecodeFromStream(s)

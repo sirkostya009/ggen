@@ -74,3 +74,19 @@ func TestParseErrAddPosCascadesToModError(t *testing.T) {
 		t.Errorf("ModError.Pos = %d, want 105", me.Pos)
 	}
 }
+
+// A lower-bound length says so; an exact one does not.
+func TestLenError_Message(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		err  LenError
+		want string
+	}{
+		{LenError{Path: []string{"a", "b"}, Want: 2, Got: 1}, "a.b: length 1 != required 2"},
+		{LenError{Path: []string{"a", "b"}, Want: 2, Got: 3, AtLeast: true}, "a.b: length at least 3 != required 2"},
+	} {
+		if got := tc.err.Error(); got != tc.want {
+			t.Errorf("Error() = %q, want %q", got, tc.want)
+		}
+	}
+}

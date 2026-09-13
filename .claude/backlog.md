@@ -59,66 +59,6 @@ any of them moves:
   Mega_Reader via Seq/Value(prev). Allocation counts proven, wall clock not
   — Mega is memory-bound.
 
-- **Scalar slice elements pay a dead zero store + a len-1 re-index bounds
-  check per element.** Opt #27's `dst = append(dst, <zero>)` pre-grow then
-  `dst[len(dst)-1] = int(n)` is emitted for kinds whose value is ALREADY in a
-  temp (the inline int/uint scanners) or an expression (the string fast
-  path); gc cannot dead-store the zero across the inline scan nor prove
-  `len >= 1` (check_bce: `mega_ggen.go:850 Found IsInBounds`, plus the tags
-  element). `dst = append(dst, int(n))` is a pure restructure — one store,
-  no re-index, the `panicBounds` site drops; the in-place multi-assign stays
-  only for call-returning kinds (`Float64`) and the `ggen.String` fall path.
-  ~280k elements per Mega_Unmarshal at ~2 instructions + 1 predicted branch
-  each, so likely below the 3-6% control drift on Mega — the "never-taken
-  bounds checks are ~free" caveat applies; would show, if at all, on a
-  cache-resident numeric-array micro. Bench: Mega_Unmarshal, stream twin.
-
-- **Nested map swap defeated by the outer seed's `clear()`.** For
-  `map[string]map[string]V` with allocation-owning inner values,
-  `renderMap`'s `reusesMapValues && ElemKind == KindMap` arm seeds `mv =
-  carried[mk]; clear(mv)`, then the inner level emits `carried1 := mv;
-  reuse1 := len(carried1) != 0; mv = make(..., len(carried1))` — `reuse1` is
-  constantly false, every inner value allocates fresh AND the just-cleared
-  bucket array is discarded by the make: strictly worse than either pure
-  clear-and-fill or pure swap (an unnoticed interaction from the bcaa594
-  nested-map compile fix; the clear IS right for an inner map that fills in
-  place). Fix: `clear(mv)` only when `!reusesMapValues(sliceElemField(f))`,
-  else seed bare so the inner swap reads the live entries. Bench: none
-  covers nested maps — a nested MapValues variant, allocs/op + B/op on the
-  reuse row; the reproducer is an allocation-identity test.
-
-- **`String` copies an entire unterminated escaped string before returning
-  `ErrUnterminated`.** In the no-closing-quote branch `closeIdx < 0` already
-  proves the value cannot complete, yet with a backslash present it hands
-  off to `stringSlow` (capHint `bsIdx+16`) purely to classify the error, and
-  `stringSlow` appends every remaining payload byte through the growth chain
-  before failing at `len(data)`: a truncated 8 MiB payload whose last string
-  carries one escape allocates ~41.7 MB across ~50 mallocs to return the
-  same `(pos, err)`. `classifyStructural`/`classifyStructural64` carry the
-  same shape. Fix must be a NON-COPYING `stringSlow` walk (a `copy bool` /
-  `capHint < 0` mode running the same ctrl/escape/hex/surrogate checks) —
-  NOT a `skipString` call: skipped spans are deliberately not
-  surrogate-validated, so `String("\ud800abc)` = `(7, ErrInvalidUTF8)` vs
-  `skipString` = `(10, ErrUnterminated)`. Error-path only, memory
-  amplification hardening (~5× the input in garbage per failure) rather than
-  throughput; pin with `AllocsPerRun`. No bench family exercises truncated
-  payloads.
-
-- **SWAR string kernels carry two bounds checks per 8-byte word + one in the
-  tail.** `checkSpan`/`ctrlOrHigh`/`CheckUTF8`/`hasCtrlByte` use
-  `for ; i+8 <= len(b); i += 8 { x := Uint64(b[i:]) … }` + `for ; i < len(b);
-  i++`; check_bce reports IsSliceInBounds + IsInBounds on the word load and
-  IsInBounds on the tail index in all four. The head-reslice shape `p := b;
-  for len(p) >= 8 { x := Uint64(p); …; p = p[8:] }; for _, c := range p`
-  compiles with zero bounds checks (verified as a real package file — a
-  `_test.go` twin proves nothing, `go build` skips it): ~25 → ~20
-  instructions per word, one branch per tail byte; `b` must be kept for the
-  trailing `utf8.Valid`. Scalar tier only (the SIMD tiers classify ctrl
-  in-vector), and Mega/Small/NoAlloc strings are 4-13 B so the word loop runs
-  0-1 iterations — expect noise-to-small; only long clean strings (scalar
-  SkipHeavy via `hasCtrlByte`, RuneGated) could show it. Bench: NoAlloc /
-  SkipHeavy scalar rows.
-
 - **`ReadMore(keep)` with a small `keep` on a full window memmoves nearly the
   whole buffer to reclaim `keep` bytes, then Reads at most `keep` bytes
   before growing anyway.** The compaction arm always memmoves `buf[keep:]`
@@ -155,44 +95,6 @@ any of them moves:
   −9.7% SkipHeavy compact from the SAME shell inlining into the runtime
   skip tree. Don't emit the guard without a house-rule A/B on Mega_Reader /
   NoAlloc_Reader / Small_Reader.
-
-- **Stream `stringSlow` scratch starts at a fixed 32 B.** `(*Stream).stringSlow`
-  does `make([]byte, 0, 32)` regardless of what is buffered, then appends the
-  raw prefix and every decoded byte; the bytes twin sizes the scratch
-  exactly from `stringSpanEnd`. Every escaped string over ~32 B runs the
-  growth chain on the stream: 9 scratch allocs + copies on the 4.8 KiB
-  EscapeHeavy field vs 1 on bytes. Fix: pass a capHint — `stringSpanEnd(
-  s.buf, start)-start` when the closing quote is already in the window
-  (`stringView`/`KeyView` and the `stringViewAVX*` cores know whether
-  IndexByte found it), else `len(s.buf)-start`, floored at 32. Caveat: the
-  only rows exercising it (EscapeHeavy/EscapeSparse `ggen_stream`) use a
-  512 B window, so the exact arm never fires there and the window-remainder
-  hint trims the chain to ~5 allocs, not 1; the 9→1 win needs a window at
-  least as large as the string. Bench: EscapeHeavy/EscapeSparse ggen_stream
-  (allocs/op, B/op).
-
-- **`(*Stream).skipNumber`'s cursor is address-taken for `refillSkip(*int,
-  *error)`, so every digit iteration loads/stores it through the stack.**
-  `refillSkip` (cost 97, not inlinable — it calls ReadMore) takes `&i`/`&rerr`
-  at 10 sites, so the compiler cannot registerize them: the -S listing shows
-  `MOVQ i+24(SP)` / `LEAQ 1(SI)` / `MOVQ DX, i+24(SP)` per digit in all three
-  digit runs, where the bytes `skipNumber` and the stream `Int64`/`Float64`
-  keep the cursor in a register (they hoist `buf := s.buf` and only call
-  ReadMore at loop exit — scan.md "Buffer-header hoist"; `skipNumber` is the
-  odd refill loop out). Fix: value-returning `refillSkip(i int, rerr error)
-  (int, error, bool)`, the ten sites rewritten as `if i >= len(s.buf) { if
-  i, rerr, ok = s.refillSkip(i, rerr); !ok { … } }`; asm-verified in a
-  prototype: 0 address-of sites, cursor in BX, ~7 → 4 memory ops per digit,
-  `refillSkip` stays out-of-line (cost 95) so the inline-check/cold-helper
-  split is preserved; full root suite + simd + the Stream/Skip/Reader/Seq
-  integrationtests passed. Distinct from the rejected window-gated inline
-  int loops (generated Int64 sites) and the vector skipNumber tier (bytes
-  path): no new kernel, no new call, only the address-taking removed. Reach:
-  SkipHeavy `ggen_stream` rows (compact + pretty, scalar and avx512 — all
-  tiers call `s.skipNumber()`); Mega_Reader does not reach it
-  (`CaptureValue` uses the bytes SkipValue). Zen 3+ memory renaming can hide
-  the SP-relative store→load latency, so the win may be small. Update the
-  scan.md `refillSkip(&i)` sentence if it lands.
 
 Smaller UNMEASURED notes from the round-10 fix wave (benches were forbidden
 there; check when a bench pass is next scheduled):
@@ -813,9 +715,53 @@ surface pinned by `Decoder[T]`).
   makes the compiler abort with "can SSA LHS mv[idx0] but not RHS" instead of
   dead-storing it. Nothing in ggen is blocked (the `[0]T` readers have no
   element loop at all, cli opt #85), but the toolchain bug stands.
-  Reproducer kept at `~/audit-round10/work/probe1`.
+  Minimal repro (two shapes, array-variable and call-result RHS) with a drafted upstream report at `~/audit-round10/ice/REPORT.md`.
 
 # Tried Rejected
+
+- **Appending scalar slice elements directly instead of pre-grow + re-index —
+  REJECTED, measured flat (2026-09).** `row = append(row, int(n))` in place of
+  `append(row, 0)` then `row[len(row)-1] = int(n)` on the bytes path removes a
+  dead zero store and one bounds check per element (the `mega_ggen.go:868`
+  IsInBounds goes). Two core-pinned 500x passes: Mega_Unmarshal/ggen scalar
+  −0.3% / −0.5%, ggen_copy −0.5% / −1.3% (controls 0.1% / 0.4%) — at noise,
+  as predicted for ~2 instructions over ~280k elements. The simd pair was
+  unreadable: the untouched jsonv2 control ran 4.1% / 4.0% faster in the
+  patched binary on BOTH passes, a reproducible layout difference between the
+  two builds. Don't retry for speed; if it lands it lands as a codegen
+  simplification, not a perf change.
+
+- **Sizing the stream `stringSlow` scratch from the raw span — REJECTED,
+  measured (2026-09).** `make([]byte, 0, max(32, stringSpanEnd(s.buf,
+  start)-start))` in place of the fixed 32 B, mirroring the bytes twin. Cuts
+  allocations a third (EscapeHeavy ggen_stream 38 → 27, EscapeSparse 42 → 30)
+  but is slower and allocates MORE bytes: EscapeHeavy/ggen_stream +13.1%
+  scalar (control 2.4%) / +5.7% simd (control 0.3%), B/op 34224 → 37344;
+  EscapeSparse +2.4% (control 0.1%), B/op 66608 → 70192; Mega_Reader flat. On a
+  512 B window the closing quote of a long string is rarely buffered, so the
+  hint falls back to the window remainder for every escaped string, short ones
+  included — a larger zeroed `make` plus an extra `stringSpanEnd` walk over
+  bytes the copy touches anyway, in exchange for skipping cheap growth
+  appends. Fewer allocations is not the metric; don't retry without a hint
+  that never over-sizes short strings.
+
+- **Bounds-check-free SWAR string kernels — REJECTED, measured (2026-09).**
+  Two shapes, both one core-pinned 500x pass per side with jsonv2 controls.
+  (1) Head-reslice all four kernels (`p := b; for len(p) >= 8 { …; p = p[8:] }`)
+  removes the 12 bounds checks but makes the POINTER loop-carried: `p[8:]`
+  must not point past the allocation, so every iteration computes
+  `ptr += cap > 0 ? 8 : 0` (NEG/SAR/AND/ADD) and the next load waits on it,
+  where the indexed loop carries only a 1-cycle `i += 8` and its bounds
+  checks are predicted and ~free. `checkSpan` on Small's 2800 B string:
+  Small_Unmarshal/ggen 622.8 → 700.4 ns/op (+12.5%, reproduced at 200000x).
+  The reshape also dropped `ctrlOrHigh` under the inline budget (86 → 75),
+  and Mega_Reader read −4.2% that pass. (2) Keeping the indexed word loop and
+  folding the tail into `hi` alone (`for _, c := range b[i:]` —
+  `ctrlOrHigh` 86 → 70, inlined at all 6 sites, codegen otherwise base) did
+  NOT reproduce any stream win (Mega_Reader/ggen_stream +1.2%, control 0.35%)
+  and read EscapeHeavy/ggen +7.0% (control 1.9%), where the inlined call grows
+  the hot bytes `stringSlow`. Don't retry: the removed branches were the cheap
+  part, and inlining `ctrlOrHigh` has no measured beneficiary.
 
 - **Folding the bool give-up walk into `ggen.Bool` — REJECTED, measured
   (2026-09, inline cost).** `Bool` costs 54; every variant carrying the

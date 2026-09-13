@@ -171,17 +171,15 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   `StringView` (no copy), and the checks are byte compares on the
   already-validated string. `AppendRFC3339` is the encode twin
   (.claude/encode.md). Pinned by `TestParseRFC3339_JSONv2Parity`.
-- **`Zero[T any](p *T)`** — one-line generic reset generated code calls before
-  a merging cross-package rung (`encoding/json`, `UnmarshalJSON`,
-  `UnmarshalText`) so decode-into-receiver yields what a fresh decode would;
-  generic so the emitter needs no spelling of the foreign type.
 - **`String()` zero-copy alias** via `unsafe.String(unsafe.SliceData(data[start:]),
   len)` when no escapes; falls back to `stringSlow` (`utf8.AppendRune` for `\uXXXX` +
   surrogates). `bytes.IndexByte` (SIMD) finds the closing `"`; a second IndexByte
-  over the span detects a preceding `\`. A truncated `\u…`/trailing `\` that is
-  still a valid escape prefix → `ErrBadString` at `len(data)` via fallthrough
-  to `stringSlow`; a tail that cannot become an escape reports the backslash
-  (`uEscapeEnd`, see the error-position contract). **UTF-8 validated** (jsonv2
+  over the span detects a preceding `\`. With no closing quote and a backslash
+  present, `stringUnterminated` runs `stringSlow`'s grammar without copying —
+  `stringSlow` cannot succeed there — so a truncated `\u…`/trailing `\` that is
+  still a valid escape prefix → `ErrBadString` at `len(data)`, and a tail that
+  cannot become an escape reports the backslash (`uEscapeEnd`, see the
+  error-position contract). **UTF-8 validated** (jsonv2
   parity, `ErrInvalidUTF8`): the clean span goes through `checkSpan` — the SWAR
   ctrl walk fused with a high-bit accumulate, so pure-ASCII spans never pay the
   `utf8.Valid` rune walk; only spans that actually contain ≥0x80 bytes run it.
@@ -293,7 +291,10 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   VPMOVM2B+VPORD+VPMOVB2M). Both shaves measured −2.9% NoAlloc at avx512. Shared scalar `classifyStructural` tail keeps alias return /
   `stringSlow` handoff / error identity byte-identical to `String` (pinned by
   `TestStringSIMD_Parity`: fixed cases at every vector-phase alignment + 2000
-  randomized bodies, all three tiers). **No tier ever reads past
+  randomized bodies, all three tiers), including the non-copying
+  `stringUnterminated` route for an escaped string with no closing quote
+  (`TestStringSIMD_UnterminatedEscaped`: 0 allocations, parity at every lane
+  offset). **No tier ever reads past
   `data[len(data)-1]`.** The 16/32-lane tiers take their tail through
   `Load*Part` (zero-fill, composed from scalar element loads); padding zeroes
   register as ctrl bytes, filtered by the `k < len(rest)` position check. The
@@ -899,7 +900,9 @@ Skipped bytes are discardable, so every skip refill now compacts:
 `SkipValue`/`skipArray`/`skipObject` bound checks pass `s.Pos` (== len(buf)
 ⇒ free full-discard, no memmove) + `s.Pos = 0` rebase; `skipString`'s
 clean-window refill full-discards (`ReadMore(len(buf))`); `skipNumber`
-refills via `refillSkip(&i)` — the hot `i < len(s.buf)` bounds check stays
+refills via `refillSkip(i, rerr)` (cursor and recorded error passed and
+returned BY VALUE, so the digit loops keep the cursor in a register) — the
+hot `i < len(s.buf)` bounds check stays
 inline, the cold helper compacts + rebases (a pointer-arg `hasByteAt`
 variant broke inlining and cost +40% — the split is load-bearing), and
 EVERY `skipNumber` exit writes the rebased `i` back to `s.Pos` (its error

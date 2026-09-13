@@ -8,6 +8,7 @@ import (
 	jsonv2 "encoding/json/v2"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -212,13 +213,17 @@ func TestTuple_StrictTooFew(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error on short tuple")
 	}
-	if _, ok := errors.AsType[*ggen.LenError](err); !ok {
-		t.Errorf("got %v, want *ggen.LenError", err)
+	le, ok := errors.AsType[*ggen.LenError](err)
+	if !ok {
+		t.Fatalf("got %v, want *ggen.LenError", err)
+	}
+	if le.Want != 2 || le.Got != 1 || le.AtLeast {
+		t.Errorf("Want=%d Got=%d AtLeast=%v, want an exact 2/1", le.Want, le.Got, le.AtLeast)
 	}
 }
 
-// More than N elements errors; Got counts the element that overflowed, so it
-// reads as too-many next to the too-few case — on both paths.
+// More than N elements errors at the first extra element on both paths, so Got
+// is a lower bound (N+1) and AtLeast says so.
 func TestTuple_StrictTooMany(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"point":[1.5,2.5,3.5]}`)
@@ -232,8 +237,11 @@ func TestTuple_StrictTooMany(t *testing.T) {
 			t.Errorf("%s: got %v, want *ggen.LenError", path, err)
 			continue
 		}
-		if le.Want != 2 || le.Got != 3 {
-			t.Errorf("%s: Want=%d Got=%d, want 2/3", path, le.Want, le.Got)
+		if le.Want != 2 || le.Got != 3 || !le.AtLeast {
+			t.Errorf("%s: Want=%d Got=%d AtLeast=%v, want at least 2/3", path, le.Want, le.Got, le.AtLeast)
+		}
+		if msg := le.Error(); !strings.Contains(msg, "at least 3") {
+			t.Errorf("%s: message %q does not say the length is a lower bound", path, msg)
 		}
 	}
 }

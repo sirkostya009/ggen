@@ -278,3 +278,28 @@ func TestStreamStringSIMD_ErrorPos(t *testing.T) {
 		}
 	}
 }
+
+// Every tier classifies an unterminated escaped string exactly as String does
+// — the escape landing at each lane position — and copies nothing to do it.
+func TestStringSIMD_UnterminatedEscaped(t *testing.T) {
+	tails := []string{`\n`, `\`, `\u`, `\u12`, `\u12zz`, `\q`, `\ud800`, `\ud800abc`, `\ud800\udc0`, "\\n\x01", `\ud83d\ude00x`}
+	for n := range 70 {
+		for _, tail := range tails {
+			data := []byte(`"` + strings.Repeat("a", n) + tail)
+			for _, validate := range []bool{true, false} {
+				_, wp, we := String(data, 0, validate)
+				for _, tier := range stringTiers {
+					if _, p, err := tier.fn(data, 0, validate); p != wp || err != we {
+						t.Errorf("%s(%q, validate=%v) = (%d, %v), String = (%d, %v)", tier.name, data, validate, p, err, wp, we)
+					}
+				}
+			}
+		}
+	}
+	data := append([]byte(`"a\n`), bytes.Repeat([]byte("x"), 1<<20)...)
+	for _, tier := range stringTiers {
+		if allocs := testing.AllocsPerRun(5, func() { tier.fn(data, 0, true) }); allocs != 0 {
+			t.Errorf("%s(unterminated escaped) allocates %v per call, want 0", tier.name, allocs)
+		}
+	}
+}
