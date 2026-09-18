@@ -3,6 +3,8 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/sirkostya009/ggen/gen/model"
 )
 
 // A named type over a primitive (`type Priority string`) reports KindStruct at
@@ -10,14 +12,14 @@ import (
 // effectiveKind, or the check either fails to compile (raw token / uncast
 // argument) or — worse — emits nothing at all.
 func TestNamedPrimitive_RulesResolveUnderlying(t *testing.T) {
-	gen := func(goType string, kind TypeKind, steps []Step, seed map[string]TypeKind) string {
+	gen := func(goType string, kind model.TypeKind, steps []model.Step, seed map[string]model.TypeKind) string {
 		t.Helper()
 		// generate() only seeds the globals when they are nil, so a second call
 		// in the same test would otherwise reuse the first call's namedKinds.
 		generatedTypes, namedKinds, cyclicTypes = nil, nil, nil
-		code, err := generate("p", []StructInfo{{
+		code, err := generate("p", []model.StructInfo{{
 			Name: "V",
-			Fields: []FieldInfo{{
+			Fields: []model.FieldInfo{{
 				GoName: "S", JSONName: "s", GoType: goType, Kind: kind, Pipe: steps,
 				NamedPrims: seed,
 			}},
@@ -27,37 +29,37 @@ func TestNamedPrimitive_RulesResolveUnderlying(t *testing.T) {
 		}
 		return string(code)
 	}
-	strSeed := map[string]TypeKind{"Pri": KindString}
-	intSeed := map[string]TypeKind{"Cnt": KindInt}
+	strSeed := map[string]model.TypeKind{"Pri": model.KindString}
+	intSeed := map[string]model.TypeKind{"Cnt": model.KindInt}
 
 	t.Run("oneof_quotes_through_alias", func(t *testing.T) {
-		s := gen("Pri", KindStruct, []Step{{V: ValidationRule{Name: "oneof", Value: "low|high"}}}, strSeed)
+		s := gen("Pri", model.KindStruct, []model.Step{{V: model.ValidationRule{Name: "oneof", Value: "low|high"}}}, strSeed)
 		if !strings.Contains(s, `case "low", "high":`) {
 			t.Errorf("oneof on a named string must emit quoted cases:\n%s", s)
 		}
 	})
 
 	t.Run("eq_neq_emit_at_all", func(t *testing.T) {
-		// The regression: `if kind == KindString {…} else if isNumeric(kind) {…}`
+		// The regression: `if kind == KindString {…} else if IsNumeric(kind) {…}`
 		// with no else silently dropped the rule for KindStruct.
-		s := gen("Pri", KindStruct, []Step{
-			{V: ValidationRule{Name: "eq", Value: "low"}},
-			{V: ValidationRule{Name: "neq", Value: "high"}},
+		s := gen("Pri", model.KindStruct, []model.Step{
+			{V: model.ValidationRule{Name: "eq", Value: "low"}},
+			{V: model.ValidationRule{Name: "neq", Value: "high"}},
 		}, strSeed)
 		if !strings.Contains(s, "ggen.EqError") || !strings.Contains(s, "ggen.NeqError") {
 			t.Errorf("eq/neq on a named string emitted no check:\n%s", s)
 		}
-		n := gen("Cnt", KindStruct, []Step{{V: ValidationRule{Name: "eq", Value: "3"}}}, intSeed)
+		n := gen("Cnt", model.KindStruct, []model.Step{{V: model.ValidationRule{Name: "eq", Value: "3"}}}, intSeed)
 		if !strings.Contains(n, "ggen.EqError") {
 			t.Errorf("eq on a named int emitted no check:\n%s", n)
 		}
 	})
 
 	t.Run("string_apis_are_cast", func(t *testing.T) {
-		s := gen("Pri", KindStruct, []Step{
-			{V: ValidationRule{Name: "maxrunes", Value: "4"}},
-			{V: ValidationRule{Name: "contains", Value: "x"}},
-			{V: ValidationRule{Name: "url"}},
+		s := gen("Pri", model.KindStruct, []model.Step{
+			{V: model.ValidationRule{Name: "maxrunes", Value: "4"}},
+			{V: model.ValidationRule{Name: "contains", Value: "x"}},
+			{V: model.ValidationRule{Name: "url"}},
 		}, strSeed)
 		for _, want := range []string{
 			"utf8.RuneCountInString(string(result.S))",
@@ -71,7 +73,7 @@ func TestNamedPrimitive_RulesResolveUnderlying(t *testing.T) {
 	})
 
 	t.Run("plain_string_field_is_not_cast", func(t *testing.T) {
-		s := gen("string", KindString, []Step{{V: ValidationRule{Name: "url"}}}, nil)
+		s := gen("string", model.KindString, []model.Step{{V: model.ValidationRule{Name: "url"}}}, nil)
 		if strings.Contains(s, "string(result.S)") {
 			t.Errorf("a plain string field must not get a redundant conversion:\n%s", s)
 		}
@@ -82,21 +84,21 @@ func TestNamedPrimitive_RulesResolveUnderlying(t *testing.T) {
 // not a composite type, so `Pri{}` does not compile.
 func TestNamedPrimitive_ZeroLit(t *testing.T) {
 	prev := namedKinds
-	namedKinds = map[string]TypeKind{"Pri": KindString, "Cnt": KindInt, "Flag": KindBool}
+	namedKinds = map[string]model.TypeKind{"Pri": model.KindString, "Cnt": model.KindInt, "Flag": model.KindBool}
 	defer func() { namedKinds = prev }()
 
 	for _, tc := range []struct {
 		typ  string
-		kind TypeKind
+		kind model.TypeKind
 		want string
 	}{
-		{"Pri", KindStruct, `Pri("")`},
-		{"Cnt", KindStruct, "Cnt(0)"},
-		{"Flag", KindStruct, "Flag(false)"},
-		{"string", KindString, `""`},
-		{"int", KindInt, "0"},
-		{"Other", KindStruct, "Other{}"},
-		{"[]int", KindSlice, "nil"},
+		{"Pri", model.KindStruct, `Pri("")`},
+		{"Cnt", model.KindStruct, "Cnt(0)"},
+		{"Flag", model.KindStruct, "Flag(false)"},
+		{"string", model.KindString, `""`},
+		{"int", model.KindInt, "0"},
+		{"Other", model.KindStruct, "Other{}"},
+		{"[]int", model.KindSlice, "nil"},
 	} {
 		if got := zeroLit(tc.typ, tc.kind); got != tc.want {
 			t.Errorf("zeroLit(%q, %v) = %q, want %q", tc.typ, tc.kind, got, tc.want)
@@ -112,14 +114,14 @@ func TestPointerContainer_LeafSeedEmptied(t *testing.T) {
 	gen := func(goType string) string {
 		t.Helper()
 		generatedTypes, namedKinds, cyclicTypes = nil, nil, nil
-		depth, leaf := pointerDepth(goType)
-		code, err := generate("p", []StructInfo{{
+		depth, leaf := model.PointerDepth(goType)
+		code, err := generate("p", []model.StructInfo{{
 			Name: "V",
-			Fields: []FieldInfo{{
+			Fields: []model.FieldInfo{{
 				GoName: "C", JSONName: "c", GoType: goType,
 				Pointer: depth > 0, PointeeType: goType[1:],
-				Kind:     resolveKind(leaf),
-				ElemType: "int", ElemKind: KindInt,
+				Kind:     model.ResolveKind(leaf),
+				ElemType: "int", ElemKind: model.KindInt,
 			}},
 		}})
 		if err != nil {
@@ -155,20 +157,20 @@ func TestPointerContainer_LeafSeedEmptied(t *testing.T) {
 // forfeits the inline window scan and, for an UNANNOTATED named type, there
 // were no methods at all so the field fell through to encoding/json.
 func TestNamedPrimitive_InlineDecode(t *testing.T) {
-	gen := func(alias StructInfo, field FieldInfo) string {
+	gen := func(alias model.StructInfo, field model.FieldInfo) string {
 		t.Helper()
 		generatedTypes, namedKinds, cyclicTypes = nil, nil, nil
 		field.GoName, field.JSONName = "S", "s"
-		code, err := generate("p", []StructInfo{alias, {Name: "V", Fields: []FieldInfo{field}}})
+		code, err := generate("p", []model.StructInfo{alias, {Name: "V", Fields: []model.FieldInfo{field}}})
 		if err != nil {
 			t.Fatal(err)
 		}
 		return string(code)
 	}
-	aliasPri := StructInfo{Name: "Pri", IsAlias: true, AliasKind: KindString, AliasUnderlying: "string"}
+	aliasPri := model.StructInfo{Name: "Pri", IsAlias: true, AliasKind: model.KindString, AliasUnderlying: "string"}
 
 	t.Run("scans_underlying_and_converts", func(t *testing.T) {
-		s := gen(aliasPri, FieldInfo{GoType: "Pri", Kind: KindStruct, NamedPrims: map[string]TypeKind{"Pri": KindString}})
+		s := gen(aliasPri, model.FieldInfo{GoType: "Pri", Kind: model.KindStruct, NamedPrims: map[string]model.TypeKind{"Pri": model.KindString}})
 		for _, want := range []string{"var namedS string", "result.S = Pri(namedS)"} {
 			if !strings.Contains(s, want) {
 				t.Errorf("missing %q:\n%s", want, s)
@@ -184,8 +186,8 @@ func TestNamedPrimitive_InlineDecode(t *testing.T) {
 
 	t.Run("unannotated_skips_encoding_json", func(t *testing.T) {
 		// No alias StructInfo at all — the type carries no generated methods.
-		s := gen(StructInfo{Name: "Unused", Fields: nil},
-			FieldInfo{GoType: "Tag", Kind: KindStruct, NamedPrims: map[string]TypeKind{"Tag": KindString}})
+		s := gen(model.StructInfo{Name: "Unused", Fields: nil},
+			model.FieldInfo{GoType: "Tag", Kind: model.KindStruct, NamedPrims: map[string]model.TypeKind{"Tag": model.KindString}})
 		if strings.Contains(s, "json.Unmarshal") || strings.Contains(s, "json.Marshal") {
 			t.Errorf("unannotated named primitive still routes through encoding/json:\n%s", s)
 		}
@@ -200,7 +202,7 @@ func TestNamedPrimitive_InlineDecode(t *testing.T) {
 		// PARENT's flags would silently drop that.
 		esc := aliasPri
 		esc.Name, esc.HTMLEscape = "Esc", true
-		s := gen(esc, FieldInfo{GoType: "Esc", Kind: KindStruct, NamedPrims: map[string]TypeKind{"Esc": KindString}})
+		s := gen(esc, model.FieldInfo{GoType: "Esc", Kind: model.KindStruct, NamedPrims: map[string]model.TypeKind{"Esc": model.KindString}})
 		if !strings.Contains(s, "result.S.DecodeFrom(") {
 			t.Errorf("flagged alias must keep its own decoder:\n%s", s)
 		}

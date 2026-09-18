@@ -1,0 +1,652 @@
+package model
+
+import (
+	"errors"
+	"fmt"
+	"go/ast"
+	"go/types"
+	"maps"
+	"slices"
+	"strconv"
+	"strings"
+)
+
+// customFunc holds the resolution for a `@Func` / `@pkg.Func` reference,
+// stamped onto the Validation/ModRule so codegen emits a direct call.
+type customFunc struct {
+	PkgImport string // import path; "" for same-package
+	PkgName   string // canonical name to qualify the call in generated code; "" for same-package
+	FuncName  string // bare function name (no "@", no "pkg.")
+	Fallible  bool   // mods only: true when signature is `func(T) (T, error)`
+}
+
+// lookupFunc resolves a `@Func` / `@pkg.Func` reference (the part after the
+// `@`) to its *types.Func plus the import path / package name the generated
+// call must qualify with. Shared by classifyValueFunc and classifyConverter.
+func lookupFunc(ref string, file *ast.File, pkg *types.Package) (fn *types.Func, pkgImp, pkgName string, err error) {
+	if ref == "" {
+		return nil, "", "", fmt.Errorf("empty @ reference")
+	}
+	pkgPart, funcPart, hasDot := strings.Cut(ref, ".")
+	if !hasDot {
+		funcPart = pkgPart
+		pkgPart = ""
+	}
+	if pkgPart == "" {
+		if pkg == nil {
+			return nil, "", "", fmt.Errorf("no package context (run ggen with a Go module so type info is available)")
+		}
+		obj := pkg.Scope().Lookup(funcPart)
+		if obj == nil {
+			return nil, "", "", fmt.Errorf("func %s not found in package %s", funcPart, pkg.Name())
+		}
+		f, ok := obj.(*types.Func)
+		if !ok {
+			return nil, "", "", fmt.Errorf("%s is not a function (got %T)", funcPart, obj)
+		}
+		return f, "", "", nil
+	}
+	target, importPath, err := lookupCrossPkg(pkgPart, file, pkg)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("%w", err)
+	}
+	obj := target.Scope().Lookup(funcPart)
+	if obj == nil {
+		return nil, "", "", fmt.Errorf("func %s not found in package %s", funcPart, target.Path())
+	}
+	f, ok := obj.(*types.Func)
+	if !ok {
+		return nil, "", "", fmt.Errorf("%s is not a function (got %T)", funcPart, obj)
+	}
+	return f, importPath, target.Name(), nil
+}
+
+// pipeRole classifies a value-stage `@Func`: validator, mod (pure or
+// fallible, in-type == out-type), or converter (in != out — only legal in the
+// decode stage, rejected here).
+type pipeRole uint8
+
+const (
+	roleValidator pipeRole = iota
+	roleMod
+	roleConverter
+)
+
+// classifyValueFunc resolves a value-stage `@Func` against the working type wt
+// and classifies it from its signature (a single bool or error return is
+// always a validator):
+//
+//	func(T) error         → validator
+//	func(T) bool          → validator (message-capable)   [func(bool)bool banned]
+//	func(T) T             → mod (pure)
+//	func(T) (T, error)    → mod (fallible, error)
+//	func(T) (T, bool)     → mod (fallible, message-capable)
+//	func(T) U  (U != T)   → converter — illegal in a value stage
+func classifyValueFunc(ref string, wt types.Type, file *ast.File, pkg *types.Package) (role pipeRole, cf customFunc, boolForm bool, err error) {
+	fn, pkgImp, pkgName, err := lookupFunc(ref, file, pkg)
+	if err != nil {
+		return 0, customFunc{}, false, err
+	}
+	_, funcPart, hasDot := strings.Cut(ref, ".")
+	if !hasDot {
+		funcPart = ref
+	}
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok {
+		return 0, customFunc{}, false, fmt.Errorf("not a function signature")
+	}
+	if sig.Recv() != nil {
+		return 0, customFunc{}, false, fmt.Errorf("must be a top-level function, not a method")
+	}
+	if sig.Params().Len() != 1 {
+		return 0, customFunc{}, false, fmt.Errorf("must take exactly one parameter (the value)")
+	}
+	cf = customFunc{PkgImport: pkgImp, PkgName: pkgName, FuncName: funcPart}
+
+	paramType := sig.Params().At(0).Type()
+	paramTP, paramGeneric := paramType.(*types.TypeParam)
+	if paramGeneric {
+		if !satisfiesConstraint(wt, paramTP) {
+			return 0, customFunc{}, false, fmt.Errorf("value type %s does not satisfy constraint %s on param", wt, paramTP.Constraint())
+		}
+	} else if !types.Identical(paramType, wt) {
+		return 0, customFunc{}, false, fmt.Errorf("param type %s does not match value type %s", paramType, wt)
+	}
+	matchesWT := func(r types.Type) bool {
+		if types.Identical(r, wt) {
+			return true
+		}
+		if rtp, ok := r.(*types.TypeParam); ok && paramGeneric {
+			return rtp == paramTP
+		}
+		return false
+	}
+	wtIsBool := false
+	if b, ok := wt.Underlying().(*types.Basic); ok && b.Kind() == types.Bool {
+		wtIsBool = true
+	}
+
+	res := sig.Results()
+	switch res.Len() {
+	case 1:
+		rt := res.At(0).Type()
+		switch {
+		case isErrorType(rt):
+			return roleValidator, cf, false, nil
+		case isBoolType(rt):
+			// func(bool)bool is banned (ambiguous; use func(bool) error).
+			if wtIsBool {
+				return 0, customFunc{}, false, fmt.Errorf("func(bool) bool is banned — use func(bool) error to validate a bool field")
+			}
+			return roleValidator, cf, true, nil
+		case matchesWT(rt):
+			return roleMod, cf, false, nil // pure mod
+		default:
+			return roleConverter, cf, false, fmt.Errorf("converter (func(%s) %s) is only valid as a decode-stage variant, not a value step", wt, rt)
+		}
+	case 2:
+		rt, st := res.At(0).Type(), res.At(1).Type()
+		if !matchesWT(rt) {
+			return roleConverter, cf, false, fmt.Errorf("converter (func(%s) (%s, …)) is only valid as a decode-stage variant, not a value step", wt, rt)
+		}
+		cf.Fallible = true
+		switch {
+		case isErrorType(st):
+			return roleMod, cf, false, nil
+		case isBoolType(st):
+			return roleMod, cf, true, nil
+		default:
+			return 0, customFunc{}, false, fmt.Errorf("fallible mod second result must be error or bool, got %s", st)
+		}
+	}
+	return 0, customFunc{}, false, fmt.Errorf("must return one of: error, bool, T, (T, error), (T, bool); got %d results", res.Len())
+}
+
+// classifyConverter resolves a decode-stage converter variant `@Conv`. Unlike
+// a value func it is OUTPUT-anchored: the first result must equal the field
+// type T; the single parameter W is the type ggen scans natively (its wire
+// shape decides the JSON shape this variant claims). Returns W. W must be
+// builtin or same-package, optionally pointer-wrapped (a `*W` input claims
+// W's shape plus null); foreign inputs are unsupported.
+func classifyConverter(ref string, fieldType types.Type, file *ast.File, pkg *types.Package) (cf customFunc, w types.Type, boolForm bool, err error) {
+	fn, pkgImp, pkgName, err := lookupFunc(ref, file, pkg)
+	if err != nil {
+		return customFunc{}, nil, false, err
+	}
+	_, funcPart, hasDot := strings.Cut(ref, ".")
+	if !hasDot {
+		funcPart = ref
+	}
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok {
+		return customFunc{}, nil, false, fmt.Errorf("not a function signature")
+	}
+	if sig.Recv() != nil {
+		return customFunc{}, nil, false, fmt.Errorf("must be a top-level function, not a method")
+	}
+	if sig.Params().Len() != 1 {
+		return customFunc{}, nil, false, fmt.Errorf("converter must take exactly one parameter (the scanned input)")
+	}
+	w = sig.Params().At(0).Type()
+	// Peel pointer levels first: `*[]int` or `*other.T` must not dodge the
+	// checks below (a pointer-wrapped container still emits broken code).
+	base := w
+	for {
+		p, isPtr := base.(*types.Pointer)
+		if !isPtr {
+			break
+		}
+		base = p.Elem()
+	}
+	if named, isNamed := base.(*types.Named); isNamed && named.Obj().Pkg() != nil && named.Obj().Pkg() != pkg {
+		return customFunc{}, nil, false, fmt.Errorf("converter input %s is from another package; only builtin or same-package input types are supported", w)
+	}
+	// The documented contract is "primitive or ggen-decodable struct" — a
+	// container input synthesizes a FieldInfo with no element shape and the
+	// emitted scan doesn't compile (or silently mis-scans); chan/func/
+	// interface inputs have no wire shape at all.
+	switch base.Underlying().(type) {
+	case *types.Slice, *types.Array, *types.Map:
+		return customFunc{}, nil, false, fmt.Errorf("converter input %s must be a primitive or a ggen-decodable struct — container inputs are not supported", w)
+	case *types.Chan, *types.Signature, *types.Interface:
+		return customFunc{}, nil, false, fmt.Errorf("converter input %s must be a primitive or a ggen-decodable struct", w)
+	}
+	cf = customFunc{PkgImport: pkgImp, PkgName: pkgName, FuncName: funcPart}
+	res := sig.Results()
+	switch res.Len() {
+	case 1:
+		if !types.Identical(res.At(0).Type(), fieldType) {
+			return customFunc{}, nil, false, fmt.Errorf("converter output %s must equal field type %s", res.At(0).Type(), fieldType)
+		}
+	case 2:
+		if !types.Identical(res.At(0).Type(), fieldType) {
+			return customFunc{}, nil, false, fmt.Errorf("converter first result %s must equal field type %s", res.At(0).Type(), fieldType)
+		}
+		cf.Fallible = true
+		switch {
+		case isErrorType(res.At(1).Type()):
+		case isBoolType(res.At(1).Type()):
+			boolForm = true
+		default:
+			return customFunc{}, nil, false, fmt.Errorf("converter second result must be error or bool, got %s", res.At(1).Type())
+		}
+	default:
+		return customFunc{}, nil, false, fmt.Errorf("converter must return T or (T, error) or (T, bool), got %d results", res.Len())
+	}
+	return cf, w, boolForm, nil
+}
+
+// isBoolType reports whether t is the predeclared bool.
+func isBoolType(t types.Type) bool {
+	b, ok := t.Underlying().(*types.Basic)
+	return ok && b.Kind() == types.Bool
+}
+
+// satisfiesConstraint reports whether t may instantiate the type parameter tp
+// (type-set membership check against tp's constraint interface).
+func satisfiesConstraint(t types.Type, tp *types.TypeParam) bool {
+	constraint := tp.Constraint()
+	if iface, ok := constraint.Underlying().(*types.Interface); ok {
+		return types.Satisfies(t, iface)
+	}
+	return false
+}
+
+// lookupCrossPkg resolves an alias or package name written before the `.`
+// in a `@pkg.Func` reference. Returns the target *types.Package plus its
+// import path so the generator can add it to the generated file.
+func lookupCrossPkg(pkgPart string, file *ast.File, pkg *types.Package) (*types.Package, string, error) {
+	if file != nil {
+		// Pass 1: file-scoped aliases (`import alias "path"`).
+		for _, imp := range file.Imports {
+			path, err := strconv.Unquote(imp.Path.Value)
+			if err != nil {
+				continue
+			}
+			alias := ""
+			if imp.Name != nil {
+				alias = imp.Name.Name
+			}
+			target := findImportedPackage(pkg, path)
+			if target == nil {
+				continue
+			}
+			switch alias {
+			case pkgPart:
+				return target, path, nil
+			case "":
+				if target.Name() == pkgPart {
+					return target, path, nil
+				}
+			case "_":
+				// Blank import: no file-scoped name; match the declared name.
+				if target.Name() == pkgPart {
+					return target, path, nil
+				}
+			}
+		}
+	}
+	// Pass 2: any transitive import whose declared name matches (catches an
+	// import living in a different file of the same package).
+	for _, imp := range pkg.Imports() {
+		if imp.Name() == pkgPart {
+			return imp, imp.Path(), nil
+		}
+	}
+	return nil, "", fmt.Errorf("no import alias or package named %s in scope", pkgPart)
+}
+
+// findImportedPackage returns the *types.Package corresponding to the given
+// import path among pkg's transitive imports.
+func findImportedPackage(pkg *types.Package, path string) *types.Package {
+	if pkg == nil {
+		return nil
+	}
+	for _, imp := range pkg.Imports() {
+		if imp.Path() == path {
+			return imp
+		}
+	}
+	return nil
+}
+
+// isErrorType reports whether t is the universe error interface.
+func isErrorType(t types.Type) bool {
+	if named, ok := t.(*types.Named); ok {
+		return named.Obj().Name() == "error" && named.Obj().Pkg() == nil
+	}
+	return false
+}
+
+// pipeHasCustom reports whether any unclassified `@`-step is present on fi's
+// pipe buckets (customs are parked as validator-shaped steps with Name "@…"
+// until classifyValueFunc runs).
+func pipeHasCustom(fi *FieldInfo) bool {
+	has := func(steps []Step) bool {
+		for _, s := range steps {
+			if strings.HasPrefix(s.V.Name, "@") || strings.HasPrefix(s.M.Name, "@") {
+				return true
+			}
+		}
+		return false
+	}
+	if has(fi.Pipe) || has(fi.KeyPipe) {
+		return true
+	}
+	return slices.ContainsFunc(fi.Levels, has)
+}
+
+// pipeHasConverter reports whether fi has a decode-stage converter variant.
+func pipeHasConverter(fi *FieldInfo) bool {
+	for _, v := range fi.Variants {
+		if v.Kind == VariantConvert {
+			return true
+		}
+	}
+	return false
+}
+
+// resolvePipeCustoms classifies and resolves every `@`-step on a pipe-tagged
+// field against the working type at its level, then re-derives the split
+// buckets. Mod vs validator is decided by signature here.
+func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldType types.Type) error {
+	if !pipeHasCustom(fi) && !pipeHasConverter(fi) {
+		deriveBuckets(fi)
+		return nil
+	}
+	if s.typesInfo == nil || fieldType == nil {
+		return fmt.Errorf("`@Func` references require Go module context (run ggen inside a Go module so packages.Load can resolve types)")
+	}
+	file := s.structFile[structName]
+	pkg := s.typesPkg
+	qualifier := s.pkgQualifier()
+	var errs []error
+
+	// Decode-stage converter variants: resolve OUTPUT==T, capture input W.
+	// W is described the way a FIELD of that type would be — the pointer
+	// peeled off, Kind from the base spelling, and a named primitive
+	// registered in NamedPrims so the shape dispatch and the inline scan
+	// resolve it to its underlying kind — since the emitters scan it through
+	// the same field renderers.
+	for i := range fi.Variants {
+		v := &fi.Variants[i]
+		if v.Kind != VariantConvert {
+			continue
+		}
+		cf, w, boolForm, err := classifyConverter(v.FuncName, fieldType, file, pkg)
+		if err != nil {
+			errs = append(errs, &RichError{Msg: err.Error(), CodeSpan: "@" + v.FuncName})
+			continue
+		}
+		if v.Msg != "" && !boolForm {
+			errs = append(errs, &RichError{Msg: fmt.Sprintf("inline message on @%s requires a bool-form converter (func(W) (T, bool))", v.FuncName), CodeSpan: "@" + v.FuncName})
+			continue
+		}
+		v.Custom = true
+		v.PkgImport = cf.PkgImport
+		v.PkgName = cf.PkgName
+		v.FuncName = cf.FuncName
+		v.Fallible = cf.Fallible
+		v.BoolForm = boolForm
+		v.InType = types.TypeString(w, qualifier)
+		v.In = w
+		base := w
+		for {
+			p, isPtr := base.(*types.Pointer)
+			if !isPtr {
+				break
+			}
+			v.InPointer = true
+			base = p.Elem()
+		}
+		v.InKind = ResolveKind(types.TypeString(base, qualifier))
+		if np := s.namedPrims(w); len(np) > 0 {
+			if fi.NamedPrims == nil {
+				fi.NamedPrims = map[string]TypeKind{}
+			}
+			maps.Copy(fi.NamedPrims, np)
+		}
+	}
+
+	resolve := func(steps []Step, wt types.Type) {
+		for i := range steps {
+			st := &steps[i]
+			name := st.V.Name
+			if st.IsMod || !strings.HasPrefix(name, "@") {
+				continue
+			}
+			msg := st.V.Msg
+			role, cf, boolForm, err := classifyValueFunc(name[1:], wt, file, pkg)
+			if err != nil {
+				errs = append(errs, &RichError{Msg: err.Error(), CodeSpan: name})
+				continue
+			}
+			if msg != "" && !boolForm {
+				errs = append(errs, &RichError{
+					Msg:      fmt.Sprintf("inline message on %s requires a bool-form func (func(_) bool / func(_) (_, bool))", name),
+					CodeSpan: name,
+				})
+				continue
+			}
+			switch role {
+			case roleValidator:
+				st.IsMod = false
+				st.V = ValidationRule{Name: name, Custom: true, PkgImport: cf.PkgImport, PkgName: cf.PkgName, FuncName: cf.FuncName, BoolForm: boolForm, Msg: msg}
+			case roleMod:
+				st.IsMod = true
+				st.M = ModRule{Name: name, Custom: true, PkgImport: cf.PkgImport, PkgName: cf.PkgName, FuncName: cf.FuncName, Fallible: cf.Fallible, BoolForm: boolForm, Msg: msg}
+				st.V = ValidationRule{}
+			}
+		}
+	}
+
+	resolve(fi.Pipe, fieldType)
+	resolve(fi.KeyPipe, types.Typ[types.String])
+	wt := fieldType
+	for i := range fi.Levels {
+		elem, err := diveElemType(wt)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("dive level %d: %w", i+1, err))
+			break
+		}
+		resolve(fi.Levels[i], elem)
+		wt = elem
+	}
+	if err := checkVariantShapes(*fi); err != nil {
+		errs = append(errs, err)
+	}
+	deriveBuckets(fi)
+	return errors.Join(errs...)
+}
+
+// PartitionCustomValidation splits a rule list into built-in vs `@Func` rules.
+// Pointer-field codegen runs built-in rules on the deref'd value but `@Func`
+// rules on the exact `*T` field type.
+func PartitionCustomValidation(rules []ValidationRule) (builtin, custom []ValidationRule) {
+	for _, r := range rules {
+		if r.Custom {
+			custom = append(custom, r)
+		} else {
+			builtin = append(builtin, r)
+		}
+	}
+	return
+}
+
+// PartitionCustomMods is the mod-rule counterpart to PartitionCustomValidation.
+func PartitionCustomMods(rules []ModRule) (builtin, custom []ModRule) {
+	for _, r := range rules {
+		if r.Custom {
+			custom = append(custom, r)
+		} else {
+			builtin = append(builtin, r)
+		}
+	}
+	return
+}
+
+// diveElemType peels one container layer off t. `inner:` rules apply to the
+// elements of slices/arrays/maps; this helper computes the type each level
+// will see at codegen time.
+func diveElemType(t types.Type) (types.Type, error) {
+	switch tt := t.Underlying().(type) {
+	case *types.Slice:
+		return tt.Elem(), nil
+	case *types.Array:
+		return tt.Elem(), nil
+	case *types.Map:
+		return tt.Elem(), nil
+	case *types.Pointer:
+		// `*[]T`-style pointer-to-container: peel both the pointer and the
+		// container. Rare in practice, but supported.
+		return diveElemType(tt.Elem())
+	}
+	return nil, fmt.Errorf("type %s has no element to dive into", t)
+}
+
+// FieldHasConverter reports whether f needs shape-dispatch decode. Native/
+// nullzero-only fields take the ordinary decode path + NullZero flag.
+func FieldHasConverter(f FieldInfo) bool {
+	for _, v := range f.Variants {
+		if v.Kind == VariantConvert {
+			return true
+		}
+	}
+	return false
+}
+
+// kindShapeBytes returns the JSON first-byte case labels a kind's natural wire
+// shape claims, as Go rune literals. Empty => the kind has no single shape
+// (any / raw) and cannot participate in shape dispatch.
+func kindShapeBytes(k TypeKind, format string) []string {
+	switch k {
+	case KindString, KindTime, KindDuration, KindNetIP, KindNetipAddr,
+		KindNetipPrefix, KindURL, KindBigFloat, KindBigRat:
+		return []string{"'\"'"}
+	case KindBytes:
+		if format == "array" {
+			return []string{"'['"}
+		}
+		return []string{"'\"'"}
+	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
+		KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
+		KindFloat32, KindFloat64, KindBigInt:
+		return []string{"'-'", "'0'", "'1'", "'2'", "'3'", "'4'", "'5'", "'6'", "'7'", "'8'", "'9'"}
+	case KindBool:
+		return []string{"'t'", "'f'"}
+	case KindStruct, KindMap:
+		return []string{"'{'"}
+	case KindSlice, KindArray:
+		return []string{"'['"}
+	}
+	return nil
+}
+
+// KindResolver maps a named type spelling to its underlying primitive kind,
+// returning kind unchanged when goType is not a named primitive.
+type KindResolver func(goType string, kind TypeKind) TypeKind
+
+// variantShapeKind resolves a type spelling to the kind whose JSON SHAPE it
+// actually has. A named primitive (`type Score int`) reports KindStruct at its
+// use sites, so an unresolved lookup claims the object shape `{` for a value
+// that really decodes as a number — the native variant became unreachable for
+// its own type, and a converter with a named-primitive input W likewise.
+// FieldInfo.NamedPrims is the parse-time source (resolvePipeCustoms registers
+// a converter's W there too); resolve, when non-nil, is the render-time
+// fallback for synthesized fields that carry no NamedPrims. Pointer spellings
+// resolve through the pointee.
+func variantShapeKind(f FieldInfo, goType string, kind TypeKind, resolve KindResolver) TypeKind {
+	goType = strings.TrimLeft(goType, "*")
+	if k, ok := f.NamedPrims[goType]; ok {
+		return k
+	}
+	if resolve != nil {
+		return resolve(goType, kind)
+	}
+	return kind
+}
+
+// VariantCaseBytes returns the case labels a single variant claims.
+func VariantCaseBytes(f FieldInfo, v Variant, resolve KindResolver) []string {
+	switch v.Kind {
+	case VariantNullZero:
+		return []string{"'n'"}
+	case VariantNative:
+		bs := kindShapeBytes(variantShapeKind(f, f.GoType, f.Kind, resolve), f.Format)
+		// Null-aware native kinds keep their null arm: without it a converter
+		// variant made {"p":null} a hard error where the plain field decodes
+		// null → nil. An explicit nullzero variant claims 'n' itself.
+		if nativeAcceptsNull(f, resolve) && !hasNullZeroVariant(f) {
+			bs = append(bs, "'n'")
+		}
+		return bs
+	case VariantConvert:
+		bs := kindShapeBytes(variantShapeKind(f, v.InType, v.InKind, resolve), "")
+		if v.InPointer {
+			bs = append(bs, "'n'")
+		}
+		return bs
+	}
+	return nil
+}
+
+// nativeAcceptsNull reports whether f's native decode path has a null branch
+// (the kind-gated null acceptance: pointer, slice, map, []byte, net.IP, raw).
+func nativeAcceptsNull(f FieldInfo, resolve KindResolver) bool {
+	if f.Pointer {
+		return true
+	}
+	switch variantShapeKind(f, f.GoType, f.Kind, resolve) {
+	case KindSlice, KindMap, KindBytes, KindNetIP, KindRawJSON:
+		return true
+	}
+	return false
+}
+
+func hasNullZeroVariant(f FieldInfo) bool {
+	for _, v := range f.Variants {
+		if v.Kind == VariantNullZero {
+			return true
+		}
+	}
+	return false
+}
+
+// checkVariantShapes verifies the decode variants on f claim disjoint JSON
+// shapes (one variant per shape) and that each shape-dispatchable variant
+// resolves to a concrete first byte. Returns a *RichError on conflict.
+func checkVariantShapes(f FieldInfo) error {
+	if !FieldHasConverter(f) {
+		return nil
+	}
+	seen := map[string]string{} // case-byte → variant label
+	label := func(v Variant) string {
+		switch v.Kind {
+		case VariantNullZero:
+			return "nullzero"
+		case VariantNative:
+			return "native (" + f.GoType + ")"
+		default:
+			return "@" + v.FuncName
+		}
+	}
+	for _, v := range f.Variants {
+		bs := VariantCaseBytes(f, v, nil)
+		if len(bs) == 0 {
+			return &RichError{
+				Msg:      fmt.Sprintf("%s.%s: decode variant %s has no single JSON shape to dispatch on", f.StructName, f.GoName, label(v)),
+				CodeSpan: "@" + v.FuncName,
+			}
+		}
+		for _, c := range bs {
+			if prev, dup := seen[c]; dup {
+				return &RichError{
+					Msg:      fmt.Sprintf("%s.%s: decode variants %s and %s both claim the same JSON shape", f.StructName, f.GoName, prev, label(v)),
+					CodeSpan: "@" + v.FuncName,
+				}
+			}
+			seen[c] = label(v)
+		}
+	}
+	return nil
+}

@@ -1,0 +1,10 @@
+{
+  "name": "ggen-gen-differential",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "typescript": "*",
+    "valibot": "*",
+    "zod": "*"
+  }
+}

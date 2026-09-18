@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+
+	"github.com/sirkostya009/ggen/gen/model"
 )
 
 // Multi-shape decode dispatch (the `pipe:` `/` variants). When a field's
@@ -11,150 +13,10 @@ import (
 // routes to the single variant claiming it: `.` native, `nullzero` (null →
 // zero), or `@Conv` (scan input W, call func(W) → T). Encode is untouched.
 
-// fieldHasConverter reports whether f needs shape-dispatch decode. Native/
-// nullzero-only fields take the ordinary decode path + NullZero flag.
-func fieldHasConverter(f FieldInfo) bool {
-	for _, v := range f.Variants {
-		if v.Kind == VariantConvert {
-			return true
-		}
-	}
-	return false
-}
-
-// kindShapeBytes returns the JSON first-byte case labels a kind's natural wire
-// shape claims, as Go rune literals. Empty => the kind has no single shape
-// (any / raw) and cannot participate in shape dispatch.
-func kindShapeBytes(k TypeKind, format string) []string {
-	switch k {
-	case KindString, KindTime, KindDuration, KindNetIP, KindNetipAddr,
-		KindNetipPrefix, KindURL, KindBigFloat, KindBigRat:
-		return []string{"'\"'"}
-	case KindBytes:
-		if format == "array" {
-			return []string{"'['"}
-		}
-		return []string{"'\"'"}
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
-		KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
-		KindFloat32, KindFloat64, KindBigInt:
-		return []string{"'-'", "'0'", "'1'", "'2'", "'3'", "'4'", "'5'", "'6'", "'7'", "'8'", "'9'"}
-	case KindBool:
-		return []string{"'t'", "'f'"}
-	case KindStruct, KindMap:
-		return []string{"'{'"}
-	case KindSlice, KindArray:
-		return []string{"'['"}
-	}
-	return nil
-}
-
-// variantShapeKind resolves a type spelling to the kind whose JSON SHAPE it
-// actually has. A named primitive (`type Score int`) reports KindStruct at its
-// use sites, so an unresolved lookup claims the object shape `{` for a value
-// that really decodes as a number — the native variant became unreachable for
-// its own type, and a converter with a named-primitive input W likewise.
-// FieldInfo.NamedPrims is the PARSE-time source (checkVariantShapes runs
-// before namedKinds is seeded; resolvePipeCustoms registers a converter's W
-// there too); namedKinds covers render time. Pointer spellings resolve
-// through the pointee.
-func variantShapeKind(f FieldInfo, goType string, kind TypeKind) TypeKind {
-	goType = strings.TrimLeft(goType, "*")
-	if k, ok := f.NamedPrims[goType]; ok {
-		return k
-	}
-	return effectiveKind(goType, kind)
-}
-
-// variantCaseBytes returns the case labels a single variant claims.
-func variantCaseBytes(f FieldInfo, v Variant) []string {
-	switch v.Kind {
-	case VariantNullZero:
-		return []string{"'n'"}
-	case VariantNative:
-		bs := kindShapeBytes(variantShapeKind(f, f.GoType, f.Kind), f.Format)
-		// Null-aware native kinds keep their null arm: without it a converter
-		// variant made {"p":null} a hard error where the plain field decodes
-		// null → nil. An explicit nullzero variant claims 'n' itself.
-		if nativeAcceptsNull(f) && !hasNullZeroVariant(f) {
-			bs = append(bs, "'n'")
-		}
-		return bs
-	case VariantConvert:
-		bs := kindShapeBytes(variantShapeKind(f, v.InType, v.InKind), "")
-		if v.InPointer {
-			bs = append(bs, "'n'")
-		}
-		return bs
-	}
-	return nil
-}
-
-// nativeAcceptsNull reports whether f's native decode path has a null branch
-// (the kind-gated null acceptance: pointer, slice, map, []byte, net.IP, raw).
-func nativeAcceptsNull(f FieldInfo) bool {
-	if f.Pointer {
-		return true
-	}
-	switch variantShapeKind(f, f.GoType, f.Kind) {
-	case KindSlice, KindMap, KindBytes, KindNetIP, KindRawJSON:
-		return true
-	}
-	return false
-}
-
-func hasNullZeroVariant(f FieldInfo) bool {
-	for _, v := range f.Variants {
-		if v.Kind == VariantNullZero {
-			return true
-		}
-	}
-	return false
-}
-
-// checkVariantShapes verifies the decode variants on f claim disjoint JSON
-// shapes (one variant per shape) and that each shape-dispatchable variant
-// resolves to a concrete first byte. Returns a *richError on conflict.
-func checkVariantShapes(f FieldInfo) error {
-	if !fieldHasConverter(f) {
-		return nil
-	}
-	seen := map[string]string{} // case-byte → variant label
-	label := func(v Variant) string {
-		switch v.Kind {
-		case VariantNullZero:
-			return "nullzero"
-		case VariantNative:
-			return "native (" + f.GoType + ")"
-		default:
-			return "@" + v.FuncName
-		}
-	}
-	for _, v := range f.Variants {
-		bs := variantCaseBytes(f, v)
-		if len(bs) == 0 {
-			return &richError{
-				Msg:      fmt.Sprintf("%s.%s: decode variant %s has no single JSON shape to dispatch on", f.StructName, f.GoName, label(v)),
-				CodeSpan: "@" + v.FuncName,
-			}
-		}
-		for _, c := range bs {
-			if prev, dup := seen[c]; dup {
-				return &richError{
-					Msg:      fmt.Sprintf("%s.%s: decode variants %s and %s both claim the same JSON shape", f.StructName, f.GoName, prev, label(v)),
-					CodeSpan: "@" + v.FuncName,
-				}
-			}
-			seen[c] = label(v)
-		}
-	}
-	return nil
-}
-
 // nativeVariantField strips f to a pure-decode copy for the native case body:
 // no variants, no null-as-zero, no outer pipe (the outer value stage runs once
 // after dispatch). Container-level dive/keys rules are kept.
-func nativeVariantField(f FieldInfo) FieldInfo {
+func nativeVariantField(f model.FieldInfo) model.FieldInfo {
 	nf := f
 	nf.Variants = nil
 	nf.NullZero = false
@@ -169,8 +31,8 @@ func nativeVariantField(f FieldInfo) FieldInfo {
 // is shaped like a field of type W: a pointer input takes the pointer path
 // (null → nil, else a fresh leaf — the temp is a known-nil local, hence
 // TargetNil) and NamedPrims carries W's named-primitive resolution.
-func converterInputField(f FieldInfo, v Variant) FieldInfo {
-	in := FieldInfo{
+func converterInputField(f model.FieldInfo, v model.Variant) model.FieldInfo {
+	in := model.FieldInfo{
 		GoName:           f.GoName,
 		StructName:       f.StructName,
 		JSONName:         f.JSONName,
@@ -188,7 +50,7 @@ func converterInputField(f FieldInfo, v Variant) FieldInfo {
 	return in
 }
 
-func convCall(v Variant) string {
+func convCall(v model.Variant) string {
 	if v.PkgName != "" {
 		return v.PkgName + "." + v.FuncName
 	}
@@ -198,21 +60,21 @@ func convCall(v Variant) string {
 // renderVariantDispatch emits the bytes-path shape dispatch for f into ref,
 // advancing posVar past the consumed value. The outer value stage runs after
 // (caller's validateAndMod).
-func renderVariantDispatch(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderVariantDispatch(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	inlineSkipWS(b, posVar)
 	fmt.Fprintf(b, "if %s >= len(data) {\nreturn result, %s, ggen.NewParseErr(%s, %s, ggen.ErrUnexpectedEnd)\n}\n", posVar, posVar, field, posVar)
 	fmt.Fprintf(b, "switch data[%s] {\n", posVar)
 	for idx, v := range f.Variants {
-		labels := strings.Join(variantCaseBytes(f, v), ", ")
+		labels := strings.Join(model.VariantCaseBytes(f, v, effectiveKind), ", ")
 		fmt.Fprintf(b, "case %s:\n", labels)
 		switch v.Kind {
-		case VariantNullZero:
+		case model.VariantNullZero:
 			fmt.Fprintf(b, "if %s+4 > len(data) || data[%s+1] != 'u' || data[%s+2] != 'l' || data[%s+3] != 'l' {\nreturn result, %s, ggen.NewParseErr(%s, %s, ggen.ErrBadLiteral)\n}\n%s += 4\n%s = %s\n",
 				posVar, posVar, posVar, posVar, posVar, field, posVar, posVar, ref, zeroLit(f.GoType, f.Kind))
-		case VariantNative:
+		case model.VariantNative:
 			renderField(b, nativeVariantField(f), ref, posVar)
-		case VariantConvert:
+		case model.VariantConvert:
 			tmp := fmt.Sprintf("conv%d", idx)
 			fmt.Fprintf(b, "var %s %s\n", tmp, v.InType)
 			renderField(b, converterInputField(f, v), tmp, posVar)
@@ -223,23 +85,23 @@ func renderVariantDispatch(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 }
 
 // renderVariantDispatchStream is the stream-path counterpart.
-func renderVariantDispatchStream(f FieldInfo, ref, posVar string) string {
+func renderVariantDispatchStream(f model.FieldInfo, ref, posVar string) string {
 	b := getSmall()
 	defer putSmall(b)
 	field := fieldLit(f)
 	b.WriteString(streamReadMore(field, "0", false, "ggen.ErrUnexpectedEnd"))
 	b.WriteString("switch s.Bytes()[s.Pos] {\n")
 	for idx, v := range f.Variants {
-		labels := strings.Join(variantCaseBytes(f, v), ", ")
+		labels := strings.Join(model.VariantCaseBytes(f, v, effectiveKind), ", ")
 		fmt.Fprintf(b, "case %s:\n", labels)
 		switch v.Kind {
-		case VariantNullZero:
+		case model.VariantNullZero:
 			rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 			fmt.Fprintf(b, "for ki := 1; ki < 4; ki++ {\n%sif s.Bytes()[s.Pos+ki] != \"null\"[ki] {\nreturn result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrBadLiteral)\n}\n}\ns.Pos += 4\n%s = %s\n",
 				rmKi, field, ref, zeroLit(f.GoType, f.Kind))
-		case VariantNative:
+		case model.VariantNative:
 			b.WriteString(renderStreamField(nativeVariantField(f), ref, posVar))
-		case VariantConvert:
+		case model.VariantConvert:
 			tmp := fmt.Sprintf("conv%d", idx)
 			fmt.Fprintf(b, "var %s %s\n", tmp, v.InType)
 			b.WriteString(renderStreamField(converterInputField(f, v), tmp, posVar))
@@ -251,7 +113,7 @@ func renderVariantDispatchStream(f FieldInfo, ref, posVar string) string {
 }
 
 // emitConvAssign emits the converter call + assignment for the bytes path.
-func emitConvAssign(b *bytes.Buffer, v Variant, field, ref, tmp, posVar string) {
+func emitConvAssign(b *bytes.Buffer, v model.Variant, field, ref, tmp, posVar string) {
 	call := convCall(v)
 	if !v.Fallible {
 		fmt.Fprintf(b, "%s = %s(%s)\n", ref, call, tmp)
@@ -271,7 +133,7 @@ func emitConvAssign(b *bytes.Buffer, v Variant, field, ref, tmp, posVar string) 
 }
 
 // emitConvAssignStream is the stream-path counterpart (2-tuple returns).
-func emitConvAssignStream(b *bytes.Buffer, v Variant, field, ref, tmp string) {
+func emitConvAssignStream(b *bytes.Buffer, v model.Variant, field, ref, tmp string) {
 	call := convCall(v)
 	if !v.Fallible {
 		fmt.Fprintf(b, "%s = %s(%s)\n", ref, call, tmp)

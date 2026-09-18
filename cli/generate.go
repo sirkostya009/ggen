@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/sirkostya009/ggen/gen/model"
 )
 
 // smallPool recycles bytes.Buffer for the per-renderer temp buffers.
@@ -50,7 +52,7 @@ var cyclicTypes map[string]struct{}
 var multiErrTypes map[string]struct{}
 
 // seedMultiErrTypes fills multiErrTypes from the pass's structs.
-func seedMultiErrTypes(structs []StructInfo) map[string]struct{} {
+func seedMultiErrTypes(structs []model.StructInfo) map[string]struct{} {
 	out := make(map[string]struct{}, len(structs))
 	for _, s := range structs {
 		if s.MultiErr {
@@ -58,73 +60,6 @@ func seedMultiErrTypes(structs []StructInfo) map[string]struct{} {
 		}
 	}
 	return out
-}
-
-var goIdentRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`)
-
-// computeCyclicTypes over-approximates the reference graph by scraping type
-// identifiers out of each field's type strings and intersecting with the
-// generated set — an extra hit only costs a struct an unnecessary (correct)
-// depth shim, so precision is not load-bearing.
-func computeCyclicTypes(structs []StructInfo) map[string]struct{} {
-	names := make(map[string]struct{}, len(structs))
-	for _, s := range structs {
-		names[s.Name] = struct{}{}
-	}
-	adj := make(map[string]map[string]struct{}, len(structs))
-	var collect func(f FieldInfo, out map[string]struct{})
-	collect = func(f FieldInfo, out map[string]struct{}) {
-		for _, t := range []string{f.GoType, f.ElemType, f.PointeeType} {
-			for _, id := range goIdentRe.FindAllString(t, -1) {
-				if _, ok := names[id]; ok {
-					out[id] = struct{}{}
-				}
-			}
-		}
-		if f.SQLNullInner != nil {
-			collect(*f.SQLNullInner, out)
-		}
-	}
-	for _, s := range structs {
-		out := make(map[string]struct{})
-		for _, f := range s.Fields {
-			collect(f, out)
-		}
-		if s.IsAlias {
-			for _, id := range goIdentRe.FindAllString(s.AliasUnderlying, -1) {
-				if _, ok := names[id]; ok {
-					out[id] = struct{}{}
-				}
-			}
-		}
-		adj[s.Name] = out
-	}
-	cyc := make(map[string]struct{})
-	for name := range adj {
-		// name is cyclic iff it can reach itself.
-		seen := map[string]struct{}{}
-		stack := make([]string, 0, 8)
-		for n := range adj[name] {
-			stack = append(stack, n)
-		}
-		for len(stack) > 0 {
-			n := stack[len(stack)-1]
-			stack = stack[:len(stack)-1]
-			if n == name {
-				cyc[name] = struct{}{}
-				stack = nil
-				break
-			}
-			if _, ok := seen[n]; ok {
-				continue
-			}
-			seen[n] = struct{}{}
-			for m := range adj[n] {
-				stack = append(stack, m)
-			}
-		}
-	}
-	return cyc
 }
 
 func isCyclic(typeName string) bool {
@@ -150,7 +85,7 @@ func streamDecodeCallFor(typeName string) string {
 	return "DecodeFromStream(s)"
 }
 
-func generateTo(w io.Writer, pkg, scope string, structs []StructInfo) error {
+func generateTo(w io.Writer, pkg, scope string, structs []model.StructInfo) error {
 	resetOneofRegistry(scope)
 	resetCapRegistry()
 	// generatedTypes is seeded by the caller with every struct in the same Go
@@ -158,7 +93,7 @@ func generateTo(w io.Writer, pkg, scope string, structs []StructInfo) error {
 	// reference still routes to a direct DecodeFrom. Per-bucket fallback when unseeded.
 	if generatedTypes == nil {
 		generatedTypes = make(map[string]struct{}, len(structs))
-		namedKinds = make(map[string]TypeKind)
+		namedKinds = make(map[string]model.TypeKind)
 		for _, s := range structs {
 			generatedTypes[s.Name] = struct{}{}
 		}
@@ -171,7 +106,7 @@ func generateTo(w io.Writer, pkg, scope string, structs []StructInfo) error {
 		multiErrTypes = seedMultiErrTypes(structs)
 	}
 	if cyclicTypes == nil {
-		cyclicTypes = computeCyclicTypes(structs)
+		cyclicTypes = model.CyclicTypes(structs)
 	}
 	// Sort fields alphabetically by JSON name (opt out with nosortkeys).
 	// Embedded fallback fields stay at the end so comma emission stays tidy.
@@ -179,7 +114,7 @@ func generateTo(w io.Writer, pkg, scope string, structs []StructInfo) error {
 		if structs[i].NoSort {
 			continue
 		}
-		slices.SortStableFunc(structs[i].Fields, func(a, b FieldInfo) int {
+		slices.SortStableFunc(structs[i].Fields, func(a, b model.FieldInfo) int {
 			switch {
 			case a.Embed && !b.Embed:
 				return 1
@@ -251,8 +186,8 @@ func generateTo(w io.Writer, pkg, scope string, structs []StructInfo) error {
 // seedGeneratedFields maps every object-shaped generated struct to its
 // fields. Aliases stay out: their method set delegates, so an entry here means
 // "encodes as an object with exactly these fields".
-func seedGeneratedFields(structs []StructInfo) map[string][]FieldInfo {
-	out := make(map[string][]FieldInfo, len(structs))
+func seedGeneratedFields(structs []model.StructInfo) map[string][]model.FieldInfo {
+	out := make(map[string][]model.FieldInfo, len(structs))
 	for _, s := range structs {
 		if !s.IsAlias {
 			out[s.Name] = s.Fields
@@ -310,7 +245,7 @@ func writePrelude(buf *bytes.Buffer, pkg, buildTag string, stdlib, third []impor
 // renderStructMethods writes the full method set for a single struct:
 // DecodeFrom + DecodeFromStream + JSONSize + AppendJSON, plus optional
 // MarshalJSON / UnmarshalJSON hooks.
-func renderStructMethods(buf *bytes.Buffer, s StructInfo) {
+func renderStructMethods(buf *bytes.Buffer, s model.StructInfo) {
 	// Cap-const names carry the struct they were registered under
 	// (ggenCap_<Struct>_<Field>_<elemType>) — see capName.
 	currentStructName = s.Name
@@ -332,7 +267,7 @@ func renderStructMethods(buf *bytes.Buffer, s StructInfo) {
 
 // collectImports walks structs and returns the sorted set of imports the
 // generated file will reference, driven off StructInfo features plus a body-scan.
-func collectImports(structs []StructInfo, bodies [][]byte) ([]importSpec, []importSpec) {
+func collectImports(structs []model.StructInfo, bodies [][]byte) ([]importSpec, []importSpec) {
 	// import path → explicit qualifier ("" binds the declared name).
 	need := map[string]string{
 		// The ggen runtime package is named by every generated method.
@@ -346,7 +281,7 @@ func collectImports(structs []StructInfo, bodies [][]byte) ([]importSpec, []impo
 			need[p] = ""
 		}
 	}
-	addImport := func(ti TypeImport) {
+	addImport := func(ti model.TypeImport) {
 		if ti.Path == "" {
 			return
 		}
@@ -358,19 +293,19 @@ func collectImports(structs []StructInfo, bodies [][]byte) ([]importSpec, []impo
 	}
 	// Candidate foreign packages by qualifier, narrowed to the ones a
 	// rendered body actually names — see scanBodiesForForeignImports.
-	foreign := map[string]TypeImport{}
+	foreign := map[string]model.TypeImport{}
 
 	// Per-feature walk: each match flips on its imports.
 	anyMarshal, anyUnmarshal := false, false
 	anyString, anyValidation, anyBytes, anyRequired := false, false, false, false
-	walkCustomV := func(rules []ValidationRule) {
+	walkCustomV := func(rules []model.ValidationRule) {
 		for _, r := range rules {
 			if r.Custom {
 				add(r.PkgImport)
 			}
 		}
 	}
-	walkCustomM := func(rules []ModRule) {
+	walkCustomM := func(rules []model.ModRule) {
 		for _, r := range rules {
 			if r.Custom {
 				add(r.PkgImport)
@@ -389,7 +324,7 @@ func collectImports(structs []StructInfo, bodies [][]byte) ([]importSpec, []impo
 		}
 		// Struct alias delegating to a foreign-package underlying
 		// (e.g. `type Local uuid.UUID`) needs that package's import.
-		if s.IsAlias && s.AliasKind == KindStruct {
+		if s.IsAlias && s.AliasKind == model.KindStruct {
 			addImport(s.AliasUnderlyingImport)
 		}
 		// streamUnknownKey clones the KeyView alias in every mode.
@@ -399,7 +334,7 @@ func collectImports(structs []StructInfo, bodies [][]byte) ([]importSpec, []impo
 		// A container alias keeps its shape in AliasField, not Fields.
 		if s.IsAlias {
 			switch s.AliasKind {
-			case KindBytes, KindSlice, KindArray, KindMap:
+			case model.KindBytes, model.KindSlice, model.KindArray, model.KindMap:
 				collectFieldImports(s.AliasField, addImport, &anyString, &anyValidation, &anyBytes, &anyRequired)
 				for _, ti := range s.AliasField.TypeImports {
 					foreign[ti.Name] = ti
@@ -447,36 +382,6 @@ func collectImports(structs []StructInfo, bodies [][]byte) ([]importSpec, []impo
 	slices.SortFunc(out, byPath)
 	slices.SortFunc(third, byPath)
 	return out, third
-}
-
-// emitterPackages maps every package qualifier the emitters spell as a
-// literal (`json.RawMessage`, `time.Parse`, `netip.ParseAddr`, …) to the
-// package it means. A user package declared under one of those names
-// (`internal/json`) would collide with that literal, so its types are spelled
-// through the `<name>_` alias instead — see qualifierFor.
-var emitterPackages = map[string]string{
-	"ggen":     "github.com/sirkostya009/ggen",
-	"archsimd": "simd/archsimd",
-	"base32":   "encoding/base32",
-	"base64":   "encoding/base64",
-	"big":      "math/big",
-	"bits":     "math/bits",
-	"bytes":    "bytes",
-	"fmt":      "fmt",
-	"hex":      "encoding/hex",
-	"json":     "encoding/json",
-	"jsontext": "encoding/json/jsontext",
-	"math":     "math",
-	"net":      "net",
-	"netip":    "net/netip",
-	"reflect":  "reflect",
-	"sql":      "database/sql",
-	"strconv":  "strconv",
-	"strings":  "strings",
-	"time":     "time",
-	"unsafe":   "unsafe",
-	"url":      "net/url",
-	"utf8":     "unicode/utf8",
 }
 
 // namesQualifier reports whether body spells the package qualifier tok
@@ -547,7 +452,7 @@ func scanBodiesForStdImports(bodies [][]byte, add func(string)) {
 // (a plain value field only ever writes `result.X` and calls methods on it).
 // Importing unconditionally would break the second case with "imported and not
 // used", so the candidate set is filtered the same way the stdlib helpers are.
-func scanBodiesForForeignImports(bodies [][]byte, cands map[string]TypeImport, add func(TypeImport)) {
+func scanBodiesForForeignImports(bodies [][]byte, cands map[string]model.TypeImport, add func(model.TypeImport)) {
 	for name, ti := range cands {
 		tok := []byte(name + ".")
 		for _, body := range bodies {
@@ -562,8 +467,8 @@ func scanBodiesForForeignImports(bodies [][]byte, cands map[string]TypeImport, a
 // collectFieldImports adds per-field imports. Flags get flipped for
 // struct-wide checks (validation block, string-typed work) that the
 // caller resolves into ggen subpackage imports afterwards.
-func collectFieldImports(f FieldInfo, addImport func(TypeImport), anyString, anyValidation, anyBytes, anyRequired *bool) {
-	add := func(p string) { addImport(TypeImport{Path: p}) }
+func collectFieldImports(f model.FieldInfo, addImport func(model.TypeImport), anyString, anyValidation, anyBytes, anyRequired *bool) {
+	add := func(p string) { addImport(model.TypeImport{Path: p}) }
 	if len(f.Validation) > 0 || len(f.ElemValidation) > 0 || len(f.KeyValidation) > 0 {
 		*anyValidation = true
 	}
@@ -575,7 +480,7 @@ func collectFieldImports(f FieldInfo, addImport func(TypeImport), anyString, any
 	if f.IsRequired() {
 		*anyRequired = true
 	}
-	walkValidation := func(rules []ValidationRule) {
+	walkValidation := func(rules []model.ValidationRule) {
 		for _, v := range rules {
 			switch v.Name {
 			case "runes", "minrunes", "maxrunes":
@@ -595,7 +500,7 @@ func collectFieldImports(f FieldInfo, addImport func(TypeImport), anyString, any
 	for _, inner := range f.InnerValidation {
 		walkValidation(inner)
 	}
-	walkMods := func(rules []ModRule) {
+	walkMods := func(rules []model.ModRule) {
 		for _, m := range rules {
 			switch m.Name {
 			case "trim", "tolower", "toupper", "trimleft", "trimright", "replace":
@@ -612,13 +517,13 @@ func collectFieldImports(f FieldInfo, addImport func(TypeImport), anyString, any
 	// crossPkgStruct flags non-generated KindStruct fields: those go
 	// through the json.Unmarshal / json.Marshal fallback when no
 	// ggen/Text/JSON method is detected.
-	crossPkgStruct := func(typ string, iface FieldInterfaces) {
+	crossPkgStruct := func(typ string, iface model.FieldInterfaces) {
 		if isGenerated(typ) {
 			return
 		}
 		// Named primitive decoded/encoded inline — never reaches encoding/json.
-		if _, _, ok := inlineNamedPrim(FieldInfo{
-			GoType: typ, Kind: KindStruct, HTMLEscape: f.HTMLEscape, Copy: f.Copy,
+		if _, _, ok := inlineNamedPrim(model.FieldInfo{
+			GoType: typ, Kind: model.KindStruct, HTMLEscape: f.HTMLEscape, Copy: f.Copy,
 			AllowInvalidUTF8: f.AllowInvalidUTF8, NoValidate: f.NoValidate,
 		}); ok {
 			return
@@ -633,20 +538,20 @@ func collectFieldImports(f FieldInfo, addImport func(TypeImport), anyString, any
 		add("encoding/json")
 	}
 	switch f.Kind {
-	case KindString:
+	case model.KindString:
 		*anyString = true
-	case KindTime, KindDuration:
+	case model.KindTime, model.KindDuration:
 		add("time")
-	case KindNetIP:
+	case model.KindNetIP:
 		add("net")
 		*anyString = true
-	case KindNetipAddr, KindNetipPrefix:
+	case model.KindNetipAddr, model.KindNetipPrefix:
 		add("net/netip")
 		*anyString = true
-	case KindURL:
+	case model.KindURL:
 		add("net/url")
 		*anyString = true
-	case KindBytes:
+	case model.KindBytes:
 		*anyBytes = true
 		switch f.Format {
 		case "", "base64", "base64url":
@@ -659,7 +564,7 @@ func collectFieldImports(f FieldInfo, addImport func(TypeImport), anyString, any
 		if f.Format != "array" {
 			*anyString = true
 		}
-	case KindSQLNull:
+	case model.KindSQLNull:
 		add("database/sql")
 		if f.SQLNullInner != nil {
 			// Foreign-package imports for the type literals, plus the inner
@@ -668,17 +573,17 @@ func collectFieldImports(f FieldInfo, addImport func(TypeImport), anyString, any
 				addImport(imp)
 			}
 			collectFieldImports(*f.SQLNullInner, addImport, anyString, anyValidation, anyBytes, anyRequired)
-		} else if spec, ok := SQLNullSpec(f.GoType); ok {
+		} else if spec, ok := model.SQLNullSpec(f.GoType); ok {
 			switch spec.Inner {
-			case KindString:
+			case model.KindString:
 				*anyString = true
-			case KindTime:
+			case model.KindTime:
 				add("time")
 			}
 		}
-	case KindBigInt, KindBigFloat, KindBigRat:
+	case model.KindBigInt, model.KindBigFloat, model.KindBigRat:
 		*anyString = true
-	case KindStruct:
+	case model.KindStruct:
 		// For *T fields f.GoType is "*T" but isGenerated matches bare names —
 		// use PointeeType so the cross-file struct-by-name check resolves.
 		typ := f.GoType
@@ -691,37 +596,37 @@ func collectFieldImports(f FieldInfo, addImport func(TypeImport), anyString, any
 			leaf := f
 			leaf.Pointer = false
 			leaf.PointeeType = ""
-			_, leaf.GoType = pointerDepth(f.GoType)
-			leaf.Kind = resolveKind(leaf.GoType)
+			_, leaf.GoType = model.PointerDepth(f.GoType)
+			leaf.Kind = model.ResolveKind(leaf.GoType)
 			collectFieldImports(leaf, addImport, anyString, anyValidation, anyBytes, anyRequired)
 		} else {
 			crossPkgStruct(typ, f.Iface)
 		}
-	case KindSlice, KindArray, KindMap:
+	case model.KindSlice, model.KindArray, model.KindMap:
 		// Pointer elements / map values: only the LEAF kind drives imports
 		// (as above). Non-pointer cross-pkg struct elems keep the json fallback.
 		if et, eDepth := elemPtrType(f); eDepth > 0 {
 			leaf := elemPtrField(f, f.JSONName)
 			leaf.Pointer = false
 			leaf.PointeeType = ""
-			_, leaf.GoType = pointerDepth(et)
+			_, leaf.GoType = model.PointerDepth(et)
 			collectFieldImports(leaf, addImport, anyString, anyValidation, anyBytes, anyRequired)
-		} else if f.ElemKind == KindStruct {
+		} else if f.ElemKind == model.KindStruct {
 			crossPkgStruct(f.ElemType, f.ElemIface)
 		} else {
 			switch f.ElemKind {
-			case KindSlice, KindArray:
+			case model.KindSlice, model.KindArray:
 				// Nested container: the deep element's kind drives imports.
 				collectFieldImports(peelSliceField(f), addImport, anyString, anyValidation, anyBytes, anyRequired)
-			case KindTime, KindDuration, KindBytes, KindRawJSON, KindNetIP, KindNetipAddr,
-				KindNetipPrefix, KindURL, KindBigInt, KindBigFloat, KindBigRat, KindSQLNull, KindAny, KindMap:
+			case model.KindTime, model.KindDuration, model.KindBytes, model.KindRawJSON, model.KindNetIP, model.KindNetipAddr,
+				model.KindNetipPrefix, model.KindURL, model.KindBigInt, model.KindBigFloat, model.KindBigRat, model.KindSQLNull, model.KindAny, model.KindMap:
 				// Dedicated-kind element delegates to the field emitters —
 				// same imports as a field of that kind.
 				collectFieldImports(sliceElemField(f), addImport, anyString, anyValidation, anyBytes, anyRequired)
 			}
 		}
-	case KindAny:
-	case KindRawJSON:
+	case model.KindAny:
+	case model.KindRawJSON:
 	}
 	if f.String {
 		// json:",string": strconv on decode/encode, inline string scan.
@@ -737,11 +642,11 @@ func isThirdParty(p string) bool {
 // preregisterOneOfs walks all rules to populate the OneOf frozen-slice
 // registry before render, so render-time lookups are pure map reads
 // (required for safe parallel rendering). Dedup makes it order-independent.
-func preregisterOneOfs(structs []StructInfo) {
-	walk := func(rules []ValidationRule) {
+func preregisterOneOfs(structs []model.StructInfo) {
+	walk := func(rules []model.ValidationRule) {
 		for _, v := range rules {
 			if v.Name == "oneof" {
-				registerOneOf(splitPipeParts(v.Value))
+				registerOneOf(model.SplitPipeParts(v.Value))
 			}
 		}
 	}
@@ -757,26 +662,16 @@ func preregisterOneOfs(structs []StructInfo) {
 	}
 }
 
-func isNumeric(k TypeKind) bool {
-	switch k {
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
-		KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
-		KindFloat32, KindFloat64:
-		return true
-	}
-	return false
-}
-
 // scalarCountable reports whether a flat container of element kind k admits
 // exact-cap sizing by counting delimiters in the bytes-path buffer. True only
 // for numeric / bool elements (their textual form carries no `,`/`]`/`:`/`}`).
-func scalarCountable(k TypeKind) bool { return isNumeric(k) || k == KindBool }
+func scalarCountable(k model.TypeKind) bool { return model.IsNumeric(k) || k == model.KindBool }
 
 // renderOneMod emits one mod (transform) against ref. posVar selects the
 // return shape for a fallible mod ("" = stream 2-tuple, else bytes 3-tuple). A
 // custom mod is pure (`func(T)T`), error-form (`func(T)(T,error)`, parse error),
 // or bool-form (`func(T)(T,bool)`, false → ggen.ModError parse error).
-func renderOneMod(b *bytes.Buffer, m ModRule, field, ref, goType string, kind TypeKind, posVar string) {
+func renderOneMod(b *bytes.Buffer, m model.ModRule, field, ref, goType string, kind model.TypeKind, posVar string) {
 	kind = effectiveKind(goType, kind)
 	prim := kindPrimitiveName(kind)
 	cast := goType != "" && prim != "" && goType != prim
@@ -846,7 +741,7 @@ func renderOneMod(b *bytes.Buffer, m ModRule, field, ref, goType string, kind Ty
 		case "trimright":
 			fmt.Fprintf(b, "%s = %s\n", ref, wrap(fmt.Sprintf("strings.TrimSuffix(%s, %s)", asPrim(ref), strconv.Quote(m.Value))))
 		case "replace":
-			parts := splitPipeParts(m.Value)
+			parts := model.SplitPipeParts(m.Value)
 			if len(parts) == 2 {
 				fmt.Fprintf(b, "%s = %s\n", ref,
 					wrap(fmt.Sprintf("strings.ReplaceAll(%s, %s, %s)", asPrim(ref), strconv.Quote(parts[0]), strconv.Quote(parts[1]))))
@@ -854,7 +749,7 @@ func renderOneMod(b *bytes.Buffer, m ModRule, field, ref, goType string, kind Ty
 		case "clamp":
 			// clamp=lo|hi — bound the value into [lo, hi]. Constants cast to
 			// the field's type so `<`/`>` are comparable on aliased numerics.
-			cparts := splitPipeParts(m.Value)
+			cparts := model.SplitPipeParts(m.Value)
 			if len(cparts) != 2 {
 				return
 			}
@@ -881,7 +776,7 @@ func renderOneMod(b *bytes.Buffer, m ModRule, field, ref, goType string, kind Ty
 // aliases (`//ggen:generate type Count int`) and the named primitives the
 // parse layer resolved from go/types on each field's type (which also covers
 // types the user never annotated, and foreign ones like `leaf.Name`).
-func seedNamedKinds(structs []StructInfo) {
+func seedNamedKinds(structs []model.StructInfo) {
 	aliasFlags = map[string]aliasCodegen{}
 	for _, s := range structs {
 		if s.IsAlias && kindPrimitiveName(s.AliasKind) != "" {
@@ -914,11 +809,11 @@ func seedNamedKinds(structs []StructInfo) {
 // Inlining with the PARENT's flags would silently swap that behaviour, so those
 // keep the call. A flag set globally on the CLI lands on both sides equally and
 // so never blocks inlining.
-func inlineNamedPrim(f FieldInfo) (prim string, kind TypeKind, ok bool) {
+func inlineNamedPrim(f model.FieldInfo) (prim string, kind model.TypeKind, ok bool) {
 	// KindStruct is the generator's "named type I have no special handling
 	// for". Anything else (KindDuration, KindTime, KindBytes, …) owns its wire
 	// shape and keeps its own emitter, named primitive underneath or not.
-	if f.Kind != KindStruct {
+	if f.Kind != model.KindStruct {
 		return "", 0, false
 	}
 	k, isNamed := namedKinds[f.GoType]
@@ -949,7 +844,7 @@ func inlineNamedPrim(f FieldInfo) (prim string, kind TypeKind, ok bool) {
 // The value steps stay on the OUTER field so they run against the named type
 // (their `oneof`/`eq`/… resolve through effectiveKind); the inner render only
 // produces the raw value.
-func namedPrimInner(f FieldInfo, prim string, kind TypeKind) FieldInfo {
+func namedPrimInner(f model.FieldInfo, prim string, kind model.TypeKind) model.FieldInfo {
 	inner := f
 	inner.GoType = prim
 	inner.Kind = kind
@@ -958,12 +853,12 @@ func namedPrimInner(f FieldInfo, prim string, kind TypeKind) FieldInfo {
 	inner.Pipe = nil
 	inner.Levels = nil
 	inner.NamedPrims = nil
-	inner.Iface = FieldInterfaces{}
+	inner.Iface = model.FieldInterfaces{}
 	inner.AtDispatch = false
 	return inner
 }
 
-func effectiveKind(goType string, kind TypeKind) TypeKind {
+func effectiveKind(goType string, kind model.TypeKind) model.TypeKind {
 	if k, ok := namedKinds[goType]; ok {
 		return k
 	}
@@ -976,7 +871,7 @@ func effectiveKind(goType string, kind TypeKind) TypeKind {
 // stores it in a string-typed error field. Comparisons against untyped
 // constants (len/gte/eq/oneof) need no cast, so callers only wrap where the
 // destination type is concrete.
-func primCast(goType string, kind TypeKind, ref string) string {
+func primCast(goType string, kind model.TypeKind, ref string) string {
 	prim := kindPrimitiveName(kind)
 	if goType == "" || prim == "" || goType == prim {
 		return ref
@@ -986,35 +881,35 @@ func primCast(goType string, kind TypeKind, ref string) string {
 
 // kindPrimitiveName returns the Go literal name for a primitive TypeKind,
 // or "" for kinds that aren't a single primitive token.
-func kindPrimitiveName(k TypeKind) string {
+func kindPrimitiveName(k model.TypeKind) string {
 	switch k {
-	case KindString:
+	case model.KindString:
 		return "string"
-	case KindBool:
+	case model.KindBool:
 		return "bool"
-	case KindInt:
+	case model.KindInt:
 		return "int"
-	case KindInt8:
+	case model.KindInt8:
 		return "int8"
-	case KindInt16:
+	case model.KindInt16:
 		return "int16"
-	case KindInt32:
+	case model.KindInt32:
 		return "int32"
-	case KindInt64:
+	case model.KindInt64:
 		return "int64"
-	case KindUint:
+	case model.KindUint:
 		return "uint"
-	case KindUint8:
+	case model.KindUint8:
 		return "uint8"
-	case KindUint16:
+	case model.KindUint16:
 		return "uint16"
-	case KindUint32:
+	case model.KindUint32:
 		return "uint32"
-	case KindUint64:
+	case model.KindUint64:
 		return "uint64"
-	case KindFloat32:
+	case model.KindFloat32:
 		return "float32"
-	case KindFloat64:
+	case model.KindFloat64:
 		return "float64"
 	}
 	return ""
@@ -1024,7 +919,7 @@ func kindPrimitiveName(k TypeKind) string {
 // untyped literal carries the field's own kind, so a bound above MaxInt64
 // keeps its value instead of defaulting to int (overflow) or float64
 // (rounded report).
-func numBound(kind TypeKind, value string) string {
+func numBound(kind model.TypeKind, value string) string {
 	prim := kindPrimitiveName(kind)
 	if prim == "" {
 		return value
@@ -1054,8 +949,8 @@ func withPos(errExpr, posVar string) string {
 // byteArrayLen returns N for a `[N]byte` field folded onto the KindBytes
 // (base64) path, else 0. jsonv2 base64s byte ARRAYS and rejects the v1
 // number-array form; the decoded length must be exactly N.
-func byteArrayLen(f FieldInfo) int {
-	if f.Kind == KindBytes && f.ArrayLen > 0 {
+func byteArrayLen(f model.FieldInfo) int {
+	if f.Kind == model.KindBytes && f.ArrayLen > 0 {
 		return f.ArrayLen
 	}
 	return 0
@@ -1064,11 +959,11 @@ func byteArrayLen(f FieldInfo) int {
 // leafKind is the kind of a pointer field's pointee. `[N]byte` reads as a
 // plain array in the type string — only Kind + ArrayLen carry the base64
 // fold — so a byte-array pointee keeps the field's own kind.
-func leafKind(f FieldInfo, leafType string) TypeKind {
+func leafKind(f model.FieldInfo, leafType string) model.TypeKind {
 	if byteArrayLen(f) > 0 {
-		return KindBytes
+		return model.KindBytes
 	}
-	return resolveKind(leafType)
+	return model.ResolveKind(leafType)
 }
 
 func arrayLenErr(field string, want int, gotExpr, posVar string) string {
@@ -1158,7 +1053,7 @@ func registerOneOf(parts []string) string {
 // renderValidationOn emits validation checks against ref. jsonName appears in
 // errors; kind selects type-appropriate comparisons; multiErr appends instead
 // of returning. posVar selects the return shape ("" 2-tuple, else 3-tuple).
-func renderValidationOn(b *bytes.Buffer, rules []ValidationRule, ref, jsonName, goType string, kind TypeKind, multiErr bool, posVar string) {
+func renderValidationOn(b *bytes.Buffer, rules []model.ValidationRule, ref, jsonName, goType string, kind model.TypeKind, multiErr bool, posVar string) {
 	onErr := func(errExpr string) string {
 		errExpr = withPos(errExpr, posVar)
 		if multiErr {
@@ -1194,7 +1089,7 @@ func asciiImplyingRule(name string) bool {
 // utf8.RuneCountInString walk via byte-length gating. If an ASCII-implying rule
 // already passed earlier in this run AND we're not in multierr mode, the count
 // is exactly len and the walk is dropped entirely.
-func emitValRun(b *bytes.Buffer, run []ValidationRule, ref, jsonName, goType string, kind TypeKind, multiErr bool, onErr func(string) string) {
+func emitValRun(b *bytes.Buffer, run []model.ValidationRule, ref, jsonName, goType string, kind model.TypeKind, multiErr bool, onErr func(string) string) {
 	kind = effectiveKind(goType, kind)
 	asciiSeen := false
 	for _, v := range run {
@@ -1213,7 +1108,7 @@ func emitValRun(b *bytes.Buffer, run []ValidationRule, ref, jsonName, goType str
 // useLen drops the walk entirely (count is len). Otherwise byte-length gates
 // resolve the fail-free and pass-free cases in O(1); only the ambiguous band
 // walks. The failure literal's Got reports the real rune count.
-func emitRuneRule(b *bytes.Buffer, v ValidationRule, ref, jsonName, goType string, kind TypeKind, onErr func(string) string, useLen bool) {
+func emitRuneRule(b *bytes.Buffer, v model.ValidationRule, ref, jsonName, goType string, kind model.TypeKind, onErr func(string) string, useLen bool) {
 	errLit := func(got string) string {
 		switch v.Name {
 		case "runes":
@@ -1271,7 +1166,7 @@ func emitRuneRule(b *bytes.Buffer, v ValidationRule, ref, jsonName, goType strin
 // CustomError, bool form (BoolForm) emits PredicateError on a false return.
 // Rune-count rules (runes/minrunes/maxrunes) are NOT handled here — emitValRun
 // routes them to emitRuneRule (byte-length gating).
-func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName, goType string, kind TypeKind, onErr func(string) string) {
+func renderOneVal(b *bytes.Buffer, v model.ValidationRule, ref, jsonName, goType string, kind model.TypeKind, onErr func(string) string) {
 	kind = effectiveKind(goType, kind)
 	// str is ref converted to a plain string — for the checks and error fields
 	// that are string-typed rather than untyped-constant comparisons.
@@ -1308,21 +1203,21 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName, goType strin
 			onErr(fmt.Sprintf("&ggen.LTEError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
 
 	case "eq":
-		if kind == KindString {
+		if kind == model.KindString {
 			fmt.Fprintf(b, "if %s != %q {\n\t%s\n}\n",
 				ref, v.Value,
 				onErr(fmt.Sprintf("&ggen.EqError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
-		} else if isNumeric(kind) {
+		} else if model.IsNumeric(kind) {
 			fmt.Fprintf(b, "if %s != %s {\n\t%s\n}\n",
 				ref, v.Value,
 				onErr(fmt.Sprintf("&ggen.EqError{Path: []string{%q}, Want: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
 		}
 	case "neq":
-		if kind == KindString {
+		if kind == model.KindString {
 			fmt.Fprintf(b, "if %s == %q {\n\t%s\n}\n",
 				ref, v.Value,
 				onErr(fmt.Sprintf("&ggen.NeqError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
-		} else if isNumeric(kind) {
+		} else if model.IsNumeric(kind) {
 			fmt.Fprintf(b, "if %s == %s {\n\t%s\n}\n",
 				ref, v.Value,
 				onErr(fmt.Sprintf("&ggen.NeqError{Path: []string{%q}, Want: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
@@ -1330,7 +1225,7 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName, goType strin
 
 	case "oneof":
 		cases := renderOneofCases(kind, v.Value)
-		varName := registerOneOf(splitPipeParts(v.Value))
+		varName := registerOneOf(model.SplitPipeParts(v.Value))
 		fmt.Fprintf(b, "switch %s {\ncase %s:\ndefault:\n\t%s\n}\n",
 			ref, cases,
 			onErr(fmt.Sprintf("&ggen.OneOfError{Path: []string{%q}, Allowed: %s, Value: %s}", jsonName, varName, ref)))
@@ -1393,11 +1288,11 @@ func renderOneVal(b *bytes.Buffer, v ValidationRule, ref, jsonName, goType strin
 	}
 }
 
-func renderOneofCases(kind TypeKind, raw string) string {
-	parts := splitPipeParts(raw)
+func renderOneofCases(kind model.TypeKind, raw string) string {
+	parts := model.SplitPipeParts(raw)
 	out := make([]string, len(parts))
 	for i, p := range parts {
-		if kind == KindString {
+		if kind == model.KindString {
 			out[i] = strconv.Quote(p)
 		} else {
 			out[i] = p
@@ -1408,7 +1303,7 @@ func renderOneofCases(kind TypeKind, raw string) string {
 
 // fieldIsConditional reports whether the field's marshal emission depends on
 // a runtime check (omitempty/omitzero).
-func fieldIsConditional(f FieldInfo) bool {
+func fieldIsConditional(f model.FieldInfo) bool {
 	if f.Embed {
 		return true
 	}
@@ -1421,7 +1316,7 @@ func fieldIsConditional(f FieldInfo) bool {
 // fieldSkipExpr returns a Go boolean expression that is true when the field
 // should be EMITTED (omitempty: skip if JSON-empty; omitzero: skip if Go zero).
 // Empty string means "always emit".
-func fieldSkipExpr(f FieldInfo, ref string) string {
+func fieldSkipExpr(f model.FieldInfo, ref string) string {
 	var emitConds []string
 	// A named primitive reports KindStruct at its use sites; unresolved, the
 	// omitzero KindStruct arm emitted `ref != (Score{})` (does not compile)
@@ -1431,7 +1326,7 @@ func fieldSkipExpr(f FieldInfo, ref string) string {
 		if f.Pointer {
 			// nil encodes null; a pointee that encodes empty is omitted too.
 			emitConds = append(emitConds, fmt.Sprintf("%s != nil", ref))
-			depth, leafType := pointerDepth(f.GoType)
+			depth, leafType := model.PointerDepth(f.GoType)
 			leaf := f
 			leaf.Pointer, leaf.PointeeType, leaf.GoType = false, "", leafType
 			leaf.Kind = leafKind(f, leafType)
@@ -1450,44 +1345,44 @@ func fieldSkipExpr(f FieldInfo, ref string) string {
 			emitConds = append(emitConds, fmt.Sprintf("%s != nil", ref))
 		} else {
 			switch kind {
-			case KindString:
+			case model.KindString:
 				emitConds = append(emitConds, fmt.Sprintf("%s != \"\"", ref))
-			case KindBool:
+			case model.KindBool:
 				emitConds = append(emitConds, ref)
-			case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
-				KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
-				KindFloat32, KindFloat64:
+			case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64,
+				model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64,
+				model.KindFloat32, model.KindFloat64:
 				emitConds = append(emitConds, fmt.Sprintf("%s != 0", ref))
-			case KindSlice, KindMap, KindRawJSON:
+			case model.KindSlice, model.KindMap, model.KindRawJSON:
 				// Go-zero is nil; `make([]T, 0)` is non-nil and must be emitted.
 				emitConds = append(emitConds, fmt.Sprintf("%s != nil", ref))
-			case KindBytes:
+			case model.KindBytes:
 				// A [N]byte rides the base64 path but is an array, not a nillable slice.
 				if byteArrayLen(f) > 0 {
 					emitConds = append(emitConds, zeroCompare(f, ref))
 				} else {
 					emitConds = append(emitConds, fmt.Sprintf("%s != nil", ref))
 				}
-			case KindStruct:
+			case model.KindStruct:
 				emitConds = append(emitConds, zeroCompare(f, ref))
-			case KindTime:
+			case model.KindTime:
 				emitConds = append(emitConds, fmt.Sprintf("!%s.IsZero()", ref))
-			case KindDuration:
+			case model.KindDuration:
 				emitConds = append(emitConds, fmt.Sprintf("%s != 0", ref))
-			case KindNetIP:
+			case model.KindNetIP:
 				emitConds = append(emitConds, fmt.Sprintf("%s != nil", ref))
-			case KindNetipAddr, KindNetipPrefix:
+			case model.KindNetipAddr, model.KindNetipPrefix:
 				emitConds = append(emitConds, fmt.Sprintf("%s.IsValid()", ref))
-			case KindAny:
+			case model.KindAny:
 				emitConds = append(emitConds, fmt.Sprintf("%s != nil", ref))
-			case KindSQLNull:
+			case model.KindSQLNull:
 				emitConds = append(emitConds, zeroCompare(f, ref))
-			case KindURL:
+			case model.KindURL:
 				emitConds = append(emitConds, fmt.Sprintf("%s != (%s{})", ref, f.GoType))
-			case KindBigInt, KindBigFloat, KindBigRat:
+			case model.KindBigInt, model.KindBigFloat, model.KindBigRat:
 				// big.X isn't comparable (unexported slices); Sign()==0 for zero.
 				emitConds = append(emitConds, fmt.Sprintf("%s.Sign() != 0", ref))
-			case KindArray:
+			case model.KindArray:
 				emitConds = append(emitConds, zeroCompare(f, ref))
 			}
 		}
@@ -1503,31 +1398,31 @@ func fieldSkipExpr(f FieldInfo, ref string) string {
 // "" when the kind can never encode empty. Numbers, bools, times, durations
 // and big.* always carry a value (a zero big.Int is `0`, not JSON-empty), so
 // they never get a guard.
-func omitEmptyCond(f FieldInfo, ref string) string {
+func omitEmptyCond(f model.FieldInfo, ref string) string {
 	switch effectiveKind(f.GoType, f.Kind) {
-	case KindString:
+	case model.KindString:
 		return fmt.Sprintf("%s != \"\"", ref)
-	case KindBytes:
+	case model.KindBytes:
 		// nil → null, empty → ""; a [N]byte is N base64 bytes, never empty.
 		if byteArrayLen(f) > 0 {
 			return ""
 		}
 		return fmt.Sprintf("len(%s) > 0", ref)
-	case KindSlice, KindMap, KindRawJSON:
+	case model.KindSlice, model.KindMap, model.KindRawJSON:
 		return fmt.Sprintf("len(%s) > 0", ref)
-	case KindArray:
+	case model.KindArray:
 		if f.ArrayLen == 0 {
 			return "false"
 		}
-	case KindNetIP:
+	case model.KindNetIP:
 		return fmt.Sprintf("len(%s) > 0", ref)
-	case KindNetipAddr, KindNetipPrefix:
+	case model.KindNetipAddr, model.KindNetipPrefix:
 		return fmt.Sprintf("%s.IsValid()", ref)
-	case KindURL:
+	case model.KindURL:
 		return fmt.Sprintf("%s != (%s{})", ref, f.GoType)
-	case KindAny:
+	case model.KindAny:
 		return fmt.Sprintf("!ggen.AnyIsEmpty(%s)", ref)
-	case KindSQLNull:
+	case model.KindSQLNull:
 		// !Valid marshals as `null`.
 		return fmt.Sprintf("%s.Valid", ref)
 	}
@@ -1537,14 +1432,14 @@ func omitEmptyCond(f FieldInfo, ref string) string {
 // zeroCompare emits the omitzero is-nonzero test: `ref != (T{})` when the
 // type is comparable, else a reflect deep-zero probe — `!= (T{})` on a struct
 // carrying a slice/map field does not compile.
-func zeroCompare(f FieldInfo, ref string) string {
+func zeroCompare(f model.FieldInfo, ref string) string {
 	if f.NotComparable {
 		return fmt.Sprintf("!reflect.ValueOf(%s).IsZero()", ref)
 	}
 	return fmt.Sprintf("%s != (%s{})", ref, f.GoType)
 }
 
-func renderAppendJSON(b *bytes.Buffer, s StructInfo) {
+func renderAppendJSON(b *bytes.Buffer, s model.StructInfo) {
 	fmt.Fprintf(b, "func (s %s) AppendJSON(dst []byte) ([]byte, error) {\n", s.Name)
 	if s.IsAlias {
 		renderAliasAppendJSON(b, s)
@@ -1681,7 +1576,7 @@ func parseConstAppendArgs(args string) ([]byte, bool) {
 	return out, true
 }
 
-func renderAppendJSONBody(b *bytes.Buffer, s StructInfo) {
+func renderAppendJSONBody(b *bytes.Buffer, s model.StructInfo) {
 	if len(s.Fields) == 0 {
 		b.WriteString("return append(dst, '{', '}'), nil")
 		return
@@ -1765,15 +1660,15 @@ dst = append(dst, ':')
 // inlineValueEmit returns the embedded-fallback marshal code for one map
 // entry's value (loop var `v`). Specializes a few elem kinds to skip the
 // `any` boxing; everything else goes through AppendAny.
-func inlineValueEmit(f FieldInfo) string {
+func inlineValueEmit(f model.FieldInfo) string {
 	switch f.ElemKind {
-	case KindString:
+	case model.KindString:
 		return fmt.Sprintf("dst = append(dst, '\"')\ndst = %s(dst, v)\n", appendStrFn(f.HTMLEscape))
-	case KindStruct:
+	case model.KindStruct:
 		if isGenerated(f.ElemType) {
 			return "if dst, err = v.AppendJSON(dst); err != nil { return dst, err }\n"
 		}
-	case KindRawJSON:
+	case model.KindRawJSON:
 		// jsontext.Value / json.RawMessage: passthrough; empty → `null`
 		// (appending nothing would corrupt the object — field-level raw
 		// emit and AppendAny both null empties).
@@ -1785,7 +1680,7 @@ func inlineValueEmit(f FieldInfo) string {
 	return fmt.Sprintf("if dst, err = %s(dst, v); err != nil { return dst, err }\n", appendAnyFn(f.HTMLEscape))
 }
 
-func renderAppendValue(b *bytes.Buffer, f FieldInfo, ref string) {
+func renderAppendValue(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	// Named primitive: append the underlying directly (`AppendStringNoHTML(dst,
 	// string(s.X))`) instead of calling the alias's AppendJSON. Frees the
 	// `"key":"` quote fold (opt #16) for string-underlying aliases, and gets an
@@ -1798,7 +1693,7 @@ func renderAppendValue(b *bytes.Buffer, f FieldInfo, ref string) {
 	if f.Pointer {
 		// nil at any level → `null` (flat else-if ladder, one rung per level);
 		// only a full chain reaches the leaf.
-		depth, leafType := pointerDepth(f.GoType)
+		depth, leafType := model.PointerDepth(f.GoType)
 		leaf := f
 		leaf.Pointer = false
 		leaf.PointeeType = ""
@@ -1818,73 +1713,73 @@ func renderAppendValue(b *bytes.Buffer, f FieldInfo, ref string) {
 	}
 	if f.String {
 		switch f.Kind {
-		case KindBool:
+		case model.KindBool:
 			// jsonv2 dropped `,string` for bool — stays bare; fall through.
-		case KindInt, KindInt8, KindInt16, KindInt32:
+		case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32:
 			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendInt(dst, int64(%s), 10)\ndst = append(dst, '\"')\n", ref)
 			return
-		case KindInt64:
+		case model.KindInt64:
 			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendInt(dst, %s, 10)\ndst = append(dst, '\"')\n", ref)
 			return
-		case KindUint, KindUint8, KindUint16, KindUint32:
+		case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32:
 			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendUint(dst, uint64(%s), 10)\ndst = append(dst, '\"')\n", ref)
 			return
-		case KindUint64:
+		case model.KindUint64:
 			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendUint(dst, %s, 10)\ndst = append(dst, '\"')\n", ref)
 			return
-		case KindFloat32:
+		case model.KindFloat32:
 			fmt.Fprintf(b, "dst = append(dst, '\"')\nif dst, err = ggen.AppendFloat(dst, float64(%s), 32); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
 			return
-		case KindFloat64:
+		case model.KindFloat64:
 			fmt.Fprintf(b, "dst = append(dst, '\"')\nif dst, err = ggen.AppendFloat(dst, %s, 64); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
 			return
 		}
 		// unknown/invalid combo — fall through to default
 	}
 	switch f.Kind {
-	case KindString:
+	case model.KindString:
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =%s(dst, %s)\n", appendStrFn(f.HTMLEscape), ref)
-	case KindBool:
+	case model.KindBool:
 		fmt.Fprintf(b, "dst = strconv.AppendBool(dst, %s)\n", ref)
-	case KindInt, KindInt8, KindInt16, KindInt32:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32:
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, int64(%s), 10)\n", ref)
-	case KindInt64:
+	case model.KindInt64:
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s, 10)\n", ref)
-	case KindUint, KindUint8, KindUint16, KindUint32:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32:
 		fmt.Fprintf(b, "dst = strconv.AppendUint(dst, uint64(%s), 10)\n", ref)
-	case KindUint64:
+	case model.KindUint64:
 		fmt.Fprintf(b, "dst = strconv.AppendUint(dst, %s, 10)\n", ref)
-	case KindFloat32:
+	case model.KindFloat32:
 		fmt.Fprintf(b, "if dst, err = ggen.AppendFloat(dst, float64(%s), 32); err != nil { return dst, err }\n", ref)
-	case KindFloat64:
+	case model.KindFloat64:
 		fmt.Fprintf(b, "if dst, err = ggen.AppendFloat(dst, %s, 64); err != nil { return dst, err }\n", ref)
-	case KindStruct:
+	case model.KindStruct:
 		if isGenerated(f.GoType) {
 			fmt.Fprintf(b, "if dst, err = %s.AppendJSON(dst); err != nil { return dst, err }\n", ref)
 		} else {
 			b.WriteString(renderCrossPkgStructAppend(f, ref))
 		}
-	case KindSlice, KindArray:
+	case model.KindSlice, model.KindArray:
 		renderAppendSlice(b, f, ref)
-	case KindMap:
+	case model.KindMap:
 		renderAppendMap(b, f, ref)
-	case KindBytes:
+	case model.KindBytes:
 		renderAppendBytes(b, f, ref)
-	case KindTime:
+	case model.KindTime:
 		renderAppendTime(b, f, ref)
-	case KindDuration:
+	case model.KindDuration:
 		renderAppendDuration(b, f, ref)
-	case KindNetIP, KindNetipPrefix:
+	case model.KindNetIP, model.KindNetipPrefix:
 		// Both implement encoding.TextAppender (Go 1.24+); their text can
 		// never carry escape-needing bytes (no zone — PrefixFrom strips it).
 		fmt.Fprintf(b, `dst = append(dst, '"')
 if dst, err = %s.AppendText(dst); err != nil { return dst, err }
 dst = append(dst, '"')
 `, ref)
-	case KindNetipAddr:
+	case model.KindNetipAddr:
 		// Zoned text may need escaping — ggen.AppendNetipAddr handles it.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s(dst, %s)\n", appendNetipAddrFn(f.HTMLEscape), ref)
-	case KindRawJSON:
+	case model.KindRawJSON:
 		// Emit raw bytes verbatim (or "null" if empty/nil).
 		fmt.Fprintf(b, `if len(%s) == 0 {
 	dst = append(dst, 'n', 'u', 'l', 'l')
@@ -1892,17 +1787,17 @@ dst = append(dst, '"')
 	dst = append(dst, %s...)
 }
 `, ref, ref)
-	case KindURL:
+	case model.KindURL:
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s(dst, %s)\n", appendURLFn(f.HTMLEscape), ref)
-	case KindBigInt:
+	case model.KindBigInt:
 		fmt.Fprintf(b, "dst = (&%s).Append(dst, 10)\n", ref)
-	case KindBigFloat:
+	case model.KindBigFloat:
 		// big.Float as JSON string — jsonv2 wire format.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = (&%s).Append(dst, 'g', -1)\ndst = append(dst, '\"')\n", ref)
-	case KindBigRat:
+	case model.KindBigRat:
 		// JSON string "num/denom" (or "n" when whole), via AppendText.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\nif dst, err = (&%s).AppendText(dst); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
-	case KindSQLNull:
+	case model.KindSQLNull:
 		if f.SQLNullInner != nil {
 			inner := sqlNullInnerField(f)
 			fmt.Fprintf(b, "if !%s.Valid {\n\tdst = append(dst, 'n', 'u', 'l', 'l')\n} else {\n\t", ref)
@@ -1910,21 +1805,21 @@ dst = append(dst, '"')
 			b.WriteString("}\n")
 			return
 		}
-		spec, ok := SQLNullSpec(f.GoType)
+		spec, ok := model.SQLNullSpec(f.GoType)
 		if !ok {
 			return
 		}
-		innerField := FieldInfo{Kind: spec.Inner, GoType: spec.Type, Format: f.Format}
+		innerField := model.FieldInfo{Kind: spec.Inner, GoType: spec.Type, Format: f.Format}
 		fmt.Fprintf(b, "if !%s.Valid {\n\tdst = append(dst, 'n', 'u', 'l', 'l')\n} else {\n\t", ref)
 		renderAppendValue(b, innerField, ref+"."+spec.Field)
 		b.WriteString("}\n")
-	case KindAny:
+	case model.KindAny:
 		fmt.Fprintf(b, "if dst, err = %s(dst, %s); err != nil { return dst, err }\n", appendAnyFn(f.HTMLEscape), ref)
 	}
 }
 
 // renderAppendBytes emits marshal code for a []byte field based on format.
-func renderAppendBytes(b *bytes.Buffer, f FieldInfo, ref string) {
+func renderAppendBytes(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	if byteArrayLen(f) > 0 {
 		renderAppendBytesValue(b, f, ref)
 		return
@@ -1935,7 +1830,7 @@ func renderAppendBytes(b *bytes.Buffer, f FieldInfo, ref string) {
 	b.WriteString("}\n")
 }
 
-func renderAppendBytesValue(b *bytes.Buffer, f FieldInfo, ref string) {
+func renderAppendBytesValue(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	if byteArrayLen(f) > 0 {
 		ref += "[:]" // the encoders take a slice
 	}
@@ -2063,7 +1958,7 @@ func timeLayoutExpr(format string) (layout string, numeric string) {
 	return strconv.Quote(format), ""
 }
 
-func renderAppendTime(b *bytes.Buffer, f FieldInfo, ref string) {
+func renderAppendTime(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	layout, numeric := timeLayoutExpr(f.Format)
 	if numeric != "" {
 		// `format:unix` emits a fractional decimal so sub-second nanos
@@ -2125,7 +2020,7 @@ func isCustomTimeLayout(format string) bool {
 	return numeric == "" && !strings.HasPrefix(layout, "time.")
 }
 
-func renderAppendDuration(b *bytes.Buffer, f FieldInfo, ref string) {
+func renderAppendDuration(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	switch f.Format {
 	case "sec":
 		// Seconds() is always finite — the error arm is dead but uniform.
@@ -2145,9 +2040,9 @@ func renderAppendDuration(b *bytes.Buffer, f FieldInfo, ref string) {
 // structHasAppendFormatTime reports whether any field emits via
 // time.Time.AppendFormat (non-numeric time format) — renderSize reserves
 // 64-byte headroom for the stdlib's internal slices.Grow.
-func structHasAppendFormatTime(s StructInfo) bool {
+func structHasAppendFormatTime(s model.StructInfo) bool {
 	for _, f := range s.Fields {
-		if f.Kind != KindTime {
+		if f.Kind != model.KindTime {
 			continue
 		}
 		_, numeric := timeLayoutExpr(f.Format)
@@ -2162,7 +2057,7 @@ func structHasAppendFormatTime(s StructInfo) bool {
 // count to serialize the struct. Per-field contributions split into a
 // compile-time constant (folded into `size := N`) and runtime code; runtime
 // adds collect into a sibling builder during the constant pass and flush after.
-func renderSize(b *bytes.Buffer, s StructInfo) {
+func renderSize(b *bytes.Buffer, s model.StructInfo) {
 	fmt.Fprintf(b, "func (s %s) JSONSize() int {\n", s.Name)
 	if s.IsAlias {
 		b.WriteString(renderAliasSize(s))
@@ -2335,29 +2230,29 @@ func anySizeFn(htmlEscape bool) string {
 // foldLeadingQuote checks whether the field's value emit begins with a JSON
 // `"`. If so, it returns the prefix with `"` appended and the value-emit code
 // with the opening quote elided — saves one byte-append op per field.
-func foldLeadingQuote(f FieldInfo, ref, prefix string) (newPrefix, code string, ok bool) {
+func foldLeadingQuote(f model.FieldInfo, ref, prefix string) (newPrefix, code string, ok bool) {
 	if f.Pointer {
 		return prefix, "", false // pointer may emit "null"
 	}
 	switch f.Kind {
-	case KindString:
+	case model.KindString:
 		return prefix + `"`, fmt.Sprintf("dst = %s(dst, %s)\n", appendStrFn(f.HTMLEscape), ref), true
-	case KindNetIP, KindNetipPrefix:
+	case model.KindNetIP, model.KindNetipPrefix:
 		return prefix + `"`, fmt.Sprintf(`if dst, err = %s.AppendText(dst); err != nil { return dst, err }
 dst = append(dst, '"')
 `, ref), true
-	case KindNetipAddr:
+	case model.KindNetipAddr:
 		// Zoned text may need escaping — ggen.AppendNetipAddr handles it.
 		return prefix + `"`, fmt.Sprintf("dst = %s(dst, %s)\n", appendNetipAddrFn(f.HTMLEscape), ref), true
-	case KindBytes:
+	case model.KindBytes:
 		// No fold: a nil []byte emits `null` (no opening quote).
-	case KindURL:
+	case model.KindURL:
 		// AppendURL writes body + closing quote, escaping when RawQuery/
 		// Opaque/Host smuggled bytes a JSON string can't hold raw.
 		return prefix + `"`, fmt.Sprintf("dst = %s(dst, %s)\n", appendURLFn(f.HTMLEscape), ref), true
-	case KindBigRat:
+	case model.KindBigRat:
 		return prefix + `"`, fmt.Sprintf("if dst, err = (&%s).AppendText(dst); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref), true
-	case KindBigFloat:
+	case model.KindBigFloat:
 		return prefix + `"`, fmt.Sprintf("dst = (&%s).Append(dst, 'g', -1)\ndst = append(dst, '\"')\n", ref), true
 	}
 	return prefix, "", false
@@ -2389,11 +2284,11 @@ func strMult(htmlEscape bool) int {
 // known at codegen time, and the runtime statements that compute the
 // variable contribution. constN is folded into the initial `size := N`
 // at the top level; runtimeCode is emitted as-is.
-func sizeContrib(f FieldInfo, ref string) (int, string) {
+func sizeContrib(f model.FieldInfo, ref string) (int, string) {
 	if f.Pointer {
 		// nil at any level budgets `null` (4 bytes); a full chain budgets the
 		// leaf. Flat else-if ladder, one rung per level.
-		depth, leafType := pointerDepth(f.GoType)
+		depth, leafType := model.PointerDepth(f.GoType)
 		leaf := f
 		leaf.Pointer = false
 		leaf.PointeeType = ""
@@ -2421,9 +2316,9 @@ func sizeContrib(f FieldInfo, ref string) (int, string) {
 	// KindBool excluded (jsonv2 emits bare bool even with `,string`).
 	if f.String {
 		switch f.Kind {
-		case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
-			KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
-			KindFloat32, KindFloat64:
+		case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64,
+			model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64,
+			model.KindFloat32, model.KindFloat64:
 			n, code := sizeContribKind(f, ref)
 			return n + 2, code
 		}
@@ -2431,19 +2326,19 @@ func sizeContrib(f FieldInfo, ref string) (int, string) {
 	return sizeContribKind(f, ref)
 }
 
-func sizeContribKind(f FieldInfo, ref string) (int, string) {
+func sizeContribKind(f model.FieldInfo, ref string) (int, string) {
 	switch f.Kind {
-	case KindString:
+	case model.KindString:
 		return sizeStrPad, fmt.Sprintf("size += len(%s)*%d\n", ref, strMult(f.HTMLEscape))
-	case KindBool:
+	case model.KindBool:
 		return sizeBool, ""
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64:
 		return sizeInt, ""
-	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64:
 		return sizeUint, ""
-	case KindFloat32, KindFloat64:
+	case model.KindFloat32, model.KindFloat64:
 		return sizeFloat, ""
-	case KindStruct:
+	case model.KindStruct:
 		// Named primitive: budget the underlying, not a JSONSize() call — the
 		// value emitter writes the primitive inline (see renderAppendValue).
 		if prim, kind, ok := inlineNamedPrim(f); ok {
@@ -2453,11 +2348,11 @@ func sizeContribKind(f FieldInfo, ref string) (int, string) {
 			return 0, fmt.Sprintf("size += %s.JSONSize()\n", ref)
 		}
 		return 128, ""
-	case KindSlice, KindArray:
+	case model.KindSlice, model.KindArray:
 		return sizeSliceContrib(f, ref, 0)
-	case KindMap:
+	case model.KindMap:
 		return sizeMapContrib(f, ref)
-	case KindBytes:
+	case model.KindBytes:
 		// 4-byte const covers brackets/quotes AND the nil-as-null case.
 		switch f.Format {
 		case "array":
@@ -2470,54 +2365,54 @@ func sizeContribKind(f FieldInfo, ref string) (int, string) {
 		}
 		// base64 (default) / base64url
 		return 4, fmt.Sprintf("size += ((len(%s)+2)/3)*4\n", ref)
-	case KindTime:
+	case model.KindTime:
 		return timeFormatSize(f.Format), ""
-	case KindDuration:
+	case model.KindDuration:
 		return durationFormatSize(f.Format), ""
-	case KindNetIP:
+	case model.KindNetIP:
 		// ParseIP returns 16 bytes even for IPv4; To4() is non-nil only for
 		// addresses that fit in 4 octets.
 		return 2, fmt.Sprintf("if %s.To4() != nil { size += 15 } else if len(%s) != 0 { size += 39 } else { size += 2 }\n", ref, ref)
-	case KindNetipAddr:
+	case model.KindNetipAddr:
 		// Zone: '%' separator + worst-case short escapes (×2 / ×6 html);
 		// raw ctrl bytes overshoot like the string budget's documented corner.
 		return 2, fmt.Sprintf("if %[1]s.Is4() { size += 15 } else { size += 39 }\nif z := len(%[1]s.Zone()); z > 0 { size += 1 + z*%[2]d }\n", ref, strMult(f.HTMLEscape))
-	case KindNetipPrefix:
+	case model.KindNetipPrefix:
 		// Addr + /N: +4 for "/128" worst case.
 		return 2, fmt.Sprintf("if %s.Addr().Is4() { size += 19 } else { size += 43 }\n", ref)
-	case KindRawJSON:
+	case model.KindRawJSON:
 		return 0, fmt.Sprintf("if n := len(%s); n > 0 { size += n } else { size += 4 }\n", ref)
-	case KindURL:
+	case model.KindURL:
 		// Component sum, not a flat 256. +8 covers `"`+`://`+`?`+`#`+closing
 		// `"`. Decoded fields (Path/Fragment/userinfo) ×3 for percent-escape.
 		return 8, fmt.Sprintf("size += len(%s.Scheme) + len(%s.Host)*3 + len(%s.Path)*3 + len(%s.RawQuery)*2 + len(%s.Fragment)*3 + len(%s.Opaque)*2\nif %s.User != nil { pw, _ := %s.User.Password(); size += (len(%s.User.Username()) + len(pw))*3 + 2 }\n",
 			ref, ref, ref, ref, ref, ref, ref, ref, ref)
-	case KindBigInt:
+	case model.KindBigInt:
 		// log10(2^bits) ≈ bits/3, plus sign/safety.
 		return 4, fmt.Sprintf("size += %s.BitLen()/3\n", ref)
-	case KindBigFloat:
+	case model.KindBigFloat:
 		// 'g' -1 digit count scales with the value's mantissa precision
 		// (user-settable via SetPrec): ≈ Prec()×log10(2) ≤ Prec()/3. A flat
 		// const under-reserved raised-precision values, breaking the
 		// single-alloc Marshal contract. +24: sign, '.', "e-123456789", quotes.
 		return 24, fmt.Sprintf("size += int(%s.Prec())/3\n", ref)
-	case KindBigRat:
+	case model.KindBigRat:
 		return 8, fmt.Sprintf("size += (%s.Num().BitLen() + %s.Denom().BitLen())/3\n", ref, ref)
-	case KindSQLNull:
+	case model.KindSQLNull:
 		if f.SQLNullInner != nil {
 			inner := sqlNullInnerField(f)
 			innerN, code := sizeContrib(inner, ref+".V")
 			return max(innerN, 4), code // widen for !Valid → "null"
 		}
-		spec, ok := SQLNullSpec(f.GoType)
+		spec, ok := model.SQLNullSpec(f.GoType)
 		if !ok {
 			return 0, ""
 		}
-		innerField := FieldInfo{Kind: spec.Inner, GoType: spec.Type, Format: f.Format}
+		innerField := model.FieldInfo{Kind: spec.Inner, GoType: spec.Type, Format: f.Format}
 		innerN, code := sizeContrib(innerField, ref+"."+spec.Field)
 		// widen for !Valid → "null" (4); inner budgets <4 under-reserve otherwise.
 		return max(innerN, 4), code
-	case KindAny:
+	case model.KindAny:
 		return 0, fmt.Sprintf("size += %s(%s)\n", anySizeFn(f.HTMLEscape), ref)
 	}
 	return 0, ""
@@ -2527,7 +2422,7 @@ func sizeContribKind(f FieldInfo, ref string) (int, string) {
 // The 2-byte brackets are returned as a constant for the caller to fold;
 // per-element accounting goes into the runtime code. Nested slices recurse
 // with a depth-suffixed loop variable to avoid name collisions.
-func sizeSliceContrib(f FieldInfo, ref string, depth int) (int, string) {
+func sizeSliceContrib(f model.FieldInfo, ref string, depth int) (int, string) {
 	ivar := fmt.Sprintf("i%d", depth)
 	b := getSmall()
 	defer putSmall(b)
@@ -2548,25 +2443,25 @@ func sizeSliceContrib(f FieldInfo, ref string, depth int) (int, string) {
 		}
 		b.WriteString(leafCode)
 		b.WriteString("}\n")
-	case f.ElemKind == KindString:
+	case f.ElemKind == model.KindString:
 		fmt.Fprintf(b, "for %s := range %s { size += len(%s[%s])*%d + %d }\n",
 			ivar, ref, ref, ivar, strMult(f.HTMLEscape), sizeStrPad)
-	case f.ElemKind == KindBool:
+	case f.ElemKind == model.KindBool:
 		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, sizeBool)
-	case f.ElemKind == KindInt, f.ElemKind == KindInt64, f.ElemKind == KindInt8, f.ElemKind == KindInt16, f.ElemKind == KindInt32:
+	case f.ElemKind == model.KindInt, f.ElemKind == model.KindInt64, f.ElemKind == model.KindInt8, f.ElemKind == model.KindInt16, f.ElemKind == model.KindInt32:
 		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, sizeInt)
-	case f.ElemKind == KindUint, f.ElemKind == KindUint64, f.ElemKind == KindUint8, f.ElemKind == KindUint16, f.ElemKind == KindUint32:
+	case f.ElemKind == model.KindUint, f.ElemKind == model.KindUint64, f.ElemKind == model.KindUint8, f.ElemKind == model.KindUint16, f.ElemKind == model.KindUint32:
 		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, sizeUint)
-	case f.ElemKind == KindFloat32, f.ElemKind == KindFloat64:
+	case f.ElemKind == model.KindFloat32, f.ElemKind == model.KindFloat64:
 		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, sizeFloat)
-	case f.ElemKind == KindStruct:
+	case f.ElemKind == model.KindStruct:
 		if isGenerated(f.ElemType) || f.ElemIface.JSONSize {
 			fmt.Fprintf(b, "for %s := range %s { size += %s[%s].JSONSize() }\n",
 				ivar, ref, ref, ivar)
 		} else {
 			fmt.Fprintf(b, "size += len(%s) * 128\n", ref)
 		}
-	case f.ElemKind == KindSlice, f.ElemKind == KindArray:
+	case f.ElemKind == model.KindSlice, f.ElemKind == model.KindArray:
 		fmt.Fprintf(b, "for %s := range %s {\n", ivar, ref)
 		innerN, innerCode := sizeSliceContrib(peelSliceField(f), fmt.Sprintf("%s[%s]", ref, ivar), depth+1)
 		if innerN > 0 {
@@ -2590,7 +2485,7 @@ func sizeSliceContrib(f FieldInfo, ref string, depth int) (int, string) {
 	}
 	// nil slice → "null" (4 bytes) is wider than `[]` (2); reserve the max.
 	// Arrays can't be nil, so they keep the 2-byte bracket budget.
-	if f.Kind == KindArray {
+	if f.Kind == model.KindArray {
 		return 2, b.String()
 	}
 	return 4, b.String()
@@ -2599,7 +2494,7 @@ func sizeSliceContrib(f FieldInfo, ref string, depth int) (int, string) {
 // sizeMapContrib emits the size contribution for a `map[string]V` field.
 // Per-entry overhead is `"k":v,` = 4 fixed bytes (a comma overcounted on the
 // last entry, still an upper bound) + 2*len(k) for the key + value budget.
-func sizeMapContrib(f FieldInfo, ref string) (int, string) {
+func sizeMapContrib(f model.FieldInfo, ref string) (int, string) {
 	b := getSmall()
 	defer putSmall(b)
 	const perEntryFixed = 4
@@ -2656,19 +2551,19 @@ func sizeMapContrib(f FieldInfo, ref string) (int, string) {
 // fixed upper-bound size, and returns it. format is honored for KindTime /
 // KindDuration so the budget tracks the actual layout. Kinds sized at runtime
 // (KindAny, KindBigFloat) report false, leaving the per-entry sizeContrib loop.
-func constSizePerEntry(kind TypeKind, format string) (int, bool) {
+func constSizePerEntry(kind model.TypeKind, format string) (int, bool) {
 	switch kind {
-	case KindBool:
+	case model.KindBool:
 		return sizeBool, true
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64:
 		return sizeInt, true
-	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64:
 		return sizeUint, true
-	case KindFloat32, KindFloat64:
+	case model.KindFloat32, model.KindFloat64:
 		return sizeFloat, true
-	case KindTime:
+	case model.KindTime:
 		return timeFormatSize(format), true
-	case KindDuration:
+	case model.KindDuration:
 		return durationFormatSize(format), true
 	}
 	return 0, false
@@ -2679,25 +2574,25 @@ func constSizePerEntry(kind TypeKind, format string) (int, bool) {
 // the loop must not bind one. Read from the element TYPE, the same source
 // sliceElemField derives the element's ArrayLen from: map values carry no
 // ElemArrayLen.
-func constEmptyElem(f FieldInfo) bool {
-	return f.ElemKind == KindArray && !f.ElemPointer && arrayLenFromType(f.ElemType) == 0
+func constEmptyElem(f model.FieldInfo) bool {
+	return f.ElemKind == model.KindArray && !f.ElemPointer && model.ArrayLenFromType(f.ElemType) == 0
 }
 
-func renderAppendSlice(b *bytes.Buffer, f FieldInfo, ref string) {
+func renderAppendSlice(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	emitAppendSlice(b, f, ref, 0)
 }
 
 // emitAppendSlice is the recursive marshal counterpart to emitByteSliceRead.
 // Nested slices peel one [] off per level; loop vars carry a depth suffix.
 // nil slice → `null`, empty non-nil → `[]` (stdlib v1/v2); arrays skip the check.
-func emitAppendSlice(b *bytes.Buffer, f FieldInfo, ref string, depth int) {
-	if f.Kind == KindArray && f.ArrayLen == 0 {
+func emitAppendSlice(b *bytes.Buffer, f model.FieldInfo, ref string, depth int) {
+	if f.Kind == model.KindArray && f.ArrayLen == 0 {
 		// `[0]T`: the unrolled first element would index a zero-length array.
 		b.WriteString("dst = append(dst, \"[]\"...)\n")
 		return
 	}
 	vvar := fmt.Sprintf("v%d", depth)
-	if f.Kind == KindSlice {
+	if f.Kind == model.KindSlice {
 		fmt.Fprintf(b, "if %s == nil {\ndst = append(dst, \"null\"...)\n} else {\n", ref)
 	}
 	fmt.Fprintf(b, "dst = append(dst, '[')\nif len(%s) > 0 {\n", ref)
@@ -2713,14 +2608,14 @@ func emitAppendSlice(b *bytes.Buffer, f FieldInfo, ref string, depth int) {
 		emitSliceElement(b, f, vvar, depth)
 	}
 	b.WriteString("}\n}\ndst = append(dst, ']')\n")
-	if f.Kind == KindSlice {
+	if f.Kind == model.KindSlice {
 		b.WriteString("}\n")
 	}
 }
 
 // emitSliceElement emits the marshal code for one slice element. Shared
 // between the first-element and loop-body emits in emitAppendSlice.
-func emitSliceElement(b *bytes.Buffer, f FieldInfo, vref string, depth int) {
+func emitSliceElement(b *bytes.Buffer, f model.FieldInfo, vref string, depth int) {
 	// Named-primitive element: append the underlying, converting at the read.
 	if prim, kind, ok := inlineNamedPrim(elemAsField(f)); ok && !f.ElemPointer {
 		nf := f
@@ -2742,34 +2637,34 @@ func emitSliceElement(b *bytes.Buffer, f FieldInfo, vref string, depth int) {
 		b.WriteString("} else {\n")
 		nf := f
 		nf.ElemPointer = false
-		_, nf.ElemType = pointerDepth(f.ElemType)
-		nf.ElemKind = resolveKind(nf.ElemType)
-		if nf.ElemKind == KindArray {
-			nf.ElemArrayLen = arrayLenFromType(nf.ElemType)
+		_, nf.ElemType = model.PointerDepth(f.ElemType)
+		nf.ElemKind = model.ResolveKind(nf.ElemType)
+		if nf.ElemKind == model.KindArray {
+			nf.ElemArrayLen = model.ArrayLenFromType(nf.ElemType)
 		}
 		emitSliceElement(b, nf, derefStr(vref, ptrDepth), depth)
 		b.WriteString("}\n")
 		return
 	}
 	switch f.ElemKind {
-	case KindString:
+	case model.KindString:
 		// Two lines so the coalescer folds the `'"'` with the preceding const.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s(dst, %s)\n", appendStrFn(f.HTMLEscape), vref)
-	case KindBool:
+	case model.KindBool:
 		fmt.Fprintf(b, "dst = strconv.AppendBool(dst, %s)\n", vref)
-	case KindInt, KindInt8, KindInt16, KindInt32:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32:
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, int64(%s), 10)\n", vref)
-	case KindInt64:
+	case model.KindInt64:
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s, 10)\n", vref)
-	case KindUint, KindUint8, KindUint16, KindUint32:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32:
 		fmt.Fprintf(b, "dst = strconv.AppendUint(dst, uint64(%s), 10)\n", vref)
-	case KindUint64:
+	case model.KindUint64:
 		fmt.Fprintf(b, "dst = strconv.AppendUint(dst, %s, 10)\n", vref)
-	case KindFloat32:
+	case model.KindFloat32:
 		fmt.Fprintf(b, "if dst, err = ggen.AppendFloat(dst, float64(%s), 32); err != nil { return dst, err }\n", vref)
-	case KindFloat64:
+	case model.KindFloat64:
 		fmt.Fprintf(b, "if dst, err = ggen.AppendFloat(dst, %s, 64); err != nil { return dst, err }\n", vref)
-	case KindStruct:
+	case model.KindStruct:
 		if isGenerated(f.ElemType) {
 			fmt.Fprintf(b, "if dst, err = %s.AppendJSON(dst); err != nil { return dst, err }\n", vref)
 		} else {
@@ -2779,7 +2674,7 @@ func emitSliceElement(b *bytes.Buffer, f FieldInfo, vref string, depth int) {
 			// arms emit once for the first element and once in the loop.
 			fmt.Fprintf(b, "{\n%s}\n", renderCrossPkgStructAppend(sliceElemField(f), vref))
 		}
-	case KindSlice, KindArray:
+	case model.KindSlice, model.KindArray:
 		emitAppendSlice(b, peelSliceField(f), vref, depth+1)
 	default:
 		// Dedicated-kind element — same value emitter the field level uses.
@@ -2791,7 +2686,7 @@ func emitSliceElement(b *bytes.Buffer, f FieldInfo, vref string, depth int) {
 // renderAppendMap emits marshal code for a map[string]V field. Iteration order
 // is Go's randomized map order (wire output not stable). nil map → null,
 // empty non-nil → {}. The first-entry flag is field-suffixed to avoid collisions.
-func renderAppendMap(b *bytes.Buffer, f FieldInfo, ref string) {
+func renderAppendMap(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	appendStr := appendStrFn(f.HTMLEscape)
 	first := "first" + strings.ReplaceAll(f.GoName, ".", "")
 	// `map[string][0]T`: every value is the constant `[]`, so bind keys only.
@@ -2824,24 +2719,24 @@ dst = append(dst, ':')
 		f.ElemType, f.ElemKind = prim, kind
 	}
 	switch f.ElemKind {
-	case KindString:
+	case model.KindString:
 		// Two lines so coalesce merges the `'"'` with the preceding `':'`.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s(dst, %s)\n", appendStr, vref)
-	case KindBool:
+	case model.KindBool:
 		fmt.Fprintf(b, "dst = strconv.AppendBool(dst, %s)\n", vref)
-	case KindInt, KindInt8, KindInt16, KindInt32:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32:
 		b.WriteString("dst = strconv.AppendInt(dst, int64(v), 10)\n")
-	case KindInt64:
+	case model.KindInt64:
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s, 10)\n", vref)
-	case KindUint, KindUint8, KindUint16, KindUint32:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32:
 		b.WriteString("dst = strconv.AppendUint(dst, uint64(v), 10)\n")
-	case KindUint64:
+	case model.KindUint64:
 		fmt.Fprintf(b, "dst = strconv.AppendUint(dst, %s, 10)\n", vref)
-	case KindFloat32:
+	case model.KindFloat32:
 		b.WriteString("if dst, err = ggen.AppendFloat(dst, float64(v), 32); err != nil { return dst, err }\n")
-	case KindFloat64:
+	case model.KindFloat64:
 		fmt.Fprintf(b, "if dst, err = ggen.AppendFloat(dst, %s, 64); err != nil { return dst, err }\n", vref)
-	case KindStruct:
+	case model.KindStruct:
 		if isGenerated(f.ElemType) {
 			b.WriteString("if dst, err = v.AppendJSON(dst); err != nil { return dst, err }\n")
 		} else {
@@ -2849,7 +2744,7 @@ dst = append(dst, ':')
 			// so a foreign ggen value marshals the way it decodes.
 			b.WriteString(renderCrossPkgStructAppend(sliceElemField(f), vref))
 		}
-	case KindAny:
+	case model.KindAny:
 		fmt.Fprintf(b, "if dst, err = %s(dst, v); err != nil { return dst, err }\n", appendAnyFn(f.HTMLEscape))
 	default:
 		// Dedicated-kind value — same value emitter the field level uses.
@@ -2867,7 +2762,7 @@ dst = append(dst, ':')
 // which always beats a guess from the element's size. Returns -1 for "unset"
 // so callers distinguish hintlen=0 (opt-out) from no hint. `maxlen` is NOT
 // used — it's a bound, not an expected size, and only ever clamps DOWN.
-func userPreallocHint(f FieldInfo) int {
+func userPreallocHint(f model.FieldInfo) int {
 	if f.HintLen >= 0 {
 		return f.HintLen
 	}
@@ -2887,7 +2782,7 @@ func userPreallocHint(f FieldInfo) int {
 // mapPreallocCap returns the cap for `make(map[K]V, cap)` from the user's
 // sizing hints, or 0 with no hint — maps get no kind-based default (makemap
 // lazy-allocates below 8, and a bigger default over-allocates the common case).
-func mapPreallocCap(f FieldInfo) int {
+func mapPreallocCap(f model.FieldInfo) int {
 	if n := userPreallocHint(f); n >= 0 {
 		return n
 	}
@@ -2915,9 +2810,9 @@ func ownsAllocations(typeName string, seen map[string]struct{}) bool {
 			return true
 		}
 		switch f.Kind {
-		case KindSlice, KindMap, KindBytes, KindAny, KindRawJSON:
+		case model.KindSlice, model.KindMap, model.KindBytes, model.KindAny, model.KindRawJSON:
 			return true
-		case KindStruct:
+		case model.KindStruct:
 			if isGenerated(f.GoType) && ownsAllocations(f.GoType, seen) {
 				return true
 			}
@@ -2936,10 +2831,10 @@ func ownsAllocations(typeName string, seen map[string]struct{}) bool {
 // (opt #74), while a value reaching encoding/json or an UnmarshalJSON rung
 // would MERGE into it. Slice and map values carry their own backing and are
 // reset at the seed site.
-func reusesMapValues(f FieldInfo) bool {
+func reusesMapValues(f model.FieldInfo) bool {
 	// The catch-all map is filled by unknownKey, not renderMap, so no swap is
 	// emitted for it and its entry clear() has to stand.
-	if f.Kind != KindMap || f.Embed {
+	if f.Kind != model.KindMap || f.Embed {
 		return false
 	}
 	// A pointer value recycles its pointee: the cascade decodes into the
@@ -2949,13 +2844,13 @@ func reusesMapValues(f FieldInfo) bool {
 		return elemPtrReusable(f)
 	}
 	switch f.ElemKind {
-	case KindSlice, KindMap, KindBytes:
+	case model.KindSlice, model.KindMap, model.KindBytes:
 		return true
-	case KindRawJSON:
+	case model.KindRawJSON:
 		// A raw span ALIASES the input unless -copy is on, so without it the
 		// value owns nothing and the swap would be pure cost.
 		return f.Copy
-	case KindStruct:
+	case model.KindStruct:
 		return isGenerated(f.ElemType) && ownsAllocations(f.ElemType, nil)
 	}
 	return false
@@ -2978,7 +2873,7 @@ func reusesMapValues(f FieldInfo) bool {
 //
 // `maxlen` is still NOT a generous hint — it's a bound, so it only ever clamps
 // the width guess DOWN.
-func preallocCap(f FieldInfo) (slice, slab string) {
+func preallocCap(f model.FieldInfo) (slice, slab string) {
 	if n := userPreallocHint(f); n >= 0 {
 		return strconv.Itoa(n), strconv.Itoa(n)
 	}
@@ -3005,10 +2900,10 @@ func preallocCap(f FieldInfo) (slice, slab string) {
 		return capFor(scope, "*"+f.ElemType, maxlen), elem
 	}
 	switch f.ElemKind {
-	case KindSlice, KindMap:
+	case model.KindSlice, model.KindMap:
 		// Element is a slice header / map handle; the slab is unused.
 		return elem, "0"
-	case KindStruct, KindArray:
+	case model.KindStruct, model.KindArray:
 		// Was cap 0 ("sizeof(T) unbounded; start nil, grow") — the width is
 		// known at compile time, so a wide element now gets a real, bounded cap
 		// instead of the 1→2→4→8 chain.
@@ -3039,7 +2934,7 @@ func preallocCap(f FieldInfo) (slice, slab string) {
 // plus the field's Go name (empty for top-level container aliases, whose
 // struct part IS the alias name). Struct names are package-unique, so the
 // names can't collide across files without any hashing.
-func capScope(f FieldInfo) string {
+func capScope(f model.FieldInfo) string {
 	if f.GoName == "" {
 		return currentStructName
 	}
@@ -3132,7 +3027,7 @@ func resetCapRegistry() {
 
 // fieldLit returns the JSON name of f as a Go string literal — the `field`
 // argument embedded into ggen.NewParseErr at every error-return site.
-func fieldLit(f FieldInfo) string { return strconv.Quote(f.JSONName) }
+func fieldLit(f model.FieldInfo) string { return strconv.Quote(f.JSONName) }
 
 // inlineSkipWS emits an inline whitespace-skipping loop that mutates posVar
 // directly, avoiding the ggen.SkipSpace call overhead.
@@ -3172,15 +3067,15 @@ func inlineNullPeek(b *bytes.Buffer, posVar, field string) {
 // foreign import this file never mentions, or have no spelling at all (an
 // anonymous interface). Element and pointer-leaf targets name the pointer-peeled
 // type, which is already spelled where they are declared.
-func zeroAssign(f FieldInfo, ref string) string {
+func zeroAssign(f model.FieldInfo, ref string) string {
 	if f.StructName != "" && ref == "result."+f.GoName {
 		return fmt.Sprintf("%s = (%s{}).%s\n", ref, f.StructName, f.GoName)
 	}
-	_, leaf := pointerDepth(f.GoType)
+	_, leaf := model.PointerDepth(f.GoType)
 	return fmt.Sprintf("%s = *new(%s)\n", ref, leaf)
 }
 
-func zeroLit(elemType string, kind TypeKind) string {
+func zeroLit(elemType string, kind model.TypeKind) string {
 	// Pointer types carry the POINTEE's kind (KindInt for `*int`), so the
 	// conversion below would emit `*int(0)`. Every pointer zeroes to nil.
 	if strings.HasPrefix(elemType, "*") {
@@ -3192,21 +3087,21 @@ func zeroLit(elemType string, kind TypeKind) string {
 	kind = effectiveKind(elemType, kind)
 	zero := ""
 	switch kind {
-	case KindString:
+	case model.KindString:
 		zero = `""`
-	case KindBool:
+	case model.KindBool:
 		zero = "false"
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
-		KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
-		KindFloat32, KindFloat64:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64,
+		model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64,
+		model.KindFloat32, model.KindFloat64:
 		zero = "0"
-	case KindSlice, KindMap:
+	case model.KindSlice, model.KindMap:
 		return "nil"
-	case KindAny, KindBytes, KindRawJSON, KindNetIP:
+	case model.KindAny, model.KindBytes, model.KindRawJSON, model.KindNetIP:
 		// `any{}` / composite literals over slice-backed kinds are invalid
 		// or wasteful — their zero is nil.
 		return "nil"
-	case KindDuration:
+	case model.KindDuration:
 		// time.Duration is a named int64 — `time.Duration{}` doesn't compile.
 		return "0"
 	default:
@@ -3228,19 +3123,19 @@ func zeroLit(elemType string, kind TypeKind) string {
 // the MaxInt64/MaxUint64 scan bound already covers them).
 // kindNarrowName maps a narrow integer kind to its builtin spelling for
 // narrowIntGuard — f.GoType may be a named type whose bounds these are.
-func kindNarrowName(k TypeKind) string {
+func kindNarrowName(k model.TypeKind) string {
 	switch k {
-	case KindInt8:
+	case model.KindInt8:
 		return "int8"
-	case KindInt16:
+	case model.KindInt16:
 		return "int16"
-	case KindInt32:
+	case model.KindInt32:
 		return "int32"
-	case KindUint8:
+	case model.KindUint8:
 		return "uint8"
-	case KindUint16:
+	case model.KindUint16:
 		return "uint16"
-	case KindUint32:
+	case model.KindUint32:
 		return "uint32"
 	}
 	return ""
@@ -3285,8 +3180,8 @@ func narrowIntGuard(wideVar, typ, errRet string) string {
 // own (ggen.Float32 / Stream.Float32) rather than a narrowed float64 scan:
 // narrowing rounds the decimal twice, which lands one ulp off on float32
 // rounding midpoints and rejects an in-range value next to MaxFloat32.
-func floatScanFn(k TypeKind) string {
-	if k == KindFloat32 {
+func floatScanFn(k model.TypeKind) string {
+	if k == model.KindFloat32 {
 		return "Float32"
 	}
 	return "Float64"
@@ -3427,7 +3322,7 @@ const scalarStringWindow = 32
 
 // vArg renders the validate literal for string-scan calls: "false" when the
 // struct opted out via allowinvalidutf8, else "true".
-func vArg(f FieldInfo) string {
+func vArg(f model.FieldInfo) string {
 	if f.AllowInvalidUTF8 {
 		return "false"
 	}
@@ -3435,7 +3330,7 @@ func vArg(f FieldInfo) string {
 }
 
 // vArgS is vArg at struct level (dispatch-key scans).
-func vArgS(s StructInfo) string {
+func vArgS(s model.StructInfo) string {
 	if s.AllowInvalidUTF8 {
 		return "false"
 	}
@@ -3448,7 +3343,7 @@ func inlineScanString(b *bytes.Buffer, posIn, dst, posOut, field string, cp bool
 
 // maxJSONNameLen returns the longest declared JSON key name on s (0 when no
 // named fields — embedded fallbacks carry arbitrary keys and are excluded).
-func maxJSONNameLen(s StructInfo) int {
+func maxJSONNameLen(s model.StructInfo) int {
 	n := 0
 	for _, f := range s.Fields {
 		if f.Embed {
@@ -3608,19 +3503,19 @@ if %[5]s < len(data) && data[%[5]s] == '"' {
 // decoder appends over carried-in data. Deliberately UNCONDITIONAL — a blank
 // payload yields a blank slate while keeping capacity. Arrays (strict-length)
 // and pointer fields (handled in renderField) are skipped.
-func emitReceiverReset(b *bytes.Buffer, s StructInfo, bytesPath bool) {
+func emitReceiverReset(b *bytes.Buffer, s model.StructInfo, bytesPath bool) {
 	for _, f := range s.Fields {
 		if f.Pointer {
 			continue // emitPointerSeed empties the leaf it hands over
 		}
 		ref := "result." + f.GoName
 		switch f.Kind {
-		case KindSlice, KindBytes:
+		case model.KindSlice, model.KindBytes:
 			if byteArrayLen(f) > 0 {
 				continue // a fixed array has no header to reset
 			}
 			fmt.Fprintf(b, "if %[1]s != nil { %[1]s = %[1]s[:0] }\n", ref)
-		case KindMap:
+		case model.KindMap:
 			if bytesPath && reusesMapValues(f) {
 				// The bytes decode reads this map while filling a new one,
 				// so clearing here would destroy the values it reuses. The
@@ -3637,18 +3532,18 @@ func emitReceiverReset(b *bytes.Buffer, s StructInfo, bytesPath bool) {
 // scan and a generated struct resets itself (opt #74), so neither carries
 // data forward; anything reaching encoding/json or an UnmarshalJSON rung
 // would MERGE into the carried value instead.
-func leafResets(k TypeKind, t string) bool {
-	return k != KindStruct || isGenerated(t)
+func leafResets(k model.TypeKind, t string) bool {
+	return k != model.KindStruct || isGenerated(t)
 }
 
 // elemPtrReusable reports whether a multi-level pointer ELEMENT can decode
 // into the chain the receiver carried in that slot.
-func elemPtrReusable(f FieldInfo) bool {
+func elemPtrReusable(f model.FieldInfo) bool {
 	// A multi-level element reports KindStruct with the remaining pointer
 	// levels still in ElemType, so resolve the LEAF before judging it.
 	et, _ := elemPtrType(f)
-	_, leaf := pointerDepth(et)
-	return leafResets(resolveKind(leaf), leaf)
+	_, leaf := model.PointerDepth(et)
+	return leafResets(model.ResolveKind(leaf), leaf)
 }
 
 // emitArraySlotBlank empties a fixed-array slot before its element decodes
@@ -3657,17 +3552,17 @@ func elemPtrReusable(f FieldInfo) bool {
 // encoding/json structs, maps, []byte's AppendDecode — is blanked here so the
 // slot decodes fresh. A bytes-path map whose values are swapped (opt #76)
 // reads the carried entries and is handed over intact.
-func emitArraySlotBlank(b *bytes.Buffer, f FieldInfo, slot string, bytesPath bool) {
+func emitArraySlotBlank(b *bytes.Buffer, f model.FieldInfo, slot string, bytesPath bool) {
 	switch f.ElemKind {
-	case KindStruct:
+	case model.KindStruct:
 		if !isGenerated(f.ElemType) {
 			fmt.Fprintf(b, "%s = %s\n", slot, zeroLit(f.ElemType, f.ElemKind))
 		}
-	case KindMap:
+	case model.KindMap:
 		if !(bytesPath && reusesMapValues(sliceElemField(f))) {
 			fmt.Fprintf(b, "clear(%s)\n", slot)
 		}
-	case KindBytes:
+	case model.KindBytes:
 		if f.ElemArrayLen == 0 {
 			fmt.Fprintf(b, "%[1]s = %[1]s[:0]\n", slot)
 		}
@@ -3678,7 +3573,7 @@ func emitArraySlotBlank(b *bytes.Buffer, f FieldInfo, slot string, bytesPath boo
 // generated struct element resets itself on decode, so a within-cap grow hands
 // it the carried element and its inner allocations get reused; every other
 // element kind is pre-grown with a zero value.
-func emitElemGrow(b *bytes.Buffer, dst string, f FieldInfo, directStruct bool) {
+func emitElemGrow(b *bytes.Buffer, dst string, f model.FieldInfo, directStruct bool) {
 	if directStruct {
 		fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, %[2]s) }\n",
 			dst, zeroLit(f.ElemType, f.ElemKind))
@@ -3695,15 +3590,17 @@ func emitElemGrow(b *bytes.Buffer, dst string, f FieldInfo, directStruct bool) {
 // field (`(T{}).X`) instead: the qualifier may not be imported by the
 // generated file (a value field otherwise only ever writes `result.X`), and a
 // foreign named primitive or interface takes no composite literal anyway.
-func fieldZeroLit(s StructInfo, f FieldInfo) string {
+func fieldZeroLit(s model.StructInfo, f model.FieldInfo) string {
 	if f.Pointer {
 		return "nil"
 	}
 	lit := zeroLit(f.GoType, f.Kind)
-	if f.Kind == KindBytes && byteArrayLen(f) > 0 {
+	if f.Kind == model.KindBytes && byteArrayLen(f) > 0 {
 		lit = f.GoType + "{}"
 	}
-	if strings.Contains(lit, ".") {
+	// A named slice or map reads as KindStruct too, and `Tags{}` is an empty
+	// non-nil value, not its zero.
+	if strings.Contains(lit, ".") || (lit == f.GoType+"{}" && f.Kind == model.KindStruct && !f.UnderlyingStruct) {
 		return "(" + s.Name + "{})." + f.GoName
 	}
 	return lit
@@ -3712,7 +3609,7 @@ func fieldZeroLit(s StructInfo, f FieldInfo) string {
 // needsOmittedZero reports whether f must be zeroed when its key never
 // appeared. Containers are excluded: they are already emptied by
 // emitReceiverReset and keep their capacity for reuse.
-func needsOmittedZero(f FieldInfo) bool {
+func needsOmittedZero(f model.FieldInfo) bool {
 	if f.Embed || !needsSeen(f) {
 		return false
 	}
@@ -3720,9 +3617,9 @@ func needsOmittedZero(f FieldInfo) bool {
 		return true
 	}
 	switch f.Kind {
-	case KindSlice, KindMap:
+	case model.KindSlice, model.KindMap:
 		return false
-	case KindBytes:
+	case model.KindBytes:
 		// `[]byte` is a container; `[N]byte` is a value with no entry reset.
 		return byteArrayLen(f) > 0
 	}
@@ -3734,13 +3631,13 @@ func needsOmittedZero(f FieldInfo) bool {
 // give — only container capacity and element allocations are recycled.
 // Pointers are cleared HERE rather than at entry so a PRESENT key can still
 // reuse the carried pointee chain.
-func emitOmittedZero(b *bytes.Buffer, s StructInfo, bytesPath bool) {
+func emitOmittedZero(b *bytes.Buffer, s model.StructInfo, bytesPath bool) {
 	for _, f := range s.Fields {
 		// A map the bytes decode SWAPS has no entry clear() — the swap is what
 		// empties it, and it only runs when the key is present. An omitted key
 		// therefore has to be emptied here, or the carried entries survive a
 		// payload that never mentioned them.
-		if bytesPath && !f.Pointer && f.Kind == KindMap && reusesMapValues(f) {
+		if bytesPath && !f.Pointer && f.Kind == model.KindMap && reusesMapValues(f) {
 			fmt.Fprintf(b, "if %s { clear(result.%s) }\n", seenNotAccess(s, f), f.GoName)
 			continue
 		}
@@ -3754,7 +3651,7 @@ func emitOmittedZero(b *bytes.Buffer, s StructInfo, bytesPath bool) {
 // renderDecode emits the body of DecodeFrom: a loop reading each JSON key,
 // dispatching to per-field scan code, handling ',' / '}'. Zero-copy and
 // zero-alloc on the happy path; whitespace skipping inlined at each hot site.
-func renderDecode(bOut *bytes.Buffer, s StructInfo) {
+func renderDecode(bOut *bytes.Buffer, s model.StructInfo) {
 	// Rendered into a temp buffer so the SIMD tier can rewrite the
 	// ggen.SkipValue callee post-emit (unique token, no collision risk) —
 	// the tier skip tree vector-skips whitespace runs + fuses skipString.
@@ -3802,7 +3699,7 @@ func renderDecode(bOut *bytes.Buffer, s StructInfo) {
 // renderDecodeBody emits everything after the DecodeFrom prologue
 // (result = recv [; depth check]) — the alias delegation or the full
 // object-scan loop, shared by both the cyclic and acyclic prologues above.
-func renderDecodeBody(b *bytes.Buffer, s StructInfo) {
+func renderDecodeBody(b *bytes.Buffer, s model.StructInfo) {
 	if s.IsAlias {
 		renderAliasDecode(b, s)
 		b.WriteString("}\n\n")
@@ -3873,17 +3770,17 @@ return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 // renderPostLoop emits end-of-parse bookkeeping: required-field checks
 // (when validation is on) and the multierr flush (when MultiErr is on).
 // Called at every success exit inside DecodeFrom / DecodeFromStream.
-func renderPostLoop(b *bytes.Buffer, s StructInfo) {
+func renderPostLoop(b *bytes.Buffer, s model.StructInfo) {
 	renderPostLoopShape(b, s, false)
 }
 
 // renderStreamPostLoop is the stream-path counterpart — same checks, but
 // emits `return result, X` (no position arg, since Stream owns s.Pos).
-func renderStreamPostLoop(b *bytes.Buffer, s StructInfo) {
+func renderStreamPostLoop(b *bytes.Buffer, s model.StructInfo) {
 	renderPostLoopShape(b, s, true)
 }
 
-func renderPostLoopShape(b *bytes.Buffer, s StructInfo, stream bool) {
+func renderPostLoopShape(b *bytes.Buffer, s model.StructInfo, stream bool) {
 	emitOmittedZero(b, s, !stream)
 	retShape := "return result, i, %s"
 	errsShape := "if len(errs) > 0 { return result, i, errs }\n"
@@ -3914,11 +3811,11 @@ func renderPostLoopShape(b *bytes.Buffer, s StructInfo, stream bool) {
 
 // renderDispatch emits a flat string switch on key (the compiler lowers it to
 // length-grouped binary search / jump tables).
-func renderDispatch(b *bytes.Buffer, s StructInfo) {
+func renderDispatch(b *bytes.Buffer, s model.StructInfo) {
 	// emitField wraps per-field parse code with seen-tracking + dup handling.
 	// The seen-branch differs by mode: AllowDups skips (first-wins), MultiErr
 	// logs DuplicateKeyError and skips, default errors immediately.
-	emitField := func(b *bytes.Buffer, f FieldInfo) {
+	emitField := func(b *bytes.Buffer, f model.FieldInfo) {
 		f.AtDispatch = true
 		if f.Embed || !needsSeen(f) {
 			renderField(b, f, "result."+f.GoName, "i")
@@ -3966,20 +3863,20 @@ func renderDispatch(b *bytes.Buffer, s StructInfo) {
 
 // keyValidateAndMod emits mods + validation on the map key (keyRef) from the
 // `keys:` tag bucket, bytes path (3-tuple return).
-func keyValidateAndMod(b *bytes.Buffer, f FieldInfo, keyRef string) {
+func keyValidateAndMod(b *bytes.Buffer, f model.FieldInfo, keyRef string) {
 	if f.NoValidate {
 		return
 	}
-	renderPipe(b, fieldKeyPipe(f), keyRef, f.JSONName+".key", "string", KindString, f.MultiErr, "i")
+	renderPipe(b, fieldKeyPipe(f), keyRef, f.JSONName+".key", "string", model.KindString, f.MultiErr, "i")
 }
 
 // keyValidateAndModStream is the stream-path counterpart of
 // keyValidateAndMod. Emits 2-tuple `return result, err` shapes.
-func keyValidateAndModStream(b *bytes.Buffer, f FieldInfo, keyRef string) {
+func keyValidateAndModStream(b *bytes.Buffer, f model.FieldInfo, keyRef string) {
 	if f.NoValidate {
 		return
 	}
-	renderPipe(b, fieldKeyPipe(f), keyRef, f.JSONName+".key", "string", KindString, f.MultiErr, "")
+	renderPipe(b, fieldKeyPipe(f), keyRef, f.JSONName+".key", "string", model.KindString, f.MultiErr, "")
 }
 
 // renderMap emits map[string]V decode for the byte path. `null` → nil,
@@ -4005,7 +3902,7 @@ func mapLocals() (mk, mv, carried, reuse string) {
 	return "mk" + suffix, "mv" + suffix, "carried" + suffix, "reuse" + suffix
 }
 
-func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) {
+func renderMap(b *bytes.Buffer, f model.FieldInfo, ref, posVar string, topLevel bool) {
 	mapNest++
 	defer func() { mapNest-- }()
 	mkVar, mvVar, carriedVar, reuseVar := mapLocals()
@@ -4121,30 +4018,30 @@ func renderMap(b *bytes.Buffer, f FieldInfo, ref, posVar string, topLevel bool) 
 		f.ElemType, f.ElemKind = prim, kind
 	}
 	switch f.ElemKind {
-	case KindString:
+	case model.KindString:
 		// Straight into the slot; end-var `ve` since the key scan owns `ke`.
 		inlineScanStringVar(b, posVar, mapTarget, posVar, field, "ve", f.Copy, !f.AllowInvalidUTF8)
-	case KindBool:
+	case model.KindBool:
 		fmt.Fprintf(b, `%[2]s, %[1]s, err = ggen.Bool(data, %[1]s)
 if err != nil { %[1]s = ggen.BoolEnd(data, %[1]s); return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 `, posVar, mapTarget, field)
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64:
 		castFn := ""
 		if f.ElemType != "int64" {
 			castFn = f.ElemType
 		}
 		inlineScanInt64(b, posVar, mapTarget, castFn, field)
-	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64:
 		castFn := ""
 		if f.ElemType != "uint64" {
 			castFn = f.ElemType
 		}
 		inlineScanUint64(b, posVar, mapTarget, castFn, field)
-	case KindFloat32, KindFloat64:
+	case model.KindFloat32, model.KindFloat64:
 		fmt.Fprintf(b, `%[2]s, %[1]s, err = ggen.%[4]s(data, %[1]s)
 if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 `, posVar, mapTarget, field, floatScanFn(f.ElemKind))
-	case KindStruct:
+	case model.KindStruct:
 		if isGenerated(f.ElemType) {
 			// `mv` is the value-receiver source and stored value; `consumed`
 			// (bytes consumed) advances posVar. When the carried map is being
@@ -4179,14 +4076,14 @@ if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 		// carried map and empty it — the delegated emitter fills it from
 		// there, and only allocates when it came back nil.
 		switch {
-		case reusesMapValues(f) && (f.ElemKind == KindSlice || f.ElemKind == KindBytes):
+		case reusesMapValues(f) && (f.ElemKind == model.KindSlice || f.ElemKind == model.KindBytes):
 			// []byte decodes with AppendDecode, so the seed must be emptied or
 			// the decoded bytes land after the carried ones.
 			fmt.Fprintf(b, "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s][:0] }\n", mvVar, f.ElemType, reuseVar, carriedVar, mkVar)
-		case reusesMapValues(f) && f.ElemKind == KindRawJSON:
+		case reusesMapValues(f) && f.ElemKind == model.KindRawJSON:
 			// renderRawJSON appends over mv[:0] itself under -copy.
 			fmt.Fprintf(b, "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s] }\n", mvVar, f.ElemType, reuseVar, carriedVar, mkVar)
-		case reusesMapValues(f) && f.ElemKind == KindMap:
+		case reusesMapValues(f) && f.ElemKind == model.KindMap:
 			// An inner level that swaps reads the seed's live entries to
 			// recycle their values; only an in-place fill needs it emptied.
 			seed := "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s]; clear(%[1]s) }\n"
@@ -4227,7 +4124,7 @@ if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 
 // renderBytes emits bytes decode (base64/hex/array). JSON `null` → nil out
 // the field (stdlib v1/v2 parity).
-func renderBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderBytes(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	if byteArrayLen(f) > 0 {
 		// A fixed array is never nil, so it has no `null` form (same rule as
 		// every other [N]T).
@@ -4254,7 +4151,7 @@ func emitEmptyBytesNonNil(b *bytes.Buffer, ref string) {
 	fmt.Fprintf(b, "if %[1]s == nil { %[1]s = []byte{} }\n", ref)
 }
 
-func renderBytesValue(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderBytesValue(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	if f.Format == "array" {
 		// `u` not `v`: a pointer-leaf caller declares `var v []byte` here.
@@ -4342,7 +4239,7 @@ if err != nil { return result, %[4]s, ggen.NewParseErr(%[5]s, %[4]s, err) }
 }
 
 // renderTime emits time.Time decode.
-func renderTime(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderTime(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	layout, numeric := timeLayoutExpr(f.Format)
 	if numeric != "" {
@@ -4378,7 +4275,7 @@ if err != nil { return result, %[3]s, ggen.NewParseErr(%[4]s, %[3]s, err) }
 }
 
 // renderDuration emits time.Duration decode.
-func renderDuration(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderDuration(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	switch f.Format {
 	case "sec":
@@ -4413,7 +4310,7 @@ if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 // value — the form a zero address marshals to, and what the types' own
 // UnmarshalText accept — so a never-set field round-trips. net.IP is a byte
 // slice: null → nil, like []byte.
-func renderNetIP(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderNetIP(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	inlineNullPeek(b, posVar, field)
 	fmt.Fprintf(b, "%s = nil\n", ref)
@@ -4442,7 +4339,7 @@ if %[1]s == nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, &net.Pars
 	}
 }
 
-func renderNetipAddr(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderNetipAddr(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
@@ -4453,7 +4350,7 @@ if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
 }
 
-func renderNetipPrefix(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderNetipPrefix(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
@@ -4467,7 +4364,7 @@ if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 // elemAsField reshapes f so its ELEMENT looks like the field itself — the view
 // the cross-package ladder needs when a slice/array/map element carries the
 // foreign type. Element-level pipes stay behind; the caller emits those.
-func elemAsField(f FieldInfo) FieldInfo {
+func elemAsField(f model.FieldInfo) model.FieldInfo {
 	ef := f
 	ef.GoType = f.ElemType
 	ef.Kind = f.ElemKind
@@ -4475,7 +4372,7 @@ func elemAsField(f FieldInfo) FieldInfo {
 	ef.Pointer = false
 	ef.PointeeType = ""
 	ef.ElemType = ""
-	ef.ElemKind = KindString
+	ef.ElemKind = model.KindString
 	return ef
 }
 
@@ -4485,7 +4382,7 @@ func elemAsField(f FieldInfo) FieldInfo {
 // decode, and the element sits inside a loop — never at dispatch — so the
 // outer field's rule buckets and dispatch flags must not leak in. Map
 // elements get their value shape back (elemAsField zeroes it).
-func sliceElemField(f FieldInfo) FieldInfo {
+func sliceElemField(f model.FieldInfo) model.FieldInfo {
 	ef := elemAsField(f)
 	ef.JSONName = f.JSONName + "[]"
 	ef.AtDispatch = false
@@ -4504,25 +4401,25 @@ func sliceElemField(f FieldInfo) FieldInfo {
 	ef.ArrayLen, ef.ElemArrayLen = 0, 0
 	ef.NullDone = false
 	switch ef.Kind {
-	case KindMap:
+	case model.KindMap:
 		// Mirror the parse layer: stars stay on ElemType (pointer values
 		// route through elemPtrType inside renderMap).
 		ef.ElemType = strings.TrimPrefix(ef.GoType, "map[string]")
-		ef.ElemKind = resolveKind(ef.ElemType)
-	case KindSlice, KindArray:
+		ef.ElemKind = model.ResolveKind(ef.ElemType)
+	case model.KindSlice, model.KindArray:
 		// Re-derive the container's own element shape (elemAsField zeroed
 		// it); mirror peelSliceField's pointer peel.
-		inner, kind, n := stripOneContainer(ef.GoType)
+		inner, kind, n := model.StripOneContainer(ef.GoType)
 		if strings.HasPrefix(inner, "*") {
 			ef.ElemPointer = true
 			inner = inner[1:]
-			kind = resolveKind(inner)
+			kind = model.ResolveKind(inner)
 		}
 		ef.ElemType, ef.ElemKind = inner, kind
-		if ef.ElemKind == KindArray {
-			ef.ElemArrayLen = arrayLenFromType(ef.ElemType)
+		if ef.ElemKind == model.KindArray {
+			ef.ElemArrayLen = model.ArrayLenFromType(ef.ElemType)
 		}
-		if ef.Kind == KindArray {
+		if ef.Kind == model.KindArray {
 			ef.ArrayLen = n
 		}
 	}
@@ -4533,7 +4430,7 @@ func sliceElemField(f FieldInfo) FieldInfo {
 // unannotated struct field. Resolved f.Iface → a static branch on the type's
 // implemented interface (zero runtime probes); unresolved (AST-only) → the
 // encoding/json fallback.
-func renderCrossPkgStructDecode(f FieldInfo, ref, posVar string) string {
+func renderCrossPkgStructDecode(f model.FieldInfo, ref, posVar string) string {
 	chk := bytesErrCheck(fieldLit(f), posVar)
 	// Every non-ggen rung MERGES into what it is handed, so the target is
 	// zeroed first: decode-into-receiver yields what a fresh decode would.
@@ -4574,7 +4471,7 @@ ts, %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(f)+`)
 // renderCrossPkgStructAppend is the marshal counterpart for cross-package
 // struct fields. Resolved → static branch on what the type implements.
 // Unresolved → runtime cascade.
-func renderCrossPkgStructAppend(f FieldInfo, ref string) string {
+func renderCrossPkgStructAppend(f model.FieldInfo, ref string) string {
 	// Field-suffixed temp — fields emit at function scope, so two cross-pkg
 	// fields would collide on a shared name.
 	tmp := "b" + strings.ReplaceAll(f.GoName, ".", "")
@@ -4629,7 +4526,7 @@ dst = append(dst, %[1]s...)
 
 // renderCrossPkgStructStreamDecode is the streaming counterpart of
 // renderCrossPkgStructDecode. Same static-vs-runtime branching.
-func renderCrossPkgStructStreamDecode(f FieldInfo, ref, posVar string) string {
+func renderCrossPkgStructStreamDecode(f model.FieldInfo, ref, posVar string) string {
 	_ = posVar
 	chk := streamErrCheck(fieldLit(f))
 	zero := zeroAssign(f, ref) // see renderCrossPkgStructDecode
@@ -4667,7 +4564,7 @@ ts, err = s.StringView(`+vArg(f)+`)
 // into the field — zero copy. Under -copy it copies the span into the field's
 // own (reused) backing so the value survives a later mutation of data. Works
 // for json.RawMessage and jsontext.Value (both underlying []byte).
-func renderRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderRawJSON(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	chk := bytesErrCheck(fieldLit(f), posVar)
 	span := "data[start:%[1]s]"
 	if f.Copy {
@@ -4688,7 +4585,7 @@ func renderRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 // safe because Parse returns a non-nil *URL on success. The scan honours
 // f.Copy: url.Parse SLICES its input into Host/Path/RawQuery/Fragment, so an
 // aliasing scan would leave the stored URL pointing at the caller's buffer.
-func renderURL(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderURL(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
 	inlineScanString(b, posVar, "s", posVar, field, f.Copy, !f.AllowInvalidUTF8)
@@ -4702,7 +4599,7 @@ if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 // renderBigInt reads a bare JSON number into big.Int.SetString (no overflow,
 // arbitrary length). The literal is aliased via unsafe.String; SetString
 // copies the digits into its own storage, so the alias is short-lived.
-func renderBigInt(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderBigInt(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	fmt.Fprintf(b, `start := %[1]s
 %[1]s, err = ggen.SkipValue(data, start)
@@ -4716,7 +4613,7 @@ if _, ok := (&%[2]s).SetString(unsafe.String(unsafe.SliceData(data[start:]), %[1
 // renderBigFloat reads a JSON-string-wrapped numeric literal into big.Float
 // at the default precision. Wrapping matches jsonv2's wire format for
 // big.Float; bare numbers are not accepted (use big.Int or float64 for those).
-func renderBigFloat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderBigFloat(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
@@ -4728,7 +4625,7 @@ func renderBigFloat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 
 // renderBigRat reads a JSON string of the form "num" or "num/denom"
 // and feeds it to big.Rat.SetString. Lossless — fractions stay exact.
-func renderBigRat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderBigRat(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
@@ -4741,7 +4638,7 @@ func renderBigRat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 // sqlNullInnerField returns a render-ready copy of a generic sql.Null[T]'s
 // inner FieldInfo — the synthetic V field with the parent's struct flags
 // applied (the inner is built at parse time, before flag propagation).
-func sqlNullInnerField(f FieldInfo) FieldInfo {
+func sqlNullInnerField(f model.FieldInfo) model.FieldInfo {
 	inner := *f.SQLNullInner
 	inner.JSONName = f.JSONName
 	inner.MultiErr = f.MultiErr
@@ -4756,7 +4653,7 @@ func sqlNullInnerField(f FieldInfo) FieldInfo {
 
 // renderSQLNull emits decode for a database/sql.NullX field: probe `null`
 // first, else parse the inner value and set Valid=true.
-func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderSQLNull(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	if f.SQLNullInner != nil {
 		// Generic sql.Null[T]: null → zero; else decode V into a temp and
 		// publish the {V, Valid:true} literal.
@@ -4778,7 +4675,7 @@ func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 `, ref, sqlTypeName(f.GoType), body, valExpr)
 		return
 	}
-	spec, ok := SQLNullSpec(f.GoType)
+	spec, ok := model.SQLNullSpec(f.GoType)
 	if !ok {
 		return
 	}
@@ -4787,34 +4684,34 @@ func renderSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	valExpr := "nv"
 	declType := spec.Type
 	switch spec.Inner {
-	case KindString:
+	case model.KindString:
 		declType = "string"
 		inlineScanString(&inner, posVar, "nv", posVar, field, f.Copy, !f.AllowInvalidUTF8)
-	case KindBool:
+	case model.KindBool:
 		declType = "bool"
 		fmt.Fprintf(&inner, "nv, %[1]s, err = ggen.Bool(data, %[1]s)\n", posVar)
 		fmt.Fprintf(&inner, "if err != nil { %[1]s = ggen.BoolEnd(data, %[1]s); return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64:
 		cast := spec.Type
 		if spec.Type == "int64" {
 			cast = ""
 		}
 		inlineScanInt64(&inner, posVar, "nv", cast, field)
-	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64:
 		cast := spec.Type
 		if spec.Type == "uint64" {
 			cast = ""
 		}
 		inlineScanUint64(&inner, posVar, "nv", cast, field)
-	case KindFloat32, KindFloat64:
+	case model.KindFloat32, model.KindFloat64:
 		declType = kindPrimitiveName(spec.Inner)
 		fmt.Fprintf(&inner, "nv, %[1]s, err = ggen.%[2]s(data, %[1]s)\n", posVar, floatScanFn(spec.Inner))
 		fmt.Fprintf(&inner, "if err != nil { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 		if spec.Type != declType {
 			valExpr = spec.Type + "(nv)"
 		}
-	case KindTime:
-		tf := FieldInfo{JSONName: f.JSONName, Format: f.Format,
+	case model.KindTime:
+		tf := model.FieldInfo{JSONName: f.JSONName, Format: f.Format,
 			Copy: f.Copy, AllowInvalidUTF8: f.AllowInvalidUTF8, MultiErr: f.MultiErr}
 		declType = "time.Time"
 		renderTime(&inner, tf, "nv", posVar)
@@ -4849,7 +4746,7 @@ func sqlTypeName(goType string) string {
 // renderAny decodes into a reflective any via ggen.Any / ggen.AnyNumber. Under
 // -copy the Copy variants clone every nested string (values + object keys) so
 // the tree survives a later mutation of data.
-func renderAny(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderAny(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	fn := "ggen.Any"
 	if f.UseNumber {
 		fn = "ggen.AnyNumber"
@@ -4865,7 +4762,7 @@ func renderAny(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 // needsSeen reports whether a seen<Field> flag is required for f (always
 // except embedded fallback maps). Used for dup-key guard / first-wins skip /
 // required-field post-loop check.
-func needsSeen(f FieldInfo) bool {
+func needsSeen(f model.FieldInfo) bool {
 	return !f.Embed
 }
 
@@ -4875,7 +4772,7 @@ const seenBitmaskThreshold = 32
 
 // useSeenBitmask reports whether struct s should use the packed-bitmask
 // shape for its seen-tracking instead of per-field bools.
-func useSeenBitmask(s StructInfo) bool {
+func useSeenBitmask(s model.StructInfo) bool {
 	if len(s.Fields) <= seenBitmaskThreshold {
 		return false
 	}
@@ -4889,7 +4786,7 @@ func useSeenBitmask(s StructInfo) bool {
 
 // seenBitIndex assigns a stable bit index to f from its position in s.Fields.
 // Embedded fallback fields still occupy an index (simpler addressing).
-func seenBitIndex(s StructInfo, f FieldInfo) int {
+func seenBitIndex(s model.StructInfo, f model.FieldInfo) int {
 	for i, ff := range s.Fields {
 		if ff.GoName == f.GoName {
 			return i
@@ -4898,13 +4795,13 @@ func seenBitIndex(s StructInfo, f FieldInfo) int {
 	return -1
 }
 
-func seenWordCount(s StructInfo) int {
+func seenWordCount(s model.StructInfo) int {
 	return (len(s.Fields) + 63) / 64
 }
 
 // seenDecl emits the declaration line(s) for the bitmask, or the empty
 // string when bools-mode is in use (caller emits per-field bools).
-func seenDecl(s StructInfo) string {
+func seenDecl(s model.StructInfo) string {
 	if !useSeenBitmask(s) {
 		return ""
 	}
@@ -4916,7 +4813,7 @@ func seenDecl(s StructInfo) string {
 
 // seenAccess returns the read expression for f's seen bit (bool local or
 // bitmask test).
-func seenAccess(s StructInfo, f FieldInfo) string {
+func seenAccess(s model.StructInfo, f model.FieldInfo) string {
 	if !useSeenBitmask(s) {
 		return "seen" + f.GoName
 	}
@@ -4929,7 +4826,7 @@ func seenAccess(s StructInfo, f FieldInfo) string {
 
 // seenNotAccess is the negated counterpart of seenAccess — true when the
 // bit is unset.
-func seenNotAccess(s StructInfo, f FieldInfo) string {
+func seenNotAccess(s model.StructInfo, f model.FieldInfo) string {
 	if !useSeenBitmask(s) {
 		return "!seen" + f.GoName
 	}
@@ -4942,7 +4839,7 @@ func seenNotAccess(s StructInfo, f FieldInfo) string {
 
 // seenSet emits a statement that marks f's seen bit. Trailing newline
 // is intentional so callers can concatenate freely.
-func seenSet(s StructInfo, f FieldInfo) string {
+func seenSet(s model.StructInfo, f model.FieldInfo) string {
 	if !useSeenBitmask(s) {
 		return "seen" + f.GoName + " = true\n"
 	}
@@ -4960,7 +4857,7 @@ func seenSet(s StructInfo, f FieldInfo) string {
 // ggen.NewParseErr (no clone). Under -copy every retained `key` is cloned
 // (keyExpr) and inline-map string/any VALUES are copied too, so the absorbed
 // entries survive a later mutation of data — matching the stream path.
-func unknownKey(s StructInfo, posVar string) string {
+func unknownKey(s model.StructInfo, posVar string) string {
 	keyExpr := "key"
 	if s.Copy {
 		keyExpr = "strings.Clone(key)"
@@ -4970,7 +4867,7 @@ func unknownKey(s StructInfo, posVar string) string {
 		initMap := fmt.Sprintf("if result.%s == nil { result.%s = make(%s) }\n",
 			embedded.GoName, embedded.GoName, embedded.GoType)
 		switch embedded.ElemKind {
-		case KindAny:
+		case model.KindAny:
 			anyFn := "ggen.Any"
 			if s.UseNumber {
 				anyFn = "ggen.AnyNumber"
@@ -4980,7 +4877,7 @@ func unknownKey(s StructInfo, posVar string) string {
 			}
 			return initMap + fmt.Sprintf(`result.%[1]s[%[5]s], %[2]s, err = %[3]s(data, %[2]s, %[6]s)
 %[4]s`, embedded.GoName, posVar, anyFn, chk, keyExpr, vArg(embedded))
-		case KindString:
+		case model.KindString:
 			if s.Copy {
 				// tier func + ggen.Detach: reuse the tier locate, clone the value
 				// only when it aliases data (an owned stringSlow escape result
@@ -4992,7 +4889,7 @@ strVal, %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(embedded)+`)
 			}
 			return initMap + fmt.Sprintf(`result.%[2]s[key], %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(embedded)+`)
 %[3]s`, posVar, embedded.GoName, chk)
-		case KindStruct:
+		case model.KindStruct:
 			if isGenerated(embedded.ElemType) {
 				return initMap + fmt.Sprintf(`var entry %[1]s
 var entryConsumed int
@@ -5024,7 +4921,7 @@ result.%[3]s[%[5]s] = entry
 // renderPipe emits an ordered value-stage step list (mods and validators
 // interleaved in declared order) against ref. posVar selects the return shape
 // ("i" bytes path, "" stream path).
-func renderPipe(b *bytes.Buffer, steps []Step, ref, jsonName, goType string, kind TypeKind, multiErr bool, posVar string) {
+func renderPipe(b *bytes.Buffer, steps []model.Step, ref, jsonName, goType string, kind model.TypeKind, multiErr bool, posVar string) {
 	if len(steps) == 0 {
 		return
 	}
@@ -5046,7 +4943,7 @@ func renderPipe(b *bytes.Buffer, steps []Step, ref, jsonName, goType string, kin
 		}
 		// maximal run of validators against the current (unmutated) ref
 		q := p
-		run := make([]ValidationRule, 0, len(steps)-p)
+		run := make([]model.ValidationRule, 0, len(steps)-p)
 		for q < len(steps) && !steps[q].IsMod {
 			run = append(run, steps[q].V)
 			q++
@@ -5058,21 +4955,21 @@ func renderPipe(b *bytes.Buffer, steps []Step, ref, jsonName, goType string, kin
 
 // fieldPipe returns the ordered value steps for a field — f.Pipe when set,
 // else derived from the legacy split buckets (covers synthetic pointer-leaf fields).
-func fieldPipe(f FieldInfo) []Step {
+func fieldPipe(f model.FieldInfo) []model.Step {
 	if f.Pipe != nil {
 		return f.Pipe
 	}
-	return stepsFromLegacy(f.Mods, f.Validation)
+	return model.StepsFromLegacy(f.Mods, f.Validation)
 }
 
-func fieldKeyPipe(f FieldInfo) []Step {
+func fieldKeyPipe(f model.FieldInfo) []model.Step {
 	if f.KeyPipe != nil {
 		return f.KeyPipe
 	}
-	return stepsFromLegacy(f.KeyMods, f.KeyValidation)
+	return model.StepsFromLegacy(f.KeyMods, f.KeyValidation)
 }
 
-func validateAndMod(b *bytes.Buffer, f FieldInfo, ref string) {
+func validateAndMod(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	renderPipe(b, fieldPipe(f), ref, f.JSONName, f.GoType, f.Kind, f.MultiErr, "i")
 }
 
@@ -5082,13 +4979,13 @@ func validateAndMod(b *bytes.Buffer, f FieldInfo, ref string) {
 // wraps the built-in groups in a nil test, for callers that reach here with
 // the pointer possibly still nil (the converter dispatch); the plain pointer
 // path emits after its assign cascade, where every level is non-nil.
-func emitPointerPipe(b *bytes.Buffer, f FieldInfo, ref string, depth int, leafType string, leafK TypeKind, posVar string, guardNil bool) {
+func emitPointerPipe(b *bytes.Buffer, f model.FieldInfo, ref string, depth int, leafType string, leafK model.TypeKind, posVar string, guardNil bool) {
 	steps := fieldPipe(f)
 	deref := derefStr(ref, depth)
 	for i := 0; i < len(steps); {
-		custom := stepIsCustom(steps[i])
+		custom := model.StepIsCustom(steps[i])
 		j := i + 1
-		for j < len(steps) && stepIsCustom(steps[j]) == custom {
+		for j < len(steps) && model.StepIsCustom(steps[j]) == custom {
 			j++
 		}
 		if custom {
@@ -5118,31 +5015,31 @@ func ptrNonNilCond(ref string, depth int) string {
 
 // emitFieldPipe runs a field's value stage: a pointer field splits its steps
 // between the pointer and its leaf, every other field runs them on ref.
-func emitFieldPipe(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func emitFieldPipe(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	if !f.Pointer {
 		renderPipe(b, fieldPipe(f), ref, f.JSONName, f.GoType, f.Kind, f.MultiErr, posVar)
 		return
 	}
-	depth, leafType := pointerDepth(f.GoType)
+	depth, leafType := model.PointerDepth(f.GoType)
 	emitPointerPipe(b, f, ref, depth, leafType, leafKind(f, leafType), posVar, true)
 }
 
 // validateAndModStream is the stream-path counterpart of validateAndMod.
 // Emits 2-tuple `return result, err` shape (Stream owns s.Pos).
-func validateAndModStream(b *bytes.Buffer, f FieldInfo, ref string) {
+func validateAndModStream(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	renderPipe(b, fieldPipe(f), ref, f.JSONName, f.GoType, f.Kind, f.MultiErr, "")
 }
 
 // renderStringTag handles json:",string" — reads a quoted JSON string and
 // parses its contents into the field's numeric / bool type.
-func renderStringTag(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStringTag(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	// Brace-less: `sv` / `qn` / `qe` land in the caller's scope.
 	b.WriteString("var sv string\n")
 	// Only the KindString case retains sv (ref = sv); numeric `,string` parses
 	// it into an independent value, so the copy is needed for strings only.
-	inlineScanString(b, posVar, "sv", posVar, field, f.Copy && f.Kind == KindString, !f.AllowInvalidUTF8)
-	if f.Kind == KindBool {
+	inlineScanString(b, posVar, "sv", posVar, field, f.Copy && f.Kind == model.KindString, !f.AllowInvalidUTF8)
+	if f.Kind == model.KindBool {
 		fmt.Fprintf(b, `switch sv {
 case "true": %[1]s = true
 case "false": %[1]s = false
@@ -5160,12 +5057,12 @@ default: return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, ggen.ErrBadBool)
 // spellings (NaN, Infinity, +1, 01, 1_0), none of which jsonv2 admits, and a
 // NaN or Inf let in that way could not be marshaled back. retPrefix opens
 // the caller's error return up to the wrapped error.
-func renderQuotedNumber(b *bytes.Buffer, f FieldInfo, ref, retPrefix string) {
+func renderQuotedNumber(b *bytes.Buffer, f model.FieldInfo, ref, retPrefix string) {
 	var scan, wide string
 	switch f.Kind {
-	case KindFloat32, KindFloat64:
+	case model.KindFloat32, model.KindFloat64:
 		scan, wide = floatScanFn(f.Kind), kindPrimitiveName(f.Kind)
-	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64:
 		scan, wide = "Uint64", "uint64"
 	default:
 		scan, wide = "Int64", "int64"
@@ -5184,42 +5081,29 @@ if err != nil { %[3]serr) }
 	}
 }
 
-// pointerDepth counts the leading `*` of a pointer field's GoType and
-// returns (depth, leafType). depth==1 is a plain `*T`; depth>=2 is a
-// multi-level pointer (`**T`, `***T`, …) whose leaf is the type left after
-// stripping every `*`.
-func pointerDepth(goType string) (int, string) {
-	depth := 0
-	for len(goType) > 0 && goType[0] == '*' {
-		depth++
-		goType = goType[1:]
-	}
-	return depth, goType
-}
-
 // elemPtrType returns the full element type including every pointer level,
 // plus the total pointer depth (0 = not a pointer). The parse layer unwraps
 // one `*` into ElemPointer for slices/arrays; map/nested keep their stars on ElemType.
-func elemPtrType(f FieldInfo) (string, int) {
+func elemPtrType(f model.FieldInfo) (string, int) {
 	et := f.ElemType
 	if f.ElemPointer {
 		et = "*" + et
 	}
-	depth, _ := pointerDepth(et)
+	depth, _ := model.PointerDepth(et)
 	return et, depth
 }
 
 // elemPtrField synthesizes the FieldInfo a pointer-typed element decodes
 // through — the parse-first cascade scalar pointer fields use. Elem-level
 // rules ride along. jsonName is the validation-path suffix ("x[]" / "x.value").
-func elemPtrField(f FieldInfo, jsonName string) FieldInfo {
+func elemPtrField(f model.FieldInfo, jsonName string) model.FieldInfo {
 	et, _ := elemPtrType(f)
-	_, leafType := pointerDepth(et)
-	pf := FieldInfo{
+	_, leafType := model.PointerDepth(et)
+	pf := model.FieldInfo{
 		GoType:           et,
 		Pointer:          true,
 		PointeeType:      et[1:],
-		Kind:             resolveKind(leafType),
+		Kind:             model.ResolveKind(leafType),
 		JSONName:         jsonName,
 		Format:           f.Format,
 		HTMLEscape:       f.HTMLEscape,
@@ -5236,21 +5120,21 @@ func elemPtrField(f FieldInfo, jsonName string) FieldInfo {
 	// A container leaf needs its own Elem* populated — the parse layer only
 	// fills these for the outermost container.
 	switch pf.Kind {
-	case KindSlice, KindArray:
-		pf.ArrayLen = arrayLenFromType(leafType)
-		elem, kind, _ := stripOneContainer(leafType)
+	case model.KindSlice, model.KindArray:
+		pf.ArrayLen = model.ArrayLenFromType(leafType)
+		elem, kind, _ := model.StripOneContainer(leafType)
 		if strings.HasPrefix(elem, "*") {
 			pf.ElemPointer = true
 			elem = elem[1:]
-			kind = resolveKind(elem)
+			kind = model.ResolveKind(elem)
 		}
 		pf.ElemType, pf.ElemKind = elem, kind
-		if kind == KindArray {
-			pf.ElemArrayLen = arrayLenFromType(elem)
+		if kind == model.KindArray {
+			pf.ElemArrayLen = model.ArrayLenFromType(elem)
 		}
-	case KindMap:
+	case model.KindMap:
 		pf.ElemType = strings.TrimPrefix(leafType, "map[string]")
-		pf.ElemKind = resolveKind(pf.ElemType)
+		pf.ElemKind = model.ResolveKind(pf.ElemType)
 	}
 	return pf
 }
@@ -5274,12 +5158,12 @@ func newChain(expr string, n int) string {
 // produces (int64/uint64/float64) plus the cast back. The pointer decode scans
 // into a wide temp and casts at the assign site. Returns ("",0,"") when no
 // widening is needed.
-func widenedLeafCast(k TypeKind, leafGoType string) (wideType string, wideKind TypeKind, cast string) {
+func widenedLeafCast(k model.TypeKind, leafGoType string) (wideType string, wideKind model.TypeKind, cast string) {
 	switch k {
-	case KindInt, KindInt8, KindInt16, KindInt32:
-		return "int64", KindInt64, leafGoType
-	case KindUint, KindUint8, KindUint16, KindUint32:
-		return "uint64", KindUint64, leafGoType
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32:
+		return "int64", model.KindInt64, leafGoType
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32:
+		return "uint64", model.KindUint64, leafGoType
 	}
 	return "", 0, ""
 }
@@ -5287,9 +5171,9 @@ func widenedLeafCast(k TypeKind, leafGoType string) (wideType string, wideKind T
 // leafMerges reports whether a pointer leaf benefits from being seeded with
 // the receiver's carried-in value before decode (struct/slice/map merge;
 // primitives just overwrite).
-func leafMerges(k TypeKind) bool {
+func leafMerges(k model.TypeKind) bool {
 	switch k {
-	case KindStruct, KindSlice, KindArray, KindMap:
+	case model.KindStruct, model.KindSlice, model.KindArray, model.KindMap:
 		return true
 	}
 	return false
@@ -5300,19 +5184,19 @@ func leafMerges(k TypeKind) bool {
 // Requires the emit site to sit directly inside the dispatch switch
 // (AtDispatch) and no post-value field rules — a break would skip the
 // validateAndMod / custom @Func calls that follow the value block.
-func nullBreakOK(f FieldInfo) bool {
+func nullBreakOK(f model.FieldInfo) bool {
 	return f.AtDispatch && (f.NoValidate || (len(f.Validation) == 0 && len(f.Mods) == 0))
 }
 
 // nullZeroApplies reports whether the `nullzero` opt-in adds a null→zero
 // branch. Only dispatch-level non-pointer value kinds that would otherwise
 // hard-error on `null` qualify; already-null-aware kinds are no-ops.
-func nullZeroApplies(f FieldInfo) bool {
+func nullZeroApplies(f model.FieldInfo) bool {
 	if !f.NullZero || f.Pointer || !f.AtDispatch {
 		return false
 	}
 	switch f.Kind {
-	case KindSlice, KindMap, KindBytes, KindNetIP, KindRawJSON, KindSQLNull, KindAny:
+	case model.KindSlice, model.KindMap, model.KindBytes, model.KindNetIP, model.KindRawJSON, model.KindSQLNull, model.KindAny:
 		return false
 	}
 	return true
@@ -5348,7 +5232,7 @@ func emitStreamNullZero(b *bytes.Buffer, ref, zero, field string, flat bool, sen
 // (opt #76) is handed over intact — the swap reads the carried entries.
 // No-op for primitive leaves and for one that would merge stale data
 // instead of resetting (leafResets).
-func emitPointerSeed(b *bytes.Buffer, ref string, depth int, leaf FieldInfo, bytesPath bool) {
+func emitPointerSeed(b *bytes.Buffer, ref string, depth int, leaf model.FieldInfo, bytesPath bool) {
 	if !leafMerges(leaf.Kind) || !leafResets(leaf.Kind, leaf.GoType) {
 		return
 	}
@@ -5357,11 +5241,11 @@ func emitPointerSeed(b *bytes.Buffer, ref string, depth int, leaf FieldInfo, byt
 		conds[k] = derefStr(ref, k) + " != nil"
 	}
 	seed := derefStr(ref, depth)
-	if leaf.Kind == KindSlice {
+	if leaf.Kind == model.KindSlice {
 		seed += "[:0]"
 	}
 	fmt.Fprintf(b, "if %s {\nv = %s\n", strings.Join(conds, " && "), seed)
-	if leaf.Kind == KindMap && !(bytesPath && reusesMapValues(leaf)) {
+	if leaf.Kind == model.KindMap && !(bytesPath && reusesMapValues(leaf)) {
 		b.WriteString("clear(v)\n")
 	}
 	b.WriteString("}\n")
@@ -5383,10 +5267,10 @@ func emitPointerAssign(b *bytes.Buffer, ref string, depth int, valExpr string) {
 	fmt.Fprintf(b, "} else {\n%s = %s\n}\n", derefStr(ref, depth), valExpr)
 }
 
-func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderField(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	// Converter variant: peek the JSON shape and route (handles null/native/
 	// convert itself); the outer value stage runs after.
-	if fieldHasConverter(f) {
+	if model.FieldHasConverter(f) {
 		renderVariantDispatch(b, f, ref, posVar)
 		if !f.NoValidate {
 			emitFieldPipe(b, f, ref, "i")
@@ -5443,15 +5327,15 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		// the assign (emitPointerPipe); a pipe of one half keeps that half on
 		// its own target — the leaf's steps ride along with its decode, the
 		// @-rules run on `ref` once the null branch has rejoined.
-		builtinV, customV := partitionCustomValidation(f.Validation)
-		builtinM, customM := partitionCustomMods(f.Mods)
-		builtinSteps, customSteps := splitCustomSteps(fieldPipe(f))
+		builtinV, customV := model.PartitionCustomValidation(f.Validation)
+		builtinM, customM := model.PartitionCustomMods(f.Mods)
+		builtinSteps, customSteps := model.SplitCustomSteps(fieldPipe(f))
 		ordered := !f.NoValidate && len(builtinSteps) > 0 && len(customSteps) > 0
 		// Decode-into-receiver, any pointer depth. null → nil outer (stdlib
 		// merge parity). Else decode the leaf into temp `v` FIRST (no mutation
 		// on parse failure), then the assign cascade reuses the non-nil prefix
 		// and allocates only the nil tail; a mergeable leaf is seeded first.
-		depth, leafType := pointerDepth(f.GoType)
+		depth, leafType := model.PointerDepth(f.GoType)
 		leaf := f
 		leaf.Pointer = false
 		leaf.PointeeType = ""
@@ -5487,7 +5371,7 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		}
 		// Fast path: the inline int/uint scanner materializes `n`, so a leaf
 		// with no built-in rules skips the temp — cascade runs off `n`.
-		if (leaf.Kind == KindInt64 || leaf.Kind == KindUint64) && !f.String && len(builtinV) == 0 && len(builtinM) == 0 {
+		if (leaf.Kind == model.KindInt64 || leaf.Kind == model.KindUint64) && !f.String && len(builtinV) == 0 && len(builtinM) == 0 {
 			valExpr := "n"
 			if castFn != "" {
 				valExpr = castFn + "(n)"
@@ -5502,7 +5386,7 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 				emitPointerAssign(&cascade, ref, depth, valExpr)
 			}
 			stmt := strings.TrimRight(cascade.String(), "\n")
-			if leaf.Kind == KindInt64 {
+			if leaf.Kind == model.KindInt64 {
 				inlineScanInt64Stmt(b, posVar, fieldLit(f), stmt)
 			} else {
 				inlineScanUint64Stmt(b, posVar, fieldLit(f), stmt)
@@ -5555,7 +5439,7 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		}
 	}
 	// jsonv2 dropped `,string` for bool; fall through to the bare decode.
-	if f.String && f.Kind != KindBool {
+	if f.String && f.Kind != model.KindBool {
 		renderStringTag(b, f, ref, posVar)
 		if nz && !flat {
 			b.WriteString("}\n")
@@ -5567,24 +5451,24 @@ func renderField(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	}
 	field := fieldLit(f)
 	switch f.Kind {
-	case KindString:
+	case model.KindString:
 		inlineScanString(b, posVar, ref, posVar, field, f.Copy, !f.AllowInvalidUTF8)
-	case KindBool:
+	case model.KindBool:
 		fmt.Fprintf(b, "%[1]s, %[2]s, err = ggen.Bool(data, %[2]s)\n", ref, posVar)
 		fmt.Fprintf(b, "if err != nil { %[1]s = ggen.BoolEnd(data, %[1]s); return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
-	case KindInt, KindInt8, KindInt16, KindInt32:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32:
 		inlineScanInt64(b, posVar, ref, f.GoType, field)
-	case KindInt64:
+	case model.KindInt64:
 		inlineScanInt64(b, posVar, ref, "", field)
-	case KindUint, KindUint8, KindUint16, KindUint32:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32:
 		inlineScanUint64(b, posVar, ref, f.GoType, field)
-	case KindUint64:
+	case model.KindUint64:
 		inlineScanUint64(b, posVar, ref, "", field)
-	case KindFloat32, KindFloat64:
+	case model.KindFloat32, model.KindFloat64:
 		fmt.Fprintf(b, `%[1]s, %[2]s, err = ggen.%[4]s(data, %[2]s)
 if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field, floatScanFn(f.Kind))
-	case KindStruct:
+	case model.KindStruct:
 		if isGenerated(f.GoType) {
 			// Value-receiver DecodeFrom merges the field's current value;
 			// `consumed` (bytes consumed) advances posVar. Cyclic types route to the
@@ -5596,37 +5480,37 @@ if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 		} else {
 			b.WriteString(renderCrossPkgStructDecode(f, ref, posVar))
 		}
-	case KindSlice:
+	case model.KindSlice:
 		renderSlice(b, f, ref, posVar)
-	case KindArray:
+	case model.KindArray:
 		emitByteArrayRead(b, f, ref, posVar, 0)
-	case KindMap:
+	case model.KindMap:
 		renderMap(b, f, ref, posVar, false)
-	case KindBytes:
+	case model.KindBytes:
 		renderBytes(b, f, ref, posVar)
-	case KindTime:
+	case model.KindTime:
 		renderTime(b, f, ref, posVar)
-	case KindDuration:
+	case model.KindDuration:
 		renderDuration(b, f, ref, posVar)
-	case KindNetIP:
+	case model.KindNetIP:
 		renderNetIP(b, f, ref, posVar)
-	case KindNetipAddr:
+	case model.KindNetipAddr:
 		renderNetipAddr(b, f, ref, posVar)
-	case KindNetipPrefix:
+	case model.KindNetipPrefix:
 		renderNetipPrefix(b, f, ref, posVar)
-	case KindRawJSON:
+	case model.KindRawJSON:
 		renderRawJSON(b, f, ref, posVar)
-	case KindURL:
+	case model.KindURL:
 		renderURL(b, f, ref, posVar)
-	case KindBigInt:
+	case model.KindBigInt:
 		renderBigInt(b, f, ref, posVar)
-	case KindBigFloat:
+	case model.KindBigFloat:
 		renderBigFloat(b, f, ref, posVar)
-	case KindBigRat:
+	case model.KindBigRat:
 		renderBigRat(b, f, ref, posVar)
-	case KindSQLNull:
+	case model.KindSQLNull:
 		renderSQLNull(b, f, ref, posVar)
-	case KindAny:
+	case model.KindAny:
 		renderAny(b, f, ref, posVar)
 	default:
 		fmt.Fprintf(b, `k, err := ggen.SkipValue(data, %[1]s)
@@ -5643,28 +5527,28 @@ if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 
 // renderSlice is the depth-0 entry point into the recursive slice emitter
 // (struct-field path — not top-level).
-func renderSlice(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderSlice(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	emitByteSliceRead(b, f, ref, posVar, 0, false)
 }
 
 // peelSliceField returns the FieldInfo one level down for a slice-of-slice or
 // slice-of-array element. Rules shift up one level (InnerValidation[0] →
 // ElemValidation, etc.). Called only when f.ElemKind is KindSlice / KindArray.
-func peelSliceField(f FieldInfo) FieldInfo {
+func peelSliceField(f model.FieldInfo) model.FieldInfo {
 	innerGoType := f.ElemType
-	innerElem, innerKind, innerLen := stripOneContainer(innerGoType)
+	innerElem, innerKind, innerLen := model.StripOneContainer(innerGoType)
 	// Mirror the parse layer: one leading `*` unwraps into ElemPointer; any
 	// remaining stars stay on ElemType for the multi-level route.
 	innerPointer := false
 	if strings.HasPrefix(innerElem, "*") {
 		innerPointer = true
 		innerElem = innerElem[1:]
-		innerKind = resolveKind(innerElem)
-		if innerKind == KindArray {
-			innerLen = arrayLenFromType(innerElem)
+		innerKind = model.ResolveKind(innerElem)
+		if innerKind == model.KindArray {
+			innerLen = model.ArrayLenFromType(innerElem)
 		}
 	}
-	inner := FieldInfo{
+	inner := model.FieldInfo{
 		GoType:           innerGoType,
 		GoName:           f.GoName,   // cap-const names keep the field attribution
 		Kind:             f.ElemKind, // the layer one level down
@@ -5682,7 +5566,7 @@ func peelSliceField(f FieldInfo) FieldInfo {
 		// default — the zero-value 0 would read as opt-out.
 		HintLen: -1,
 	}
-	if innerKind == KindArray {
+	if innerKind == model.KindArray {
 		inner.ElemArrayLen = innerLen
 	}
 	if len(f.InnerValidation) > 0 {
@@ -5712,35 +5596,16 @@ func peelSliceField(f FieldInfo) FieldInfo {
 
 // elemSteps returns the ordered per-element value steps (level-1 inner) —
 // Levels[0] when present, else the derived split buckets.
-func elemSteps(f FieldInfo) []Step {
+func elemSteps(f model.FieldInfo) []model.Step {
 	if len(f.Levels) > 0 {
 		return f.Levels[0]
 	}
-	return stepsFromLegacy(f.ElemMods, f.ElemValidation)
-}
-
-// stripOneContainer peels off one layer of container (slice `[]` or array
-// `[N]`) from a Go type string, returning the element type, its kind, and
-// N (0 for slices / non-containers).
-func stripOneContainer(typ string) (inner string, kind TypeKind, length int) {
-	if strings.HasPrefix(typ, "[]") {
-		inner = typ[2:]
-		return inner, resolveKind(inner), 0
-	}
-	if len(typ) > 2 && typ[0] == '[' {
-		if end := strings.IndexByte(typ, ']'); end > 1 {
-			if n, err := strconv.Atoi(typ[1:end]); err == nil {
-				inner = typ[end+1:]
-				return inner, resolveKind(inner), n
-			}
-		}
-	}
-	return typ, resolveKind(typ), 0
+	return model.StepsFromLegacy(f.ElemMods, f.ElemValidation)
 }
 
 // emitByteArrayRead is a thin wrapper around emitByteSliceRead for [N]T fields
 // (struct-field path — not top-level).
-func emitByteArrayRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth int) {
+func emitByteArrayRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string, depth int) {
 	emitByteSliceRead(b, f, dst, posVar, depth, false)
 }
 
@@ -5752,8 +5617,8 @@ func emitByteArrayRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth i
 // nothing to parse after the array, so each exit returns directly instead of
 // falling through to a trailing `return`. Always false for struct fields and
 // nested elements (their caller has more to parse).
-func emitByteSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth int, topLevel bool) {
-	isArray := f.Kind == KindArray
+func emitByteSliceRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string, depth int, topLevel bool) {
+	isArray := f.Kind == model.KindArray
 	arrayN := f.ArrayLen
 	// Multi-level pointer element (`[]**T`, …): no slab — each element runs
 	// the parse-first cascade. Depth-1 `[]*T` keeps the slab fast path.
@@ -5849,7 +5714,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	// Every elem kind decodes IN PLACE into the destination slot (slab[ivar] /
 	// dst[ivar] for arrays; pre-grown slab/dst tail for slices). err is hoisted
 	// at the DecodeFrom function level.
-	directStruct := f.ElemKind == KindStruct && isGenerated(f.ElemType)
+	directStruct := f.ElemKind == model.KindStruct && isGenerated(f.ElemType)
 	_ = evvar // unused at this scope
 	// Do-while: the empty `[]` and truncation cases are caught by this one-time
 	// guard (preserving ErrBadArray below); inside, the comma handler's
@@ -5901,7 +5766,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 		// Slab holds the pointee type; pre-grow the tail slot.
 		emitElemGrow(b, slabVar, f, directStruct)
 		target = fmt.Sprintf("%s[len(%s)-1]", slabVar, slabVar)
-	case f.ElemKind == KindSlice:
+	case f.ElemKind == model.KindSlice:
 		// Slice element: reslice within cap so the carried inner header/backing
 		// survives for reuse; only a past-cap grow allocates a nil slot.
 		fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, nil) }\n", dst)
@@ -5936,28 +5801,28 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 			f.ElemType, f.ElemKind = prim, kind
 		}
 		switch f.ElemKind {
-		case KindString:
+		case model.KindString:
 			inlineScanString(b, kvar, target, kvar, field, f.Copy, !f.AllowInvalidUTF8)
-		case KindBool:
+		case model.KindBool:
 			fmt.Fprintf(b, "%s, %s, err = ggen.Bool(data, %s)\n", target, kvar, kvar)
 			fmt.Fprintf(b, "if err != nil { %[1]s = ggen.BoolEnd(data, %[1]s) }\n", kvar)
 			b.WriteString(errCheck)
-		case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
+		case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64:
 			castFn := ""
 			if f.ElemType != "int64" {
 				castFn = f.ElemType
 			}
 			inlineScanInt64(b, kvar, target, castFn, field)
-		case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+		case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64:
 			castFn := ""
 			if f.ElemType != "uint64" {
 				castFn = f.ElemType
 			}
 			inlineScanUint64(b, kvar, target, castFn, field)
-		case KindFloat32, KindFloat64:
+		case model.KindFloat32, model.KindFloat64:
 			fmt.Fprintf(b, "%s, %s, err = ggen.%s(data, %s)\n", target, kvar, floatScanFn(f.ElemKind), kvar)
 			b.WriteString(errCheck)
-		case KindStruct:
+		case model.KindStruct:
 			if directStruct {
 				fmt.Fprintf(b, `var consumed int
 %[1]s, consumed, err = %[1]s.`+decodeCallFor(f.ElemType)+`
@@ -5978,10 +5843,10 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 			// pre-grown zero slot was never scanned, so every non-empty array
 			// failed ErrBadArray (or the file didn't compile).
 			renderField(b, sliceElemField(f), target, kvar)
-		case KindSlice, KindArray:
+		case model.KindSlice, model.KindArray:
 			// Nested container — recurse, peeling one outer [] / [N] off.
 			inner := peelSliceField(f)
-			if inner.Kind == KindSlice && len(f.ElemMods) == 0 {
+			if inner.Kind == model.KindSlice && len(f.ElemMods) == 0 {
 				// `null` elem → nil slot handled HERE so the inner body isn't
 				// nested in an else (mirrors the []*T nil-elem fast path).
 				inlineNullPeek(b, kvar, fieldLit(f))
@@ -6006,7 +5871,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 			// slot ([:0] reset) so the inner decode reuses its backing.
 			row := fmt.Sprintf("row%d", depth)
 			fmt.Fprintf(b, "%s := %s\n", row, target)
-			if inner.Kind == KindSlice {
+			if inner.Kind == model.KindSlice {
 				fmt.Fprintf(b, "if %[1]s != nil { %[1]s = %[1]s[:0] }\n", row)
 			}
 			emitByteSliceRead(b, inner, row, kvar, depth+1, false)
@@ -6055,7 +5920,7 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 
 // renderStreamDecode emits the streaming counterpart of renderDecode, using
 // ggen.Stream methods that pull more bytes on demand.
-func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
+func renderStreamDecode(b *bytes.Buffer, s model.StructInfo) {
 	// Named-result return slot — see DecodeFrom above.
 	var body bytes.Buffer
 	if isCyclic(s.Name) {
@@ -6099,7 +5964,7 @@ func renderStreamDecode(b *bytes.Buffer, s StructInfo) {
 // KeyView keeps the scalar-prelude original on all-short-key structs — same
 // gate and rationale as the bytes-path key window (the prelude beats the
 // vector dependency chain on ≤5-byte keys).
-func tierStreamStringCalls(body string, s StructInfo) string {
+func tierStreamStringCalls(body string, s model.StructInfo) string {
 	if simdSuffix == "" {
 		return body
 	}
@@ -6116,7 +5981,7 @@ func tierStreamStringCalls(body string, s StructInfo) string {
 	return body
 }
 
-func renderStreamDecodeStruct(b *bytes.Buffer, s StructInfo) {
+func renderStreamDecodeStruct(b *bytes.Buffer, s model.StructInfo) {
 	emitReceiverReset(b, s, false)
 	if s.MultiErr {
 		b.WriteString("var errs ggen.Errors\n")
@@ -6175,10 +6040,10 @@ for {
 }`, chk, plStr, renderStreamDispatch(s), badObj, rmoreKey, rmoreSep)
 }
 
-func renderStreamDispatch(s StructInfo) string {
+func renderStreamDispatch(s model.StructInfo) string {
 	// Each known-key case opens with s.ConsumeColon — the alias isn't needed
 	// past this point, so the shift it triggers is safe.
-	emitField := func(b *bytes.Buffer, f FieldInfo, parse string) {
+	emitField := func(b *bytes.Buffer, f model.FieldInfo, parse string) {
 		field := fieldLit(f)
 		chk := streamErrCheck(field)
 		fmt.Fprintf(b, "err = s.ConsumeColon()\n%s", chk)
@@ -6231,7 +6096,7 @@ func renderStreamDispatch(s StructInfo) string {
 // renderStreamMap emits map decode for the stream path. `null` → nil,
 // empty `{}` → non-nil empty, else fresh make(). Map keys must be detached
 // copies (the buffer can be overwritten on ReadMore), so we use s.String.
-func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamMap(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	mapNest++
 	defer func() { mapNest-- }()
 	mkVar, mvVar, _, _ := mapLocals()
@@ -6308,13 +6173,13 @@ func renderStreamMap(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 		f.ElemType, f.ElemKind = prim, kind
 	}
 	switch f.ElemKind {
-	case KindString:
+	case model.KindString:
 		fmt.Fprintf(b, `%s, err = s.String(%s)
 %s`, mapTarget, vArg(f), chk)
-	case KindBool:
+	case model.KindBool:
 		fmt.Fprintf(b, `%s, err = s.Bool()
 %s`, mapTarget, chk)
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64:
 		if f.ElemType == "int64" {
 			fmt.Fprintf(b, `%s, err = s.Int64()
 %s`, mapTarget, chk)
@@ -6325,7 +6190,7 @@ iv, err = s.Int64()
 %[3]s%[4]s%[1]s = %[2]s(iv)
 `, mapTarget, f.ElemType, chk, g)
 		}
-	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64:
 		if f.ElemType == "uint64" {
 			fmt.Fprintf(b, `%s, err = s.Uint64()
 %s`, mapTarget, chk)
@@ -6336,10 +6201,10 @@ uv, err = s.Uint64()
 %[3]s%[4]s%[1]s = %[2]s(uv)
 `, mapTarget, f.ElemType, chk, g)
 		}
-	case KindFloat32, KindFloat64:
+	case model.KindFloat32, model.KindFloat64:
 		fmt.Fprintf(b, `%s, err = s.%s()
 %s`, mapTarget, floatScanFn(f.ElemKind), chk)
-	case KindStruct:
+	case model.KindStruct:
 		if isGenerated(f.ElemType) {
 			fmt.Fprintf(b, `var %[4]s %[1]s
 %[4]s, err = %[4]s.`+streamDecodeCallFor(f.ElemType)+`
@@ -6409,20 +6274,20 @@ func streamReadMore(field, keep string, resetPos bool, sentinel string) string {
 
 // truncSentinel maps a value kind to the grammar sentinel the BYTES path
 // reports for input truncated at that value's head.
-func truncSentinel(k TypeKind) string {
+func truncSentinel(k model.TypeKind) string {
 	switch k {
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
-		KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
-		KindFloat32, KindFloat64, KindBigInt:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64,
+		model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64,
+		model.KindFloat32, model.KindFloat64, model.KindBigInt:
 		return "ggen.ErrBadNumber"
-	case KindBool:
+	case model.KindBool:
 		return "ggen.ErrBadBool"
-	case KindString, KindBytes, KindTime, KindDuration, KindNetIP,
-		KindNetipAddr, KindNetipPrefix, KindURL, KindBigFloat, KindBigRat:
+	case model.KindString, model.KindBytes, model.KindTime, model.KindDuration, model.KindNetIP,
+		model.KindNetipAddr, model.KindNetipPrefix, model.KindURL, model.KindBigFloat, model.KindBigRat:
 		return "ggen.ErrExpectString"
-	case KindMap, KindStruct:
+	case model.KindMap, model.KindStruct:
 		return "ggen.ErrBadObject"
-	case KindSlice, KindArray:
+	case model.KindSlice, model.KindArray:
 		return "ggen.ErrBadArray"
 	}
 	return "ggen.ErrUnexpectedEnd"
@@ -6432,21 +6297,21 @@ func truncSentinel(k TypeKind) string {
 // shape at the value head, not the Go kind — a pointer chain decodes its
 // leaf, sql.Null* its inner, a `,string` value opens with a quote, and a
 // format:array []byte is a JSON array.
-func headSentinel(f FieldInfo) string {
+func headSentinel(f model.FieldInfo) string {
 	goType, kind := f.GoType, f.Kind
 	if f.Pointer {
-		_, goType = pointerDepth(f.GoType)
+		_, goType = model.PointerDepth(f.GoType)
 		kind = leafKind(f, goType)
 	}
-	if kind == KindSQLNull {
-		if spec, ok := SQLNullSpec(goType); ok {
+	if kind == model.KindSQLNull {
+		if spec, ok := model.SQLNullSpec(goType); ok {
 			goType, kind = spec.Type, spec.Inner
 		}
 	}
-	if f.String && kind != KindBool {
+	if f.String && kind != model.KindBool {
 		return "ggen.ErrExpectString"
 	}
-	if kind == KindBytes && f.Format == "array" {
+	if kind == model.KindBytes && f.Format == "array" {
 		return "ggen.ErrBadArray"
 	}
 	return truncSentinel(effectiveKind(goType, kind))
@@ -6463,12 +6328,12 @@ func headSentinel(f FieldInfo) string {
 // (NewParseErrShift / ShiftPos). Stream positions are already global.
 // calleeTypeOf names the type whose DecodeFrom a field's nested decode calls
 // — the element type for containers, else the field's own (pointer-peeled).
-func calleeTypeOf(f FieldInfo) string {
+func calleeTypeOf(f model.FieldInfo) string {
 	switch f.Kind {
-	case KindSlice, KindArray, KindMap:
+	case model.KindSlice, model.KindArray, model.KindMap:
 		return f.ElemType
 	}
-	if f.ElemType != "" && (f.ElemKind == KindStruct) {
+	if f.ElemType != "" && (f.ElemKind == model.KindStruct) {
 		return f.ElemType
 	}
 	if f.PointeeType != "" {
@@ -6516,7 +6381,7 @@ func nestedDecodeErrCheck(field, callee string, multierr, bytesPath bool, nVar s
 
 // --- stream native-type renderers ---
 
-func renderStreamBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamBytes(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	if byteArrayLen(f) > 0 {
 		renderStreamBytesValue(b, f, ref, posVar) // no `null` form — see renderBytes
 		return
@@ -6542,7 +6407,7 @@ func renderStreamBytes(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	b.WriteString("}\n")
 }
 
-func renderStreamBytesValue(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamBytesValue(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar // stream-path uses s.Pos directly
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
@@ -6619,7 +6484,7 @@ sv, err = s.StringView(`+vArg(f)+`)
 	emitEmptyBytesNonNil(b, ref)
 }
 
-func renderStreamTime(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamTime(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
@@ -6654,7 +6519,7 @@ sv, err = s.StringView(`+vArg(f)+`)
 %[3]s`, ref, timeParseExpr(f.Format, layout, "sv"), chk)
 }
 
-func renderStreamDuration(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamDuration(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
@@ -6687,7 +6552,7 @@ sv, err = s.StringView(`+vArg(f)+`)
 
 // Stream mirrors of renderNetIP / renderNetipAddr / renderNetipPrefix: ""
 // is the zero value, null nils a net.IP.
-func renderStreamNetIP(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamNetIP(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
@@ -6708,11 +6573,11 @@ if %[1]s == nil { return result, ggen.NewParseErr(%[3]s, s.Offset(), &net.ParseE
 	}
 }
 
-func renderStreamNetipAddr(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamNetipAddr(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	renderStreamNetipParse(b, f, ref, "netip.ParseAddr", "netip.Addr{}")
 }
 
-func renderStreamNetipPrefix(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamNetipPrefix(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	renderStreamNetipParse(b, f, ref, "netip.ParsePrefix", "netip.Prefix{}")
 }
 
@@ -6722,7 +6587,7 @@ func renderStreamNetipPrefix(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 // FAILURE value keeps the input string verbatim (parseAddrError.in, quoted
 // by Error()), so the error branch re-parses a detached copy — the buffer
 // is recyclable the moment decode returns.
-func renderStreamNetipParse(b *bytes.Buffer, f FieldInfo, ref, parse, zero string) {
+func renderStreamNetipParse(b *bytes.Buffer, f model.FieldInfo, ref, parse, zero string) {
 	field := fieldLit(f)
 	fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
@@ -6736,7 +6601,7 @@ if err != nil { _, err = %[2]s(strings.Clone(sv)); return result, ggen.NewParseE
 // renderStreamRawJSON copies the captured span into the field (CaptureValue
 // returns a buffer alias, so the append detaches it). The receiver's backing is
 // reused when it has the room, matching the bytes path's copy shape.
-func renderStreamRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamRawJSON(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar
 	chk := streamErrCheck(fieldLit(f))
 	check := "err = ggen.CheckUTF8(span)\n%[2]s"
@@ -6748,7 +6613,7 @@ func renderStreamRawJSON(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 `, ref, chk)
 }
 
-func renderStreamURL(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamURL(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar
 	chk := streamErrCheck(fieldLit(f))
 	fmt.Fprintf(b, `var sv string
@@ -6758,7 +6623,7 @@ sv, err = s.String(`+vArg(f)+`)
 `, ref, chk)
 }
 
-func renderStreamBigInt(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamBigInt(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
@@ -6769,7 +6634,7 @@ func renderStreamBigInt(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 `, ref, chk, field)
 }
 
-func renderStreamBigFloat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamBigFloat(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
@@ -6782,7 +6647,7 @@ sv, err = s.StringView(`+vArg(f)+`)
 `, ref, chk, field)
 }
 
-func renderStreamBigRat(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamBigRat(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
@@ -6796,7 +6661,7 @@ sv, err = s.StringView(`+vArg(f)+`)
 }
 
 // renderStreamSQLNull is the streaming counterpart of renderSQLNull.
-func renderStreamSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamSQLNull(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar
 	if f.SQLNullInner != nil {
 		inner := sqlNullInnerField(f)
@@ -6823,7 +6688,7 @@ func renderStreamSQLNull(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 `, ref, sqlTypeName(f.GoType), body, valExpr, rm, field, rmKi)
 		return
 	}
-	spec, ok := SQLNullSpec(f.GoType)
+	spec, ok := model.SQLNullSpec(f.GoType)
 	if !ok {
 		return
 	}
@@ -6842,35 +6707,35 @@ nv, err = s.%[2]s(%[4]s)
 %[3]s`, typ, method, chk, args)
 	}
 	switch spec.Inner {
-	case KindString:
+	case model.KindString:
 		scanTmpl("string", "String")
 		valExpr = "nv"
-	case KindBool:
+	case model.KindBool:
 		scanTmpl("bool", "Bool")
 		valExpr = "nv"
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64:
 		scanTmpl("int64", "Int64")
 		valExpr = "nv"
 		if spec.Type != "int64" {
 			inner.WriteString(narrowIntGuard("nv", spec.Type, overflow))
 			valExpr = fmt.Sprintf("%s(nv)", spec.Type)
 		}
-	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64:
 		scanTmpl("uint64", "Uint64")
 		valExpr = "nv"
 		if spec.Type != "uint64" {
 			inner.WriteString(narrowIntGuard("nv", spec.Type, overflow))
 			valExpr = fmt.Sprintf("%s(nv)", spec.Type)
 		}
-	case KindFloat32, KindFloat64:
+	case model.KindFloat32, model.KindFloat64:
 		prim := kindPrimitiveName(spec.Inner)
 		scanTmpl(prim, floatScanFn(spec.Inner))
 		valExpr = "nv"
 		if spec.Type != prim {
 			valExpr = fmt.Sprintf("%s(nv)", spec.Type)
 		}
-	case KindTime:
-		tf := FieldInfo{JSONName: f.JSONName, Format: f.Format,
+	case model.KindTime:
+		tf := model.FieldInfo{JSONName: f.JSONName, Format: f.Format,
 			Copy: f.Copy, AllowInvalidUTF8: f.AllowInvalidUTF8, MultiErr: f.MultiErr}
 		inner.WriteString("var nv time.Time\n")
 		renderStreamTime(&inner, tf, "nv", posVar)
@@ -6892,7 +6757,7 @@ nv, err = s.%[2]s(%[4]s)
 	_ = chk
 }
 
-func renderStreamAny(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamAny(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar
 	chk := streamErrCheck(fieldLit(f))
 	fn := "s.Any"
@@ -6908,7 +6773,7 @@ func renderStreamAny(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 // past that (stored keys, retained errors) must be cloned BEFORE ConsumeColon.
 // Every arm consumes the colon first, so a missing one is the grammar error
 // the bytes path reports and UnknownKeyError.Pos is the value head there too.
-func streamUnknownKey(s StructInfo, posVar string) string {
+func streamUnknownKey(s model.StructInfo, posVar string) string {
 	_ = posVar
 	if embedded := s.EmbedField(); embedded.Embed {
 		chk := streamErrCheck("ownKey")
@@ -6917,17 +6782,17 @@ err = s.ConsumeColon()
 %[3]sif result.%[1]s == nil { result.%[1]s = make(%[2]s) }
 `, embedded.GoName, embedded.GoType, chk)
 		switch embedded.ElemKind {
-		case KindAny:
+		case model.KindAny:
 			anyFn := "s.Any"
 			if s.UseNumber {
 				anyFn = "s.AnyNumber"
 			}
 			return prelude + fmt.Sprintf(`result.%[1]s[ownKey], err = %[2]s(%[4]s)
 %[3]s`, embedded.GoName, anyFn, chk, vArg(embedded))
-		case KindString:
+		case model.KindString:
 			return prelude + fmt.Sprintf(`result.%[1]s[ownKey], err = s.String(`+vArg(embedded)+`)
 %[2]s`, embedded.GoName, chk)
-		case KindStruct:
+		case model.KindStruct:
 			if isGenerated(embedded.ElemType) {
 				return prelude + fmt.Sprintf(`var entry %[1]s
 entry, err = entry.`+streamDecodeCallFor(embedded.ElemType)+`
@@ -6962,7 +6827,7 @@ err = s.ConsumeColon()
 `, chk)
 }
 
-func renderStreamStringTag(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamStringTag(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar // stream-path uses s.Pos directly
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
@@ -6971,7 +6836,7 @@ func renderStreamStringTag(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
 	b.WriteString("var sv string\n")
 	fmt.Fprintf(b, "sv, err = s.KeyView(%s)\n", vArg(f))
 	b.WriteString(chk)
-	if f.Kind == KindBool {
+	if f.Kind == model.KindBool {
 		fmt.Fprintf(b, `switch sv {
 case "true": %[1]s = true
 case "false": %[1]s = false
@@ -6983,12 +6848,12 @@ default: return result, ggen.NewParseErr(%[2]s, s.Offset(), ggen.ErrBadBool)
 	renderQuotedNumber(b, f, ref, fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ", field))
 }
 
-func renderStreamField(f FieldInfo, ref, posVar string) string {
+func renderStreamField(f model.FieldInfo, ref, posVar string) string {
 	// Converter variant FIRST, exactly like renderField: the converter's
 	// result already has the field's (possibly named) type, so routing a
 	// named-primitive field through the underlying-typed temp below would
 	// assign `cv` (type T) into a temp of T's underlying type.
-	if fieldHasConverter(f) {
+	if model.FieldHasConverter(f) {
 		out := renderVariantDispatchStream(f, ref, posVar)
 		if !f.NoValidate {
 			var vb bytes.Buffer
@@ -7031,7 +6896,7 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 	// See renderField — `,string` on bool is a no-op to match jsonv2. Pointer
 	// fields fall through to the pointer peel below, whose leaf recursion
 	// re-enters here (the string-tag branch on `*T` emits broken code).
-	if f.String && f.Kind != KindBool && !f.Pointer {
+	if f.String && f.Kind != model.KindBool && !f.Pointer {
 		var out bytes.Buffer
 		nz := nullZeroApplies(f)
 		flat := nz && nullBreakOK(f)
@@ -7054,14 +6919,14 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 	if f.Pointer {
 		// See renderField: custom @Func rules want the pointer, built-ins the
 		// leaf, and a pipe mixing the two runs as one ordered pass.
-		builtinV, customV := partitionCustomValidation(f.Validation)
-		builtinM, customM := partitionCustomMods(f.Mods)
-		builtinSteps, customSteps := splitCustomSteps(fieldPipe(f))
+		builtinV, customV := model.PartitionCustomValidation(f.Validation)
+		builtinM, customM := model.PartitionCustomMods(f.Mods)
+		builtinSteps, customSteps := model.SplitCustomSteps(fieldPipe(f))
 		ordered := !f.NoValidate && len(builtinSteps) > 0 && len(customSteps) > 0
 		rm := streamReadMore(field, "0", false, headSentinel(f))
 		rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
 		// Decode-into-receiver, any depth — see renderField.
-		depth, leafType := pointerDepth(f.GoType)
+		depth, leafType := model.PointerDepth(f.GoType)
 		leaf := f
 		leaf.Pointer = false
 		leaf.PointeeType = ""
@@ -7152,60 +7017,60 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 		emitStreamNullZero(b, ref, zeroLit(f.GoType, f.Kind), field, flat, headSentinel(f))
 	}
 	switch f.Kind {
-	case KindString:
+	case model.KindString:
 		primScan("String")
-	case KindBool:
+	case model.KindBool:
 		primScan("Bool")
-	case KindInt, KindInt8, KindInt16, KindInt32:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32:
 		widenedScan("int64", "iv", "Int64", f.GoType)
-	case KindInt64:
+	case model.KindInt64:
 		primScan("Int64")
-	case KindUint, KindUint8, KindUint16, KindUint32:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32:
 		widenedScan("uint64", "uv", "Uint64", f.GoType)
-	case KindUint64:
+	case model.KindUint64:
 		primScan("Uint64")
-	case KindFloat32:
+	case model.KindFloat32:
 		primScan("Float32")
-	case KindFloat64:
+	case model.KindFloat64:
 		primScan("Float64")
-	case KindStruct:
+	case model.KindStruct:
 		if isGenerated(f.GoType) {
 			fmt.Fprintf(b, `%[1]s, err = %[1]s.`+streamDecodeCallFor(f.GoType)+`
 %[2]s`, ref, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, false, ""))
 		} else {
 			b.WriteString(renderCrossPkgStructStreamDecode(f, ref, posVar))
 		}
-	case KindSlice:
+	case model.KindSlice:
 		renderStreamSlice(b, f, ref, posVar)
-	case KindArray:
+	case model.KindArray:
 		emitStreamSliceRead(b, f, ref, posVar, 0)
-	case KindMap:
+	case model.KindMap:
 		renderStreamMap(b, f, ref, posVar)
-	case KindBytes:
+	case model.KindBytes:
 		renderStreamBytes(b, f, ref, posVar)
-	case KindTime:
+	case model.KindTime:
 		renderStreamTime(b, f, ref, posVar)
-	case KindDuration:
+	case model.KindDuration:
 		renderStreamDuration(b, f, ref, posVar)
-	case KindNetIP:
+	case model.KindNetIP:
 		renderStreamNetIP(b, f, ref, posVar)
-	case KindNetipAddr:
+	case model.KindNetipAddr:
 		renderStreamNetipAddr(b, f, ref, posVar)
-	case KindNetipPrefix:
+	case model.KindNetipPrefix:
 		renderStreamNetipPrefix(b, f, ref, posVar)
-	case KindRawJSON:
+	case model.KindRawJSON:
 		renderStreamRawJSON(b, f, ref, posVar)
-	case KindURL:
+	case model.KindURL:
 		renderStreamURL(b, f, ref, posVar)
-	case KindBigInt:
+	case model.KindBigInt:
 		renderStreamBigInt(b, f, ref, posVar)
-	case KindBigFloat:
+	case model.KindBigFloat:
 		renderStreamBigFloat(b, f, ref, posVar)
-	case KindBigRat:
+	case model.KindBigRat:
 		renderStreamBigRat(b, f, ref, posVar)
-	case KindSQLNull:
+	case model.KindSQLNull:
 		renderStreamSQLNull(b, f, ref, posVar)
-	case KindAny:
+	case model.KindAny:
 		renderStreamAny(b, f, ref, posVar)
 	default:
 		fmt.Fprintf(b, `err = s.SkipValue()
@@ -7220,14 +7085,14 @@ func renderStreamField(f FieldInfo, ref, posVar string) string {
 	return b.String()
 }
 
-func renderStreamSlice(b *bytes.Buffer, f FieldInfo, ref, posVar string) {
+func renderStreamSlice(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	emitStreamSliceRead(b, f, ref, posVar, 0)
 }
 
 // emitStreamSliceRead is the streaming counterpart of emitByteSliceRead.
-func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth int) {
+func emitStreamSliceRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string, depth int) {
 	_ = posVar // stream-path uses s.Pos directly
-	isArray := f.Kind == KindArray
+	isArray := f.Kind == model.KindArray
 	arrayN := f.ArrayLen
 	// Multi-level pointer element — same cascade as the bytes path; slab is
 	// depth-1 only.
@@ -7292,7 +7157,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 		b.WriteString("}\n")
 	}
 	// Generated struct elems decode IN PLACE — see emitByteSliceRead.
-	directStruct := f.ElemKind == KindStruct && isGenerated(f.ElemType)
+	directStruct := f.ElemKind == model.KindStruct && isGenerated(f.ElemType)
 	b.WriteString("for s.Bytes()[s.Pos] != ']' {\n")
 	if isArray {
 		// Excess element — see emitByteSliceRead.
@@ -7339,7 +7204,7 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 	case f.ElemPointer:
 		emitElemGrow(b, slabVar, f, directStruct)
 		target = fmt.Sprintf("%s[len(%s)-1]", slabVar, slabVar)
-	case f.ElemKind == KindSlice:
+	case f.ElemKind == model.KindSlice:
 		// Reslice within cap to keep the carried header — see emitByteSliceRead.
 		fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, nil) }\n", dst)
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
@@ -7369,13 +7234,13 @@ func emitStreamSliceRead(b *bytes.Buffer, f FieldInfo, dst, posVar string, depth
 			f.ElemType, f.ElemKind = prim, kind
 		}
 		switch f.ElemKind {
-		case KindString:
+		case model.KindString:
 			fmt.Fprintf(b, `%s, err = s.String(%s)
 %s`, target, vArg(f), chk)
-		case KindBool:
+		case model.KindBool:
 			fmt.Fprintf(b, `%s, err = s.Bool()
 %s`, target, chk)
-		case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
+		case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64:
 			if f.ElemType == "int64" {
 				fmt.Fprintf(b, `%s, err = s.Int64()
 %s`, target, chk)
@@ -7386,7 +7251,7 @@ iv, err = s.Int64()
 %[3]s%[4]s%[1]s = %[2]s(iv)
 `, target, f.ElemType, chk, g)
 			}
-		case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+		case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64:
 			if f.ElemType == "uint64" {
 				fmt.Fprintf(b, `%s, err = s.Uint64()
 %s`, target, chk)
@@ -7397,10 +7262,10 @@ uv, err = s.Uint64()
 %[3]s%[4]s%[1]s = %[2]s(uv)
 `, target, f.ElemType, chk, g)
 			}
-		case KindFloat32, KindFloat64:
+		case model.KindFloat32, model.KindFloat64:
 			fmt.Fprintf(b, `%s, err = s.%s()
 %s`, target, floatScanFn(f.ElemKind), chk)
-		case KindStruct:
+		case model.KindStruct:
 			if directStruct {
 				fmt.Fprintf(b, `%[1]s, err = %[1]s.`+streamDecodeCallFor(f.ElemType)+`
 %[2]s`, target, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, false, ""))
@@ -7409,9 +7274,9 @@ uv, err = s.Uint64()
 				// this path emitted nothing at all.
 				b.WriteString(renderCrossPkgStructStreamDecode(elemAsField(f), target, ""))
 			}
-		case KindSlice, KindArray:
+		case model.KindSlice, model.KindArray:
 			inner := peelSliceField(f)
-			if inner.Kind == KindSlice && len(f.ElemMods) == 0 {
+			if inner.Kind == model.KindSlice && len(f.ElemMods) == 0 {
 				// `null` elem → nil slot handled HERE so the inner body isn't
 				// nested in an else (mirrors the []*T nil-elem fast path).
 				fmt.Fprintf(b, `%[2]sif s.Bytes()[s.Pos] == 'n' {
@@ -7439,7 +7304,7 @@ break
 			// for backing reuse); publish with `target = rowN`. See emitByteSliceRead.
 			row := fmt.Sprintf("row%d", depth)
 			fmt.Fprintf(b, "%s := %s\n", row, target)
-			if inner.Kind == KindSlice {
+			if inner.Kind == model.KindSlice {
 				fmt.Fprintf(b, "if %[1]s != nil { %[1]s = %[1]s[:0] }\n", row)
 			}
 			emitStreamSliceRead(b, inner, row, "s.Pos", depth+1)
@@ -7481,4 +7346,50 @@ if s.Bytes()[s.Pos] != ']' { return result, ggen.NewParseErr(%[2]s, s.Offset(), 
 	if !isArray && !flat && !f.NullDone {
 		b.WriteString("}\n") // close else (null-check)
 	}
+}
+
+// generatedTypes is the set of struct names that this generation pass is
+// emitting code for. renderReadStruct / renderAppendValue consult it to decide
+// whether to emit a direct DecodeFrom/AppendJSON call or a jsonv2 fallback
+// (for cross-package / unannotated types).
+var generatedTypes map[string]struct{}
+
+// generatedFields carries each object-shaped generated struct's fields
+// alongside generatedTypes (aliases stay out — their methods delegate), so an
+// emitter can ask what a value type OWNS — whether decoding into a carried
+// value would recycle any allocation, or only overwrite scalars — and whether
+// a nested struct can encode as `{}`. Same lifetime as generatedTypes.
+var generatedFields map[string][]model.FieldInfo
+
+// namedKinds maps every named type in the pass whose underlying type is a
+// primitive to that primitive's kind ("Count" → KindInt) — both the ones
+// carrying `//ggen:generate` (which get a full method surface, so their FIELD
+// occurrences report KindStruct) and plain unannotated ones the user never
+// asked ggen about. Rule/mod codegen consults it through effectiveKind so the
+// checks compile and cast through the underlying. Struct/container aliases are
+// absent.
+var namedKinds map[string]model.TypeKind
+
+// aliasCodegen records the codegen-shaping flags each ANNOTATED primitive alias
+// was generated with. A field of such a type is decoded inline (scan the
+// underlying primitive, convert at the assign) instead of calling the alias's
+// own methods — but only when the alias would have emitted the same code the
+// inline path does. `//ggen:generate htmlescape type HtmlString string` is the
+// documented way to escape one type and not the rest, and `copy` /
+// `allowinvalidutf8` likewise change what a string decode emits; inlining those
+// with the PARENT's flags would silently drop the alias's behaviour.
+type aliasCodegen struct {
+	HTMLEscape       bool
+	Copy             bool
+	AllowInvalidUTF8 bool
+	NoValidate       bool
+}
+
+var aliasFlags map[string]aliasCodegen
+
+// isGenerated reports whether name is a struct in the current generation pass.
+// Small wrapper to keep call sites readable.
+func isGenerated(name string) bool {
+	_, ok := generatedTypes[name]
+	return ok
 }

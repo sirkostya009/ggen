@@ -1,0 +1,8 @@
+{
+  "name": "ggen-valibot-testdata",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "valibot": "*"
+  }
+}

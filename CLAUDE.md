@@ -5,7 +5,9 @@ byte scan over the caller's `[]byte` or `*ggen.Stream`; the bytes path aliases
 input via `unsafe.String` — no copy, no tokens, no AST.
 
 This file is the **project map + repo-wide conventions**. The CLI / codegen
-surface and the _why_ behind generated-code shape live in `cli/CLAUDE.md`;
+surface, the tag grammar the parser implements, and the _why_ behind
+generated-code shape live in `cli/CLAUDE.md`; the `gen` module (parser
+library + the cross-language export it exists for) in `gen/CLAUDE.md`;
 runtime internals live in the `.claude/{decode,encode,scan,validation}.md`
 area docs, benchmarks and integration-test conventions in those modules'
 CLAUDE.md. This is NOT the user-facing doc — that is `README.md` / `SKILL.md`.
@@ -13,22 +15,31 @@ CLAUDE.md. This is NOT the user-facing doc — that is `README.md` / `SKILL.md`.
 ## Repo layout
 
 ```
-schema/
-├── go.work             ← workspace tying all four modules together
+ggen/
+├── go.work             ← workspace tying all modules together
+├── package.json        ← npm workspace: the pinned typescript/zod/valibot the
+│                         JavaScript lanes of gen/ run and type-check against
 ├── *.go                ← runtime library, single root package ggen (github.com/sirkostya009/ggen)
 │                         area docs: .claude/{decode,encode,scan,validation}.md
-├── cli/                → see cli/CLAUDE.md            ← CLI module / generator (github.com/sirkostya009/ggen/cli, package main)
+├── gen/                → see gen/CLAUDE.md            ← library module (github.com/sirkostya009/ggen/gen)
+│   ├── SKILL.md        ← user-facing doc for the export library + its emitters
+│   └── model/          ← the parser: annotations, tags, go/types resolution
+├── cli/                → see cli/CLAUDE.md            ← the ggen binary (github.com/sirkostya009/ggen/cli, package main)
 ├── integrationtests/   → see integrationtests/CLAUDE.md  (own Go module)
 ├── bench/              → see bench/CLAUDE.md             (own Go module)
 └── .claude/backlog.md  ← ideas worth pursuing, tried-and-rejected, maybe-someday
 ```
 
-Three modules under one `go.work` plus the root: root (`github.com/sirkostya009/ggen`
+Four modules under one `go.work` plus the root: root (`github.com/sirkostya009/ggen`
 — the whole runtime as one package `ggen`, no external deps; decode/encode/scan/
-validation survive only as file-name and area-doc groupings), `cli/` (the
-generator, depends on `golang.org/x/tools`), `bench/`, `integrationtests/`. The
-CLI doesn't import the runtime package — it emits its import path as a string
+validation survive only as file-name and area-doc groupings), `gen/` (the
+parser as a library, depends on `golang.org/x/tools`), `cli/` (the Go emitter
+over `gen/model`), `bench/`, `integrationtests/`. Neither `gen` nor `cli`
+imports the runtime package — the emitter writes its import path as a string
 literal into generated code, qualifying every runtime call as `ggen.`.
+`cli/go.mod` carries `replace github.com/sirkostya009/ggen/gen => ../gen` until
+`gen` is tagged; `go install …/cli@latest` refuses a module with a `replace`,
+so the tag has to land first.
 
 ## Conventions
 
@@ -56,8 +67,8 @@ go generate work
 The binary builds from the `cli/` module to project-root `./ggen` (so the
 `../ggen` references in `bench/` and `integrationtests/` resolve). ggen is
 module-scoped — `./...` visits only the invoked module's packages; `cli/`,
-`bench/`, `integrationtests/` each carry their own `go.mod` and must be regen'd
-from inside (one invocation per module). In `bench/` and `integrationtests/`,
+`gen/`, `bench/`, `integrationtests/` each carry their own `go.mod` and must be
+regen'd from inside (one invocation per module). In `bench/` and `integrationtests/`,
 each annotated source carries `//go:generate ../ggen $GOFILE` and emits a
 sibling `<file>_ggen.go` (bench) / `<file>_ggen_test.go` (integrationtests).
 
@@ -71,6 +82,11 @@ propagate to all three in the same commit:
 - `cli/CLAUDE.md` — implementation-detail doc (the _why_ behind CLI/codegen)
 - `README.md` — user-facing surface (_what_/_how_)
 - `SKILL.md` — user-facing surface (_what_/_how_)
+
+**The `gen` module has its own pair.** A change to the export library or an
+emitter (core API, lowering rule, emitter option, what a target renders) moves
+`gen/CLAUDE.md` (the _why_) and `gen/SKILL.md` (the user-facing _what_/_how_)
+together. The three docs above cover the CLI and the runtime, not `gen`.
 
 Everything else routes to exactly one doc:
 

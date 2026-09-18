@@ -4,5 +4,6 @@ use (
 	.
 	./bench
 	./cli
+	./gen
 	./integrationtests
 )

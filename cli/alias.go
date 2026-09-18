@@ -3,18 +3,20 @@ package main
 import (
 	"bytes"
 	"fmt"
+
+	"github.com/sirkostya009/ggen/gen/model"
 )
 
 // renderAliasDecode emits the body of DecodeFrom for a primitive alias
 // (e.g. `type HtmlString string`), a struct alias (`type LocalUUID
 // uuid.UUID`), or a container alias (`type Tags []string`,
 // `type Lookup map[string]int`, `type Tuple [3]int`).
-func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
-	if s.AliasKind == KindStruct {
+func renderAliasDecode(b *bytes.Buffer, s model.StructInfo) {
+	if s.AliasKind == model.KindStruct {
 		renderAliasStructDecode(b, s, false)
 		return
 	}
-	if s.AliasKind == KindSlice || s.AliasKind == KindMap || s.AliasKind == KindArray || s.AliasKind == KindBytes {
+	if s.AliasKind == model.KindSlice || s.AliasKind == model.KindMap || s.AliasKind == model.KindArray || s.AliasKind == model.KindBytes {
 		renderAliasContainerDecode(b, s, false)
 		return
 	}
@@ -22,7 +24,7 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 	// Leading whitespace is legal before any top-level value.
 	inlineSkipWS(b, "i")
 	switch s.AliasKind {
-	case KindString:
+	case model.KindString:
 		// copy: Detach clones iff the scan result aliases data (escape-path
 		// results already own their bytes) — same shape as struct fields.
 		detach := ""
@@ -30,15 +32,15 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 			detach = "v = ggen.Detach(v, data)\n"
 		}
 		fmt.Fprintf(b, "var v string\nv, i, err = "+scanStringFn+"(data, i, "+vArgS(s)+")\n%s\n%sresult = %s(v)\n", wrap, detach, s.Name)
-	case KindBool:
+	case model.KindBool:
 		fmt.Fprintf(b, "var v bool\nv, i, err = ggen.Bool(data, i)\nif err != nil { i = ggen.BoolEnd(data, i) }\n%s\nresult = %s(v)\n", wrap, s.Name)
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64:
 		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, i, ggen.NewParseErr("", i, ggen.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v int64\nv, i, err = ggen.Int64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
-	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64:
 		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, i, ggen.NewParseErr("", i, ggen.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v uint64\nv, i, err = ggen.Uint64(data, i)\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
-	case KindFloat32, KindFloat64:
+	case model.KindFloat32, model.KindFloat64:
 		fmt.Fprintf(b, "var v %s\nv, i, err = ggen.%s(data, i)\n%s\nresult = %s(v)\n", s.AliasUnderlying, floatScanFn(s.AliasKind), wrap, s.Name)
 	}
 	b.WriteString("return result, i, nil\n")
@@ -46,59 +48,59 @@ func renderAliasDecode(b *bytes.Buffer, s StructInfo) {
 
 // renderAliasStreamDecode is the io.Reader counterpart of
 // renderAliasDecode.
-func renderAliasStreamDecode(b *bytes.Buffer, s StructInfo) {
-	if s.AliasKind == KindStruct {
+func renderAliasStreamDecode(b *bytes.Buffer, s model.StructInfo) {
+	if s.AliasKind == model.KindStruct {
 		renderAliasStructDecode(b, s, true)
 		return
 	}
-	if s.AliasKind == KindSlice || s.AliasKind == KindMap || s.AliasKind == KindArray || s.AliasKind == KindBytes {
+	if s.AliasKind == model.KindSlice || s.AliasKind == model.KindMap || s.AliasKind == model.KindArray || s.AliasKind == model.KindBytes {
 		renderAliasContainerDecode(b, s, true)
 		return
 	}
 	const wrap = `if err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }`
 	b.WriteString("err = s.SkipSpace()\n" + wrap + "\n")
 	switch s.AliasKind {
-	case KindString:
+	case model.KindString:
 		fmt.Fprintf(b, "var v string\nv, err = s.String("+vArgS(s)+")\n%s\nresult = %s(v)\n", wrap, s.Name)
-	case KindBool:
+	case model.KindBool:
 		fmt.Fprintf(b, "var v bool\nv, err = s.Bool()\n%s\nresult = %s(v)\n", wrap, s.Name)
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64:
 		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, ggen.NewParseErr("", s.Offset(), ggen.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v int64\nv, err = s.Int64()\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
-	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64:
 		guard := narrowIntGuard("v", s.AliasUnderlying, `return result, ggen.NewParseErr("", s.Offset(), ggen.ErrNumberOverflow)`)
 		fmt.Fprintf(b, "var v uint64\nv, err = s.Uint64()\n%s\n%sresult = %s(v)\n", wrap, guard, s.Name)
-	case KindFloat32, KindFloat64:
+	case model.KindFloat32, model.KindFloat64:
 		fmt.Fprintf(b, "var v %s\nv, err = s.%s()\n%s\nresult = %s(v)\n", s.AliasUnderlying, floatScanFn(s.AliasKind), wrap, s.Name)
 	}
 	b.WriteString("return result, nil\n")
 }
 
 // renderAliasSize returns an upper-bound JSONSize body for the alias.
-func renderAliasSize(s StructInfo) string {
+func renderAliasSize(s model.StructInfo) string {
 	switch s.AliasKind {
-	case KindString:
+	case model.KindString:
 		// Worst-case escapes (×2; ×6 under htmlescape — `<` → <) + 2 quotes.
 		return fmt.Sprintf("return len(string(s))*%d + 2\n", strMult(s.HTMLEscape))
-	case KindBool:
+	case model.KindBool:
 		return "return 5\n" // "false"
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64:
 		return "return 20\n" // -9223372036854775808
-	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64:
 		return "return 20\n" // 18446744073709551615
-	case KindFloat32, KindFloat64:
+	case model.KindFloat32, model.KindFloat64:
 		return fmt.Sprintf("return %d\n", sizeFloat)
-	case KindBytes:
+	case model.KindBytes:
 		// `[]byte` base64 expansion is ~4/3 + padding + quotes
 		return "return len(s)*4/3 + 8\n"
-	case KindSlice, KindMap, KindArray:
+	case model.KindSlice, model.KindMap, model.KindArray:
 		// Same per-kind machinery as a struct FIELD of this shape — the old
 		// flat 1024 under-reserved any real container (growth chain past it)
 		// and over-reserved small ones.
 		f := aliasContainerField(s)
 		n, code := sizeContrib(f, "s")
 		return fmt.Sprintf("size := %d\n%sreturn size\n", n, code)
-	case KindStruct:
+	case model.KindStruct:
 		switch {
 		case s.AliasIface.AppendJSON && s.AliasIface.JSONSize:
 			// ggen-method delegation pairs with the underlying's real bound.
@@ -117,30 +119,30 @@ func renderAliasSize(s StructInfo) string {
 
 // renderAliasAppendJSON emits the body of AppendJSON for a primitive
 // or struct alias.
-func renderAliasAppendJSON(b *bytes.Buffer, s StructInfo) {
-	if s.AliasKind == KindStruct {
+func renderAliasAppendJSON(b *bytes.Buffer, s model.StructInfo) {
+	if s.AliasKind == model.KindStruct {
 		renderAliasStructAppendJSON(b, s)
 		return
 	}
-	if s.AliasKind == KindSlice || s.AliasKind == KindMap || s.AliasKind == KindArray || s.AliasKind == KindBytes {
+	if s.AliasKind == model.KindSlice || s.AliasKind == model.KindMap || s.AliasKind == model.KindArray || s.AliasKind == model.KindBytes {
 		renderAliasContainerAppendJSON(b, s)
 		return
 	}
 	switch s.AliasKind {
-	case KindString:
+	case model.KindString:
 		// Opening quote here; the helper writes the body + closing quote.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s(dst, string(s))\nreturn dst, nil\n", appendStrFn(s.HTMLEscape))
-	case KindBool:
+	case model.KindBool:
 		b.WriteString("return strconv.AppendBool(dst, bool(s)), nil\n")
-	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64:
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64:
 		b.WriteString("return strconv.AppendInt(dst, int64(s), 10), nil\n")
-	case KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
+	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64:
 		b.WriteString("return strconv.AppendUint(dst, uint64(s), 10), nil\n")
-	case KindFloat32:
+	case model.KindFloat32:
 		// ggen.AppendFloat: stdlib-parity format, errors on NaN/Inf instead
 		// of emitting invalid JSON — same routing as struct float fields.
 		b.WriteString("return ggen.AppendFloat(dst, float64(s), 32)\n")
-	case KindFloat64:
+	case model.KindFloat64:
 		b.WriteString("return ggen.AppendFloat(dst, float64(s), 64)\n")
 	}
 }
@@ -150,7 +152,7 @@ func renderAliasAppendJSON(b *bytes.Buffer, s StructInfo) {
 // ggen-shaped DecodeFrom → JSONUnmarshaler (SkipValue + UnmarshalJSON) →
 // TextUnmarshaler (ggen.String + UnmarshalText). Drives a fresh `u` of the
 // underlying type, then casts back.
-func renderAliasStructDecode(b *bytes.Buffer, s StructInfo, stream bool) {
+func renderAliasStructDecode(b *bytes.Buffer, s model.StructInfo, stream bool) {
 	switch {
 	case s.AliasIface.ByteDecoder && !stream:
 		// Cyclic underlying: thread depth through the delegation, else an
@@ -232,7 +234,7 @@ return result, tj, nil
 // Same delegation ladder as decode but for the encode direction:
 // AppendJSON > MarshalJSON > AppendText (Go 1.24+, zero alloc) >
 // MarshalText (one alloc — the lib's []byte return).
-func renderAliasStructAppendJSON(b *bytes.Buffer, s StructInfo) {
+func renderAliasStructAppendJSON(b *bytes.Buffer, s model.StructInfo) {
 	switch {
 	case s.AliasIface.AppendJSON:
 		fmt.Fprintf(b, "u := %s(s)\nreturn u.AppendJSON(dst)\n", s.AliasUnderlying)
@@ -268,7 +270,7 @@ return dst, nil
 // stamped on — the alias field is built at parse time, BEFORE annotation/CLI
 // flag propagation (which only walks Fields), so reading it raw silently
 // dropped copy/htmlescape/allowinvalidutf8/multierr on container aliases.
-func aliasContainerField(s StructInfo) FieldInfo {
+func aliasContainerField(s model.StructInfo) model.FieldInfo {
 	f := s.AliasField
 	f.GoType = s.Name
 	f.MultiErr = s.MultiErr
@@ -285,16 +287,16 @@ func aliasContainerField(s StructInfo) FieldInfo {
 // field-level emitters with `result` as ref; s.AliasField carries the shape.
 // All the slice/map/array machinery (empty-peek, hint-len cap, slab, dive)
 // carries over.
-func renderAliasContainerDecode(b *bytes.Buffer, s StructInfo, stream bool) {
+func renderAliasContainerDecode(b *bytes.Buffer, s model.StructInfo, stream bool) {
 	// Receiver IS the container — reset before decode so we don't append over
 	// carried-in data. KindArray has no nil state (every slot overwritten).
 	switch s.AliasKind {
-	case KindSlice, KindBytes:
+	case model.KindSlice, model.KindBytes:
 		// A folded [N]byte is still an array — no nil state, not resliceable.
 		if s.AliasField.ArrayLen == 0 {
 			b.WriteString("if result != nil { result = result[:0] }\n")
 		}
-	case KindMap:
+	case model.KindMap:
 		b.WriteString("if result != nil { clear(result) }\n")
 	}
 	f := aliasContainerField(s)
@@ -311,13 +313,13 @@ func renderAliasContainerDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 	// (null / array close) instead of falling through, so the trailing return is
 	// dropped. Stream path keeps the trailing return.
 	switch s.AliasKind {
-	case KindSlice:
+	case model.KindSlice:
 		if stream {
 			renderStreamSlice(b, f, "result", posVar)
 		} else {
 			emitByteSliceRead(b, f, "result", posVar, 0, true)
 		}
-	case KindArray:
+	case model.KindArray:
 		// emit{Byte,Stream}SliceRead handle both KindSlice and
 		// KindArray internally via f.Kind / f.ArrayLen.
 		if stream {
@@ -325,13 +327,13 @@ func renderAliasContainerDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 		} else {
 			emitByteSliceRead(b, f, "result", posVar, 0, true)
 		}
-	case KindMap:
+	case model.KindMap:
 		if stream {
 			renderStreamMap(b, f, "result", posVar)
 		} else {
 			renderMap(b, f, "result", posVar, true)
 		}
-	case KindBytes:
+	case model.KindBytes:
 		if stream {
 			// The other stream kinds reach their first byte through
 			// ArrayOpen/ObjectOpen; renderStreamBytes indexes s.Pos directly.
@@ -345,26 +347,26 @@ func renderAliasContainerDecode(b *bytes.Buffer, s StructInfo, stream bool) {
 	// bytes KindBytes need the trailing return.
 	if stream {
 		b.WriteString("return result, nil\n")
-	} else if s.AliasKind == KindBytes {
+	} else if s.AliasKind == model.KindBytes {
 		b.WriteString("return result, i, nil\n")
 	}
 }
 
 // renderAliasContainerAppendJSON emits the encode body for slice/map/array
 // aliases via the field-level append helpers, with `s` (the receiver) as ref.
-func renderAliasContainerAppendJSON(b *bytes.Buffer, s StructInfo) {
+func renderAliasContainerAppendJSON(b *bytes.Buffer, s model.StructInfo) {
 	f := aliasContainerField(s)
 	// Same shared slot the struct body declares: a delegating element
 	// (nested ggen struct, marshaler alias) emits `dst, err = …`, and this
 	// path has no field loop to have declared it.
 	b.WriteString("var err error\n_ = err\n")
 	switch s.AliasKind {
-	case KindSlice, KindArray:
+	case model.KindSlice, model.KindArray:
 		// renderAppendSlice handles both via f.Kind / f.ArrayLen.
 		renderAppendSlice(b, f, "s")
-	case KindMap:
+	case model.KindMap:
 		renderAppendMap(b, f, "s")
-	case KindBytes:
+	case model.KindBytes:
 		renderAppendBytes(b, f, "s")
 	}
 	b.WriteString("return dst, nil\n")

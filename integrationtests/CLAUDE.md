@@ -29,7 +29,7 @@ Per-feature coverage:
 
 | File                    | What it covers                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `alias_test.go`         | Top-level type aliases — primitive, struct, slice/map/array, `[]byte`, `[N]byte` (base64 + strict length, same wire as a `[N]byte` field), leading whitespace across every alias shape, struct delegation tiers, single-alloc float budget, and element structs reached only through a container alias. Plus NAMED PRIMITIVES (`NamedPrims`, annotated and not): every rule resolves the underlying kind and casts through it — `oneof`, `eq`/`neq`, rune/substring/charset rules, `nullzero`. `R10IntroAlias`: an alias over an unannotated struct takes field introspection and resolves the underlying's `@Func` mods / validators AND `@Conv` variants in the ALIAS's package. |
+| `alias_test.go`         | Top-level type aliases — primitive, struct, slice/map/array, `[]byte`, `[N]byte` (base64 + strict length, same wire as a `[N]byte` field), leading whitespace across every alias shape, struct delegation tiers, single-alloc float budget, and element structs reached only through a container alias. Plus NAMED PRIMITIVES (`NamedPrims`, annotated and not): every rule resolves the underlying kind and casts through it — `oneof`, `eq`/`neq`, rune/substring/charset rules, `nullzero`. `R10IntroAlias`: an alias over an unannotated struct takes field introspection and resolves the underlying's `@Func` mods / validators AND `@Conv` variants in the ALIAS's package. `AliasTagsHost`: an omitted field of a named container type decodes to nil, like a plain slice. |
 | `any_test.go`           | `any` / `interface{}` fields; usenumber mode. `R10DurationAny`: a value whose POINTER type carries the marshaler (`big.Rat`/`big.Float`) still marshals through it inside an `any`, directly or nested, and a `time.Duration` in an `any` emits the same units string a `Duration` field does (jsonv2 parity). |
 | `copy_test.go`          | `-copy` / `//ggen:generate copy`: bytes-path decode copies strings / slice elems / map keys+values / `json.RawMessage` / any-embedded strings / `url.URL` components out of the input. Scribbles the source buffer after decode and asserts retained values survive (`AliasDoc` is the negative control proving the scribble is effective); deep-tree fingerprint check.                                                                                                                                       |
 | `custom_test.go`        | `@FuncName` / `@pkg.FuncName` validators and mods.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
@@ -79,6 +79,60 @@ both errors so a test compares sentinel and `Pos` directly:
 Use one of these rather than open-coding a `ggen.Stream`: the parity contract
 they pin (same sentinel, same `Pos`, any chunk size) is the reason the round-10
 error-position tests exist.
+
+### `gen/` — differential test for the schema emitters
+
+`gen/fixture.go` (+ `gen/other/`) is a NON-test fixture, because `gen.Load`
+skips test files; one `//go:generate ../../ggen ./...` line generates the
+whole tree, `./other` first, since a host generated before its cross-package
+dependency falls back to `encoding/json`. The fixture aims at coverage, not
+realism: `Scalars`, `Stdlib`, `Containers`, `Rules`, `Node`/`Pair` and `More`
+together carry every Go kind, every `format:`, every rule, a catch-all map, an
+embedded struct, a quoted JSON name, an integer enum, a `json:"-"` field and a
+pointer to a map.
+
+`TestDifferential` loads both packages, places every type's `In()` and `Out()`
+into zod and valibot files, type-checks them with `tsc --strict`, then tries
+every probe value at every field (and as every non-object value): the
+generated Go decoder and each input schema must agree on accept/reject,
+transformed values must match Go's, Go must read a schema's parsed value as it
+read the probe, and whatever Go accepts must marshal to JSON the output
+schemas accept. Disagreements a schema cannot avoid are the `divergences`
+predicates (JSON numbers, closed enum sets, converter checks); each must
+explain at least one case, so a stale one fails. Needs `node` on PATH and
+`npm ci` at the repo root, whose workspace pins zod, valibot and typescript
+for every JavaScript lane (`gen/js/package.json` is the member that names the
+three); skips otherwise.
+
+`TestDifferentialTS` type-checks every value Go accepts against the `ts` types
+themselves: an accepted input is assigned to the input type and Go's output to
+the output type, as a literal, so a tuple, an enum member and a narrowed
+string have to fit. A `tsc` error line maps back to its case. A probe carrying
+a key the input type does not declare is left out, because the literal
+assignment also runs TypeScript's excess-property check and an unknown key is
+the decoder's business. It takes its typescript from `GGEN_NODE_MODULES` or the
+root install, like the lane above.
+
+`TestDifferentialSwift` renders the Swift types of every fixture type and, for
+every case Go accepts, requires that the Swift output type decodes Go's output
+and re-encodes the same value, and that Go reads what the Swift input type
+re-encodes as the value it read directly. `TestDifferentialKotlin` does the
+same with kotlinx.serialization data classes and needs `GGEN_KOTLIN_HOME`.
+Both share `checkTypedLane`, with per-language `laneDivergence` lists that must
+each explain a disagreement: Swift's `Decimal` range and swift-foundation's
+refusal of a literal outside the target's float range (underflow included),
+kotlinx's refusal of a non-finite number, and neither language having a
+catch-all map. The re-encoding is compared by value with `sameValue`, which
+reads a key holding null as absent on both sides: Swift and Kotlin leave a nil
+property out where Go writes null, and Go reads an absent key as that same
+zero.
+
+`TestUnloaded` pins what a script sees when it loads a package whose
+ggen-generated dependency it did not load.
+
+`gen/test-toolchains.sh` installs every toolchain these tests need, runs them,
+and fails on a SKIPPED test: every lane skips when its toolchain is missing,
+so a skip under the script means a lane silently stopped running.
 
 ### `thirdparty/` and `thirdparty2/`
 

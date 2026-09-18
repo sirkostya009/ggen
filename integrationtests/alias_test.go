@@ -404,6 +404,32 @@ func TestAlias_Slice_Roundtrip(t *testing.T) {
 	}
 }
 
+//ggen:generate
+type AliasTagsHost struct {
+	Tags  AliasTags `json:"tags"`
+	Plain []string  `json:"plain"`
+}
+
+// An omitted field of a named container type decodes to its zero value, nil,
+// like a plain slice, so it marshals as null rather than [].
+func TestAlias_OmittedContainerFieldIsNil(t *testing.T) {
+	t.Parallel()
+	got, _, err := AliasTagsHost{}.DecodeFrom([]byte(`{}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var st ggen.Stream
+	sg, err := AliasTagsHost{}.DecodeFromStream(st.Reset(bytes.NewReader([]byte(`{}`)), nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, v := range []AliasTagsHost{got, sg} {
+		if v.Tags != nil || v.Plain != nil {
+			t.Errorf("Tags=%#v Plain=%#v, want both nil", v.Tags, v.Plain)
+		}
+	}
+}
+
 // Map alias — JSON object wire shape.
 func TestAlias_Map_Roundtrip(t *testing.T) {
 	t.Parallel()

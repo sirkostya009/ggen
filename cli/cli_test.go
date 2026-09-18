@@ -12,6 +12,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/sirkostya009/ggen/gen/model"
 )
 
 // buildCLI compiles ggen into the parent test's TempDir and returns its path.
@@ -2656,8 +2658,8 @@ func TestWriteGenerated_KeepsPreviousOnFailure(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "p_ggen.go")
 	const prev = "package p\n\n// previous good output\n"
 	writeFixture(t, out, prev)
-	bad := []StructInfo{{Name: "V", Fields: []FieldInfo{{
-		GoName: "S", JSONName: "s", GoType: "[]bad type", Kind: KindSlice, ElemType: "bad type", ElemKind: KindStruct,
+	bad := []model.StructInfo{{Name: "V", Fields: []model.FieldInfo{{
+		GoName: "S", JSONName: "s", GoType: "[]bad type", Kind: model.KindSlice, ElemType: "bad type", ElemKind: model.KindStruct,
 	}}}}
 	if err := writeGenerated(out, "p", bad); err == nil {
 		t.Fatal("expected the render to fail")
@@ -2666,7 +2668,7 @@ func TestWriteGenerated_KeepsPreviousOnFailure(t *testing.T) {
 		t.Fatalf("failed run replaced the previous output with %d bytes:\n%s", len(got), got)
 	}
 	reset()
-	good := []StructInfo{{Name: "V", Fields: []FieldInfo{{GoName: "S", JSONName: "s", GoType: "string", Kind: KindString}}}}
+	good := []model.StructInfo{{Name: "V", Fields: []model.FieldInfo{{GoName: "S", JSONName: "s", GoType: "string", Kind: model.KindString}}}}
 	if err := writeGenerated(out, "p", good); err != nil {
 		t.Fatal(err)
 	}
@@ -2710,17 +2712,17 @@ func TestTargetOrder_CrossPackageRouting(t *testing.T) {
 // has to spell the field's kind: a bare untyped constant above MaxInt64
 // defaults to int (overflow) and a float64 field would round the report.
 func TestNumericBoundLiteralsCarryFieldKind(t *testing.T) {
-	gen := func(goType string, kind TypeKind, rules ...ValidationRule) string {
+	gen := func(goType string, kind model.TypeKind, rules ...model.ValidationRule) string {
 		t.Helper()
 		// generate() seeds the globals only when nil — reset between calls.
 		generatedTypes, namedKinds, cyclicTypes = nil, nil, nil
-		var steps []Step
+		var steps []model.Step
 		for _, r := range rules {
-			steps = append(steps, Step{V: r})
+			steps = append(steps, model.Step{V: r})
 		}
-		code, err := generate("p", []StructInfo{{
+		code, err := generate("p", []model.StructInfo{{
 			Name:   "V",
-			Fields: []FieldInfo{{GoName: "N", JSONName: "n", GoType: goType, Kind: kind, Pipe: steps}},
+			Fields: []model.FieldInfo{{GoName: "N", JSONName: "n", GoType: goType, Kind: kind, Pipe: steps}},
 		}})
 		if err != nil {
 			t.Fatal(err)
@@ -2728,14 +2730,14 @@ func TestNumericBoundLiteralsCarryFieldKind(t *testing.T) {
 		return string(code)
 	}
 	const big = "9223372036854775809"
-	u := gen("uint64", KindUint64,
-		ValidationRule{Name: "gt", Value: big},
-		ValidationRule{Name: "gte", Value: big},
-		ValidationRule{Name: "lt", Value: big},
-		ValidationRule{Name: "lte", Value: big},
-		ValidationRule{Name: "multiple", Value: big},
-		ValidationRule{Name: "eq", Value: big},
-		ValidationRule{Name: "neq", Value: big},
+	u := gen("uint64", model.KindUint64,
+		model.ValidationRule{Name: "gt", Value: big},
+		model.ValidationRule{Name: "gte", Value: big},
+		model.ValidationRule{Name: "lt", Value: big},
+		model.ValidationRule{Name: "lte", Value: big},
+		model.ValidationRule{Name: "multiple", Value: big},
+		model.ValidationRule{Name: "eq", Value: big},
+		model.ValidationRule{Name: "neq", Value: big},
 	)
 	for _, want := range []string{
 		"ggen.GTError{", "ggen.GTEError{", "ggen.LTError{", "ggen.LTEError{",
@@ -2747,7 +2749,7 @@ func TestNumericBoundLiteralsCarryFieldKind(t *testing.T) {
 			t.Errorf("missing %q:\n%s", want, u)
 		}
 	}
-	f := gen("float64", KindFloat64, ValidationRule{Name: "lte", Value: "1.5"})
+	f := gen("float64", model.KindFloat64, model.ValidationRule{Name: "lte", Value: "1.5"})
 	if !strings.Contains(f, "Limit: float64(1.5)") {
 		t.Errorf("float bound lost its kind:\n%s", f)
 	}

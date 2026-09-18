@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sirkostya009/ggen/gen/model"
 )
 
 // clearDetectionEnv unsets every env var shouldUseConcise inspects
@@ -228,7 +230,7 @@ func TestPrettyLogger_NoColorWhenDisabled(t *testing.T) {
 
 func TestPrettyLogger_RichError_FullLayout(t *testing.T) {
 	t.Parallel()
-	// Pretty richError is a golangci-lint-style three-line diagnostic:
+	// Pretty RichError is a golangci-lint-style three-line diagnostic:
 	//   file:line:col: <Msg> (<UserHint>)
 	//   \t<source line with CodeSpan highlighted>
 	//   \t<indent>^
@@ -238,7 +240,7 @@ func TestPrettyLogger_RichError_FullLayout(t *testing.T) {
 	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	err := &richError{
+	err := &model.RichError{
 		Pos:      token.Position{Filename: path, Line: 4, Column: 2},
 		Msg:      `field n: ggen rule "ascii" cannot be applied to int`,
 		CodeSpan: "ascii",
@@ -297,7 +299,7 @@ func TestPrettyLogger_RichError_HighlightedCodeSpan(t *testing.T) {
 	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	err := &richError{
+	err := &model.RichError{
 		Pos:      token.Position{Filename: path, Line: 4, Column: 2},
 		Msg:      "bad rule",
 		CodeSpan: "ascii",
@@ -314,7 +316,7 @@ func TestPrettyLogger_RichError_HighlightedCodeSpan(t *testing.T) {
 func TestPrettyLogger_RichError_NoSourceFile_PositionAlone(t *testing.T) {
 	t.Parallel()
 	// Missing source file: render position + message, no caret row, no crash.
-	err := &richError{
+	err := &model.RichError{
 		Pos: token.Position{Filename: "/nope/no/such.go", Line: 1, Column: 1},
 		Msg: "boom",
 	}
@@ -342,7 +344,7 @@ func TestConciseLogger_RichError_SingleLineWithBotHint(t *testing.T) {
 	// Concise: one line, position + msg + parenthesized bot hint. The user
 	// hint is omitted.
 	pos := token.Position{Filename: "x.go", Line: 5, Column: 2}
-	err := &richError{
+	err := &model.RichError{
 		Pos:      pos,
 		Msg:      "bad rule",
 		BotHint:  "expected string",
@@ -351,7 +353,7 @@ func TestConciseLogger_RichError_SingleLineWithBotHint(t *testing.T) {
 	log, buf := captured(LevelQuiet, false, false)
 	log.Error(err)
 	out := strings.TrimRight(buf.String(), "\n")
-	// Bare filename gets a `./` prefix from relPath (stays clickable).
+	// Bare filename gets a `./` prefix from RelPath (stays clickable).
 	want := "err: ./x.go:5:2: bad rule (expected string)"
 	if out != want {
 		t.Errorf("got %q, want %q", out, want)
@@ -366,7 +368,7 @@ func TestConciseLogger_RichError_NoBotHint(t *testing.T) {
 	t.Parallel()
 	// Without a BotHint, no empty `()` should appear.
 	pos := token.Position{Filename: "x.go", Line: 5, Column: 2}
-	err := &richError{Pos: pos, Msg: "bad thing"}
+	err := &model.RichError{Pos: pos, Msg: "bad thing"}
 	log, buf := captured(LevelQuiet, false, false)
 	log.Error(err)
 	out := strings.TrimRight(buf.String(), "\n")
@@ -379,15 +381,15 @@ func TestConciseLogger_RichError_NoBotHint(t *testing.T) {
 func TestRichError_Unwrap(t *testing.T) {
 	t.Parallel()
 	inner := errors.New("inner")
-	re := &richError{
+	re := &model.RichError{
 		Pos: token.Position{Filename: "x.go", Line: 1, Column: 1},
 		Msg: "outer",
 		Err: inner,
 	}
 	if !errors.Is(re, inner) {
-		t.Errorf("richError must unwrap to its inner error")
+		t.Errorf("RichError must unwrap to its inner error")
 	}
-	if _, ok := errors.AsType[*richError](fmt.Errorf("wrap: %w", re)); !ok {
+	if _, ok := errors.AsType[*model.RichError](fmt.Errorf("wrap: %w", re)); !ok {
 		t.Errorf("errors.As must thread through fmt.Errorf wrapping")
 	}
 }
@@ -396,24 +398,24 @@ func TestRichError_ErrorString(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		name string
-		re   *richError
+		re   *model.RichError
 		want string
 	}{
 		{"all_fields",
-			&richError{
+			&model.RichError{
 				Pos:     token.Position{Filename: "x.go", Line: 1, Column: 2},
 				Msg:     "bad",
 				BotHint: "hint",
 			},
 			"./x.go:1:2: bad (hint)"},
 		{"no_pos",
-			&richError{Msg: "bare", BotHint: "h"},
+			&model.RichError{Msg: "bare", BotHint: "h"},
 			"bare (h)"},
 		{"no_hint",
-			&richError{Pos: token.Position{Filename: "x.go", Line: 1, Column: 2}, Msg: "bad"},
+			&model.RichError{Pos: token.Position{Filename: "x.go", Line: 1, Column: 2}, Msg: "bad"},
 			"./x.go:1:2: bad"},
 		{"naked",
-			&richError{Msg: "alone"},
+			&model.RichError{Msg: "alone"},
 			"alone"},
 	}
 	for _, c := range cases {
@@ -434,22 +436,22 @@ func TestReadSourceLine_Basics(t *testing.T) {
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got, ok := readSourceLine(path, 1); !ok || got != "package x" {
+	if got, ok := model.ReadSourceLine(path, 1); !ok || got != "package x" {
 		t.Errorf("line 1: got %q ok=%v", got, ok)
 	}
-	if got, ok := readSourceLine(path, 3); !ok || got != "func f() {}" {
+	if got, ok := model.ReadSourceLine(path, 3); !ok || got != "func f() {}" {
 		t.Errorf("line 3: got %q ok=%v", got, ok)
 	}
-	if _, ok := readSourceLine(path, 99); ok {
+	if _, ok := model.ReadSourceLine(path, 99); ok {
 		t.Error("line beyond EOF should return ok=false")
 	}
-	if _, ok := readSourceLine("/no/such/file.go", 1); ok {
+	if _, ok := model.ReadSourceLine("/no/such/file.go", 1); ok {
 		t.Error("missing file should return ok=false")
 	}
-	if _, ok := readSourceLine("", 1); ok {
+	if _, ok := model.ReadSourceLine("", 1); ok {
 		t.Error("empty filename should return ok=false")
 	}
-	if _, ok := readSourceLine(path, 0); ok {
+	if _, ok := model.ReadSourceLine(path, 0); ok {
 		t.Error("line < 1 should return ok=false")
 	}
 }
@@ -580,25 +582,25 @@ func TestHighlightSpan(t *testing.T) {
 	}
 }
 
-// ----- relPath / formatPos -----
+// ----- RelPath / FormatPos -----
 
 func TestRelPath_Variants(t *testing.T) {
 	t.Parallel()
-	if got := relPath(""); got != "" {
+	if got := model.RelPath(""); got != "" {
 		t.Errorf("empty input should return empty, got %q", got)
 	}
 	// Cwd-relative siblings get a ./ prefix.
-	if got := relPath("x.go"); got != "./x.go" {
+	if got := model.RelPath("x.go"); got != "./x.go" {
 		t.Errorf("sibling: got %q, want ./x.go", got)
 	}
 	// Absolute path under cwd: rendered as ./relative.
 	cwd, _ := os.Getwd()
 	abs := filepath.Join(cwd, "subdir", "file.go")
-	if got := relPath(abs); got != "./subdir/file.go" {
+	if got := model.RelPath(abs); got != "./subdir/file.go" {
 		t.Errorf("nested abs: got %q, want ./subdir/file.go", got)
 	}
 	// A wildly different root falls back to absolute (rather than ../../...).
-	out := relPath("/etc/hosts")
+	out := model.RelPath("/etc/hosts")
 	if !strings.HasPrefix(out, "/") {
 		t.Errorf("far-away path should fall back to absolute, got %q", out)
 	}
@@ -606,22 +608,22 @@ func TestRelPath_Variants(t *testing.T) {
 
 func TestFormatPos(t *testing.T) {
 	t.Parallel()
-	if got := formatPos(token.Position{}); got != "" {
+	if got := model.FormatPos(token.Position{}); got != "" {
 		t.Errorf("invalid pos should render empty, got %q", got)
 	}
-	got := formatPos(token.Position{Filename: "x.go", Line: 5, Column: 2})
+	got := model.FormatPos(token.Position{Filename: "x.go", Line: 5, Column: 2})
 	if got != "./x.go:5:2" {
 		t.Errorf("got %q, want ./x.go:5:2", got)
 	}
 }
 
-// ----- richError without Pos: file-level errors -----
+// ----- RichError without Pos: file-level errors -----
 
 // File-level error path (no Pos, no source excerpt, no caret): the UserHint
 // folds into the message line so the diagnostic fits on one line.
 func TestPrettyLogger_RichError_NoPos_FoldsHintInline(t *testing.T) {
 	t.Parallel()
-	err := &richError{
+	err := &model.RichError{
 		Msg:      "./temp.go: no annotation found",
 		BotHint:  "missing //ggen:generate",
 		UserHint: "Add `//ggen:generate` above your struct.",
@@ -651,7 +653,7 @@ func TestPrettyLogger_RichError_NoPos_FoldsHintInline(t *testing.T) {
 // File-level errors render the BotHint in parens but skip the position prefix.
 func TestConciseLogger_RichError_NoPos_NoLeadingPosition(t *testing.T) {
 	t.Parallel()
-	err := &richError{
+	err := &model.RichError{
 		Msg:     "./temp.go: no annotation found",
 		BotHint: "missing //ggen:generate",
 	}
@@ -664,11 +666,11 @@ func TestConciseLogger_RichError_NoPos_NoLeadingPosition(t *testing.T) {
 	}
 }
 
-// ----- bare (non-richError) error rendering -----
+// ----- bare (non-RichError) error rendering -----
 
 func TestPrettyLogger_BareError_RendersMessageOnly(t *testing.T) {
 	t.Parallel()
-	// Bare (non-richError) errors print just the raw message — no header,
+	// Bare (non-RichError) errors print just the raw message — no header,
 	// excerpt, or caret.
 	log, buf := captured(LevelQuiet, true, false)
 	log.Error(errors.New("plain failure"))
@@ -702,7 +704,7 @@ func TestPrettyLogger_CaretLandsOnCodeSpan(t *testing.T) {
 	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	err := &richError{
+	err := &model.RichError{
 		Pos:      token.Position{Filename: path, Line: 4, Column: 2},
 		Msg:      "bad rule",
 		CodeSpan: "ascii",
@@ -890,11 +892,11 @@ func TestPrettyLogger_GroupsErrorsBySourceLine(t *testing.T) {
 	}
 	pos := token.Position{Filename: path, Line: 4, Column: 2}
 	// Two errors on the same source line — different CodeSpans.
-	err1 := &richError{
+	err1 := &model.RichError{
 		Pos: pos, Msg: `rule "ascii" cannot be applied to int`,
 		CodeSpan: "ascii", UserHint: "drop the rule",
 	}
-	err2 := &richError{
+	err2 := &model.RichError{
 		Pos: pos, Msg: `mod "trim" cannot be applied to int`,
 		CodeSpan: "trim", UserHint: "drop the mod",
 	}
@@ -965,11 +967,11 @@ func TestPrettyLogger_DifferentLines_DoNotGroup(t *testing.T) {
 	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	a := &richError{
+	a := &model.RichError{
 		Pos: token.Position{Filename: path, Line: 4, Column: 2},
 		Msg: "first", CodeSpan: "N",
 	}
-	b := &richError{
+	b := &model.RichError{
 		Pos: token.Position{Filename: path, Line: 8, Column: 2},
 		Msg: "second", CodeSpan: "M",
 	}
@@ -1014,8 +1016,8 @@ func TestFlattenErrors_UnwrapsJoinedBatches(t *testing.T) {
 // files don't collapse.
 func TestGroupByLine_KeysOnFilenameAndLine(t *testing.T) {
 	t.Parallel()
-	mk := func(file string, line, col int) *richError {
-		return &richError{Pos: token.Position{Filename: file, Line: line, Column: col}, Msg: "x"}
+	mk := func(file string, line, col int) *model.RichError {
+		return &model.RichError{Pos: token.Position{Filename: file, Line: line, Column: col}, Msg: "x"}
 	}
 	errs := []error{
 		mk("a.go", 4, 2),

@@ -1,0 +1,8 @@
+{
+  "name": "ggen-zod-testdata",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "zod": "*"
+  }
+}

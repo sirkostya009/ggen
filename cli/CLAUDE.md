@@ -1,28 +1,49 @@
 # ggen CLI — generator / codegen surface
 
 The `cli/` module (`github.com/sirkostya009/ggen/cli`, package `main`) is the
-code generator: it parses annotated Go structs and emits their
-`DecodeFrom`/`DecodeFromStream`/`JSONSize`/`AppendJSON` methods. This file
-documents the **CLI / codegen surface** and the _why_ behind generated-code
-shape. The CLI does NOT import the runtime packages — it emits their import
-paths as string literals into generated code.
+code generator: it emits `DecodeFrom`/`DecodeFromStream`/`JSONSize`/
+`AppendJSON` methods for the annotated Go structs that `gen/model` parses.
+This file documents the **CLI / codegen surface**, the tag grammar the parser
+implements, and the _why_ behind generated-code shape. The CLI does NOT import
+the runtime packages — it emits their import paths as string literals into
+generated code.
 
 ## Files
 
-- `main.go`, `parse.go`, `generate.go`, `tags.go`, `types.go` — CLI (package
-  `main`); `tags.go` = json tag only
+The parser lives in `gen/model` (`github.com/sirkostya009/ggen/gen/model`, its
+own module, see `gen/CLAUDE.md`); the emitter qualifies it as `model.`. The
+parser holds no pass state — the four globals the emitter consults
+(`generatedTypes`, `generatedFields`, `namedKinds`, `aliasFlags`) live in
+`generate.go`, and `model` never reaches back: the variant shape helpers that
+also run at render time take a `KindResolver` (`nil` at parse time,
+`effectiveKind` from `variants.go`).
+
+`gen/model/`:
+
+- `parse.go`, `types.go`, `tags.go` — package/file loading (`ParsePackage` →
+  `Package`, `ParseFile` → `FileParse`, `WalkPackages`), `StructInfo`/
+  `FieldInfo`, `Flags` + `Flags.Apply`; `tags.go` = json tag only
 - `pipe.go` — `pipe:`/`hint:` grammar (tokenize, `ParsedPipe`, `Step`/`Variant`,
   `deriveBuckets`)
-- `variants.go` — multi-shape decode dispatch codegen (`/` variants)
 - `introspect.go` — go/types interface detection (TextAppender, TextMarshaler, …)
-- `alias.go` — alias-type code emitters (decode + AppendJSON)
 - `applicability.go` — parse-time rule/kind compatibility matrix
-- `customfunc.go` — `@Func` resolution + signature classification (validator/mod/converter)
+- `customfunc.go` — `@Func` resolution + signature classification
+  (validator/mod/converter), variant shape checks
+- `cycles.go` — `CyclicTypes`
+- `richerror.go` — `RichError`, source-line helpers the logger renders with
+- `parse_test.go`, `tags_test.go`, `pipe_test.go`, `applicability_test.go` —
+  parser tests
+
+`cli/` (package `main`):
+
+- `main.go`, `generate.go` — CLI entry and Go emitter
+- `variants.go` — multi-shape decode dispatch codegen (`/` variants)
+- `alias.go` — alias-type code emitters (decode + AppendJSON)
 - `check.go` — `-dry` / future-ggenvet parse-only entry points
 - `log.go` — `cliLog`: leveled logger with deferred flush
-- `parse_test.go`, `parseload_test.go`, `tags_test.go`, `pipe_test.go`,
-  `applicability_test.go`, `cli_test.go`, `namedkind_test.go`, `log_test.go` —
-  CLI tests; `bench_test.go` = `BenchmarkGenerate` (generator perf only)
+- `generate_test.go`, `parseload_test.go`, `cli_test.go`, `namedkind_test.go`,
+  `log_test.go` — CLI tests; `bench_test.go` = `BenchmarkGenerate` (generator
+  perf only)
 
 ## Generator CLI (`main` package)
 
@@ -36,7 +57,7 @@ ggen <file.go> [Names...]     one file; optional struct name filter
 ```
 
 **Every positional is a target** in dir/pattern mode, and every dir and
-pattern positional feeds ONE `walkPackages` call: a single `packages.Load`
+pattern positional feeds ONE `WalkPackages` call: a single `packages.Load`
 over all of them, processed post-order over the union, so `ggen ./b ./a`,
 `ggen ./a ./b` and `ggen ./b/... ./a/...` all emit the `./...` output — an
 importer never runs before its dependency's `_ggen.go` exists (argv order
@@ -71,7 +92,7 @@ base pass will EMIT, not by what a previous run left on disk: a type in
 NOT emit has its stale gen-file methods masked, and a base package with no
 roots this run keeps whatever it declares. Output is a fixed point from run 1
 — the direct rung used to appear only on run 2, and the symmetric case
-emitted calls to methods the same run was deleting. `parseFile` picks
+emitted calls to methods the same run was deleting. `ParseFile` picks
 whichever set declares the file, so `ggen pkg/x_test.go` on an external test
 file works (single-file mode leaves `libPkg` nil — that invocation does not
 write the base package's output, so on-disk methods are the honest answer);
@@ -87,7 +108,7 @@ own `go.mod` is skipped (multi-module repos run ggen once per module). Test-only
 packages (no non-`_test.go` files) are skipped when a pattern matched them,
 visited when named outright (single-package mode or a multi-target run).
 Processing is post-order over the matched import subgraph (deps first),
-sequential in topo order; `walkPackages` addresses packages by `Package.Dir`.
+sequential in topo order; `WalkPackages` addresses packages by `Package.Dir`.
 Dot/underscore-prefix dirs, `vendor/`, `testdata/`, `node_modules/` are
 skipped by `go list`.
 
@@ -95,11 +116,11 @@ Output is written only after the whole file rendered AND formatted
 (`writeGenerated`: render into a `bytes.Buffer`, then `os.WriteFile`), so a
 render or `format.Source` failure leaves the previous `_ggen.go` byte-identical
 instead of a 0-byte file that breaks the package build. Package mode, `-dry`
-and pattern mode report EVERY struct's parse error: `parsePackage` /
-`walkPackages` used to wrap `resolveFiltered`'s `errors.Join` in a single
+and pattern mode report EVERY struct's parse error: `ParsePackage` /
+`WalkPackages` used to wrap `resolveFiltered`'s `errors.Join` in a single
 `%w`, which the logger's `unwrapMulti` cannot see through, so only the first
-`richError` surfaced. `prefixBare(err, prefix)` rebuilds the join and
-prefixes only position-less members (a `richError` already carries
+`RichError` surfaced. `PrefixBare(err, prefix)` rebuilds the join and
+prefixes only position-less members (a `RichError` already carries
 `file:line:col`).
 
 ### Flags (all opt-in, apply to every struct in the pass)
@@ -131,7 +152,7 @@ annotated struct:
 
 `marshal`, `unmarshal`, `multierr`, `allowdups`, `novalidate`, `ignoreunknown`,
 `nullzero`, `nosortkeys`, `usenumber`, `htmlescape`, `copy`, `allowinvalidutf8`.
-Any other word is a positioned `richError` (`unknown //ggen:generate token
+Any other word is a positioned `RichError` (`unknown //ggen:generate token
 "marshl"`, hint listing the twelve); `parseAnnotation` returns one per unknown
 token as a batch that `walkStructDecls` stores in `structSet.declErr` and
 `resolveFiltered` joins into the struct's errors, so package mode, single-file
@@ -281,7 +302,7 @@ later stage := step ( WS step )*            // value steps, inner:/keys: levels
   spelling `*int` read as KindStruct and claimed `{`), and
   `converterInputField` builds the scan temp exactly like a pointer FIELD
   (`Pointer`, `PointeeType`, `TargetNil` — `var convN *W` is a known-nil
-  local); `variantCaseBytes` adds `'n'` for a pointer input, so `{"x":5}`
+  local); `VariantCaseBytes` adds `'n'` for a pointer input, so `{"x":5}`
   scans into a fresh `*int` and `{"x":null}` hands the converter nil (pairing
   that with `nullzero` or a null-accepting native variant trips the existing
   shape-clash check). W is also merged into `FieldInfo.NamedPrims`
@@ -295,7 +316,7 @@ later stage := step ( WS step )*            // value steps, inner:/keys: levels
   `@Func` steps take the field's own `*T` — the type the func is declared
   for — and runs of built-in steps take the deref'd leaf, each at its
   DECLARED position, so `pipe:"@Add1 gte=2"` on a `*int` adds before it
-  compares exactly as the value-typed twin does. `splitCustomSteps(fieldPipe(f))`
+  compares exactly as the value-typed twin does. `SplitCustomSteps(fieldPipe(f))`
   (pipe.go) only decides WHETHER the pipe mixes the two kinds: a single-half
   pipe keeps the cheaper shape (built-ins ride along with the leaf's decode,
   `@Func` steps run on `ref` once the null branch rejoins). The custom half
@@ -303,7 +324,7 @@ later stage := step ( WS step )*            // value steps, inner:/keys: levels
   `*T`. The same split runs after converter shape-dispatch (`emitFieldPipe`),
   there with a nil guard around the built-in groups because a variant may
   leave the pointer nil. The legacy `Validation`/`Mods` buckets survive only
-  as the int fast-path gate, since `stepsFromLegacy` emits ALL mods before
+  as the int fast-path gate, since `StepsFromLegacy` emits ALL mods before
   ALL validators (`gte=0 clamp=0|5` on a `*int` clamped -1 into range before
   the check).
 
@@ -320,11 +341,11 @@ end-of-tag, e.g. `oneof='New York|LA`) is a parse ERROR — it used to be
 silently auto-closed, which changes the rule's semantics (`'New York|LA'`
 reads as one `oneof` part instead of two). The tokenizer
 PRESERVES `\'` inside quoted spans; unescaping happens downstream in
-`stripQuotes`/`splitPipeParts`, after the part split — unescaping earlier
-handed `splitPipeParts` a bare quote it read as a delimiter toggle.
+`stripQuotes`/`SplitPipeParts`, after the part split — unescaping earlier
+handed `SplitPipeParts` a bare quote it read as a delimiter toggle.
 Multi-part values (`oneof`/`replace`/
 `clamp`) quote per PART: `parseStep` skips the whole-value strip for them and
-`splitPipeParts` splits on `|` OUTSIDE quotes then strips each part — so
+`SplitPipeParts` splits on `|` OUTSIDE quotes then strips each part — so
 `oneof='New York'|LA` protects the space and `replace='a|b'|c` a literal
 pipe (a naive whole-strip + split used to leak quote chars into the allowed
 set). `replace`/`clamp` require exactly 2 parts.
@@ -349,7 +370,7 @@ prealloc); `maxlen` and string lengths are bounds only and are unaffected.
 `peelSliceField`, the pointer-leaf partition) — they are DERIVED from the ordered
 `Pipe`/`KeyPipe`/`Levels` by `deriveBuckets`. The ordered step lists are the
 source of truth for emit ORDER at value-stage sites; `fieldPipe`/`elemSteps` fall
-back to `stepsFromLegacy(mods, vals)` for synthetic fields that set only buckets.
+back to `StepsFromLegacy(mods, vals)` for synthetic fields that set only buckets.
 
 ### Rule applicability (parse-time)
 
@@ -543,7 +564,7 @@ the pointer/slice null branch (opt #34): a 4-byte `null` peek sets `ref =
 (`nullBreakOK`), else nests the value decode in an `else` so the shared
 `validateAndMod` runs on either the decoded value or the zero (so `nullzero` +
 `minlen=1` on a string still rejects `null`→`""`). Per-field tag ORs onto the
-struct/CLI flag in `applyCLIFlags`. Struct fields only — not top-level aliases.
+struct/CLI flag in `Flags.Apply`. Struct fields only — not top-level aliases.
 Decode-only. Pinned in `integrationtests/nullzero_test.go` + `cli_test.go`.
 
 **Trailing commas are rejected (stdlib parity).** Every element-loop comma branch
@@ -687,7 +708,7 @@ import path per pass (see "Foreign type spelling" under Cross-package types).
 - `string`, `bool`
 - `int`/`int8`/`int16`/`int32`/`int64`, `uint`/`uint8`/`uint16`/`uint32`/`uint64`,
   plus the builtin aliases `rune` (= int32) and `byte` (= uint8). Both resolve
-  in `resolveKind`; without that a `[]rune` element fell to KindStruct and
+  in `ResolveKind`; without that a `[]rune` element fell to KindStruct and
   emitted `append(dst, rune{})` — an accepted annotation whose output did not
   compile
 - `float32`, `float64`. `float32` sites (field, slice/array element, map
@@ -806,7 +827,7 @@ import path per pass (see "Foreign type spelling" under Cross-package types).
   them, `for k := range ref` for a `map[string][0]T`), since the element emit
   names none; the first-element unroll would index `ref[0]`, compile-time out
   of bounds. The predicate is `constEmptyElem(f)`, which reads the element
-  TYPE (`arrayLenFromType(f.ElemType)` — the same source `sliceElemField`
+  TYPE (`ArrayLenFromType(f.ElemType)` — the same source `sliceElemField`
   derives an element's `ArrayLen` from) rather than `f.ElemArrayLen`, which
   parse populates for slice/array elements only: a map value leaves it 0 and
   a type-blind test would also fire for `map[string][3]int`. A POINTER
@@ -833,7 +854,7 @@ import path per pass (see "Foreign type spelling" under Cross-package types).
   the usual nullable rung. The fold lives in Kind + ArrayLen, which the type
   STRING cannot express (`"[8]byte"` resolves to a plain KindArray with no
   element info), so every pointer-leaf derivation goes through
-  `leafKind(f, leafType)` instead of bare `resolveKind`: the omitempty
+  `leafKind(f, leafType)` instead of bare `ResolveKind`: the omitempty
   condition, AppendJSON, JSONSize, the bytes decode, the stream decode and
   `headSentinel` all keep the pointee at KindBytes, which is why the
   truncation sentinel follows the WIRE shape (`ErrExpectString`, or
@@ -966,7 +987,7 @@ Backlog and commit messages cite these by number — numbering is stable.
 10. **Recursive nested-container emitter.** `emitByteSliceRead`/
     `emitStreamSliceRead`/`emitAppendSlice`/`sizeSliceContrib` take a depth param and
     unify slice+array. When `ElemKind` = KindSlice/KindArray they recurse via
-    `peelSliceField(f)` + `stripOneContainer(typ)` (strips one `[]`/`[N]`, shifts
+    `peelSliceField(f)` + `StripOneContainer(typ)` (strips one `[]`/`[N]`, shifts
     inner validation down a level). Arrays carry N via `ElemArrayLen` for
     strict-count at every level. All locals carry a depth suffix.
 11. **Map-key mods + validation.** `keyValidateAndMod` runs right after the key
@@ -1459,7 +1480,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       a `depth`-threaded core (`skipValue`/`anyValue`/`skipValueAVX*`/stream
       mirrors); each container-OPEN checks `depth > maxDepth` → `ErrMaxDepth`.
       One predictable compare per `[`/`{`, nothing on scalar values.
-    - **Codegen**: only SELF-REFERENTIAL structs change shape. `computeCyclicTypes`
+    - **Codegen**: only SELF-REFERENTIAL structs change shape. `CyclicTypes`
       (generate.go) scrapes type identifiers out of every field's
       `GoType`/`ElemType`/`PointeeType`/`SQLNullInner`/alias-underlying and
       finds which generated types can reach themselves (over-approx — a false
@@ -1481,12 +1502,11 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       detection over only the structs declared in that one file** — a
       cross-file `A↔B` cycle (A in `foo.go`, B in `bar.go`, same package)
       never entered `cyclicTypes`, so BOTH lost the depth-threaded core and
-      its stack-overflow guard, silently. `parseFile` now resolves every
-      struct in the package (`set.resolveFiltered` over `set.annotations`,
-      best-effort — a sibling that fails to resolve falls back to the old
-      per-file behavior) and runs `computeCyclicTypes` over the whole set;
-      `generateSingleFile` seeds `cyclicTypes` from that instead of leaving
-      it nil.
+      its stack-overflow guard, silently. `ParseFile` now resolves every
+      struct in the package into `FileParse.Package` (best-effort — nil when
+      a sibling fails to resolve, which falls back to per-file detection)
+      and `generateSingleFile` seeds `cyclicTypes` from `CyclicTypes` over
+      that set.
     - **Cost** (core-24, 500x, count=2, machine in `performance` profile, each
       A/B warmed first and validated with the **jsonv2 row as an in-run
       control** — see bench/CLAUDE.md): everything flat EXCEPT DeepNested (a
@@ -1556,7 +1576,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     naming the correct spelling (`\\'` in source). Same class as the
     accepted-tag-emits-broken-code rule, one layer up.
 
-55. **Decode-variant shapes resolve named primitives.** `variantCaseBytes`
+55. **Decode-variant shapes resolve named primitives.** `VariantCaseBytes`
     fed `f.Kind` straight to `kindShapeBytes`, but a named primitive reports
     KindStruct at its use sites — so the NATIVE variant of a `type Score int`
     field claimed the object shape `{` and `{"s":42}` fell to the dispatch
@@ -1719,7 +1739,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
 68. **Round-8 fixes (alias flags, variant null, omit on named prims, unix
     time, big.Float size).** Six related defects:
     - **Container + primitive aliases dropped struct flags.** `AliasField` is
-      built at parse time, BEFORE `applyCLIFlags` (which only walks `Fields`),
+      built at parse time, BEFORE `Flags.Apply` (which only walks `Fields`),
       so `copy`/`htmlescape`/`allowinvalidutf8`/`multierr` on
       `type Tags []string` were silently ignored — copy-mode elements still
       ALIASED the input (silent corruption class), htmlescape emitted NoHTML
@@ -1727,7 +1747,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       render sites; the primitive string alias emits `ggen.Detach` under
       `copy`.
     - **Converter variants made JSON `null` a hard error on null-aware
-      kinds.** `variantCaseBytes`'s native arm never claimed `'n'`, so
+      kinds.** `VariantCaseBytes`'s native arm never claimed `'n'`, so
       `P *int` + `pipe:"./@Conv"` rejected `{"p":null}` that the plain field
       decodes to nil. Native now claims `'n'` for pointer/slice/map/bytes/raw
       (`nativeAcceptsNull`) unless an explicit `nullzero` variant claims it.
@@ -1775,8 +1795,8 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       (go:generate accepts tabs) — any whitespace separates now.
     - **Single-file mode seeded `multiErrTypes` file-locally** — a
       cross-file multierr callee lost its drain branch (same class as the
-      round-6 cross-file cycle fix); parseFile now returns a package-wide
-      set unioned in.
+      round-6 cross-file cycle fix); `generateSingleFile` unions in the set
+      derived from `FileParse.Package`.
     - **Stream `,string` STRING values retained a KeyView alias**
       (`string(sv)` is an identity conversion, no copy) — silent corruption
       on the next compacting refill. Fixed, then SUPERSEDED same round by a
@@ -1915,7 +1935,7 @@ nothing else did, so every VALIDATOR emitter saw KindStruct:
 - rune / substring / charset rules passed the named value uncast into
   `utf8.RuneCountInString`, `strings.HasPrefix`, `ggen.IsURL`, and into the
   string-typed `Value`/`Want` error fields.
-- `eq`/`neq` were `if KindString {…} else if isNumeric {…}` **with no else** —
+- `eq`/`neq` were `if KindString {…} else if IsNumeric {…}` **with no else** —
   the rule emitted nothing at all. Clean build, zero enforcement.
 - `zeroLit` fell through to `elemType + "{}"`, so `nullzero` and the
   slice-element pre-grow emitted `Priority{}`.
@@ -1953,7 +1973,7 @@ Three gates, all load-bearing:
 - **`f.Kind == KindStruct` only.** `time.Duration` is a named int64 and
   `net.IP` a named []byte; those carry a dedicated kind and their own wire
   shape. `collectNamedPrims` refuses to register any type whose own
-  `resolveKind` is not KindStruct, and `inlineNamedPrim` re-checks.
+  `ResolveKind` is not KindStruct, and `inlineNamedPrim` re-checks.
 - **An annotated alias's own flags must match the field's.**
   `//ggen:generate htmlescape type HtmlString string` is documented surface, and
   `copy` / `allowinvalidutf8` / `novalidate` likewise change what the alias body
@@ -2256,7 +2276,7 @@ benchmarks under `bench/`.
 
 77. **Round-10 loader fixes (parse layer).** Beyond the Invocation-section
     items (both `go/packages` variants kept, the single post-order
-    `walkPackages` over every target, `prefixBare` error reporting,
+    `WalkPackages` over every target, `PrefixBare` error reporting,
     `writeGenerated`) and the rejections documented under Per-struct
     annotations / Top-level type aliases (unknown tokens, generic types, `=`
     aliases):
@@ -2309,7 +2329,7 @@ benchmarks under `bench/`.
       fmt's `%T`, writing `*ast.StructType` into the generated file), while a
       func or chan field compiles and then makes AppendJSON fail for EVERY
       value (`json: unsupported type: chan int`) — a codec that can never
-      succeed. The diagnostic is a `richError` carrying position + the remedy
+      succeed. The diagnostic is a `RichError` carrying position + the remedy
       that actually works for that shape: `json:"-"` or unexporting for a
       func/chan (a NAMED func type is not a way out — see the backlog),
       declaring a named struct type for an anonymous struct. INTERFACES ARE
@@ -2343,7 +2363,7 @@ benchmarks under `bench/`.
     `omitEmptyCond` + `ggen.AnyIsEmpty` and the `[N]byte` omit guards (#35),
     `[0]T` / `[][0]T` (Supported Go kinds), strict RFC 3339 via
     `ggen.AppendRFC3339`/`ParseRFC3339` (`time.Time` kind), `writeGenerated`
-    and the single topological `walkPackages` (Invocation). One item not
+    and the single topological `WalkPackages` (Invocation). One item not
     covered elsewhere: `capFor` returns the width-default cap WITHOUT
     registering a maxlen const when `maxlen > spanBudgetMax` (512, the 64-bit
     span budget) — `fits*N + (1-fits)*base` is a typed-int constant expression
@@ -2360,7 +2380,7 @@ benchmarks under `bench/`.
     `net.IP`/`netip.*` and `null` → nil `net.IP` (net kinds, `null`
     kind-gating), the `UnmarshalJSON` rung's `NewParseErrShift` (#14),
     `validate` threaded through the `Any*` families (#50), and
-    `splitCustomSteps` for pointer-field step order (`pipe:`). Pinned by
+    `SplitCustomSteps` for pointer-field step order (`pipe:`). Pinned by
     `TestNarrowFloat_RoundsDecimalOnce`, `TestMerge_crossPkgFallbackDecodesFresh`,
     `TestByteArray_TupleOfByteSlices`, `TestNetTypes_emptyIsZero`,
     `TestCrossPkg_unmarshalJSONRungRebasesPos`, `TestAllowInvalidUTF8_anyValues`,
@@ -2406,7 +2426,7 @@ benchmarks under `bench/`.
     field accepted it. The docs' "value steps run in declared order" now needs
     no pointer exception. Two consequences of emitting after the cascade: a
     widened leaf (`*int8`) runs its built-ins AFTER the narrowing check, which
-    is what the value twin does; and `splitCustomSteps` reads `fieldPipe(f)`,
+    is what the value twin does; and `SplitCustomSteps` reads `fieldPipe(f)`,
     so a synthetic pointer-element field with only legacy buckets takes the
     same path (output-identical, verified by regen). Pinned by
     `TestMods_pointerCustomStepDeclaredOrder` (against the value twin

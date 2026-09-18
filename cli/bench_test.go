@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/sirkostya009/ggen/gen/model"
 )
 
 // BenchmarkGenerate parses integrationtests/shared_test.go and rounds through
@@ -14,7 +16,8 @@ func BenchmarkGenerate(b *testing.B) {
 	if _, err := os.Stat(src); err != nil {
 		b.Skipf("no shared_test.go at %s: %v", src, err)
 	}
-	structs, pkg, _, _, _, _, err := parseFile(src, nil)
+	res, err := model.ParseFile(src, nil)
+	structs, pkg := res.Structs, res.PkgName
 	if err != nil {
 		b.Fatal(err)
 	}

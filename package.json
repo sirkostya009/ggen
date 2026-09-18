@@ -1,0 +1,15 @@
+{
+  "name": "ggen",
+  "private": true,
+  "workspaces": [
+    "gen/ts",
+    "gen/zod",
+    "gen/valibot",
+    "integrationtests/gen/js"
+  ],
+  "overrides": {
+    "typescript": "7.0.2",
+    "valibot": "1.5.0",
+    "zod": "4.6.5"
+  }
+}

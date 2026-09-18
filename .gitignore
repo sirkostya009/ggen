@@ -1,3 +1,4 @@
 ggen
 *.test
 cli/cli
+node_modules/

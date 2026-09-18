@@ -1,16 +1,16 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"go/token"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
+
+	"github.com/sirkostya009/ggen/gen/model"
 )
 
 // Level controls the verbosity floor — only messages at or above it are
@@ -106,43 +106,6 @@ func isTerminal(f *os.File) bool {
 	return fi.Mode()&os.ModeCharDevice != 0
 }
 
-// relPath returns p relative to cwd when that's shorter, with a "./" prefix on
-// siblings so they read as paths (not package paths) and stay editor-clickable.
-// Falls back to absolute when the relative form is longer (heavy "../" climb).
-func relPath(p string) string {
-	if p == "" {
-		return p
-	}
-	cwd, err := os.Getwd()
-	if err != nil {
-		return p
-	}
-	abs, err := filepath.Abs(p)
-	if err != nil {
-		return p
-	}
-	rel, err := filepath.Rel(cwd, abs)
-	if err != nil {
-		return p
-	}
-	if !strings.HasPrefix(rel, ".") {
-		rel = "./" + rel
-	}
-	if len(rel) > len(abs) {
-		return abs
-	}
-	return rel
-}
-
-// formatPos renders a token.Position with the filename relative to cwd
-// (token.Position.String always emits the absolute filename).
-func formatPos(pos token.Position) string {
-	if !pos.IsValid() {
-		return ""
-	}
-	return fmt.Sprintf("%s:%d:%d", relPath(pos.Filename), pos.Line, pos.Column)
-}
-
 // ----- concise impl -----
 
 type conciseLogger struct {
@@ -200,10 +163,10 @@ func (l *conciseLogger) renderError(err error) {
 		}
 		return
 	}
-	if re, ok := errors.AsType[*richError](err); ok {
+	if re, ok := errors.AsType[*model.RichError](err); ok {
 		body := re.Msg
 		if re.Pos.IsValid() {
-			body = formatPos(re.Pos) + ": " + body
+			body = model.FormatPos(re.Pos) + ": " + body
 		}
 		if re.BotHint != "" {
 			body = body + " (" + re.BotHint + ")"
@@ -349,9 +312,9 @@ type posKey struct {
 // renderUnit is one block of pretty output: a group of rich errors at the same
 // (file, line), or a single position-less / bare error.
 type renderUnit struct {
-	pos    token.Position // valid → grouped block; invalid → bare
-	riches []*richError   // populated when pos.IsValid()
-	bare   error          // populated when pos is invalid
+	pos    token.Position     // valid → grouped block; invalid → bare
+	riches []*model.RichError // populated when pos.IsValid()
+	bare   error              // populated when pos is invalid
 }
 
 // flattenErrors recursively unwraps errors.Join batches into a flat slice,
@@ -381,7 +344,7 @@ func groupByLine(errs []error) []renderUnit {
 	var groups []renderUnit
 	index := make(map[posKey]int, len(errs))
 	for _, e := range errs {
-		var re *richError
+		var re *model.RichError
 		if errors.As(e, &re) && re.Pos.IsValid() {
 			k := posKey{re.Pos.Filename, re.Pos.Line}
 			if i, ok := index[k]; ok {
@@ -389,7 +352,7 @@ func groupByLine(errs []error) []renderUnit {
 				continue
 			}
 			index[k] = len(groups)
-			groups = append(groups, renderUnit{pos: re.Pos, riches: []*richError{re}})
+			groups = append(groups, renderUnit{pos: re.Pos, riches: []*model.RichError{re}})
 			continue
 		}
 		groups = append(groups, renderUnit{bare: e})
@@ -409,16 +372,16 @@ func (l *prettyLogger) renderUnit(u renderUnit) {
 		return
 	}
 	first := u.riches[0]
-	line, srcOK := readSourceLine(first.Pos.Filename, first.Pos.Line)
+	line, srcOK := model.ReadSourceLine(first.Pos.Filename, first.Pos.Line)
 	var prefix string
 	if len(u.riches) > 1 {
-		prefix = fmt.Sprintf("%s:%d: ", relPath(first.Pos.Filename), first.Pos.Line)
+		prefix = fmt.Sprintf("%s:%d: ", model.RelPath(first.Pos.Filename), first.Pos.Line)
 	} else {
 		col := first.Pos.Column
 		if srcOK {
-			col = resolveSpanCol(line, first.Pos.Column, first.CodeSpan, first.Anchor)
+			col = model.ResolveSpanCol(line, first.Pos.Column, first.CodeSpan, first.Anchor)
 		}
-		prefix = fmt.Sprintf("%s:%d:%d: ", relPath(first.Pos.Filename), first.Pos.Line, col)
+		prefix = fmt.Sprintf("%s:%d:%d: ", model.RelPath(first.Pos.Filename), first.Pos.Line, col)
 	}
 	_, _ = fmt.Fprintf(l.w, "%s%s\n",
 		l.paint(ansiBold+ansiCyan, prefix),
@@ -437,7 +400,7 @@ func (l *prettyLogger) renderUnit(u renderUnit) {
 // renderBare renders a position-less rich error or a non-rich error on a
 // single line.
 func (l *prettyLogger) renderBare(err error) {
-	var re *richError
+	var re *model.RichError
 	if !errors.As(err, &re) {
 		_, _ = fmt.Fprintf(l.w, "%s\n", err.Error())
 		return
@@ -448,7 +411,7 @@ func (l *prettyLogger) renderBare(err error) {
 // formatMsg builds the `<light-red Msg> <gray UserHint>` body for header and
 // continuation lines. Msg and UserHint route through emphasize() (backtick /
 // double-quote identifiers → bold, markers stripped).
-func (l *prettyLogger) formatMsg(re *richError) string {
+func (l *prettyLogger) formatMsg(re *model.RichError) string {
 	out := l.emphasize(re.Msg, ansiLightRed)
 	if re.UserHint != "" {
 		// Drop periods — the gray run is enough end-of-thought separation.
@@ -499,7 +462,7 @@ func (l *prettyLogger) emphasize(s, baseColor string) string {
 
 // highlightSpans wraps every error's CodeSpan in red+bold, looked up from each
 // Pos.Column-1, applied in column order with overlaps merged.
-func (l *prettyLogger) highlightSpans(line string, errs []*richError) string {
+func (l *prettyLogger) highlightSpans(line string, errs []*model.RichError) string {
 	if !l.color {
 		return line
 	}
@@ -509,8 +472,8 @@ func (l *prettyLogger) highlightSpans(line string, errs []*richError) string {
 		if re.CodeSpan == "" {
 			continue
 		}
-		// resolveSpanCol is 1-indexed; subtract for the byte offset.
-		col := resolveSpanCol(line, re.Pos.Column, re.CodeSpan, re.Anchor) - 1
+		// ResolveSpanCol is 1-indexed; subtract for the byte offset.
+		col := model.ResolveSpanCol(line, re.Pos.Column, re.CodeSpan, re.Anchor) - 1
 		if col < 0 || col >= len(line) {
 			continue
 		}
@@ -548,10 +511,10 @@ func (l *prettyLogger) highlightSpans(line string, errs []*richError) string {
 
 // multiCaretLine builds a caret row with one `^` per error column. Source
 // whitespace is mirrored verbatim so tabs align; shared columns render once.
-func (l *prettyLogger) multiCaretLine(line string, errs []*richError) string {
+func (l *prettyLogger) multiCaretLine(line string, errs []*model.RichError) string {
 	cols := make([]int, len(errs))
 	for i, re := range errs {
-		col := resolveSpanCol(line, re.Pos.Column, re.CodeSpan, re.Anchor) - 1
+		col := model.ResolveSpanCol(line, re.Pos.Column, re.CodeSpan, re.Anchor) - 1
 		cols[i] = min(max(col, 0), len(line))
 	}
 	slices.Sort(cols)
@@ -572,29 +535,11 @@ func (l *prettyLogger) multiCaretLine(line string, errs []*richError) string {
 	return b.String()
 }
 
-// resolveSpanCol finds codeSpan's 1-indexed column. An optional anchor (a
-// disambiguating prefix known to precede codeSpan) is consumed first, so a
-// short codeSpan that collides earlier on the line still resolves correctly.
-func resolveSpanCol(line string, posCol int, codeSpan, anchor string) int {
-	col := max(posCol-1, 0)
-	if anchor != "" && col < len(line) {
-		if i := strings.Index(line[col:], anchor); i >= 0 {
-			col += i + len(anchor)
-		}
-	}
-	if codeSpan != "" && col < len(line) {
-		if i := strings.Index(line[col:], codeSpan); i >= 0 {
-			col += i
-		}
-	}
-	return col + 1
-}
-
 // caretIndent builds the whitespace prefix so the caret lands under the
 // offending token: the header-prefix width as spaces, then the source's own
 // whitespace bytes verbatim (so tabs align) up to the resolved CodeSpan column.
 func caretIndent(line, prefix string, posCol int, span, anchor string) string {
-	col := min(max(resolveSpanCol(line, posCol, span, anchor)-1, 0), len(line))
+	col := min(max(model.ResolveSpanCol(line, posCol, span, anchor)-1, 0), len(line))
 	var b strings.Builder
 	b.Grow(len(prefix) + col)
 	for i := 0; i < len(prefix); i++ {
@@ -625,74 +570,4 @@ func (l *prettyLogger) highlightSpan(line, span string) string {
 
 // ----- source line reader -----
 
-// sourceLineCache memoises file reads so multiple errors from one file don't
-// re-open it.
-var sourceLineCache struct {
-	mu    sync.Mutex
-	files map[string][]string
-}
-
-// readSourceLine returns the 1-indexed line N from filename, or (empty, false)
-// on any read / range error (non-fatal — the renderer drops the excerpt).
-func readSourceLine(filename string, line int) (string, bool) {
-	if filename == "" || line < 1 {
-		return "", false
-	}
-	sourceLineCache.mu.Lock()
-	defer sourceLineCache.mu.Unlock()
-	if sourceLineCache.files == nil {
-		sourceLineCache.files = map[string][]string{}
-	}
-	lines, ok := sourceLineCache.files[filename]
-	if !ok {
-		f, err := os.Open(filename)
-		if err != nil {
-			return "", false
-		}
-		defer func() { _ = f.Close() }()
-		sc := bufio.NewScanner(f)
-		for sc.Scan() {
-			lines = append(lines, sc.Text())
-		}
-		if err := sc.Err(); err != nil {
-			return "", false
-		}
-		sourceLineCache.files[filename] = lines
-	}
-	if line > len(lines) {
-		return "", false
-	}
-	return lines[line-1], true
-}
-
-// ----- richError -----
-
-// richError is the structured error type both log impls render. It separates
-// the what (Msg + Pos), the technical context (BotHint, inline for agents/CI),
-// and the human remedy (UserHint, a Note: line in pretty mode). See Logger.
-type richError struct {
-	Pos      token.Position // file:line:col; zero value when unknown
-	Msg      string         // main error message — what failed
-	CodeSpan string         // substring within the source line to highlight + point caret at
-	Anchor   string         // disambiguating prefix searched before CodeSpan (positioning only, not highlighted) when CodeSpan is short enough to collide earlier on the line
-	BotHint  string         // technical context for concise/agent output
-	UserHint string         // remedy suggestion for human output (Note:)
-	Err      error          // optional underlying error for errors.Unwrap
-}
-
-func (e *richError) Error() string {
-	var b strings.Builder
-	if e.Pos.IsValid() {
-		b.WriteString(formatPos(e.Pos))
-		b.WriteString(": ")
-	}
-	b.WriteString(e.Msg)
-	if e.BotHint != "" {
-		b.WriteString(" (")
-		b.WriteString(e.BotHint)
-		b.WriteString(")")
-	}
-	return b.String()
-}
-
-func (e *richError) Unwrap() error { return e.Err }
+// ----- RichError -----

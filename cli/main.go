@@ -12,16 +12,11 @@ import (
 	"strings"
 	"sync"
 
-	"golang.org/x/tools/go/packages"
-)
-
-const (
-	genSuffix     = "_ggen.go"
-	genTestSuffix = "_ggen_test.go"
+	"github.com/sirkostya009/ggen/gen/model"
 )
 
 var (
-	cliFlags annotationFlags
+	cliFlags model.Flags
 	cliDry   bool
 	cliLog   Logger
 
@@ -70,18 +65,18 @@ func main() {
 	)
 	flag.StringVar(&outFlag, "o", "", "output file (single-file or single-dir mode only)")
 	flag.StringVar(&pkgFlag, "pkg", "", "override package name")
-	flag.BoolVar(&cliFlags.marshal, "marshal", false, "emit MarshalJSON hook (json.Marshaler) on every generated struct")
-	flag.BoolVar(&cliFlags.unmarshal, "unmarshal", false, "emit UnmarshalJSON hook (json.Unmarshaler) on every generated struct")
-	flag.BoolVar(&cliFlags.multierr, "multierr", false, "collect validation errors instead of returning on the first failure")
-	flag.BoolVar(&cliFlags.allowdups, "allowdups", false, "skip the default duplicate-key guard in generated unmarshal code")
-	flag.BoolVar(&cliFlags.novalidate, "novalidate", false, "skip validation rules, required-field checks, and mods (trades correctness for speed)")
-	flag.BoolVar(&cliFlags.ignoreunknown, "ignoreunknown", false, "silently skip unknown JSON keys on unmarshal (default: error)")
-	flag.BoolVar(&cliFlags.nullzero, "nullzero", false, "accept explicit JSON null on non-pointer value fields, decoding it to the Go zero value (default: error)")
-	flag.BoolVar(&cliFlags.nosortkeys, "nosortkeys", false, "emit struct fields in declaration order (default: sorted by JSON name at codegen time)")
-	flag.BoolVar(&cliFlags.usenumber, "usenumber", false, "decode JSON numbers into `any` fields as json.Number instead of float64 (mirrors json.Decoder.UseNumber)")
-	flag.BoolVar(&cliFlags.htmlescape, "htmlescape", false, "HTML-safe escape <, >, & in emitted strings (default: literal, matches stdlib jsonv2)")
-	flag.BoolVar(&cliFlags.copy, "copy", false, "bytes-path DecodeFrom copies strings, json.RawMessage, and any-embedded strings out of the input instead of aliasing it (mutating data after decode no longer corrupts decoded values)")
-	flag.BoolVar(&cliFlags.allowinvalidutf8, "allowinvalidutf8", false, "skip decode-side UTF-8 validation (default: reject invalid UTF-8 / unpaired surrogates, jsonv2 parity); permissive structs pass raw bytes through like encoding/json v1 minus the U+FFFD substitution on raw bytes")
+	flag.BoolVar(&cliFlags.Marshal, "marshal", false, "emit MarshalJSON hook (json.Marshaler) on every generated struct")
+	flag.BoolVar(&cliFlags.Unmarshal, "unmarshal", false, "emit UnmarshalJSON hook (json.Unmarshaler) on every generated struct")
+	flag.BoolVar(&cliFlags.MultiErr, "multierr", false, "collect validation errors instead of returning on the first failure")
+	flag.BoolVar(&cliFlags.AllowDups, "allowdups", false, "skip the default duplicate-key guard in generated unmarshal code")
+	flag.BoolVar(&cliFlags.NoValidate, "novalidate", false, "skip validation rules, required-field checks, and mods (trades correctness for speed)")
+	flag.BoolVar(&cliFlags.IgnoreUnknown, "ignoreunknown", false, "silently skip unknown JSON keys on unmarshal (default: error)")
+	flag.BoolVar(&cliFlags.NullZero, "nullzero", false, "accept explicit JSON null on non-pointer value fields, decoding it to the Go zero value (default: error)")
+	flag.BoolVar(&cliFlags.NoSortKeys, "nosortkeys", false, "emit struct fields in declaration order (default: sorted by JSON name at codegen time)")
+	flag.BoolVar(&cliFlags.UseNumber, "usenumber", false, "decode JSON numbers into `any` fields as json.Number instead of float64 (mirrors json.Decoder.UseNumber)")
+	flag.BoolVar(&cliFlags.HTMLEscape, "htmlescape", false, "HTML-safe escape <, >, & in emitted strings (default: literal, matches stdlib jsonv2)")
+	flag.BoolVar(&cliFlags.Copy, "copy", false, "bytes-path DecodeFrom copies strings, json.RawMessage, and any-embedded strings out of the input instead of aliasing it (mutating data after decode no longer corrupts decoded values)")
+	flag.BoolVar(&cliFlags.AllowInvalidUTF8, "allowinvalidutf8", false, "skip decode-side UTF-8 validation (default: reject invalid UTF-8 / unpaired surrogates, jsonv2 parity); permissive structs pass raw bytes through like encoding/json v1 minus the U+FFFD substitution on raw bytes")
 	flag.BoolVar(&cliDry, "dry", false, "dry run: parse and validate every annotated struct, surface all errors, emit no file")
 	var simdFlag string
 	flag.StringVar(&simdFlag, "simd", "", "SIMD tier for bytes-path string scans: off|avx|avx2|avx512 (default: avx when GOEXPERIMENT=simd is set, else off; generated code then requires GOEXPERIMENT=simd to build and a matching CPU to run — no runtime probing)")
@@ -144,7 +139,7 @@ func main() {
 		if err != nil {
 			cliLog.Error(err)
 		}
-	} else if target := positional[0]; len(positional) == 1 && !isPattern(target) {
+	} else if target := positional[0]; len(positional) == 1 && !model.IsPattern(target) {
 		// One plain directory: honours -o / -pkg and picks up a test-only package.
 		if err := checkDirTarget(target); err != nil {
 			cliLog.Fatal(err)
@@ -164,13 +159,13 @@ func main() {
 			if outFlag == "" {
 				name = "-pkg"
 			}
-			if slices.ContainsFunc(positional, isPattern) {
+			if slices.ContainsFunc(positional, model.IsPattern) {
 				cliLog.Fatal(fmt.Errorf("%s cannot be used with ./... (pattern matches multiple packages; each writes its own output)", name))
 			}
 			cliLog.Fatal(fmt.Errorf("%s cannot be used with multiple targets (each package writes its own output)", name))
 		}
 		for _, target := range positional {
-			if !isPattern(target) {
+			if !model.IsPattern(target) {
 				if err := checkDirTarget(target); err != nil {
 					cliLog.Fatal(err)
 				}
@@ -185,7 +180,7 @@ func main() {
 		if cliDry {
 			act = checkPackage
 		}
-		if err := walkPackages(positional, act); err != nil {
+		if err := model.WalkPackages(positional, act, cliLog.Error); err != nil {
 			cliLog.Fatal(err)
 		}
 	}
@@ -197,8 +192,6 @@ func main() {
 		os.Exit(1)
 	}
 }
-
-func isPattern(target string) bool { return strings.HasSuffix(target, "...") }
 
 // checkDirTarget rejects a missing target and a file positioned after the
 // first argument (only the FIRST positional may be a file; its trailing args
@@ -214,137 +207,6 @@ func checkDirTarget(target string) error {
 	return nil
 }
 
-// applyCLIFlags ORs the CLI hook flags into each struct's flags and propagates
-// the MultiErr flag down to every field (template-friendly access).
-func applyCLIFlags(structs []StructInfo) {
-	for i := range structs {
-		if cliFlags.marshal {
-			structs[i].Marshal = true
-		}
-		if cliFlags.unmarshal {
-			structs[i].Unmarshal = true
-		}
-		if cliFlags.multierr {
-			structs[i].MultiErr = true
-		}
-		if cliFlags.allowdups {
-			structs[i].AllowDups = true
-		}
-		if cliFlags.novalidate {
-			structs[i].NoValidate = true
-		}
-		if cliFlags.ignoreunknown {
-			structs[i].IgnoreUnknown = true
-		}
-		if cliFlags.nullzero {
-			structs[i].NullZero = true
-		}
-		if cliFlags.nosortkeys {
-			structs[i].NoSort = true
-		}
-		if cliFlags.usenumber {
-			structs[i].UseNumber = true
-		}
-		if cliFlags.htmlescape {
-			structs[i].HTMLEscape = true
-		}
-		if cliFlags.copy {
-			structs[i].Copy = true
-		}
-		if cliFlags.allowinvalidutf8 {
-			structs[i].AllowInvalidUTF8 = true
-		}
-		for j := range structs[i].Fields {
-			structs[i].Fields[j].MultiErr = structs[i].MultiErr
-			structs[i].Fields[j].AllowDups = structs[i].AllowDups
-			structs[i].Fields[j].NoValidate = structs[i].NoValidate
-			structs[i].Fields[j].UseNumber = structs[i].UseNumber
-			structs[i].Fields[j].HTMLEscape = structs[i].HTMLEscape
-			structs[i].Fields[j].Copy = structs[i].Copy
-			structs[i].Fields[j].AllowInvalidUTF8 = structs[i].AllowInvalidUTF8
-			// OR, not assign: a per-field json:",nullzero" must survive when the
-			// struct flag is off.
-			structs[i].Fields[j].NullZero = structs[i].Fields[j].NullZero || structs[i].NullZero
-		}
-	}
-}
-
-// walkPackages resolves every target (dirs and `...` patterns) in one
-// go/packages load and invokes `act` on each matched package's directory —
-// module-scoped, never crossing module bounds (like `go build <patterns>`).
-// Processing is post-order over the matched import subgraph, so a package's
-// `_ggen.go` lands on disk before any matched importer runs and cross-package
-// field types route through direct DecodeFrom/AppendJSON rather than
-// encoding/json. Deps outside the matched set are left alone. A test-only
-// package is skipped when a pattern matched it and visited when it was named
-// outright.
-func walkPackages(targets []string, act func(dir string) error) error {
-	cfg := &packages.Config{
-		Mode: packages.NeedName | packages.NeedFiles | packages.NeedImports,
-	}
-	pkgs, err := packages.Load(cfg, targets...)
-	if err != nil {
-		return err
-	}
-	explicit := make(map[string]struct{}, len(targets))
-	for _, t := range targets {
-		if !isPattern(t) {
-			if abs, err := filepath.Abs(t); err == nil {
-				explicit[abs] = struct{}{}
-			}
-		}
-	}
-	// Surface per-package load errors via the logger rather than returning on
-	// the first — a broken-import package shouldn't hide its siblings.
-	for _, p := range pkgs {
-		for _, e := range p.Errors {
-			cliLog.Error(fmt.Errorf("%s: %s", p.PkgPath, e))
-		}
-	}
-
-	matched := make(map[string]bool, len(pkgs))
-	for _, p := range pkgs {
-		matched[p.PkgPath] = true
-	}
-	// Dedup by directory (packages.Load can return base + test variants for
-	// the same dir; generateDir loads both via Tests:true, so visit once).
-	visited := make(map[string]struct{}, len(pkgs))
-	seenPath := make(map[string]struct{}, len(pkgs))
-	var visit func(p *packages.Package)
-	visit = func(p *packages.Package) {
-		if _, ok := seenPath[p.PkgPath]; ok {
-			return
-		}
-		seenPath[p.PkgPath] = struct{}{}
-		for _, imp := range p.Imports {
-			if matched[imp.PkgPath] {
-				visit(imp)
-			}
-		}
-		dir := p.Dir
-		if dir == "" && len(p.GoFiles) > 0 {
-			dir = filepath.Dir(p.GoFiles[0])
-		}
-		if dir == "" {
-			return
-		}
-		if _, named := explicit[dir]; len(p.GoFiles) == 0 && !named {
-			return
-		}
-		if _, ok := visited[dir]; ok {
-			return
-		}
-		visited[dir] = struct{}{}
-		if err := act(dir); err != nil {
-			cliLog.Error(prefixBare(err, "in "+dir))
-		}
-	}
-	for _, p := range pkgs {
-		visit(p)
-	}
-	return nil
-}
-
 // genGlobalsMu protects the globally-shared generator state touched by
 // generate() (generatedTypes, namedKinds, the oneof registry, the
 // pools). Packages parse concurrently but only one goroutine enters the
@@ -354,16 +216,17 @@ var genGlobalsMu sync.Mutex
 func generateDir(dir, outFlag, pkgFlag string) error {
 	cliLog.Debug("parsing package %s", dir)
 	// Unlocked — go/packages.Load does its own concurrency, touches no globals.
-	structs, pkgName, err := parsePackage(dir)
+	pkg, err := model.ParsePackage(dir)
 	if err != nil {
 		return err
 	}
+	structs, pkgName := pkg.Structs, pkg.Name
 	if len(structs) == 0 {
 		cliLog.Trace("no annotated structs in %s; skipping", dir)
 		return nil
 	}
 	cliLog.Debug("package %s: %d annotated structs", pkgName, len(structs))
-	applyCLIFlags(structs)
+	cliFlags.Apply(structs)
 
 	outPkg := pkgFlag
 	if outPkg == "" {
@@ -378,7 +241,7 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 	if outFlag != "" && len(buckets) > 1 {
 		return fmt.Errorf("-o cannot be used when %s has structs across multiple build-tag / test groups (%d buckets)", dir, len(buckets))
 	}
-	var base, xtest []StructInfo
+	var base, xtest []model.StructInfo
 	for _, s := range structs {
 		if s.XTest {
 			xtest = append(xtest, s)
@@ -394,7 +257,7 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 
 // generateBuckets writes one file per (BuildTag, Test) bucket of structs,
 // which all belong to one Go package.
-func generateBuckets(dir, outFlag, outPkg string, structs []StructInfo) error {
+func generateBuckets(dir, outFlag, outPkg string, structs []model.StructInfo) error {
 	if len(structs) == 0 {
 		return nil
 	}
@@ -408,13 +271,13 @@ func generateBuckets(dir, outFlag, outPkg string, structs []StructInfo) error {
 	defer genGlobalsMu.Unlock()
 	generatedTypes = make(map[string]struct{}, len(structs))
 	generatedFields = seedGeneratedFields(structs)
-	namedKinds = make(map[string]TypeKind)
+	namedKinds = make(map[string]model.TypeKind)
 	for _, s := range structs {
 		generatedTypes[s.Name] = struct{}{}
 	}
 	seedNamedKinds(structs)
 	multiErrTypes = seedMultiErrTypes(structs)
-	cyclicTypes = computeCyclicTypes(structs)
+	cyclicTypes = model.CyclicTypes(structs)
 	defer func() {
 		generatedTypes = nil
 		generatedFields = nil
@@ -438,7 +301,7 @@ func generateBuckets(dir, outFlag, outPkg string, structs []StructInfo) error {
 // writeGenerated renders structs and replaces out only once the whole file
 // has formatted: a failed render must not truncate the previous good output
 // and take the package build down with it.
-func writeGenerated(out, pkg string, structs []StructInfo) error {
+func writeGenerated(out, pkg string, structs []model.StructInfo) error {
 	var buf bytes.Buffer
 	if err := generateTo(&buf, pkg, out, structs); err != nil {
 		return err
@@ -460,8 +323,8 @@ type bucketKey struct {
 
 // bucketStructs groups structs by (BuildTag, Test, XTest); bucketKeys gives
 // stable iteration order.
-func bucketStructs(structs []StructInfo) map[bucketKey][]StructInfo {
-	out := make(map[bucketKey][]StructInfo, len(structs))
+func bucketStructs(structs []model.StructInfo) map[bucketKey][]model.StructInfo {
+	out := make(map[bucketKey][]model.StructInfo, len(structs))
 	for _, s := range structs {
 		k := bucketKey{tag: s.BuildTag, test: s.Test, xtest: s.XTest}
 		out[k] = append(out[k], s)
@@ -472,7 +335,7 @@ func bucketStructs(structs []StructInfo) map[bucketKey][]StructInfo {
 // bucketKeys returns m's keys sorted deterministically (empty tag first, then
 // by tag, non-test before test, base package before external test) so
 // `wrote` output stays stable across runs.
-func bucketKeys(m map[bucketKey][]StructInfo) []bucketKey {
+func bucketKeys(m map[bucketKey][]model.StructInfo) []bucketKey {
 	keys := slices.Collect(maps.Keys(m))
 	boolOrder := func(a, b bool) int {
 		switch {
@@ -515,9 +378,9 @@ func packageFileName(dir, tag string, testFile, xtest bool) string {
 		name += "_xtest"
 	}
 	if testFile {
-		return name + genTestSuffix
+		return name + model.GenTestSuffix
 	}
-	return name + genSuffix
+	return name + model.GenSuffix
 }
 
 // slugifyTag makes a build-constraint expression filename-safe: non-alnum runs
@@ -543,11 +406,24 @@ func slugifyTag(tag string) string {
 }
 
 func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) error {
-	structs, pkgName, siblings, pkgCyclic, pkgMultiErr, pkgFields, err := parseFile(file, wanted)
+	res, err := model.ParseFile(file, wanted)
 	if err != nil {
 		return err
 	}
-	applyCLIFlags(structs)
+	structs, pkgName, siblings := res.Structs, res.PkgName, res.Siblings
+	cliFlags.Apply(structs)
+	// Cycle analysis, the multierr callee set and the field sets are
+	// package-wide: a cross-file A↔B cycle is invisible per file and loses the
+	// recursion depth cap, a cross-file multierr callee loses its drain
+	// branch, and a container emitter asks what a value type declared in
+	// ANOTHER file owns.
+	var pkgCyclic, pkgMultiErr map[string]struct{}
+	var pkgFields map[string][]model.FieldInfo
+	if res.Package != nil {
+		pkgCyclic = model.CyclicTypes(res.Package)
+		pkgMultiErr = seedMultiErrTypes(res.Package)
+		pkgFields = seedGeneratedFields(res.Package)
+	}
 
 	outPkg := pkgFlag
 	if outPkg == "" {
@@ -558,9 +434,9 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 	if out == "" {
 		// foo_test.go → foo_ggen_test.go; otherwise foo.go → foo_ggen.go.
 		if before, ok := strings.CutSuffix(file, "_test.go"); ok {
-			out = before + genTestSuffix
+			out = before + model.GenTestSuffix
 		} else {
-			out = strings.TrimSuffix(file, ".go") + genSuffix
+			out = strings.TrimSuffix(file, ".go") + model.GenSuffix
 		}
 	}
 	// Seed generatedTypes with every annotated struct in the package (incl.
@@ -572,10 +448,10 @@ func generateSingleFile(file string, wanted []string, outFlag, pkgFlag string) e
 	generatedTypes = make(map[string]struct{}, len(siblings)+len(structs))
 	// Package-wide, so a value type declared in a sibling file is judged by
 	// what it owns rather than falling back to "unknown".
-	generatedFields = make(map[string][]FieldInfo, len(pkgFields)+len(structs))
+	generatedFields = make(map[string][]model.FieldInfo, len(pkgFields)+len(structs))
 	maps.Copy(generatedFields, pkgFields)
 	maps.Copy(generatedFields, seedGeneratedFields(structs))
-	namedKinds = make(map[string]TypeKind)
+	namedKinds = make(map[string]model.TypeKind)
 	for n := range siblings {
 		generatedTypes[n] = struct{}{}
 	}
