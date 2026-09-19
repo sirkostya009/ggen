@@ -30,8 +30,6 @@ Skip when:
 go get github.com/sirkostya009/ggen/gen
 ```
 
-Until `gen` is tagged, `go get` may not resolve it: point a `replace` at a checkout.
-
 Put script under its own directory, run with `go run ./cmd/schemas`. Nothing generate it for you; no `//go:generate` convention imposed.
 
 ## Minimal script

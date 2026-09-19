@@ -54,12 +54,10 @@ gen/
 The script-facing package is the module root, `gen`. `cli/` requires `gen` for
 `gen/model`. Emitters are packages, so a script imports only the ones it uses.
 
-**Tradeoff to accept:** `go install github.com/sirkostya009/ggen/cli@latest`
-refuses a module with `replace` directives. `cli/go.mod` carries
-`replace github.com/sirkostya009/ggen/gen => ../gen` until `gen` is tagged
-(`go mod tidy` inside `cli` cannot resolve an unpublished version otherwise);
-the release step is: tag `gen/v0.x.y`, point `cli/go.mod` at it, drop the
-replace, tag cli.
+**Installability:** `go install github.com/sirkostya009/ggen/cli@latest`
+refuses a module with `replace` directives, so `cli/go.mod` requires `gen` by
+the pseudo-version of a pushed commit instead. No tag is needed for that; a
+`gen/v0.x.y` tag only changes the spelling of the requirement.
 
 ## Step 1 — extract the parser (DONE, awaiting review)
 
@@ -877,5 +875,5 @@ for _, t := range set.Types() {
 ## Open questions
 
 - README and SKILL.md do not cover `gen` yet.
-- Release: tag `gen`, then drop the `replace` from `cli/go.mod` and
-  `integrationtests/go.mod`.
+- Tagging `gen/v0.x.y`: optional, since cli installs from a pseudo-version.
+  `integrationtests/go.mod` keeps its `replace`; nothing installs it.

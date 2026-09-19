@@ -37,9 +37,14 @@ parser as a library, depends on `golang.org/x/tools`), `cli/` (the Go emitter
 over `gen/model`), `bench/`, `integrationtests/`. Neither `gen` nor `cli`
 imports the runtime package — the emitter writes its import path as a string
 literal into generated code, qualifying every runtime call as `ggen.`.
-`cli/go.mod` carries `replace github.com/sirkostya009/ggen/gen => ../gen` until
-`gen` is tagged; `go install …/cli@latest` refuses a module with a `replace`,
-so the tag has to land first.
+`cli/go.mod` requires `gen` by the pseudo-version of a pushed commit and has
+no `replace`, because `go install …/cli@latest` refuses a module that carries
+one. Inside the repo `go.work` overrides that requirement, so cli always builds
+against the live `gen` sources. The pin matters only to `go install`: when cli
+starts using `gen` API that is not in the pinned commit, push, then run
+`GOWORK=off go get github.com/sirkostya009/ggen/gen@<commit>` in `cli/`.
+`integrationtests/` and `bench/` keep their `replace` lines; nothing installs
+them.
 
 ## Conventions
 
