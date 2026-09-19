@@ -74,11 +74,11 @@ func validUTF8x64(b []byte) bool {
 	zero16 := archsimd.BroadcastUint8x16(0)
 	h := archsimd.LoadUint8x16(b)
 	hPrev1 := h.ConcatShiftBytesRight(zero16, 15)
-	hPrev1Hi := hPrev1.AsUint16x8().ShiftAllRight(4).AsUint8x16().And(nib16)
-	hCurHi := h.AsUint16x8().ShiftAllRight(4).AsUint8x16().And(nib16)
-	hsc := lo1.PermuteOrZero(hPrev1Hi.AsInt8x16()).
-		And(lo2.PermuteOrZero(hPrev1.And(nib16).AsInt8x16())).
-		And(lo3.PermuteOrZero(hCurHi.AsInt8x16()))
+	hPrev1Hi := hPrev1.ReshapeToUint16s().ShiftAllRight(4).ReshapeToUint8s().And(nib16)
+	hCurHi := h.ReshapeToUint16s().ShiftAllRight(4).ReshapeToUint8s().And(nib16)
+	hsc := lo1.PermuteOrZero(hPrev1Hi.BitsToInt8()).
+		And(lo2.PermuteOrZero(hPrev1.And(nib16).BitsToInt8())).
+		And(lo3.PermuteOrZero(hCurHi.BitsToInt8()))
 	hMust := h.ConcatShiftBytesRight(zero16, 14).SubSaturated(archsimd.BroadcastUint8x16(0xE0 - 0x80)).
 		Or(h.ConcatShiftBytesRight(zero16, 13).SubSaturated(archsimd.BroadcastUint8x16(0xF0 - 0x80))).
 		And(archsimd.BroadcastUint8x16(0x80))
@@ -110,11 +110,11 @@ func validUTF8x64(b []byte) bool {
 		p1 := archsimd.LoadUint8x64(b[i-1:])
 		p2 := archsimd.LoadUint8x64(b[i-2:])
 		p3 := archsimd.LoadUint8x64(b[i-3:])
-		prev1Hi := p1.AsUint16x32().ShiftAllRight(4).AsUint8x64().And(nib)
-		curHi := c.AsUint16x32().ShiftAllRight(4).AsUint8x64().And(nib)
-		sc := lut1.PermuteOrZeroGrouped(prev1Hi.AsInt8x64()).
-			And(lut2.PermuteOrZeroGrouped(p1.And(nib).AsInt8x64())).
-			And(lut3.PermuteOrZeroGrouped(curHi.AsInt8x64()))
+		prev1Hi := p1.ReshapeToUint16s().ShiftAllRight(4).ReshapeToUint8s().And(nib)
+		curHi := c.ReshapeToUint16s().ShiftAllRight(4).ReshapeToUint8s().And(nib)
+		sc := lut1.PermuteOrZeroGrouped(prev1Hi.BitsToInt8()).
+			And(lut2.PermuteOrZeroGrouped(p1.And(nib).BitsToInt8())).
+			And(lut3.PermuteOrZeroGrouped(curHi.BitsToInt8()))
 		must := p2.SubSaturated(sub3).Or(p3.SubSaturated(sub4)).And(high)
 		errAcc = errAcc.Or(must.Xor(sc))
 		prev = c

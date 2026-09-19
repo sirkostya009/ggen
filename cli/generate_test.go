@@ -24,8 +24,10 @@ func TestGenerate_basic(t *testing.T) {
 	structs := []model.StructInfo{{
 		Name: "TestStruct",
 		Fields: []model.FieldInfo{
-			{GoName: "Name", JSONName: "name", GoType: "string", Kind: model.KindString,
-				Validation: []model.ValidationRule{{Name: "required"}}},
+			{
+				GoName: "Name", JSONName: "name", GoType: "string", Kind: model.KindString,
+				Validation: []model.ValidationRule{{Name: "required"}},
+			},
 			{GoName: "Count", JSONName: "count", GoType: "int", Kind: model.KindInt},
 		},
 	}}
@@ -50,18 +52,26 @@ func TestGenerate_newValidators(t *testing.T) {
 	structs := []model.StructInfo{{
 		Name: "V",
 		Fields: []model.FieldInfo{
-			{GoName: "Code", JSONName: "code", GoType: "string", Kind: model.KindString,
-				Validation: []model.ValidationRule{{Name: "alphanum"}}},
-			{GoName: "URL", JSONName: "url", GoType: "string", Kind: model.KindString,
-				Validation: []model.ValidationRule{{Name: "url"}}},
-			{GoName: "Role", JSONName: "role", GoType: "string", Kind: model.KindString,
-				Validation: []model.ValidationRule{{Name: "oneof", Value: "a|b|c"}}},
-			{GoName: "N", JSONName: "n", GoType: "int", Kind: model.KindInt,
+			{
+				GoName: "Code", JSONName: "code", GoType: "string", Kind: model.KindString,
+				Validation: []model.ValidationRule{{Name: "alphanum"}},
+			},
+			{
+				GoName: "URL", JSONName: "url", GoType: "string", Kind: model.KindString,
+				Validation: []model.ValidationRule{{Name: "url"}},
+			},
+			{
+				GoName: "Role", JSONName: "role", GoType: "string", Kind: model.KindString,
+				Validation: []model.ValidationRule{{Name: "oneof", Value: "a|b|c"}},
+			},
+			{
+				GoName: "N", JSONName: "n", GoType: "int", Kind: model.KindInt,
 				Validation: []model.ValidationRule{
 					{Name: "gte", Value: "0"},
 					{Name: "lte", Value: "100"},
 					{Name: "gt", Value: "5"},
-				}},
+				},
+			},
 		},
 	}}
 	code, err := generate("p", structs)
@@ -177,7 +187,7 @@ func TestGenerate_runeGates(t *testing.T) {
 func TestOutputWrittenNextToSource(t *testing.T) {
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "nested", "pkg")
-	if err := os.MkdirAll(sub, 0755); err != nil {
+	if err := os.MkdirAll(sub, 0o755); err != nil {
 		t.Fatal(err)
 	}
 
@@ -188,7 +198,7 @@ type Msg struct {
 }
 `
 	goFile := filepath.Join(sub, "msg.go")
-	if err := os.WriteFile(goFile, []byte(src), 0644); err != nil {
+	if err := os.WriteFile(goFile, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -204,7 +214,7 @@ type Msg struct {
 	}
 
 	outFile := strings.TrimSuffix(goFile, ".go") + "_ggen.go"
-	if err := os.WriteFile(outFile, code, 0644); err != nil {
+	if err := os.WriteFile(outFile, code, 0o644); err != nil {
 		t.Fatal(err)
 	}
 

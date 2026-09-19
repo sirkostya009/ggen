@@ -47,7 +47,7 @@ func TestSkipValueSIMD_Parity(t *testing.T) {
 			}
 		}
 		// Truncations.
-		for cut := 0; cut < len(s); cut++ {
+		for cut := range len(s) {
 			cases = append(cases, []byte(s[:cut]))
 		}
 	}
@@ -97,7 +97,7 @@ func TestSkipSpaceSIMD_Parity(t *testing.T) {
 	ws := []byte(" \t\n\r")
 	rng := rand.New(rand.NewSource(31))
 	var cases [][]byte
-	for n := 0; n <= 130; n++ {
+	for n := range 131 {
 		b := make([]byte, n, n+1)
 		for i := range b {
 			b[i] = ws[rng.Intn(4)]
@@ -147,7 +147,7 @@ func TestStreamSkipValueSIMD_Parity(t *testing.T) {
 				}
 			}
 		}
-		for cut := 0; cut < len(s); cut++ {
+		for cut := range len(s) {
 			cases = append(cases, []byte(s[:cut]))
 		}
 	}

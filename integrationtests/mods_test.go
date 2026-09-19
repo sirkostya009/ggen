@@ -5,7 +5,6 @@ package integrationtests
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -20,8 +19,8 @@ import (
 //ggen:generate
 type ModStruct struct {
 	Email string   `json:"email" pipe:"trim tolower"`
-	Tags  []string `json:"tags" pipe:"inner:(trim tolower)"`
-	SKU   string   `json:"sku" pipe:"trimleft=SKU-"`
+	Tags  []string `json:"tags"  pipe:"inner:(trim tolower)"`
+	SKU   string   `json:"sku"   pipe:"trimleft=SKU-"`
 }
 
 func TestMods_trimLowerEmail(t *testing.T) {
@@ -87,7 +86,7 @@ type FallibleModMultierrStruct struct {
 
 func RejectShort(s string) (string, error) {
 	if len(s) < 3 {
-		return "", fmt.Errorf("rejected by mod")
+		return "", errors.New("rejected by mod")
 	}
 	return s, nil
 }
@@ -223,8 +222,8 @@ func TestCrossPkgValidator_accepts(t *testing.T) {
 //ggen:generate multierr
 type NestedMultierrStruct struct {
 	Inner FallibleModMultierrStruct `json:"inner"`
-	Name  string                    `json:"name" pipe:"required minlen=2"`
-	Code  int                       `json:"code" pipe:"gte=0 lte=100"`
+	Name  string                    `json:"name"  pipe:"required minlen=2"`
+	Code  int                       `json:"code"  pipe:"gte=0 lte=100"`
 }
 
 func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
@@ -424,10 +423,10 @@ func TestMultierr_NoCursorDesyncOnSingleErrorCallee(t *testing.T) {
 //
 //ggen:generate
 type R10PtrPipeOrder struct {
-	V  int     `json:"v" pipe:"gte=0 clamp=0|5"`
-	P  *int    `json:"p" pipe:"gte=0 clamp=0|5"`
+	V  int     `json:"v"  pipe:"gte=0 clamp=0|5"`
+	P  *int    `json:"p"  pipe:"gte=0 clamp=0|5"`
 	Cp *int    `json:"cp" pipe:"clamp=0|5 gte=1"`
-	Q  string  `json:"q" pipe:"minlen=3 trim"`
+	Q  string  `json:"q"  pipe:"minlen=3 trim"`
 	Qp *string `json:"qp" pipe:"minlen=3 trim"`
 }
 

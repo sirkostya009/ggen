@@ -119,11 +119,11 @@ func validUTF8x16(b []byte) bool {
 			c, _ = archsimd.LoadUint8x16Part(b[i:]) // zero-padded tail
 		}
 		prev1 := c.ConcatShiftBytesRight(prev, 15)
-		prev1Hi := prev1.AsUint16x8().ShiftAllRight(4).AsUint8x16().And(nib)
-		curHi := c.AsUint16x8().ShiftAllRight(4).AsUint8x16().And(nib)
-		sc := lut1.PermuteOrZero(prev1Hi.AsInt8x16()).
-			And(lut2.PermuteOrZero(prev1.And(nib).AsInt8x16())).
-			And(lut3.PermuteOrZero(curHi.AsInt8x16()))
+		prev1Hi := prev1.ReshapeToUint16s().ShiftAllRight(4).ReshapeToUint8s().And(nib)
+		curHi := c.ReshapeToUint16s().ShiftAllRight(4).ReshapeToUint8s().And(nib)
+		sc := lut1.PermuteOrZero(prev1Hi.BitsToInt8()).
+			And(lut2.PermuteOrZero(prev1.And(nib).BitsToInt8())).
+			And(lut3.PermuteOrZero(curHi.BitsToInt8()))
 		prev2 := c.ConcatShiftBytesRight(prev, 14)
 		prev3 := c.ConcatShiftBytesRight(prev, 13)
 		must23_80 := prev2.SubSaturated(sub3).Or(prev3.SubSaturated(sub4)).And(high)

@@ -10,9 +10,9 @@ func IsAlphanum(s string) bool {
 	if len(s) == 0 {
 		return false
 	}
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
-		if !((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')) {
+		if (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
 			return false
 		}
 	}
@@ -24,7 +24,7 @@ func IsNumeric(s string) bool {
 	if len(s) == 0 {
 		return false
 	}
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if c := s[i]; c < '0' || c > '9' {
 			return false
 		}
@@ -61,9 +61,9 @@ func IsHex(s string) bool {
 	if len(s) == 0 {
 		return false
 	}
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
-		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') && (c < 'A' || c > 'F') {
 			return false
 		}
 	}

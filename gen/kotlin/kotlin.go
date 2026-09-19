@@ -266,6 +266,7 @@ func (e *Emitter) base(ctx *gen.Context, s *gen.Shape, t *gen.Type, where string
 			ctx.Report.Add(where, "the enum admits Go's zero value, which no Kotlin enum entry holds; rendered as "+primitive(t)+" (Strict keeps the enum)")
 		}
 	}
+	//exhaustive:ignore not every kind applies here
 	switch t.Wire {
 	case gen.WireString, gen.WireInteger, gen.WireNumber, gen.WireBool:
 		if t.Go == gen.BigInt || t.Go == gen.Number {
@@ -289,6 +290,7 @@ func (e *Emitter) base(ctx *gen.Context, s *gen.Shape, t *gen.Type, where string
 
 // primitive is the Kotlin type of a scalar by its wire and Go kind.
 func primitive(t *gen.Type) string {
+	//exhaustive:ignore not every kind applies here
 	switch t.Wire {
 	case gen.WireString:
 		return "String"
@@ -320,6 +322,7 @@ func (e *Emitter) zero(t *gen.Type, typ string) string {
 	if strings.HasSuffix(typ, "?") {
 		return "null"
 	}
+	//exhaustive:ignore not every kind applies here
 	switch t.Go {
 	case gen.Time, gen.Duration, gen.IP, gen.Addr, gen.Prefix, gen.URL, gen.BigInt, gen.BigFloat, gen.BigRat:
 		return "" // a formatted zero is not the type's own zero literal

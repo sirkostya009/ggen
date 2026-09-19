@@ -141,7 +141,7 @@ func TestFormat_Base64Parseable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("base64 decode of %q: %v", s, err)
 	}
-	if string(decoded) != string(want) {
+	if !bytes.Equal(decoded, want) {
 		t.Errorf("decoded = %q, want %q", decoded, want)
 	}
 }
@@ -680,8 +680,8 @@ type TimeCustomTiny struct {
 //
 //ggen:generate
 type TimeEscapingLayout struct {
-	Quote time.Time `json:"quote,format:'x\"y 2006'"`
-	Slash time.Time `json:"slash,format:'a\\b 2006'"`
+	Quote time.Time `json:"quote,format:'x\"y 2006'"` //nolint:govet // layout carries spaces
+	Slash time.Time `json:"slash,format:'a\\b 2006'"` //nolint:govet // layout carries spaces
 }
 
 func TestFormat_CustomLayoutEscapes(t *testing.T) {

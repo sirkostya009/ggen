@@ -93,7 +93,7 @@ func TestMarshalSlicePointerElems(t *testing.T) {
 // TestMarshalSliceSingleAlloc: the output buffer must be presized from the
 // items' actual JSONSize sum — not the zero value's — so marshaling does a
 // single allocation instead of walking the append growth chain.
-func TestMarshalSliceSingleAlloc(t *testing.T) {
+func TestMarshalSliceSingleAlloc(t *testing.T) { //nolint:paralleltest // measures allocations
 	items := make([]fatItem, 64)
 	for i := range items {
 		items[i] = fatItem{s: strings.Repeat("x", 100)}
@@ -139,7 +139,7 @@ func refEscapeAt(dst []byte, s string, i, start int) (int, []byte) {
 
 func refNoHTML(dst []byte, s string) []byte {
 	start := 0
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if c >= 0x20 && c != '"' && c != '\\' {
 			continue
@@ -154,7 +154,7 @@ func refNoHTML(dst []byte, s string) []byte {
 
 func refHTML(dst []byte, s string) []byte {
 	start := 0
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if c >= 0x20 && c != '"' && c != '\\' && c != '<' && c != '>' && c != '&' {
 			continue
@@ -171,16 +171,18 @@ func refHTML(dst []byte, s string) []byte {
 // comparison-chain reference over every byte value and representative strings.
 func TestAppendString_TableParity(t *testing.T) {
 	t.Parallel()
-	inputs := []string{"", "hello world", "a\"b\\c", "tab\tnl\n", "<a>&</a>",
-		"\x00\x1f\x7f", "ünïcödé", strings.Repeat("x", 200)}
+	inputs := []string{
+		"", "hello world", "a\"b\\c", "tab\tnl\n", "<a>&</a>",
+		"\x00\x1f\x7f", "ünïcödé", strings.Repeat("x", 200),
+	}
 	for b := range 256 {
 		inputs = append(inputs, string([]byte{byte(b)}))
 	}
 	for _, in := range inputs {
-		if got, want := AppendStringNoHTML(nil, in), refNoHTML(nil, in); string(got) != string(want) {
+		if got, want := AppendStringNoHTML(nil, in), refNoHTML(nil, in); !bytes.Equal(got, want) {
 			t.Errorf("NoHTML(%q) = %q, want %q", in, got, want)
 		}
-		if got, want := AppendString(nil, in), refHTML(nil, in); string(got) != string(want) {
+		if got, want := AppendString(nil, in), refHTML(nil, in); !bytes.Equal(got, want) {
 			t.Errorf("HTML(%q) = %q, want %q", in, got, want)
 		}
 	}
@@ -225,6 +227,7 @@ func TestSliceWalkers_NilVsEmpty(t *testing.T) {
 // AppendUnixSeconds must be exact where float64(UnixNano())/1e9 was not:
 // outside the int64-nano range (~1678-2262) and at sub-100ns precision.
 func TestAppendUnixSeconds(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		t    time.Time
 		want string
@@ -482,6 +485,7 @@ func (nilFuncText) MarshalText() ([]byte, error) { return []byte("fn"), nil }
 // not read their nil data word as a typed-nil pointer — while a typed-nil
 // pointer still emits null.
 func TestAppendAny_NilMapFuncNotNull(t *testing.T) {
+	t.Parallel()
 	cases := []any{nilMapJSON(nil), nilFuncText(nil), (*nilMapJSON)(nil)}
 	for _, v := range cases {
 		want, err := json.Marshal(v)

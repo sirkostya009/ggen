@@ -10,7 +10,7 @@ package thirdparty2
 //
 //ggen:generate marshal unmarshal
 type External2 struct {
-	Key   string `json:"key" pipe:"required minlen=1"`
+	Key   string `json:"key"   pipe:"required minlen=1"`
 	Value int    `json:"value" pipe:"gte=0"`
 }
 

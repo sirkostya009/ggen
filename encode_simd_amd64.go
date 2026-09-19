@@ -25,8 +25,9 @@ package ggen
 
 import (
 	"math/bits"
-	"simd/archsimd"
 	"unsafe"
+
+	"simd/archsimd"
 )
 
 // appendEscapedByte appends the JSON escape for c — the shared cold path of

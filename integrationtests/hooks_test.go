@@ -14,7 +14,7 @@ import (
 //ggen:generate marshal unmarshal
 type HookedStruct struct {
 	Name string `json:"name" pipe:"required minlen=1 maxlen=20"`
-	N    int    `json:"n" pipe:"gte=0 lte=100"`
+	N    int    `json:"n"    pipe:"gte=0 lte=100"`
 }
 
 // Compile-time interface satisfaction for the []byte-based MarshalJSON/
@@ -72,9 +72,11 @@ func TestHookedRoundtrip(t *testing.T) {
 		unmarshal func([]byte, any) error
 	}{
 		{"jsonv1", jsonv1.Marshal, jsonv1.Unmarshal},
-		{"jsonv2",
+		{
+			"jsonv2",
 			func(v any) ([]byte, error) { return jsonv2.Marshal(v) },
-			func(b []byte, v any) error { return jsonv2.Unmarshal(b, v) }},
+			func(b []byte, v any) error { return jsonv2.Unmarshal(b, v) },
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()

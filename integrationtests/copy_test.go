@@ -50,6 +50,7 @@ type AliasDoc struct {
 // every retained CopyDoc value — string, slice elem, map key/value, any, and
 // json.RawMessage — stays intact.
 func TestCopy_AliasVsCopy(t *testing.T) {
+	t.Parallel()
 	const js = `{"name":"hello world","tags":["alpha","beta"],"props":{"key":"value"},"extra":"xtra","raw":{"a":"b"},"refs":[{"label":"ref-one"}]}`
 
 	// Alias control (Name-only payload): mutating the source MUST corrupt the
@@ -105,6 +106,7 @@ func TestCopy_AliasVsCopy(t *testing.T) {
 // keys (ggen.AnyCopy), and pointer-slice element structs. A content
 // fingerprint taken before and after scribbling the source must be identical.
 func TestCopy_NestedDecouples(t *testing.T) {
+	t.Parallel()
 	const js = `{
 		"name": "root",
 		"tags": ["t0", "t1", "t2"],
@@ -155,6 +157,7 @@ func TestCopy_NestedDecouples(t *testing.T) {
 // decoded value must equal the unescaped Go string both before and after the
 // source is scribbled.
 func TestCopy_EscapedDecouples(t *testing.T) {
+	t.Parallel()
 	const js = `{"name":"a\nb\"c\\dé😀","tags":["té","plain"],"props":{"k\ny":"v\"w"},"extra":"x😀","refs":[{"label":"r\t0"}]}`
 
 	wantName := "a\nb\"c\\dé\U0001F600"
@@ -252,6 +255,7 @@ type CopyURLDoc struct {
 // an aliasing scan under -copy would leave every one of them pointing at the
 // caller's buffer.
 func TestCopy_URLDecouples(t *testing.T) {
+	t.Parallel()
 	src := []byte(`{"u":"https://example.com/pathpart?q=1234#frag"}`)
 	d, _, err := CopyURLDoc{}.DecodeFrom(src)
 	if err != nil {
@@ -278,6 +282,7 @@ type CopyIPDoc struct {
 // failure literal retains the scanned text, and under -copy that must not
 // alias the input either. The stream path already cloned it.
 func TestCopy_NetIPErrorTextDecouples(t *testing.T) {
+	t.Parallel()
 	src := []byte(`{"ip":"not-an-ip-at-all"}`)
 	_, _, err := CopyIPDoc{}.DecodeFrom(src)
 	var pe *net.ParseError

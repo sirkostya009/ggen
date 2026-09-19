@@ -199,13 +199,25 @@ func TestStringTag_quotedTextTakesNumberGrammar(t *testing.T) {
 		payload string
 		want    error
 	}{
-		{`{"f64":"NaN"}`, ggen.ErrBadNumber}, {`{"f64":"Infinity"}`, ggen.ErrBadNumber}, {`{"f64":"-Infinity"}`, ggen.ErrBadNumber},
-		{`{"f64":"+1"}`, ggen.ErrBadNumber}, {`{"f64":"01"}`, ggen.ErrBadNumber}, {`{"f64":"1_0"}`, ggen.ErrBadNumber},
-		{`{"f64":"1."}`, ggen.ErrBadNumber}, {`{"f64":".5"}`, ggen.ErrBadNumber}, {`{"f64":""}`, ggen.ErrBadNumber},
-		{`{"f64":" 1"}`, ggen.ErrBadNumber}, {`{"f64":"1 "}`, ggen.ErrBadNumber},
-		{`{"i64":"+1"}`, ggen.ErrBadNumber}, {`{"i64":"01"}`, ggen.ErrBadNumber}, {`{"i64":"1.0"}`, ggen.ErrBadNumber},
-		{`{"i64":"1e2"}`, ggen.ErrBadNumber}, {`{"u64":"01"}`, ggen.ErrBadNumber}, {`{"u64":"-1"}`, ggen.ErrBadNumber},
-		{`{"i8":"300"}`, ggen.ErrNumberOverflow}, {`{"f32":"1e39"}`, ggen.ErrNumberOverflow},
+		{`{"f64":"NaN"}`, ggen.ErrBadNumber},
+		{`{"f64":"Infinity"}`, ggen.ErrBadNumber},
+		{`{"f64":"-Infinity"}`, ggen.ErrBadNumber},
+		{`{"f64":"+1"}`, ggen.ErrBadNumber},
+		{`{"f64":"01"}`, ggen.ErrBadNumber},
+		{`{"f64":"1_0"}`, ggen.ErrBadNumber},
+		{`{"f64":"1."}`, ggen.ErrBadNumber},
+		{`{"f64":".5"}`, ggen.ErrBadNumber},
+		{`{"f64":""}`, ggen.ErrBadNumber},
+		{`{"f64":" 1"}`, ggen.ErrBadNumber},
+		{`{"f64":"1 "}`, ggen.ErrBadNumber},
+		{`{"i64":"+1"}`, ggen.ErrBadNumber},
+		{`{"i64":"01"}`, ggen.ErrBadNumber},
+		{`{"i64":"1.0"}`, ggen.ErrBadNumber},
+		{`{"i64":"1e2"}`, ggen.ErrBadNumber},
+		{`{"u64":"01"}`, ggen.ErrBadNumber},
+		{`{"u64":"-1"}`, ggen.ErrBadNumber},
+		{`{"i8":"300"}`, ggen.ErrNumberOverflow},
+		{`{"f32":"1e39"}`, ggen.ErrNumberOverflow},
 	}
 	for _, c := range reject {
 		var std StringTagStruct

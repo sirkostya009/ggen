@@ -28,16 +28,16 @@ type Addr struct {
 //ggen:generate
 //easyjson:json
 type Node struct {
-	ID        int64             `json:"id" pipe:"required gte=0"`
-	Name      string            `json:"name" pipe:"required minlen=1 maxlen=128"`
-	Score     float64           `json:"score" pipe:"gte=0 lte=100"`
+	ID        int64             `json:"id"              pipe:"required gte=0"`
+	Name      string            `json:"name"            pipe:"required minlen=1 maxlen=128"`
+	Score     float64           `json:"score"           pipe:"gte=0 lte=100"`
 	Active    bool              `json:"active"`
-	Tags      []string          `json:"tags" pipe:"maxlen=64 inner:(minlen=1 maxlen=64)"`
-	Props     map[string]string `json:"props" pipe:"maxlen=64"`
-	Children  []Node            `json:"children" pipe:"maxlen=16"`
+	Tags      []string          `json:"tags"            pipe:"maxlen=64 inner:(minlen=1 maxlen=64)"`
+	Props     map[string]string `json:"props"           pipe:"maxlen=64"`
+	Children  []Node            `json:"children"        pipe:"maxlen=16"`
 	Coords    [2]float64        `json:"coords"`
-	Refs      []*Addr           `json:"refs" pipe:"maxlen=16"`
-	Matrix    [][]int           `json:"matrix" pipe:"maxlen=16 inner:maxlen=32"`
+	Refs      []*Addr           `json:"refs"            pipe:"maxlen=16"`
+	Matrix    [][]int           `json:"matrix"          pipe:"maxlen=16 inner:maxlen=32"`
 	Parent    *Addr             `json:"parent,omitzero"`
 	CreatedAt time.Time         `json:"createdAt"`
 	Blob      []byte            `json:"blob"`
@@ -87,16 +87,16 @@ type CopyAddr struct {
 //
 //ggen:generate copy
 type CopyNode struct {
-	ID        int64             `json:"id" pipe:"required gte=0"`
-	Name      string            `json:"name" pipe:"required minlen=1 maxlen=128"`
-	Score     float64           `json:"score" pipe:"gte=0 lte=100"`
+	ID        int64             `json:"id"              pipe:"required gte=0"`
+	Name      string            `json:"name"            pipe:"required minlen=1 maxlen=128"`
+	Score     float64           `json:"score"           pipe:"gte=0 lte=100"`
 	Active    bool              `json:"active"`
-	Tags      []string          `json:"tags" pipe:"maxlen=64 inner:(minlen=1 maxlen=64)"`
-	Props     map[string]string `json:"props" pipe:"maxlen=64"`
-	Children  []CopyNode        `json:"children" pipe:"maxlen=16"`
+	Tags      []string          `json:"tags"            pipe:"maxlen=64 inner:(minlen=1 maxlen=64)"`
+	Props     map[string]string `json:"props"           pipe:"maxlen=64"`
+	Children  []CopyNode        `json:"children"        pipe:"maxlen=16"`
 	Coords    [2]float64        `json:"coords"`
-	Refs      []*CopyAddr       `json:"refs" pipe:"maxlen=16"`
-	Matrix    [][]int           `json:"matrix" pipe:"maxlen=16 inner:maxlen=32"`
+	Refs      []*CopyAddr       `json:"refs"            pipe:"maxlen=16"`
+	Matrix    [][]int           `json:"matrix"          pipe:"maxlen=16 inner:maxlen=32"`
 	Parent    *CopyAddr         `json:"parent,omitzero"`
 	CreatedAt time.Time         `json:"createdAt"`
 	Blob      []byte            `json:"blob"`
@@ -136,8 +136,8 @@ func nodeToPlain(n Node) NodePlain {
 	}
 	if n.Children != nil {
 		p.Children = make([]NodePlain, len(n.Children))
-		for i, c := range n.Children {
-			p.Children[i] = nodeToPlain(c)
+		for i := range n.Children {
+			p.Children[i] = nodeToPlain(n.Children[i])
 		}
 	}
 	return p
@@ -374,7 +374,7 @@ func genRaw(g *gen) json.RawMessage {
 	case 3:
 		return json.RawMessage(fmt.Sprintf(`%q`, g.str(32+g.intn(96))))
 	case 4:
-		return json.RawMessage(fmt.Sprintf(`%d`, g.next()%(1<<60)))
+		return json.RawMessage(strconv.FormatUint(g.next()%(1<<60), 10))
 	default:
 		return json.RawMessage(`null`)
 	}
@@ -415,7 +415,7 @@ func appendRawScalar(b []byte, g *gen) []byte {
 	case 0:
 		return append(b, fmt.Sprintf(`%q`, g.str(8+g.intn(48)))...)
 	case 1:
-		return append(b, fmt.Sprintf(`%d`, g.next()%(1<<48))...)
+		return append(b, strconv.FormatUint(g.next()%(1<<48), 10)...)
 	case 2:
 		return append(b, fmt.Sprintf(`%.4f`, g.f64()*10_000)...)
 	case 3:
@@ -433,7 +433,7 @@ func appendRawScalar(b []byte, g *gen) []byte {
 			if i > 0 {
 				b = append(b, ',')
 			}
-			b = append(b, fmt.Sprintf(`%d`, g.next()%(1<<32))...)
+			b = append(b, strconv.FormatUint(g.next()%(1<<32), 10)...)
 		}
 		return append(b, ']')
 	}

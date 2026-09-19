@@ -70,7 +70,7 @@ type Scalars struct {
 	Role Role            `json:"role"`
 	Cnt  Count           `json:"cnt"`
 	Col  Color           `json:"col"`
-	Req  string          `json:"req" pipe:"required"`
+	Req  string          `json:"req"          pipe:"required"`
 	Any  any             `json:"any"`
 	Raw  json.RawMessage `json:"raw"`
 	Om   string          `json:"om,omitempty"`
@@ -91,7 +91,7 @@ type Stdlib struct {
 	Hex    []byte         `json:"hex,format:hex"`
 	Arr    []byte         `json:"arr,format:array"`
 	Fixed  [4]byte        `json:"fixed"`
-	MinB   []byte         `json:"min_b" pipe:"minlen=2"`
+	MinB   []byte         `json:"min_b"                    pipe:"minlen=2"`
 	IP     net.IP         `json:"ip"`
 	Addr   netip.Addr     `json:"addr"`
 	Prefix netip.Prefix   `json:"prefix"`
@@ -157,7 +157,7 @@ func IsEven(n int) bool { return n%2 == 0 }
 //
 //ggen:generate ignoreunknown
 type Node struct {
-	Value    string  `json:"value" pipe:"required"`
+	Value    string  `json:"value"          pipe:"required"`
 	Children []*Node `json:"children"`
 	Next     *Pair   `json:"next,omitempty"`
 }
@@ -186,6 +186,7 @@ type Embedded struct {
 //ggen:generate
 type More struct {
 	Embedded
+
 	U       uint                   `json:"u"`
 	U16     uint16                 `json:"u16"`
 	I16     int16                  `json:"i16"`

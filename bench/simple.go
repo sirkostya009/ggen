@@ -98,7 +98,7 @@ type Preferences struct {
 	BetaFeatures       bool   `json:"betaFeatures"`
 }
 
-// Copy* mirror the Account family under -copy (`//ggen:generate copy`), like
+// CopyAccount and the other Copy* types mirror the Account family under -copy (`//ggen:generate copy`), like
 // CopyNode mirrors Node: every retained string is copied out of the input
 // instead of aliased. Wire-identical to Account, so the `ggen_copy` NoAlloc
 // row decodes the same AccountPayload. Geo is reused as-is (no strings).
@@ -183,7 +183,7 @@ type CopyPreferences struct {
 	BetaFeatures       bool   `json:"betaFeatures"`
 }
 
-// Easy* mirror the Account family for the easyjson rows, kept on separate
+// EasyAccount and the other Easy* types mirror the Account family for the easyjson rows, kept on separate
 // types so easyjson's methods don't leak into the jsonv2/sonic rows. Same
 // wire shape — see "easyjson method leakage" in bench/CLAUDE.md.
 //

@@ -225,7 +225,7 @@ func R10PtrLabel(p *int) string {
 //ggen:generate
 type R10ConvInputs struct {
 	Named R10Money `json:"named" pipe:"@R10FromScore/nullzero"`
-	Ptr   R10Money `json:"ptr" pipe:"@R10FromPtr/."`
+	Ptr   R10Money `json:"ptr"   pipe:"@R10FromPtr/."`
 	Label string   `json:"label" pipe:". / @R10PtrLabel"`
 }
 

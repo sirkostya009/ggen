@@ -327,8 +327,8 @@ func TestMerge_multiLevelStructLeafReused(t *testing.T) {
 	if got.Addr != mid || *got.Addr != leaf {
 		t.Errorf("chain not reused")
 	}
-	if (**got.Addr).City != "Kyiv" {
-		t.Errorf("City=%q want Kyiv", (**got.Addr).City)
+	if (*got.Addr).City != "Kyiv" {
+		t.Errorf("City=%q want Kyiv", (*got.Addr).City)
 	}
 }
 
@@ -812,7 +812,9 @@ type R10CarriedLeaves struct {
 
 func TestMerge_pointerContainerLeavesReset(t *testing.T) {
 	t.Parallel()
-	first, _, err := R10CarriedLeaves{}.DecodeFrom([]byte(`{"mps":{"a":[1,2,3]},"mpm":{"a":{"x":1,"y":2}},"mpps":{"a":[1,2,3]},"sps":[[1,2,3]],"spm":[{"x":1,"y":2}],"pms":{"a":[1,2,3]}}`))
+	first, _, err := R10CarriedLeaves{}.DecodeFrom(
+		[]byte(`{"mps":{"a":[1,2,3]},"mpm":{"a":{"x":1,"y":2}},"mpps":{"a":[1,2,3]},"sps":[[1,2,3]],"spm":[{"x":1,"y":2}],"pms":{"a":[1,2,3]}}`),
+	)
 	if err != nil {
 		t.Fatal(err)
 	}

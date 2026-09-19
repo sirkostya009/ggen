@@ -1,6 +1,7 @@
 package model
 
 import (
+	"errors"
 	"fmt"
 	"go/types"
 	"reflect"
@@ -105,22 +106,22 @@ func tokenizePipe(tag string) ([]ptok, error) {
 	n := len(tag)
 	for i < n {
 		c := tag[i]
-		switch {
-		case c == ' ' || c == '\t' || c == '\n' || c == '\r':
+		switch c {
+		case ' ', '\t', '\n', '\r':
 			i++
-		case c == '/':
+		case '/':
 			toks = append(toks, ptok{kind: ptSlash})
 			i++
-		case c == '~':
+		case '~':
 			toks = append(toks, ptok{kind: ptTilde})
 			i++
-		case c == '(':
+		case '(':
 			toks = append(toks, ptok{kind: ptLParen})
 			i++
-		case c == ')':
+		case ')':
 			toks = append(toks, ptok{kind: ptRParen})
 			i++
-		case c == ';':
+		case ';':
 			toks = append(toks, ptok{kind: ptSemi})
 			i++
 		default:
@@ -158,7 +159,7 @@ func tokenizePipe(tag string) ([]ptok, error) {
 					if !closed {
 						// Auto-closing would silently change the rule's
 						// semantics (`oneof='New York|LA` reads as one part).
-						return nil, fmt.Errorf("unterminated ' quote in pipe tag")
+						return nil, errors.New("unterminated ' quote in pipe tag")
 					}
 					sb.WriteByte('\'')
 					continue
@@ -230,6 +231,7 @@ func parsePipeTag(tag string) (ParsedPipe, error) {
 	filtered := toks[:0:0]
 	depth := 0
 	for i, t := range toks {
+		//exhaustive:ignore not every kind applies here
 		switch t.kind {
 		case ptLParen:
 			depth++
@@ -242,13 +244,13 @@ func parsePipeTag(tag string) (ParsedPipe, error) {
 			switch t.text {
 			case "required":
 				if out.Presence == PresenceOptional {
-					return out, fmt.Errorf("`required` and `optional` are mutually exclusive")
+					return out, errors.New("`required` and `optional` are mutually exclusive")
 				}
 				out.Presence = PresenceRequired
 				continue
 			case "optional":
 				if out.Presence == PresenceRequired {
-					return out, fmt.Errorf("`required` and `optional` are mutually exclusive")
+					return out, errors.New("`required` and `optional` are mutually exclusive")
 				}
 				out.Presence = PresenceOptional
 				continue
@@ -335,10 +337,11 @@ func parseVariants(toks []ptok) ([]Variant, error) {
 	var vars []Variant
 	expectWord := true
 	for _, t := range toks {
+		//exhaustive:ignore not every kind applies here
 		switch t.kind {
 		case ptSlash:
 			if expectWord {
-				return nil, fmt.Errorf("empty decode variant around `/`")
+				return nil, errors.New("empty decode variant around `/`")
 			}
 			expectWord = true
 		case ptTilde, ptSemi:
@@ -356,7 +359,7 @@ func parseVariants(toks []ptok) ([]Variant, error) {
 		}
 	}
 	if expectWord {
-		return nil, fmt.Errorf("trailing `/` with no decode variant")
+		return nil, errors.New("trailing `/` with no decode variant")
 	}
 	return vars, nil
 }
@@ -370,7 +373,7 @@ func parseOneVariant(word string) (Variant, error) {
 	case strings.HasPrefix(word, "@"):
 		ref, msg := splitFuncMsg(word[1:])
 		if ref == "" {
-			return Variant{}, fmt.Errorf("empty `@` converter reference")
+			return Variant{}, errors.New("empty `@` converter reference")
 		}
 		return Variant{Kind: VariantConvert, FuncName: ref, Msg: msg}, nil
 	}
@@ -406,9 +409,9 @@ func parseScope(toks []ptok, lvl int, out *ParsedPipe) error {
 		case ptTilde:
 			i++ // cosmetic separator
 		case ptSlash:
-			return fmt.Errorf("`/` is only valid in the decode stage")
+			return errors.New("`/` is only valid in the decode stage")
 		case ptSemi:
-			return fmt.Errorf("`;` is no longer supported — group inner steps with `inner:(…)`")
+			return errors.New("`;` is no longer supported — group inner steps with `inner:(…)`")
 		case ptLParen, ptRParen:
 			return fmt.Errorf("unexpected `%s` — parentheses must follow `inner:`/`keys:`", parenText(t.kind))
 		case ptWord:
@@ -449,7 +452,7 @@ func parsePrefixEntry(toks []ptok, idx int, rest string, lvl int, isKeys bool, o
 	if isKeys {
 		label = "keys:"
 		if lvl != 0 {
-			return 0, fmt.Errorf("`keys:` is only valid at the top level")
+			return 0, errors.New("`keys:` is only valid at the top level")
 		}
 	}
 	addOne := func(s Step) {
@@ -475,11 +478,11 @@ func parsePrefixEntry(toks []ptok, idx int, rest string, lvl int, isKeys bool, o
 	}
 	switch toks[idx+1].kind {
 	case ptLParen:
-		close, err := matchParen(toks, idx+1)
+		closeIdx, err := matchParen(toks, idx+1)
 		if err != nil {
 			return 0, err
 		}
-		group := toks[idx+2 : close]
+		group := toks[idx+2 : closeIdx]
 		if len(group) == 0 {
 			return 0, fmt.Errorf("empty `%s(…)` group", label)
 		}
@@ -490,13 +493,13 @@ func parsePrefixEntry(toks []ptok, idx int, rest string, lvl int, isKeys bool, o
 				return 0, err
 			}
 			if len(tmp.Levels) > 0 || len(tmp.Keys) > 0 {
-				return 0, fmt.Errorf("`inner:`/`keys:` is not valid inside `keys:(…)`")
+				return 0, errors.New("`inner:`/`keys:` is not valid inside `keys:(…)`")
 			}
 			out.Keys = append(out.Keys, tmp.Outer...)
 		} else if err := parseScope(group, lvl+1, out); err != nil {
 			return 0, err
 		}
-		return close + 1, nil
+		return closeIdx + 1, nil
 	case ptWord:
 		s, err := parseStep(toks[idx+1].text)
 		if err != nil {
@@ -513,6 +516,7 @@ func parsePrefixEntry(toks []ptok, idx int, rest string, lvl int, isKeys bool, o
 func matchParen(toks []ptok, open int) (int, error) {
 	depth := 0
 	for i := open; i < len(toks); i++ {
+		//exhaustive:ignore not every kind applies here
 		switch toks[i].kind {
 		case ptLParen:
 			depth++
@@ -522,7 +526,7 @@ func matchParen(toks []ptok, open int) (int, error) {
 			}
 		}
 	}
-	return 0, fmt.Errorf("unbalanced `(` — missing `)`")
+	return 0, errors.New("unbalanced `(` — missing `)`")
 }
 
 func parenText(k ptokKind) string {
@@ -538,7 +542,7 @@ func parenText(k ptokKind) string {
 func parseStep(word string) (Step, error) {
 	switch word {
 	case "":
-		return Step{}, fmt.Errorf("empty pipe step")
+		return Step{}, errors.New("empty pipe step")
 	case "required", "optional":
 		// parsePipeTag lifts every top-level presence word before the scope
 		// walk, so one reaching a step sits under `inner:`/`keys:`.
@@ -547,7 +551,7 @@ func parseStep(word string) (Step, error) {
 	if strings.HasPrefix(word, "@") {
 		ref, msg := splitFuncMsg(word[1:])
 		if ref == "" {
-			return Step{}, fmt.Errorf("empty `@` reference")
+			return Step{}, errors.New("empty `@` reference")
 		}
 		// Name keeps the leading `@` for resolver lookup.
 		return Step{V: ValidationRule{Name: "@" + ref, Msg: msg}}, nil
@@ -700,6 +704,7 @@ func applyPipeTags(fi *FieldInfo, tag reflect.StructTag, goName string) error {
 }
 
 func glyph(k ptokKind) string {
+	//exhaustive:ignore not every kind applies here
 	switch k {
 	case ptSlash:
 		return "/"
@@ -778,17 +783,17 @@ func parseHintScope(toks []ptok, lvl int, out *HintTag) error {
 				continue
 			}
 			if i+1 >= len(toks) {
-				return fmt.Errorf("`inner:` with no following capacity or `(…)` group")
+				return errors.New("`inner:` with no following capacity or `(…)` group")
 			}
 			if toks[i+1].kind == ptLParen {
-				close, err := matchParen(toks, i+1)
+				closeIdx, err := matchParen(toks, i+1)
 				if err != nil {
 					return err
 				}
-				if err := parseHintScope(toks[i+2:close], lvl+1, out); err != nil {
+				if err := parseHintScope(toks[i+2:closeIdx], lvl+1, out); err != nil {
 					return err
 				}
-				i = close + 1
+				i = closeIdx + 1
 				continue
 			}
 			if err := parseHintScope(toks[i+1:i+2], lvl+1, out); err != nil {

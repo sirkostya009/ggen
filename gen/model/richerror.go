@@ -112,10 +112,12 @@ type RichError struct {
 	Pos      token.Position // file:line:col; zero value when unknown
 	Msg      string         // main error message — what failed
 	CodeSpan string         // substring within the source line to highlight + point caret at
-	Anchor   string         // disambiguating prefix searched before CodeSpan (positioning only, not highlighted) when CodeSpan is short enough to collide earlier on the line
-	BotHint  string         // technical context for concise/agent output
-	UserHint string         // remedy suggestion for human output (Note:)
-	Err      error          // optional underlying error for errors.Unwrap
+	// disambiguating prefix searched before CodeSpan (positioning only, not highlighted) when CodeSpan
+	// is short enough to collide earlier on the line
+	Anchor   string
+	BotHint  string // technical context for concise/agent output
+	UserHint string // remedy suggestion for human output (Note:)
+	Err      error  // optional underlying error for errors.Unwrap
 }
 
 func (e *RichError) Error() string {

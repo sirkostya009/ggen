@@ -10,20 +10,20 @@ import "github.com/sirkostya009/ggen/gen/model"
 // checkPackage validates every annotated struct in dir, returning the parser's
 // errors.Join unchanged for the caller's logger to unwrap + render.
 func checkPackage(dir string) error {
-	cliLog.Debug("checking package %s", dir)
+	cliLog.Debugf("checking package %s", dir)
 	pkg, err := model.ParsePackage(dir)
 	if err != nil {
 		return err
 	}
 	structs, pkgName := pkg.Structs, pkg.Name
 	if len(structs) == 0 {
-		cliLog.Trace("no annotated structs in %s; skipping", dir)
+		cliLog.Tracef("no annotated structs in %s; skipping", dir)
 		return nil
 	}
-	cliLog.Debug("package %s: %d annotated structs", pkgName, len(structs))
+	cliLog.Debugf("package %s: %d annotated structs", pkgName, len(structs))
 	// Parity with generateDir: validate against the same struct shape.
 	cliFlags.Apply(structs)
-	cliLog.Info("ok %s (%d structs)", model.RelPath(dir), len(structs))
+	cliLog.Infof("ok %s (%d structs)", model.RelPath(dir), len(structs))
 	return nil
 }
 
@@ -36,6 +36,6 @@ func checkFile(filename string, wanted []string) error {
 		return err
 	}
 	cliFlags.Apply(structs)
-	cliLog.Info("ok %s (%d structs)", model.RelPath(filename), len(structs))
+	cliLog.Infof("ok %s (%d structs)", model.RelPath(filename), len(structs))
 	return nil
 }

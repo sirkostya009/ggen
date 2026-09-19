@@ -3,6 +3,7 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"bytes"
 	"encoding/json"
 	jsonv2 "encoding/json/v2"
 	"testing"
@@ -48,7 +49,7 @@ func TestKeyEscape_QuoteParityWithJSONv2(t *testing.T) {
 	if err != nil {
 		t.Fatalf("jsonv2.Marshal: %v", err)
 	}
-	if string(got) != string(want) {
+	if !bytes.Equal(got, want) {
 		t.Errorf("ggen %q != jsonv2 %q", got, want)
 	}
 	back, _, err := KeyEscQuote{}.DecodeFrom(got)
@@ -90,7 +91,7 @@ func TestKeyEscape_HTMLEscapedName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("json.Marshal: %v", err)
 	}
-	if string(got) != string(want) {
+	if !bytes.Equal(got, want) {
 		t.Errorf("ggen %q != encoding/json %q", got, want)
 	}
 	back, _, err := KeyEscHTML{}.DecodeFrom(got)

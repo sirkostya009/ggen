@@ -23,8 +23,10 @@ var stringTiers = []struct {
 // same value, same position, same error identity — across escape placement,
 // control bytes, truncation, and vector-width phase alignment.
 func TestStringSIMD_Parity(t *testing.T) {
+	t.Parallel()
 	cases := [][]byte{
-		[]byte(`""`), []byte(`"a"`), []byte(`"ab"`), []byte(`not a string`), {},
+		[]byte(`""`), []byte(`"a"`), []byte(`"ab"`), []byte(`not a string`),
+		{},
 		[]byte(`"unterminated`), []byte(`"trailing\`), []byte(`"bad\u12`),
 		[]byte(`"esc\nape"`), []byte(`"A😀"`), []byte(`"\q"`),
 		// Final malformations at the end of data vs truncated prefixes.
@@ -195,6 +197,7 @@ func TestStreamStringSIMD_RefillErrorIdentity(t *testing.T) {
 	boom := io.ErrNoProgress
 	for _, tier := range tiers {
 		t.Run(tier.name, func(t *testing.T) {
+			t.Parallel()
 			// Drained at the head: scalar maps to ErrExpectString.
 			var s Stream
 			s.Reset(strings.NewReader(""), nil)
@@ -281,7 +284,7 @@ func TestStreamStringSIMD_ErrorPos(t *testing.T) {
 
 // Every tier classifies an unterminated escaped string exactly as String does
 // — the escape landing at each lane position — and copies nothing to do it.
-func TestStringSIMD_UnterminatedEscaped(t *testing.T) {
+func TestStringSIMD_UnterminatedEscaped(t *testing.T) { //nolint:paralleltest // measures allocations
 	tails := []string{`\n`, `\`, `\u`, `\u12`, `\u12zz`, `\q`, `\ud800`, `\ud800abc`, `\ud800\udc0`, "\\n\x01", `\ud83d\ude00x`}
 	for n := range 70 {
 		for _, tail := range tails {
@@ -298,7 +301,7 @@ func TestStringSIMD_UnterminatedEscaped(t *testing.T) {
 	}
 	data := append([]byte(`"a\n`), bytes.Repeat([]byte("x"), 1<<20)...)
 	for _, tier := range stringTiers {
-		if allocs := testing.AllocsPerRun(5, func() { tier.fn(data, 0, true) }); allocs != 0 {
+		if allocs := testing.AllocsPerRun(5, func() { _, _, _ = tier.fn(data, 0, true) }); allocs != 0 {
 			t.Errorf("%s(unterminated escaped) allocates %v per call, want 0", tier.name, allocs)
 		}
 	}

@@ -15,10 +15,10 @@ import (
 //
 //ggen:generate
 type NullZeroTags struct {
-	NZStr   string  `json:"nzStr" pipe:"nullzero"`
-	NZInt   int     `json:"nzInt" pipe:"nullzero"`
+	NZStr   string  `json:"nzStr"   pipe:"nullzero"`
+	NZInt   int     `json:"nzInt"   pipe:"nullzero"`
 	NZFloat float64 `json:"nzFloat" pipe:"nullzero"`
-	NZBool  bool    `json:"nzBool" pipe:"nullzero"`
+	NZBool  bool    `json:"nzBool"  pipe:"nullzero"`
 	Strict  string  `json:"strict"`
 }
 
@@ -28,7 +28,7 @@ type NullZeroTags struct {
 //ggen:generate
 type NullZeroValidated struct {
 	Count int    `json:"count" pipe:"nullzero gte=0"`
-	Name  string `json:"name" pipe:"nullzero minlen=1"`
+	Name  string `json:"name"  pipe:"nullzero minlen=1"`
 }
 
 // NullZeroWhole pins struct-level nullzero — every value field accepts null.

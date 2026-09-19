@@ -113,7 +113,10 @@ func (f *File) Place(s *Shape, name string) *File {
 	}
 	for _, p := range f.placed {
 		if p.Name == name {
-			o.errs = append(o.errs, fmt.Errorf("%s: name %s is used by both %s (%s) and %s (%s)", f.Path, name, declName(p.Shape.Decl), p.Shape.Mode, declName(s.Decl), s.Mode))
+			o.errs = append(
+				o.errs,
+				fmt.Errorf("%s: name %s is used by both %s (%s) and %s (%s)", f.Path, name, declName(p.Shape.Decl), p.Shape.Mode, declName(s.Decl), s.Mode),
+			)
 			return f
 		}
 	}
@@ -150,10 +153,6 @@ func (r *Report) Unsupported(f *Field, rule Rule, msg string) {
 
 func declName(d *TypeDecl) string { return d.Pkg.Name + "." + d.Name }
 
-// shapeName is a shape in a report: "api.Edges (output)", so the same type
-// placed in both modes raises two distinguishable issues.
-func shapeName(s *Shape) string { return declName(s.Decl) + " (" + s.Mode.String() + ")" }
-
 // Write validates every placement, renders every file, and writes them all.
 // Any error leaves the directory untouched.
 func (o *Output) Write() error {
@@ -184,7 +183,7 @@ func (o *Output) Write() error {
 	var writes []staged
 	cleanup := func() {
 		for _, w := range writes {
-			os.Remove(w.tmp)
+			_ = os.Remove(w.tmp)
 		}
 	}
 	for i, f := range o.files {
@@ -209,7 +208,7 @@ func (o *Output) Write() error {
 			err = os.Chmod(tmp.Name(), 0o644)
 		}
 		if err != nil {
-			os.Remove(tmp.Name())
+			_ = os.Remove(tmp.Name())
 			cleanup()
 			return err
 		}

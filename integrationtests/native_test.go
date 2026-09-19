@@ -340,7 +340,7 @@ func TestByteArray_TupleOfByteSlices(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	if want, _ := jsonv2.Marshal(in); string(out) != string(want) {
+	if want, _ := jsonv2.Marshal(in); !bytes.Equal(out, want) {
 		t.Fatalf("marshal: ggen %s, jsonv2 %s", out, want)
 	}
 	got, _, err := R10ByteSliceTuple{}.DecodeFrom(out)
@@ -436,11 +436,12 @@ func TestNetTypes_emptyIsZero(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want, _ := jsonv2.Marshal(R10NetZero{}); string(out) != string(want) {
+	if want, _ := jsonv2.Marshal(R10NetZero{}); !bytes.Equal(out, want) {
 		t.Fatalf("marshal: ggen %s, jsonv2 %s", out, want)
 	}
 	same := func(a, b R10NetZero) bool {
-		return a.Addr == b.Addr && a.Pfx == b.Pfx && bytes.Equal(a.IP, b.IP) && (a.IP == nil) == (b.IP == nil)
+		return a.Addr == b.Addr && a.Pfx == b.Pfx && bytes.Equal(a.IP, b.IP) && //nolint:staticcheck // byte-exact, not net.IP.Equal
+			(a.IP == nil) == (b.IP == nil)
 	}
 	carried := R10NetZero{Addr: netip.MustParseAddr("10.0.0.1"), IP: net.ParseIP("10.0.0.2"), Pfx: netip.MustParsePrefix("10.0.0.0/8")}
 	for _, p := range []string{string(out), `{"addr":""}`, `{"ip":""}`, `{"pfx":""}`, `{"ip":null}`, `{"addr":"::1","ip":"127.0.0.1","pfx":"10.0.0.0/8"}`} {

@@ -8,6 +8,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/mailru/easyjson"
+
 	"github.com/sirkostya009/ggen"
 )
 
@@ -15,7 +16,7 @@ import (
 // scalar-only record (Account). No alloc-forcing kind, so ggen decodes at
 // zero allocations — isolates the raw scan + dispatch + assign loop.
 func BenchmarkNoAlloc_Unmarshal(b *testing.B) {
-	var codecs = []struct {
+	codecs := []struct {
 		name string
 		fn   func([]byte) error
 	}{
@@ -53,7 +54,7 @@ func BenchmarkNoAlloc_Unmarshal(b *testing.B) {
 // + compaction); ggen_readall is the io.ReadAll-then-bytes-path pattern.
 func BenchmarkNoAlloc_Reader(b *testing.B) {
 	type readerState struct{ r bytes.Reader }
-	var codecs = []struct {
+	codecs := []struct {
 		name string
 		fn   func(*readerState) error
 	}{

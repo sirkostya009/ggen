@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/bytedance/sonic"
+
 	"github.com/sirkostya009/ggen"
 )
 
@@ -42,13 +43,13 @@ func BenchmarkEscapeHeavy_Unmarshal(b *testing.B) {
 	// the input after decode, the retained escape-path strings must survive.
 	cpSrc := append([]byte(nil), EscapeHeavyPayload...)
 	cg, _, err := CopyEscapeDoc{}.DecodeFrom(cpSrc)
-	if err != nil || (EscapeDoc{cg.A, cg.B, cg.C, cg.D}) != want {
-		b.Fatalf("ggen_copy escape decode wrong: err=%v equal=%v", err, EscapeDoc{cg.A, cg.B, cg.C, cg.D} == want)
+	if err != nil || EscapeDoc(cg) != want {
+		b.Fatalf("ggen_copy escape decode wrong: err=%v equal=%v", err, EscapeDoc(cg) == want)
 	}
 	for i := range cpSrc {
 		cpSrc[i] = 'Z'
 	}
-	if (EscapeDoc{cg.A, cg.B, cg.C, cg.D}) != want {
+	if EscapeDoc(cg) != want {
 		b.Fatal("ggen_copy escape strings aliased input — corrupted after source scribble")
 	}
 

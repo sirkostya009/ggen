@@ -18,9 +18,10 @@ package ggen
 
 import (
 	"math/bits"
-	"simd/archsimd"
 	"strings"
 	"unsafe"
+
+	"simd/archsimd"
 )
 
 // structuralIndexAVX returns the index of the first structural byte ('"',
@@ -328,7 +329,7 @@ func (s *Stream) stringViewAVX512(validate bool) (v string, owned bool, err erro
 			// skip the extra frame (see classifyStructural64).
 			if validate && sawHigh {
 				span := s.buf[start:end]
-				ok := true
+				var ok bool
 				if len(span) < utf8x64MinLen {
 					ok = validUTF8x16(span)
 				} else {

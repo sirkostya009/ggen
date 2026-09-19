@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# pre-commit: run golangci-lint fmt + run --fix on the root module + bench.
+# pre-commit: run golangci-lint run --fix + fmt (last, so goimports repairs what --fix leaves) on every workspace module.
 # Enable for this repo with:
 #   git config core.hooksPath .githooks
 
@@ -8,7 +8,7 @@ set -euo pipefail
 root=$(git rev-parse --show-toplevel)
 cd "$root"
 
-GOEXPERIMENT=${GOEXPERIMENT:-jsonv2}
+GOEXPERIMENT=${GOEXPERIMENT:-simd}
 export GOEXPERIMENT
 
 # Snapshot the staging area BEFORE running lint. Only files that were
@@ -64,12 +64,10 @@ run_in() {
 	(cd "$dir" && golangci-lint "$@")
 }
 
-run_in . fmt
-run_in . run --fix
-if [ -f bench/go.mod ]; then
-	run_in bench fmt
-	run_in bench run --fix
-fi
+for dir in $(go list -m -f '{{.Dir}}'); do
+	run_in "$dir" run --fix
+	run_in "$dir" fmt
+done
 
 if [ ${#staged[@]} -gt 0 ]; then
 	# Re-stage only previously-staged files that fmt/--fix rewrote.

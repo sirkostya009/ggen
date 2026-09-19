@@ -49,7 +49,7 @@ func CloseJSONStringHTML(dst []byte, from int) []byte {
 // AppendStringNoHTML for raw output.
 func AppendString(dst []byte, s string) []byte {
 	start := 0
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if !needEscapeHTML[c] {
 			continue
@@ -88,7 +88,7 @@ func AppendString(dst []byte, s string) []byte {
 // emitted literally, standard JSON escapes only. Same caller contract.
 func AppendStringNoHTML(dst []byte, s string) []byte {
 	start := 0
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if !needEscapeNoHTML[c] {
 			continue

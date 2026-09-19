@@ -1,6 +1,7 @@
 package valibot_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"os"
@@ -60,12 +61,18 @@ func render(t *testing.T) (string, *gen.Output) {
 }
 
 func TestSchemas(t *testing.T) {
+	t.Parallel()
 	dir, out := render(t)
 	var issues []string
 	for _, i := range out.Report().Issues {
 		issues = append(issues, i.String())
 	}
-	if want := []string{"api.User.point: image.Point is external with an unknown shape; map it with valibot.External or valibot.ExternalFor"}; !slices.Equal(issues, want) {
+	if want := []string{
+		"api.User.point: image.Point is external with an unknown shape; map it with valibot.External or valibot.ExternalFor",
+	}; !slices.Equal(
+		issues,
+		want,
+	) {
 		t.Errorf("report = %q, want %q", issues, want)
 	}
 	for _, name := range []string{"web/requests.ts", "web/responses.ts", "shared/money.ts"} {
@@ -83,7 +90,7 @@ func TestSchemas(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v (run with -update)", err)
 		}
-		if string(got) != string(want) {
+		if !bytes.Equal(got, want) {
 			t.Errorf("%s differs from %s:\n%s", name, golden, got)
 		}
 	}
@@ -92,6 +99,7 @@ func TestSchemas(t *testing.T) {
 // TestRuntime type-checks the schemas and runs inputs through them. It needs
 // GGEN_NODE_MODULES: a node_modules directory with valibot and typescript.
 func TestRuntime(t *testing.T) {
+	t.Parallel()
 	modules := os.Getenv("GGEN_NODE_MODULES")
 	node, err := exec.LookPath("node")
 	if modules == "" || err != nil {
@@ -103,7 +111,7 @@ func TestRuntime(t *testing.T) {
 	}
 	cfg := `{"compilerOptions":{"strict":true,"noEmit":true,"target":"ES2022","lib":["ES2022","DOM"],"module":"ESNext","moduleResolution":"Bundler","allowImportingTsExtensions":true,"skipLibCheck":true},"include":["web/*.ts","shared/*.ts"]}`
 	os.WriteFile(filepath.Join(dir, "tsconfig.json"), []byte(cfg), 0o644)
-	if b, err := exec.Command(filepath.Join(modules, ".bin", "tsc"), "-p", dir).CombinedOutput(); err != nil {
+	if b, err := exec.CommandContext(t.Context(), filepath.Join(modules, ".bin", "tsc"), "-p", dir).CombinedOutput(); err != nil {
 		t.Fatalf("tsc: %v\n%s", err, b)
 	}
 
@@ -166,7 +174,7 @@ for (const c of cases) {
 console.log(JSON.stringify(out));
 `
 	os.WriteFile(filepath.Join(dir, "run.mjs"), []byte(script), 0o644)
-	cmd := exec.Command(node, filepath.Join(dir, "run.mjs"))
+	cmd := exec.CommandContext(t.Context(), node, filepath.Join(dir, "run.mjs"))
 	cmd.Stdin = strings.NewReader(string(payload))
 	raw, err := cmd.Output()
 	if err != nil {
@@ -186,6 +194,7 @@ console.log(JSON.stringify(out));
 // TestInlineHelpers renders without a runtime file: the helpers a file uses
 // are written into it instead of imported.
 func TestInlineHelpers(t *testing.T) {
+	t.Parallel()
 	set, err := gen.Load("../testdata/api", "../testdata/other")
 	if err != nil {
 		t.Fatal(err)
@@ -211,6 +220,7 @@ func TestInlineHelpers(t *testing.T) {
 // TestFor decides headers, schema names, @Func twins and external types per
 // output file and placed type.
 func TestFor(t *testing.T) {
+	t.Parallel()
 	set, err := gen.Load("../testdata/api", "../testdata/other")
 	if err != nil {
 		t.Fatal(err)

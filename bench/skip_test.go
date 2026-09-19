@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/bytedance/sonic"
+
 	"github.com/sirkostya009/ggen"
 )
 
@@ -16,7 +17,7 @@ import (
 // Reflection codecs skip unknown keys by default, so every row measures the
 // codec's skip machinery.
 func BenchmarkSkipHeavy_Unmarshal(b *testing.B) {
-	var codecs = []struct {
+	codecs := []struct {
 		name string
 		fn   func([]byte) error
 	}{

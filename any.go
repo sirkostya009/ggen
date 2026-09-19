@@ -343,6 +343,7 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 	if needsAddr(rv.Type()) {
 		return appendAny(dst, addrOf(rv), esc, depth)
 	}
+	//exhaustive:ignore not every kind applies here
 	switch rv.Kind() {
 	case reflect.Pointer, reflect.Interface:
 		if rv.IsNil() {
@@ -613,6 +614,7 @@ func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind, addr bo
 	if t := rv.Type(); t.PkgPath() != "" {
 		return appendAny(dst, rv.Interface(), esc, depth)
 	}
+	//exhaustive:ignore not every kind applies here
 	switch kind {
 	case reflect.String:
 		dst = append(dst, '"')
@@ -657,6 +659,7 @@ const (
 type isZeroer interface{ IsZero() bool }
 
 func (f *fieldInfo) isZero(fv reflect.Value) bool {
+	//exhaustive:ignore not every kind applies here
 	switch f.zero {
 	case zeroMethod:
 		switch fv.Kind() {
@@ -765,7 +768,7 @@ func resolveFieldConflicts(fields []fieldInfo) []fieldInfo {
 // same way). Stack semantics (delete after recursing) so a diamond-embedded
 // type still surfaces twice for resolveFieldConflicts to judge.
 func collectFields(info *structInfo, t reflect.Type, parentIndex []int, seen map[reflect.Type]struct{}) {
-	for i := 0; i < t.NumField(); i++ {
+	for i := range t.NumField() {
 		sf := t.Field(i)
 		idx := append(append([]int(nil), parentIndex...), i)
 		tag := sf.Tag.Get("json")
@@ -879,6 +882,7 @@ func quotableKind(t reflect.Type) bool {
 	case durationType:
 		return false
 	}
+	//exhaustive:ignore not every kind applies here
 	switch t.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
 		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
@@ -979,7 +983,7 @@ func appendStruct(dst []byte, rv reflect.Value, esc escapeFn, depth int) ([]byte
 		dst = esc(dst, f.name)
 		dst = append(dst, ':')
 		// nil pointer-to-number emits bare null even under ,string.
-		quoted := f.quoted && !(fv.Kind() == reflect.Pointer && fv.IsNil())
+		quoted := f.quoted && (fv.Kind() != reflect.Pointer || !fv.IsNil())
 		if quoted {
 			dst = append(dst, '"')
 		}
@@ -1061,6 +1065,7 @@ func closeText(dst []byte, from int, esc escapeFn) []byte {
 // pointer.
 func isNilPtr(v any) bool {
 	type iface struct{ typ, data unsafe.Pointer }
+	// Reads the eface data word; reflect cannot see a typed-nil cheaply.
 	if (*iface)(unsafe.Pointer(&v)).data != nil {
 		return false
 	}
@@ -1228,6 +1233,7 @@ func anySize(v any, mult, depth int) int {
 	if needsAddr(rv.Type()) {
 		return anySize(addrOf(rv), mult, depth)
 	}
+	//exhaustive:ignore not every kind applies here
 	switch rv.Kind() {
 	case reflect.Pointer, reflect.Interface:
 		if rv.IsNil() {
@@ -1286,6 +1292,7 @@ func reflectValueSize(rv reflect.Value, kind reflect.Kind, addr bool, mult, dept
 	if rv.Type().PkgPath() != "" {
 		return anySize(rv.Interface(), mult, depth)
 	}
+	//exhaustive:ignore not every kind applies here
 	switch kind {
 	case reflect.String:
 		return rv.Len()*mult + 2

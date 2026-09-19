@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"github.com/sirkostya009/ggen/internal/prealloc"
 	"io"
 	"iter"
 	"math"
@@ -13,6 +12,8 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 	"unsafe"
+
+	"github.com/sirkostya009/ggen/internal/prealloc"
 )
 
 // Stream wraps an io.Reader. The cursor lives in [Stream.Pos] — every
@@ -459,7 +460,6 @@ func (s *Stream) skipString() error {
 					return NotEOF(err, ErrBadString)
 				}
 				j -= bs
-				start = 0
 				bs = 0
 				q = -1
 			}
@@ -481,7 +481,6 @@ func (s *Stream) skipString() error {
 						return NotEOF(err, ErrBadString)
 					}
 					j -= bs
-					start = 0
 					bs = 0
 					q = -1
 				}
@@ -508,7 +507,6 @@ func (s *Stream) skipString() error {
 		j = len(s.buf)
 		err := s.ReadMore(j)
 		j = 0
-		start = 0
 		q = -1
 		if err != nil {
 			s.Pos = j
@@ -1141,6 +1139,7 @@ func (s *Stream) skipNumber() error {
 			}
 		}
 	}
+	//nolint:gocritic // break must leave the loop, not a switch
 	if s.buf[i] == '0' {
 		i++
 	} else if s.buf[i] >= '1' && s.buf[i] <= '9' {
@@ -1258,7 +1257,7 @@ func (s *Stream) Bool() (bool, error) {
 	// mismatching byte, or the window end when the reader drained
 	// mid-literal. A transient reader error leaves Pos on the literal head
 	// (the grow-only refill keeps it buffered) so a retry re-scans it whole.
-	for k := 0; k < len(want); k++ {
+	for k := range len(want) {
 		pos := i + 1 + k
 		if pos >= len(s.buf) {
 			if err := s.ReadMore(0); err != nil {

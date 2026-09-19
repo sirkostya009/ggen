@@ -17,6 +17,7 @@ import (
 
 	gofrs "github.com/gofrs/uuid/v5"
 	"github.com/google/uuid"
+
 	"github.com/sirkostya009/ggen"
 )
 
@@ -124,7 +125,7 @@ func TestRich_RawJSON_ZeroCopy(t *testing.T) {
 	if string(got.Raw1) != want {
 		t.Fatalf("Raw1 initial = %s, want %s", got.Raw1, want)
 	}
-	off := strings.Index(string(in), "alpha")
+	off := bytes.Index(in, []byte("alpha"))
 	if off < 0 {
 		t.Skip("payload reshaped, can't verify alias")
 	}
@@ -196,7 +197,7 @@ type RawOnly struct {
 
 // A reused receiver's raw backing is refilled, not reallocated, so a steady
 // stream of same-shaped values settles at zero allocations per decode.
-func TestRawJSON_StreamReusesReceiverBacking(t *testing.T) {
+func TestRawJSON_StreamReusesReceiverBacking(t *testing.T) { //nolint:paralleltest // measures allocations
 	payload := []byte(`{"raw":{"nested":[1,2,3],"s":"abcdefghij"}}` + "\n")
 	var s ggen.Stream
 	buf := make([]byte, 0, 256)

@@ -46,7 +46,13 @@ func ParseRFC3339(s string) (time.Time, error) {
 		case dec2(s[len(s)-len("07:00"):]) >= 24:
 			return time.Time{}, &time.ParseError{Layout: time.RFC3339, Value: s, LayoutElem: "Z07:00", ValueElem: zone, Message: ": timezone hour out of range"}
 		case dec2(s[len(s)-len("00"):]) >= 60:
-			return time.Time{}, &time.ParseError{Layout: time.RFC3339, Value: s, LayoutElem: "Z07:00", ValueElem: zone, Message: ": timezone minute out of range"}
+			return time.Time{}, &time.ParseError{
+				Layout:     time.RFC3339,
+				Value:      s,
+				LayoutElem: "Z07:00",
+				ValueElem:  zone,
+				Message:    ": timezone minute out of range",
+			}
 		}
 	}
 	return t, nil

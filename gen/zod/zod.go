@@ -235,7 +235,8 @@ func (e *Emitter) typ(ctx *gen.Context, s *gen.Shape, t *gen.Type, where string)
 	out, k := e.base(ctx, s, t, where)
 	out = e.rules(ctx, t, out, k, where)
 	if len(t.OneOf) > 0 {
-		parts := []string{out}
+		parts := make([]string, 1, 1+len(t.OneOf))
+		parts[0] = out
 		for _, o := range t.OneOf {
 			parts = append(parts, e.typ(ctx, s, o, where))
 		}
@@ -251,7 +252,8 @@ func (e *Emitter) typ(ctx *gen.Context, s *gen.Shape, t *gen.Type, where string)
 // converter union and null.
 func (e *Emitter) wrap(ctx *gen.Context, s *gen.Shape, t *gen.Type, out string, where string) string {
 	if len(t.OneOf) > 0 {
-		parts := []string{out}
+		parts := make([]string, 1, 1+len(t.OneOf))
+		parts[0] = out
 		for _, o := range t.OneOf {
 			parts = append(parts, e.typ(ctx, s, o, where))
 		}
@@ -309,6 +311,7 @@ func (e *Emitter) base(ctx *gen.Context, s *gen.Shape, t *gen.Type, where string
 		}
 		return "z.literal([" + strings.Join(vals, ", ") + "])", other
 	}
+	//exhaustive:ignore not every kind applies here
 	switch t.Wire {
 	case gen.WireString:
 		return e.str(t)
@@ -348,6 +351,7 @@ func (e *Emitter) base(ctx *gen.Context, s *gen.Shape, t *gen.Type, where string
 
 func integer(t *gen.Type) string {
 	bits, unsigned := 64, false
+	//exhaustive:ignore not every kind applies here
 	switch t.Go {
 	case gen.BigInt:
 		return "z.number().refine(Number.isInteger)"
@@ -358,6 +362,7 @@ func integer(t *gen.Type) string {
 	case gen.Int32, gen.Uint32:
 		bits = 32
 	}
+	//exhaustive:ignore not every kind applies here
 	switch t.Go {
 	case gen.Uint, gen.Uint8, gen.Uint16, gen.Uint32, gen.Uint64:
 		unsigned = true
@@ -450,6 +455,7 @@ func formatWord(format string) string {
 // intBounds is the exact range of a Go integer kind, as decimal literals.
 func intBounds(k gen.GoKind, forceUnsigned bool) (lo, hi string) {
 	bits := 64
+	//exhaustive:ignore not every kind applies here
 	switch k {
 	case gen.Int8, gen.Uint8:
 		bits = 8
@@ -459,6 +465,7 @@ func intBounds(k gen.GoKind, forceUnsigned bool) (lo, hi string) {
 		bits = 32
 	}
 	unsigned := forceUnsigned
+	//exhaustive:ignore not every kind applies here
 	switch k {
 	case gen.Uint, gen.Uint8, gen.Uint16, gen.Uint32, gen.Uint64:
 		unsigned = true
@@ -522,7 +529,10 @@ func (e *Emitter) rules(ctx *gen.Context, t *gen.Type, out string, k kind, where
 			case t.Go == gen.Map:
 				out += refine(e.helpers.Use("ggenEntries")+"(x) "+op+" "+arg(0), word+" "+js.Count(arg(0), "entry"))
 			case t.Go == gen.Bytes:
-				out += refine(fmt.Sprintf("%s(x, %d) %s %s", e.helpers.Use("ggenDecoded"), js.FormatBits(t.Format), op, arg(0)), word+" "+js.Count(arg(0), "byte"))
+				out += refine(
+					fmt.Sprintf("%s(x, %d) %s %s", e.helpers.Use("ggenDecoded"), js.FormatBits(t.Format), op, arg(0)),
+					word+" "+js.Count(arg(0), "byte"),
+				)
 			case t.Wire == gen.WireString:
 				out += refine(e.helpers.Use("ggenBytes")+"(x) "+op+" "+arg(0), word+" "+js.Count(arg(0), "byte"))
 			default:
@@ -615,6 +625,7 @@ func (e *Emitter) rules(ctx *gen.Context, t *gen.Type, out string, k kind, where
 }
 
 func lenOp(op gen.Op) (cmp, word string) {
+	//exhaustive:ignore not every kind applies here
 	switch op {
 	case gen.MinLen:
 		return ">=", "must be at least"

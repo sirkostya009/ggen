@@ -3,6 +3,7 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"bytes"
 	"encoding/json"
 	jsonv2 "encoding/json/v2"
 	"errors"
@@ -147,6 +148,7 @@ type CrossPkgShapes struct {
 }
 
 func TestCrossPkg_AllPositions(t *testing.T) {
+	t.Parallel()
 	const payload = `{
 		"one":{"key":"a","value":1},
 		"many":[{"key":"b","value":2},{"key":"c","value":3}],
@@ -203,6 +205,7 @@ func TestCrossPkg_AllPositions(t *testing.T) {
 // The foreign type's methods must be reached through a pointer too: `*T`'s
 // method set contains T's, so the probe has to look at the pointee.
 func TestCrossPkg_PointerUsesGeneratedMethods(t *testing.T) {
+	t.Parallel()
 	v, _, err := CrossPkgShapes{}.DecodeFrom([]byte(`{"ptr":{"key":"","value":1}}`))
 	if err == nil {
 		t.Fatalf("expected the foreign type's own `required minlen=1` rule to fire, got %+v", v)
@@ -307,6 +310,7 @@ type R10SamePkgCodecHost struct {
 }
 
 func TestSamePkgCodec_MethodsHonoured(t *testing.T) {
+	t.Parallel()
 	for _, name := range []string{"DecodeFrom", "AppendJSON", "JSONSize"} {
 		if _, ok := reflect.TypeFor[R10TextCodec]().MethodByName(name); ok {
 			t.Errorf("R10TextCodec got a generated %s despite owning a text codec", name)
@@ -324,7 +328,7 @@ func TestSamePkgCodec_MethodsHonoured(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(got) != string(want) {
+	if !bytes.Equal(got, want) {
 		t.Errorf("marshal:\n ggen   %s\n jsonv2 %s", got, want)
 	}
 	var w2 R10SamePkgCodecHost

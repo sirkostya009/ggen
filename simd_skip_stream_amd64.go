@@ -14,6 +14,7 @@ package ggen
 import (
 	"io"
 	"math/bits"
+
 	"simd/archsimd"
 )
 

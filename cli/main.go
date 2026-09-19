@@ -71,15 +71,40 @@ func main() {
 	flag.BoolVar(&cliFlags.AllowDups, "allowdups", false, "skip the default duplicate-key guard in generated unmarshal code")
 	flag.BoolVar(&cliFlags.NoValidate, "novalidate", false, "skip validation rules, required-field checks, and mods (trades correctness for speed)")
 	flag.BoolVar(&cliFlags.IgnoreUnknown, "ignoreunknown", false, "silently skip unknown JSON keys on unmarshal (default: error)")
-	flag.BoolVar(&cliFlags.NullZero, "nullzero", false, "accept explicit JSON null on non-pointer value fields, decoding it to the Go zero value (default: error)")
+	flag.BoolVar(
+		&cliFlags.NullZero,
+		"nullzero",
+		false,
+		"accept explicit JSON null on non-pointer value fields, decoding it to the Go zero value (default: error)",
+	)
 	flag.BoolVar(&cliFlags.NoSortKeys, "nosortkeys", false, "emit struct fields in declaration order (default: sorted by JSON name at codegen time)")
-	flag.BoolVar(&cliFlags.UseNumber, "usenumber", false, "decode JSON numbers into `any` fields as json.Number instead of float64 (mirrors json.Decoder.UseNumber)")
+	flag.BoolVar(
+		&cliFlags.UseNumber,
+		"usenumber",
+		false,
+		"decode JSON numbers into `any` fields as json.Number instead of float64 (mirrors json.Decoder.UseNumber)",
+	)
 	flag.BoolVar(&cliFlags.HTMLEscape, "htmlescape", false, "HTML-safe escape <, >, & in emitted strings (default: literal, matches stdlib jsonv2)")
-	flag.BoolVar(&cliFlags.Copy, "copy", false, "bytes-path DecodeFrom copies strings, json.RawMessage, and any-embedded strings out of the input instead of aliasing it (mutating data after decode no longer corrupts decoded values)")
-	flag.BoolVar(&cliFlags.AllowInvalidUTF8, "allowinvalidutf8", false, "skip decode-side UTF-8 validation (default: reject invalid UTF-8 / unpaired surrogates, jsonv2 parity); permissive structs pass raw bytes through like encoding/json v1 minus the U+FFFD substitution on raw bytes")
+	flag.BoolVar(
+		&cliFlags.Copy,
+		"copy",
+		false,
+		"bytes-path DecodeFrom copies strings, json.RawMessage, and any-embedded strings out of the input instead of aliasing it (mutating data after decode no longer corrupts decoded values)",
+	)
+	flag.BoolVar(
+		&cliFlags.AllowInvalidUTF8,
+		"allowinvalidutf8",
+		false,
+		"skip decode-side UTF-8 validation (default: reject invalid UTF-8 / unpaired surrogates, jsonv2 parity); permissive structs pass raw bytes through like encoding/json v1 minus the U+FFFD substitution on raw bytes",
+	)
 	flag.BoolVar(&cliDry, "dry", false, "dry run: parse and validate every annotated struct, surface all errors, emit no file")
 	var simdFlag string
-	flag.StringVar(&simdFlag, "simd", "", "SIMD tier for bytes-path string scans: off|avx|avx2|avx512 (default: avx when GOEXPERIMENT=simd is set, else off; generated code then requires GOEXPERIMENT=simd to build and a matching CPU to run — no runtime probing)")
+	flag.StringVar(
+		&simdFlag,
+		"simd",
+		"",
+		"SIMD tier for bytes-path string scans: off|avx|avx2|avx512 (default: avx when GOEXPERIMENT=simd is set, else off; generated code then requires GOEXPERIMENT=simd to build and a matching CPU to run — no runtime probing)",
+	)
 	flag.BoolVar(&v, "v", false, "\nverbose: info-level progress (wrote <file>)")
 	flag.BoolVar(&vv, "vv", false, "more verbose: per-package / per-struct debug")
 	flag.BoolVar(&vvv, "vvv", false, "trace-level diagnostics")
@@ -214,7 +239,7 @@ func checkDirTarget(target string) error {
 var genGlobalsMu sync.Mutex
 
 func generateDir(dir, outFlag, pkgFlag string) error {
-	cliLog.Debug("parsing package %s", dir)
+	cliLog.Debugf("parsing package %s", dir)
 	// Unlocked — go/packages.Load does its own concurrency, touches no globals.
 	pkg, err := model.ParsePackage(dir)
 	if err != nil {
@@ -222,10 +247,10 @@ func generateDir(dir, outFlag, pkgFlag string) error {
 	}
 	structs, pkgName := pkg.Structs, pkg.Name
 	if len(structs) == 0 {
-		cliLog.Trace("no annotated structs in %s; skipping", dir)
+		cliLog.Tracef("no annotated structs in %s; skipping", dir)
 		return nil
 	}
-	cliLog.Debug("package %s: %d annotated structs", pkgName, len(structs))
+	cliLog.Debugf("package %s: %d annotated structs", pkgName, len(structs))
 	cliFlags.Apply(structs)
 
 	outPkg := pkgFlag
@@ -309,7 +334,7 @@ func writeGenerated(out, pkg string, structs []model.StructInfo) error {
 	if err := os.WriteFile(out, buf.Bytes(), 0o644); err != nil {
 		return err
 	}
-	cliLog.Info("wrote %s", out)
+	cliLog.Infof("wrote %s", out)
 	return nil
 }
 
@@ -389,7 +414,7 @@ func packageFileName(dir, tag string, testFile, xtest bool) string {
 func slugifyTag(tag string) string {
 	var b strings.Builder
 	last := byte(0)
-	for i := 0; i < len(tag); i++ {
+	for i := range len(tag) {
 		c := tag[i]
 		isAlnum := (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
 		if isAlnum {

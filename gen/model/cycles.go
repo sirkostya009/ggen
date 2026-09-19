@@ -54,7 +54,6 @@ func CyclicTypes(structs []StructInfo) map[string]struct{} {
 			stack = stack[:len(stack)-1]
 			if n == name {
 				cyc[name] = struct{}{}
-				stack = nil
 				break
 			}
 			if _, ok := seen[n]; ok {

@@ -15,7 +15,7 @@ type Validated struct {
 	Email string   `json:"email" pipe:"required contains=@"`
 	Name  string   `json:"name"  pipe:"required minlen=1 maxlen=64"`
 	Age   int      `json:"age"   pipe:"gte=0 lte=150"`
-	Tags  []string `json:"tags" pipe:"inner:(notempty minlen=1 maxlen=32)"`
+	Tags  []string `json:"tags"  pipe:"inner:(notempty minlen=1 maxlen=32)"`
 	Bio   string   `json:"bio"   pipe:"maxlen=4096"`
 }
 
@@ -29,7 +29,7 @@ type CopyValidated struct {
 	Email string   `json:"email" pipe:"required contains=@"`
 	Name  string   `json:"name"  pipe:"required minlen=1 maxlen=64"`
 	Age   int      `json:"age"   pipe:"gte=0 lte=150"`
-	Tags  []string `json:"tags" pipe:"inner:(notempty minlen=1 maxlen=32)"`
+	Tags  []string `json:"tags"  pipe:"inner:(notempty minlen=1 maxlen=32)"`
 	Bio   string   `json:"bio"   pipe:"maxlen=4096"`
 }
 
@@ -40,10 +40,10 @@ type CopyValidated struct {
 //
 //ggen:generate
 type Claim struct {
-	Sub string `json:"sub" pipe:"required"`
-	Iss string `json:"iss" pipe:"required"`
-	Exp int64  `json:"exp" pipe:"gte=0"`
-	Iat int64  `json:"iat" pipe:"gte=0"`
+	Sub string `json:"sub"           pipe:"required"`
+	Iss string `json:"iss"           pipe:"required"`
+	Exp int64  `json:"exp"           pipe:"gte=0"`
+	Iat int64  `json:"iat"           pipe:"gte=0"`
 	Nbf int64  `json:"nbf,omitempty"`
 	Aud string `json:"aud,omitempty"`
 	Jti string `json:"jti"`
@@ -54,10 +54,10 @@ type Claim struct {
 //
 //ggen:generate copy
 type CopyClaim struct {
-	Sub string `json:"sub" pipe:"required"`
-	Iss string `json:"iss" pipe:"required"`
-	Exp int64  `json:"exp" pipe:"gte=0"`
-	Iat int64  `json:"iat" pipe:"gte=0"`
+	Sub string `json:"sub"           pipe:"required"`
+	Iss string `json:"iss"           pipe:"required"`
+	Exp int64  `json:"exp"           pipe:"gte=0"`
+	Iat int64  `json:"iat"           pipe:"gte=0"`
 	Nbf int64  `json:"nbf,omitempty"`
 	Aud string `json:"aud,omitempty"`
 	Jti string `json:"jti"`
@@ -85,16 +85,16 @@ type EasyClaim struct {
 //
 //ggen:generate
 type ValidationHeavy struct {
-	Email    string  `json:"email" pipe:"required contains=@ maxrunes=128"`
+	Email    string  `json:"email"    pipe:"required contains=@ maxrunes=128"`
 	Username string  `json:"username" pipe:"required minrunes=3 maxrunes=32 alphanum tolower"`
-	Phone    string  `json:"phone" pipe:"minrunes=7 maxrunes=20 numeric"`
-	Age      int     `json:"age" pipe:"gte=0 lte=130"`
-	Score    float64 `json:"score" pipe:"gte=0 lte=100"`
-	Name     string  `json:"name" pipe:"required minrunes=1 maxrunes=64"`
-	URL      string  `json:"url" pipe:"url"`
-	Country  string  `json:"country" pipe:"runes=2 toupper"`
-	Lang     string  `json:"lang" pipe:"oneof=en|es|fr|de|uk"`
-	Role     string  `json:"role" pipe:"oneof=admin|user|guest"`
+	Phone    string  `json:"phone"    pipe:"minrunes=7 maxrunes=20 numeric"`
+	Age      int     `json:"age"      pipe:"gte=0 lte=130"`
+	Score    float64 `json:"score"    pipe:"gte=0 lte=100"`
+	Name     string  `json:"name"     pipe:"required minrunes=1 maxrunes=64"`
+	URL      string  `json:"url"      pipe:"url"`
+	Country  string  `json:"country"  pipe:"runes=2 toupper"`
+	Lang     string  `json:"lang"     pipe:"oneof=en|es|fr|de|uk"`
+	Role     string  `json:"role"     pipe:"oneof=admin|user|guest"`
 }
 
 // NoValidationHeavy mirrors ValidationHeavy's wire shape but skips validation
@@ -137,7 +137,7 @@ type EasyValidationHeavy struct {
 //
 //ggen:generate
 type RuneGated struct {
-	LongRunes  string `json:"longRunes" pipe:"minrunes=4 maxrunes=1000000"`
+	LongRunes  string `json:"longRunes"  pipe:"minrunes=4 maxrunes=1000000"`
 	AsciiRunes string `json:"asciiRunes" pipe:"alphanum maxrunes=1000000"`
 }
 

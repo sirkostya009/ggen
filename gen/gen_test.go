@@ -49,6 +49,7 @@ func enumValues(e *Enum) []string {
 }
 
 func TestLoad(t *testing.T) {
+	t.Parallel()
 	s := load(t)
 	if len(s.Packages) != 2 || s.Package(apiPath) == nil || s.Package("time") != nil {
 		t.Fatalf("packages: %v", s.Packages)
@@ -85,6 +86,7 @@ func TestLoad(t *testing.T) {
 }
 
 func TestInputShapes(t *testing.T) {
+	t.Parallel()
 	s := load(t)
 	in := s.Type(apiPath, "CreateUser").In()
 	name := field(t, in, "name")
@@ -142,10 +144,12 @@ func TestInputShapes(t *testing.T) {
 }
 
 func TestOutputShapes(t *testing.T) {
+	t.Parallel()
 	s := load(t)
 	out := s.Type(apiPath, "User").Out()
 	role := field(t, out, "role")
-	if role.Optional || role.Type.Ref != s.Type(apiPath, "Role") || !slices.Equal(enumValues(role.Type.Enum), []string{`"admin"`, `"member"`}) || !role.Type.Enum.Zero {
+	if role.Optional || role.Type.Ref != s.Type(apiPath, "Role") || !slices.Equal(enumValues(role.Type.Enum), []string{`"admin"`, `"member"`}) ||
+		!role.Type.Enum.Zero {
 		t.Errorf("role: %+v %+v", role, role.Type.Enum)
 	}
 	if st := field(t, out, "status").Type; st.Enum == nil || !st.Enum.Zero || st.Enum.Decl != nil || len(st.Rules) != 0 {
@@ -194,6 +198,7 @@ func TestOutputShapes(t *testing.T) {
 }
 
 func TestStrict(t *testing.T) {
+	t.Parallel()
 	s := load(t)
 	u := s.Type(apiPath, "User").Out().Strict()
 	for _, name := range []string{"role", "status", "friends"} {
@@ -259,6 +264,7 @@ func (r refs) Decl(ctx *Context, p Placed) error {
 func (refs) End(*Context) error { return nil }
 
 func TestWrite(t *testing.T) {
+	t.Parallel()
 	s := load(t)
 	dir := t.TempDir()
 	out := NewOutput(dir)
@@ -290,6 +296,7 @@ func TestWrite(t *testing.T) {
 }
 
 func TestWriteErrors(t *testing.T) {
+	t.Parallel()
 	s := load(t)
 	dir := t.TempDir()
 	out := NewOutput(dir)
@@ -322,6 +329,7 @@ func TestWriteErrors(t *testing.T) {
 }
 
 func TestReport(t *testing.T) {
+	t.Parallel()
 	s := load(t)
 	out := NewOutput(t.TempDir())
 	in := s.Type(apiPath, "CreateUser").In()
@@ -357,6 +365,7 @@ func (reporter) Decl(ctx *Context, p Placed) error {
 // TestAnnotatedEnum pins a generated alias that is also a closed set: it stays
 // in Types, keeps its constants, and is not repeated in Enums.
 func TestAnnotatedEnum(t *testing.T) {
+	t.Parallel()
 	s := load(t)
 	d := s.Type(apiPath, "Kind")
 	if d.Enum == nil || !slices.Equal(enumValues(d.Enum), []string{`"one"`, `"two"`}) {
@@ -380,6 +389,7 @@ func TestAnnotatedEnum(t *testing.T) {
 // TestCycleAcrossFiles pins that a cycle must live in one file, and that the
 // shapes on it are reported as cyclic rather than merely recursive.
 func TestCycleAcrossFiles(t *testing.T) {
+	t.Parallel()
 	s := load(t)
 	out := NewOutput(t.TempDir())
 	out.File("a.ts", refs{}).Place(s.Type(apiPath, "Tree").Out(), "Tree")
@@ -425,6 +435,7 @@ func (c cycles) Decl(ctx *Context, p Placed) error {
 
 // TestOutputRejects pins what Output refuses before writing anything.
 func TestOutputRejects(t *testing.T) {
+	t.Parallel()
 	s := load(t)
 	dir := t.TempDir()
 	for _, c := range []struct{ name, path, want string }{
@@ -432,6 +443,7 @@ func TestOutputRejects(t *testing.T) {
 		{"absolute path", "/etc/escape.ts", "leaves the output directory"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			out := NewOutput(dir)
 			out.File(c.path, refs{}).Place(s.Type(apiPath, "Address").Out(), "Address")
 			if err := out.Write(); err == nil || !strings.Contains(err.Error(), c.want) {
@@ -440,6 +452,7 @@ func TestOutputRejects(t *testing.T) {
 		})
 	}
 	t.Run("nil emitter", func(t *testing.T) {
+		t.Parallel()
 		out := NewOutput(dir)
 		out.File("a.ts", nil).Place(s.Type(apiPath, "Address").Out(), "Address")
 		if err := out.Write(); err == nil || !strings.Contains(err.Error(), "emitter") {
@@ -447,6 +460,7 @@ func TestOutputRejects(t *testing.T) {
 		}
 	})
 	t.Run("type no pattern loaded", func(t *testing.T) {
+		t.Parallel()
 		d := s.Type(apiPath, "Nope")
 		if d == nil {
 			t.Fatal("Type returns a placeholder, never nil")

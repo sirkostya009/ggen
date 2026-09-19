@@ -350,7 +350,8 @@ const isBigFloatHelper = `function ggenIsBigFloat(s: string): boolean {
 var isRationalHelper = func() string {
 	seq := func(d string) string { return d + "(?:_?" + d + ")*" }
 	digits := map[string]string{"x": "[0-9a-fA-F]", "b": "[01]", "o": "[0-7]"}
-	var nat, mant []string
+	nat := make([]string, 0, 5)
+	mant := make([]string, 0, 4)
 	for _, p := range []string{"x", "b", "o"} {
 		d := digits[p]
 		prefix := "0[" + p + strings.ToUpper(p) + "]"

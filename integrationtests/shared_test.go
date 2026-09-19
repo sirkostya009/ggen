@@ -8,8 +8,8 @@ package integrationtests
 
 //ggen:generate
 type Address struct {
-	Street  string `json:"street" pipe:"required minlen=1 maxlen=200"`
-	City    string `json:"city" pipe:"required notempty"`
+	Street  string `json:"street"  pipe:"required minlen=1 maxlen=200"`
+	City    string `json:"city"    pipe:"required notempty"`
 	ZipCode string `json:"zipCode" pipe:"required len=5"`
 }
 
@@ -32,15 +32,15 @@ type Node struct {
 //
 //ggen:generate
 type WideStruct struct {
-	F1  string `json:"f1" pipe:"required"`
-	F2  string `json:"f2" pipe:"required"`
-	F3  string `json:"f3" pipe:"required"`
-	F4  string `json:"f4" pipe:"required"`
-	F5  string `json:"f5" pipe:"required"`
-	F6  string `json:"f6" pipe:"required"`
-	F7  string `json:"f7" pipe:"required"`
-	F8  string `json:"f8" pipe:"required"`
-	F9  string `json:"f9" pipe:"required"`
+	F1  string `json:"f1"  pipe:"required"`
+	F2  string `json:"f2"  pipe:"required"`
+	F3  string `json:"f3"  pipe:"required"`
+	F4  string `json:"f4"  pipe:"required"`
+	F5  string `json:"f5"  pipe:"required"`
+	F6  string `json:"f6"  pipe:"required"`
+	F7  string `json:"f7"  pipe:"required"`
+	F8  string `json:"f8"  pipe:"required"`
+	F9  string `json:"f9"  pipe:"required"`
 	F10 string `json:"f10" pipe:"required"`
 	F11 string `json:"f11" pipe:"required"`
 	F12 string `json:"f12" pipe:"required"`

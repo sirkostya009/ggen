@@ -25,7 +25,7 @@ type customFunc struct {
 // call must qualify with. Shared by classifyValueFunc and classifyConverter.
 func lookupFunc(ref string, file *ast.File, pkg *types.Package) (fn *types.Func, pkgImp, pkgName string, err error) {
 	if ref == "" {
-		return nil, "", "", fmt.Errorf("empty @ reference")
+		return nil, "", "", errors.New("empty @ reference")
 	}
 	pkgPart, funcPart, hasDot := strings.Cut(ref, ".")
 	if !hasDot {
@@ -34,7 +34,7 @@ func lookupFunc(ref string, file *ast.File, pkg *types.Package) (fn *types.Func,
 	}
 	if pkgPart == "" {
 		if pkg == nil {
-			return nil, "", "", fmt.Errorf("no package context (run ggen with a Go module so type info is available)")
+			return nil, "", "", errors.New("no package context (run ggen with a Go module so type info is available)")
 		}
 		obj := pkg.Scope().Lookup(funcPart)
 		if obj == nil {
@@ -93,13 +93,13 @@ func classifyValueFunc(ref string, wt types.Type, file *ast.File, pkg *types.Pac
 	}
 	sig, ok := fn.Type().(*types.Signature)
 	if !ok {
-		return 0, customFunc{}, false, fmt.Errorf("not a function signature")
+		return 0, customFunc{}, false, errors.New("not a function signature")
 	}
 	if sig.Recv() != nil {
-		return 0, customFunc{}, false, fmt.Errorf("must be a top-level function, not a method")
+		return 0, customFunc{}, false, errors.New("must be a top-level function, not a method")
 	}
 	if sig.Params().Len() != 1 {
-		return 0, customFunc{}, false, fmt.Errorf("must take exactly one parameter (the value)")
+		return 0, customFunc{}, false, errors.New("must take exactly one parameter (the value)")
 	}
 	cf = customFunc{PkgImport: pkgImp, PkgName: pkgName, FuncName: funcPart}
 
@@ -136,7 +136,7 @@ func classifyValueFunc(ref string, wt types.Type, file *ast.File, pkg *types.Pac
 		case isBoolType(rt):
 			// func(bool)bool is banned (ambiguous; use func(bool) error).
 			if wtIsBool {
-				return 0, customFunc{}, false, fmt.Errorf("func(bool) bool is banned — use func(bool) error to validate a bool field")
+				return 0, customFunc{}, false, errors.New("func(bool) bool is banned — use func(bool) error to validate a bool field")
 			}
 			return roleValidator, cf, true, nil
 		case matchesWT(rt):
@@ -179,13 +179,13 @@ func classifyConverter(ref string, fieldType types.Type, file *ast.File, pkg *ty
 	}
 	sig, ok := fn.Type().(*types.Signature)
 	if !ok {
-		return customFunc{}, nil, false, fmt.Errorf("not a function signature")
+		return customFunc{}, nil, false, errors.New("not a function signature")
 	}
 	if sig.Recv() != nil {
-		return customFunc{}, nil, false, fmt.Errorf("must be a top-level function, not a method")
+		return customFunc{}, nil, false, errors.New("must be a top-level function, not a method")
 	}
 	if sig.Params().Len() != 1 {
-		return customFunc{}, nil, false, fmt.Errorf("converter must take exactly one parameter (the scanned input)")
+		return customFunc{}, nil, false, errors.New("converter must take exactly one parameter (the scanned input)")
 	}
 	w = sig.Params().At(0).Type()
 	// Peel pointer levels first: `*[]int` or `*other.T` must not dodge the
@@ -355,7 +355,7 @@ func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldTy
 		return nil
 	}
 	if s.typesInfo == nil || fieldType == nil {
-		return fmt.Errorf("`@Func` references require Go module context (run ggen inside a Go module so packages.Load can resolve types)")
+		return errors.New("`@Func` references require Go module context (run ggen inside a Go module so packages.Load can resolve types)")
 	}
 	file := s.structFile[structName]
 	pkg := s.typesPkg
@@ -379,7 +379,13 @@ func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldTy
 			continue
 		}
 		if v.Msg != "" && !boolForm {
-			errs = append(errs, &RichError{Msg: fmt.Sprintf("inline message on @%s requires a bool-form converter (func(W) (T, bool))", v.FuncName), CodeSpan: "@" + v.FuncName})
+			errs = append(
+				errs,
+				&RichError{
+					Msg:      fmt.Sprintf("inline message on @%s requires a bool-form converter (func(W) (T, bool))", v.FuncName),
+					CodeSpan: "@" + v.FuncName,
+				},
+			)
 			continue
 		}
 		v.Custom = true
@@ -428,13 +434,31 @@ func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldTy
 				})
 				continue
 			}
+			//exhaustive:ignore not every kind applies here
 			switch role {
 			case roleValidator:
 				st.IsMod = false
-				st.V = ValidationRule{Name: name, Custom: true, PkgImport: cf.PkgImport, PkgName: cf.PkgName, FuncName: cf.FuncName, BoolForm: boolForm, Msg: msg}
+				st.V = ValidationRule{
+					Name:      name,
+					Custom:    true,
+					PkgImport: cf.PkgImport,
+					PkgName:   cf.PkgName,
+					FuncName:  cf.FuncName,
+					BoolForm:  boolForm,
+					Msg:       msg,
+				}
 			case roleMod:
 				st.IsMod = true
-				st.M = ModRule{Name: name, Custom: true, PkgImport: cf.PkgImport, PkgName: cf.PkgName, FuncName: cf.FuncName, Fallible: cf.Fallible, BoolForm: boolForm, Msg: msg}
+				st.M = ModRule{
+					Name:      name,
+					Custom:    true,
+					PkgImport: cf.PkgImport,
+					PkgName:   cf.PkgName,
+					FuncName:  cf.FuncName,
+					Fallible:  cf.Fallible,
+					BoolForm:  boolForm,
+					Msg:       msg,
+				}
 				st.V = ValidationRule{}
 			}
 		}
@@ -519,6 +543,7 @@ func FieldHasConverter(f FieldInfo) bool {
 // shape claims, as Go rune literals. Empty => the kind has no single shape
 // (any / raw) and cannot participate in shape dispatch.
 func kindShapeBytes(k TypeKind, format string) []string {
+	//exhaustive:ignore not every kind applies here
 	switch k {
 	case KindString, KindTime, KindDuration, KindNetIP, KindNetipAddr,
 		KindNetipPrefix, KindURL, KindBigFloat, KindBigRat:
@@ -596,6 +621,7 @@ func nativeAcceptsNull(f FieldInfo, resolve KindResolver) bool {
 	if f.Pointer {
 		return true
 	}
+	//exhaustive:ignore not every kind applies here
 	switch variantShapeKind(f, f.GoType, f.Kind, resolve) {
 	case KindSlice, KindMap, KindBytes, KindNetIP, KindRawJSON:
 		return true

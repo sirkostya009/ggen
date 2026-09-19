@@ -2,6 +2,7 @@
 package ts
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -188,9 +189,10 @@ func splitUnion(t string) []string {
 	for i := 0; i < len(t); i++ {
 		switch c := t[i]; {
 		case quoted:
-			if c == '\\' {
+			switch c {
+			case '\\':
 				i++
-			} else if c == '"' {
+			case '"':
 				quoted = false
 			}
 		case c == '"':
@@ -262,6 +264,7 @@ func (p *Printer) base(ctx *gen.Context, s *gen.Shape, t *gen.Type) string {
 		}
 		return strings.Join(vals, " | ")
 	}
+	//exhaustive:ignore not every kind applies here
 	switch t.Wire {
 	case gen.WireString:
 		return "string"
@@ -373,7 +376,7 @@ func (im *Imports) Write(ctx *gen.Context, keyword, ext string) {
 	slices.SortFunc(files, func(a, b *gen.File) int { return strings.Compare(a.Path, b.Path) })
 	typeImport := strings.Contains(keyword, "type")
 	for _, f := range files {
-		var names []string
+		names := make([]string, 0, len(im.byFile[f]))
 		for name, imp := range im.byFile[f] {
 			spec := name
 			if name != imp.local {
@@ -405,7 +408,7 @@ func (r runtime) Begin(ctx *gen.Context) error {
 }
 
 func (runtime) Decl(*gen.Context, gen.Placed) error {
-	return fmt.Errorf("a runtime file holds no types")
+	return errors.New("a runtime file holds no types")
 }
 
 func (runtime) End(ctx *gen.Context) error {

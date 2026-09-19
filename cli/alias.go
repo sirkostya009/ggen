@@ -23,6 +23,7 @@ func renderAliasDecode(b *bytes.Buffer, s model.StructInfo) {
 	const wrap = `if err != nil { return result, i, ggen.NewParseErr("", i, err) }`
 	// Leading whitespace is legal before any top-level value.
 	inlineSkipWS(b, "i")
+	//exhaustive:ignore not every kind applies here
 	switch s.AliasKind {
 	case model.KindString:
 		// copy: Detach clones iff the scan result aliases data (escape-path
@@ -59,6 +60,7 @@ func renderAliasStreamDecode(b *bytes.Buffer, s model.StructInfo) {
 	}
 	const wrap = `if err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }`
 	b.WriteString("err = s.SkipSpace()\n" + wrap + "\n")
+	//exhaustive:ignore not every kind applies here
 	switch s.AliasKind {
 	case model.KindString:
 		fmt.Fprintf(b, "var v string\nv, err = s.String("+vArgS(s)+")\n%s\nresult = %s(v)\n", wrap, s.Name)
@@ -128,6 +130,7 @@ func renderAliasAppendJSON(b *bytes.Buffer, s model.StructInfo) {
 		renderAliasContainerAppendJSON(b, s)
 		return
 	}
+	//exhaustive:ignore not every kind applies here
 	switch s.AliasKind {
 	case model.KindString:
 		// Opening quote here; the helper writes the body + closing quote.
@@ -290,6 +293,7 @@ func aliasContainerField(s model.StructInfo) model.FieldInfo {
 func renderAliasContainerDecode(b *bytes.Buffer, s model.StructInfo, stream bool) {
 	// Receiver IS the container — reset before decode so we don't append over
 	// carried-in data. KindArray has no nil state (every slot overwritten).
+	//exhaustive:ignore not every kind applies here
 	switch s.AliasKind {
 	case model.KindSlice, model.KindBytes:
 		// A folded [N]byte is still an array — no nil state, not resliceable.
@@ -312,6 +316,7 @@ func renderAliasContainerDecode(b *bytes.Buffer, s model.StructInfo, stream bool
 	// Bytes path passes topLevel=true: the container emitter returns at each exit
 	// (null / array close) instead of falling through, so the trailing return is
 	// dropped. Stream path keeps the trailing return.
+	//exhaustive:ignore not every kind applies here
 	switch s.AliasKind {
 	case model.KindSlice:
 		if stream {
@@ -360,6 +365,7 @@ func renderAliasContainerAppendJSON(b *bytes.Buffer, s model.StructInfo) {
 	// (nested ggen struct, marshaler alias) emits `dst, err = …`, and this
 	// path has no field loop to have declared it.
 	b.WriteString("var err error\n_ = err\n")
+	//exhaustive:ignore not every kind applies here
 	switch s.AliasKind {
 	case model.KindSlice, model.KindArray:
 		// renderAppendSlice handles both via f.Kind / f.ArrayLen.

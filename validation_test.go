@@ -59,6 +59,7 @@ func TestErrorsError_EmptyMessageLeaf(t *testing.T) {
 // A nested fallible mod's ModError is born pre-wrapped in a *ParseError, so
 // the outer rebase has to cascade into the cause.
 func TestParseErrAddPosCascadesToModError(t *testing.T) {
+	t.Parallel()
 	inner := NewParseErr("f", 5, &ModError{Name: "clamp", Pos: 5})
 	outer := NewParseErrShift("b", 105, 5, inner)
 

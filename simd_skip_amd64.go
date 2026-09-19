@@ -17,6 +17,7 @@ package ggen
 
 import (
 	"math/bits"
+
 	"simd/archsimd"
 )
 

@@ -1,6 +1,7 @@
 package ggen
 
 import (
+	"bytes"
 	jsonv2 "encoding/json/v2"
 	"strconv"
 	"testing"
@@ -41,7 +42,7 @@ func TestAppendRFC3339_MatchesAppendFormat(t *testing.T) {
 			if err != nil {
 				t.Fatalf("%v/%s: %v", tm, layout, err)
 			}
-			if want := tm.AppendFormat([]byte("x"), layout); string(got) != string(want) {
+			if want := tm.AppendFormat([]byte("x"), layout); !bytes.Equal(got, want) {
 				t.Errorf("%v/%s: got %q want %q", tm, layout, got, want)
 			}
 		}

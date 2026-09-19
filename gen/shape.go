@@ -64,11 +64,11 @@ type Type struct {
 	OneOf []*Type // input only: other shapes a converter accepts in place of this one
 	// Converted: a converter turns this JSON shape into the Go value, so
 	// Rules describe the converted value and do not constrain it.
-	Enum      *Enum // closed set of values
+	Enum *Enum // closed set of values
 
 	Converted bool
-	Nullable bool // JSON null is accepted (input) or can be emitted (output)
-	Empty    bool // "" is accepted or can be emitted for a formatted string (IP, Addr, Prefix, URL)
+	Nullable  bool // JSON null is accepted (input) or can be emitted (output)
+	Empty     bool // "" is accepted or can be emitted for a formatted string (IP, Addr, Prefix, URL)
 }
 
 // Formats a Type can carry.
@@ -97,8 +97,8 @@ const (
 	FormatNumberString = "number-string" // `,string` float
 	FormatBigFloat     = "big-float"     // math/big.Float: a decimal with an e or p exponent, or Inf
 	FormatRational     = "rational"      // math/big.Rat: an integer or decimal with base prefixes, or "num/denom"
-	// A custom time layout is "time:" followed by the Go layout, e.g.
-	// "time:2006-01-02".
+	// FormatTimeLayoutPrefix starts a custom time layout: "time:" followed by
+	// the Go layout, e.g. "time:2006-01-02".
 	FormatTimeLayoutPrefix = "time:"
 )
 
@@ -455,6 +455,7 @@ func (l *lowerer) bytes(t *Type, c *fieldCtx, n int) {
 
 func (l *lowerer) basic(t *Type, b *types.Basic, c *fieldCtx, lvl int) {
 	quoted := lvl < 0 && c.f.String
+	//exhaustive:ignore not every kind applies here
 	switch b.Kind() {
 	case types.String:
 		t.Go, t.Wire = String, WireString
@@ -685,7 +686,8 @@ func (l *lowerer) delegatingAlias() *Type {
 			return t
 		}
 	}
-	if !info.AliasIface.JSONMarshaler && !info.AliasIface.JSONUnmarshaler && (info.AliasIface.TextMarshaler || info.AliasIface.TextUnmarshaler || info.AliasIface.TextAppender) {
+	if !info.AliasIface.JSONMarshaler && !info.AliasIface.JSONUnmarshaler &&
+		(info.AliasIface.TextMarshaler || info.AliasIface.TextUnmarshaler || info.AliasIface.TextAppender) {
 		t.Wire = WireString
 	}
 	return t
@@ -888,6 +890,7 @@ func modRule(m model.ModRule) (Rule, bool) {
 		return Rule{}, false
 	}
 	r := Rule{Op: op, Transform: true}
+	//exhaustive:ignore not every kind applies here
 	switch op {
 	case TrimPrefix, TrimSuffix:
 		if m.Value == "" {
@@ -923,6 +926,7 @@ func validatorRule(v model.ValidationRule) (Rule, bool) {
 // JSON null decodes to.
 func rejectsEmpty(rules []Rule) bool {
 	for _, r := range rules {
+		//exhaustive:ignore not every kind applies here
 		switch r.Op {
 		case NotEmpty:
 			return true

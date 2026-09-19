@@ -11,21 +11,21 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/sirkostya009/ggen"
 	"github.com/sirkostya009/ggen/internal/prealloc"
-	"unsafe"
 )
 
 // ExtraStruct exercises keys:/hint:/clamp/nested-dive.
 //
 //ggen:generate
 type ExtraStruct struct {
-	HintedTags   []string       `json:"hintedTags" pipe:"maxlen=1000" hint:"4"`
-	ClampedScore int            `json:"clampedScore" pipe:"clamp=0|100"`
-	KeyedMap     map[string]int `json:"keyedMap" pipe:"keys:(trim tolower minrunes=2 maxrunes=16)"`
-	NestedInts   [][]int        `json:"nestedInts" pipe:"inner:(minlen=1 inner:(gte=0 lte=100))"`
-	Triple       [][][]string   `json:"triple" pipe:"inner:(minlen=1 inner:(minlen=1 inner:minlen=1))"`
+	HintedTags   []string       `hint:"4" json:"hintedTags"   pipe:"maxlen=1000"`
+	ClampedScore int            `         json:"clampedScore" pipe:"clamp=0|100"`
+	KeyedMap     map[string]int `         json:"keyedMap"     pipe:"keys:(trim tolower minrunes=2 maxrunes=16)"`
+	NestedInts   [][]int        `         json:"nestedInts"   pipe:"inner:(minlen=1 inner:(gte=0 lte=100))"`
+	Triple       [][][]string   `         json:"triple"       pipe:"inner:(minlen=1 inner:(minlen=1 inner:minlen=1))"`
 }
 
 // tupleLen pins the named-const array-length path: the AST reads `[tupleLen]`
@@ -37,7 +37,7 @@ const tupleLen = 2
 //ggen:generate
 type TupleStruct struct {
 	Point    [2]float64      `json:"point"`
-	RGB      [3]int          `json:"rgb" pipe:"inner:(clamp=0|255 gte=0 lte=255)"`
+	RGB      [3]int          `json:"rgb"      pipe:"inner:(clamp=0|255 gte=0 lte=255)"`
 	Segments [][2]int        `json:"segments"`
 	Pair     [2][]string     `json:"pair"`
 	Named    [tupleLen]int   `json:"named"`
@@ -374,8 +374,8 @@ type PreallocWidths struct {
 	Ptrs   []*PreallocRow `json:"ptrs"`
 	Nested [][]int        `json:"nested"`
 	Hinted []PreallocWide `json:"hinted" hint:"3"`
-	Lened  []PreallocWide `json:"lened"  pipe:"len=6"`
-	Minned []PreallocWide `json:"minned" pipe:"minlen=5"`
+	Lened  []PreallocWide `json:"lened"           pipe:"len=6"`
+	Minned []PreallocWide `json:"minned"          pipe:"minlen=5"`
 	// maxlen is the exact upper bound: preallocated when that many elements
 	// still fit a 512-byte span, ignored when they do not.
 	MaxFits   []PreallocRow  `json:"maxFits"   pipe:"maxlen=8"`
@@ -414,11 +414,11 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 		got  int
 		size uintptr
 	}{
-		{"strs", cap(got.Strs), unsafe.Sizeof(*new(string))},
-		{"rows", cap(got.Rows), unsafe.Sizeof(*new(PreallocRow))},
-		{"wide", cap(got.Wide), unsafe.Sizeof(*new(PreallocWide))},
-		{"ptrs", cap(got.Ptrs), unsafe.Sizeof(*new(*PreallocRow))},
-		{"nested", cap(got.Nested), unsafe.Sizeof(*new([]int))},
+		{"strs", cap(got.Strs), unsafe.Sizeof("")},
+		{"rows", cap(got.Rows), unsafe.Sizeof(PreallocRow{})},
+		{"wide", cap(got.Wide), unsafe.Sizeof(PreallocWide{})},
+		{"ptrs", cap(got.Ptrs), unsafe.Sizeof((*PreallocRow)(nil))},
+		{"nested", cap(got.Nested), unsafe.Sizeof([]int(nil))},
 	} {
 		if want := prealloc.Cap(c.size); c.got != want {
 			t.Errorf("%s: cap = %d, want %d (element %d bytes)", c.name, c.got, want, c.size)
@@ -436,10 +436,10 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 	if got, want := cap(got.MaxFits), 8; got != want {
 		t.Errorf("maxlen=8 that fits a span: cap = %d, want %d", got, want)
 	}
-	if got, want := cap(got.MaxTooBig), prealloc.Cap(unsafe.Sizeof(*new(PreallocWide))); got != want {
+	if got, want := cap(got.MaxTooBig), prealloc.Cap(unsafe.Sizeof(PreallocWide{})); got != want {
 		t.Errorf("maxlen=8 that overshoots a span: cap = %d, want the width default %d", got, want)
 	}
-	if got, want := cap(got.MaxHuge), prealloc.Cap(unsafe.Sizeof(*new(PreallocWide))); got != want {
+	if got, want := cap(got.MaxHuge), prealloc.Cap(unsafe.Sizeof(PreallocWide{})); got != want {
 		t.Errorf("maxlen=MaxInt64: cap = %d, want the width default %d", got, want)
 	}
 	// A numeric slice beats the width guess outright: scalar elements carry no
@@ -463,8 +463,8 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 		}
 	}
 	// An element too wide for two in a span falls back to one, not zero.
-	if n := prealloc.Cap(unsafe.Sizeof(*new(PreallocWide))); n != 1 {
-		t.Errorf("a %d-byte element should prealloc 1, got %d", unsafe.Sizeof(*new(PreallocWide)), n)
+	if n := prealloc.Cap(unsafe.Sizeof(PreallocWide{})); n != 1 {
+		t.Errorf("a %d-byte element should prealloc 1, got %d", unsafe.Sizeof(PreallocWide{}), n)
 	}
 }
 
@@ -486,7 +486,9 @@ type ElemKinds struct {
 
 func TestElemKinds_DedicatedKindElements(t *testing.T) {
 	t.Parallel()
-	in := []byte(`{"anys":[1.5,"two",true,null,{"k":"v"}],"blobs":["aGVsbG8=","d29ybGQ="],"durs":["1m30s","1h0m0s"],"maps":[{"x":1,"y":2},{"z":3}],"raws":[{"a":1},[true,null],"s"],"times":["2020-01-01T00:00:00Z","2021-06-15T12:30:00Z"]}`)
+	in := []byte(
+		`{"anys":[1.5,"two",true,null,{"k":"v"}],"blobs":["aGVsbG8=","d29ybGQ="],"durs":["1m30s","1h0m0s"],"maps":[{"x":1,"y":2},{"z":3}],"raws":[{"a":1},[true,null],"s"],"times":["2020-01-01T00:00:00Z","2021-06-15T12:30:00Z"]}`,
+	)
 	got, _, err := ElemKinds{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("bytes decode: %v", err)
@@ -496,7 +498,9 @@ func TestElemKinds_DedicatedKindElements(t *testing.T) {
 	if got.Durs[0] != 90*time.Second || got.Durs[1] != time.Hour {
 		t.Errorf("Durs = %v", got.Durs)
 	}
-	stdin := []byte(`{"anys":[1.5,"two",true,null,{"k":"v"}],"blobs":["aGVsbG8=","d29ybGQ="],"maps":[{"x":1,"y":2},{"z":3}],"raws":[{"a":1},[true,null],"s"],"times":["2020-01-01T00:00:00Z","2021-06-15T12:30:00Z"]}`)
+	stdin := []byte(
+		`{"anys":[1.5,"two",true,null,{"k":"v"}],"blobs":["aGVsbG8=","d29ybGQ="],"maps":[{"x":1,"y":2},{"z":3}],"raws":[{"a":1},[true,null],"s"],"times":["2020-01-01T00:00:00Z","2021-06-15T12:30:00Z"]}`,
+	)
 	var want ElemKinds
 	if err := json.Unmarshal(stdin, &want); err != nil {
 		t.Fatalf("stdlib: %v", err)
@@ -559,7 +563,9 @@ type MapVals struct {
 
 func TestMapVals_DedicatedKindValues(t *testing.T) {
 	t.Parallel()
-	in := []byte(`{"anys":{"a":1.5,"b":"two","c":null},"blobs":{"x":"aGVsbG8="},"durs":{"d":"1m30s"},"ints":{"i":[1,2,3]},"raws":{"r":{"nested":true}},"times":{"t":"2020-01-01T00:00:00Z"}}`)
+	in := []byte(
+		`{"anys":{"a":1.5,"b":"two","c":null},"blobs":{"x":"aGVsbG8="},"durs":{"d":"1m30s"},"ints":{"i":[1,2,3]},"raws":{"r":{"nested":true}},"times":{"t":"2020-01-01T00:00:00Z"}}`,
+	)
 	got, _, err := MapVals{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("bytes decode: %v", err)
@@ -567,7 +573,9 @@ func TestMapVals_DedicatedKindValues(t *testing.T) {
 	if got.Durs["d"] != 90*time.Second {
 		t.Errorf("Durs = %v", got.Durs)
 	}
-	stdin := []byte(`{"anys":{"a":1.5,"b":"two","c":null},"blobs":{"x":"aGVsbG8="},"ints":{"i":[1,2,3]},"raws":{"r":{"nested":true}},"times":{"t":"2020-01-01T00:00:00Z"}}`)
+	stdin := []byte(
+		`{"anys":{"a":1.5,"b":"two","c":null},"blobs":{"x":"aGVsbG8="},"ints":{"i":[1,2,3]},"raws":{"r":{"nested":true}},"times":{"t":"2020-01-01T00:00:00Z"}}`,
+	)
 	var want MapVals
 	if err := json.Unmarshal(stdin, &want); err != nil {
 		t.Fatalf("stdlib: %v", err)
@@ -806,7 +814,7 @@ func TestR10WideBounds(t *testing.T) {
 //ggen:generate
 type R10BParenTypes struct {
 	Deep  []([]bool)        `json:"deep"`
-	Ptr   *(int)            `json:"ptr"`
+	Ptr   *int              `json:"ptr"`
 	Vals  map[string](*int) `json:"vals"`
 	Bytes ([]byte)          `json:"bytes"`
 	Ints  ([]int)           `json:"ints"`

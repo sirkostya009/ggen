@@ -277,7 +277,9 @@ type NPtrContainersStruct struct {
 
 func TestNPtr_containersRoundtrip(t *testing.T) {
 	t.Parallel()
-	in := []byte(`{"spp":[1,null,3],"app":[null,5,null],"nspp":[[7,null]],"mp":{"a":1,"b":null},"mpp":{"x":7,"y":null},"mpa":{"k":{"street":"Main 1","city":"Lviv","zipCode":"79000"},"n":null}}`)
+	in := []byte(
+		`{"spp":[1,null,3],"app":[null,5,null],"nspp":[[7,null]],"mp":{"a":1,"b":null},"mpp":{"x":7,"y":null},"mpa":{"k":{"street":"Main 1","city":"Lviv","zipCode":"79000"},"n":null}}`,
+	)
 	got, n, err := NPtrContainersStruct{}.DecodeFrom(in)
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -369,6 +371,7 @@ type PtrContainerElem struct {
 }
 
 func TestPtrContainer_ResetOnReuse(t *testing.T) {
+	t.Parallel()
 	first := []byte(`{"plain":[1,2,3],"one":[1,2,3],"deep":[1,2,3],"m1":{"a":1,"b":2},"m3":{"a":1,"b":2},` +
 		`"elems":[{"k":"a"},{"k":"b"}],"melem":{"a":{"k":"a"},"b":{"k":"b"}}}`)
 	second := []byte(`{"plain":[9],"one":[9],"deep":[9],"m1":{"z":9},"m3":{"z":9},` +
@@ -409,6 +412,7 @@ func TestPtrContainer_ResetOnReuse(t *testing.T) {
 // An omitted key leaves the field as a fresh decode would: a pointer to a
 // container comes back nil, not a cleared pointee.
 func TestPtrContainer_OmittedKeyClears(t *testing.T) {
+	t.Parallel()
 	v, _, err := PtrContainers{}.DecodeFrom([]byte(`{"one":[1,2,3],"m1":{"a":1}}`))
 	if err != nil {
 		t.Fatal(err)
@@ -429,6 +433,7 @@ func TestPtrContainer_OmittedKeyClears(t *testing.T) {
 // peeled one star, so at depth ≥ 2 the element kind fell back to its zero
 // value (KindString) and a `**[]T` emitted a string scan into a T slot.
 func TestPtrContainer_DeepDecodes(t *testing.T) {
+	t.Parallel()
 	v, _, err := PtrContainers{}.DecodeFrom([]byte(`{"deep":[4,5],"m3":{"k":7},"melem":{"q":{"k":"q"}}}`))
 	if err != nil {
 		t.Fatal(err)

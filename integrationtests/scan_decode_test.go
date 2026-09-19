@@ -612,6 +612,7 @@ type NarrowInts struct {
 // truncated (uint8 ← 256 = 0, the pre-fix bug), matching encoding/json — on the
 // bytes path, the stream path, and every field/map/slice/pointer emit site.
 func TestNarrowIntOverflow(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		payload string
@@ -638,6 +639,7 @@ func TestNarrowIntOverflow(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			var std NarrowInts
 			stdReject := json.Unmarshal([]byte(c.payload), &std) != nil
 			if stdReject != c.reject {
@@ -670,6 +672,7 @@ func TestNarrowIntOverflow(t *testing.T) {
 // with U+FFFD — an intentional divergence from v1). Valid multi-byte UTF-8
 // decodes identically to jsonv2.
 func TestInvalidUTF8Rejected(t *testing.T) {
+	t.Parallel()
 	long := strings.Repeat("x", 40) // past the 32 B inline window → ggen.String fall
 	cases := []struct {
 		name    string
@@ -687,6 +690,7 @@ func TestInvalidUTF8Rejected(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			var v2 Address
 			v2Reject := jsonv2.Unmarshal([]byte(c.payload), &v2) != nil
 			if v2Reject != c.reject {
@@ -726,6 +730,7 @@ func TestInvalidUTF8Rejected(t *testing.T) {
 // surrogate ESCAPES inside a raw span are ASCII text and pass (jsonv2
 // escape-parses raw strings and rejects) — see backlog.
 func TestRawCaptureInvalidUTF8(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		payload string
@@ -739,6 +744,7 @@ func TestRawCaptureInvalidUTF8(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			var v2 RichTypes
 			if v2Reject := jsonv2.Unmarshal([]byte(c.payload), &v2) != nil; v2Reject != c.reject {
 				t.Fatalf("jsonv2 reject=%v, want %v", v2Reject, c.reject)
@@ -768,6 +774,7 @@ func TestRawCaptureInvalidUTF8(t *testing.T) {
 // through generated code — self-referential struct (Node.Children), any field,
 // ignoreunknown skip, and RawMessage capture, bytes + stream.
 func TestMaxDepthNoCrash(t *testing.T) {
+	t.Parallel()
 	const n = 2_000_000 // well past MaxDepth and past the old ~2.5MB crash point
 	arr := strings.Repeat("[", n) + strings.Repeat("]", n)
 	cases := []struct {
@@ -775,17 +782,26 @@ func TestMaxDepthNoCrash(t *testing.T) {
 		payload string
 		decode  func([]byte) error
 	}{
-		{"recursive_struct", strings.Repeat(`{"children":[`, n) + strings.Repeat(`]}`, n),
-			func(d []byte) error { _, _, err := Node{}.DecodeFrom(d); return err }},
-		{"any_field", `{"data":` + arr + `}`,
-			func(d []byte) error { _, _, err := AnyHolder{}.DecodeFrom(d); return err }},
-		{"ignoreunknown_skip", `{"zz":` + arr + `}`,
-			func(d []byte) error { _, _, err := IgnoreUnknownStruct{}.DecodeFrom(d); return err }},
-		{"raw_capture", `{"raw":` + arr + `}`,
-			func(d []byte) error { _, _, err := RawHolder{}.DecodeFrom(d); return err }},
+		{
+			"recursive_struct", strings.Repeat(`{"children":[`, n) + strings.Repeat(`]}`, n),
+			func(d []byte) error { _, _, err := Node{}.DecodeFrom(d); return err },
+		},
+		{
+			"any_field", `{"data":` + arr + `}`,
+			func(d []byte) error { _, _, err := AnyHolder{}.DecodeFrom(d); return err },
+		},
+		{
+			"ignoreunknown_skip", `{"zz":` + arr + `}`,
+			func(d []byte) error { _, _, err := IgnoreUnknownStruct{}.DecodeFrom(d); return err },
+		},
+		{
+			"raw_capture", `{"raw":` + arr + `}`,
+			func(d []byte) error { _, _, err := RawHolder{}.DecodeFrom(d); return err },
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			if err := c.decode([]byte(c.payload)); !errors.Is(err, ggen.ErrMaxDepth) {
 				t.Errorf("bytes: want ErrMaxDepth, got %v", err)
 			}
@@ -831,6 +847,7 @@ type NumGrammar struct {
 // its own SKIP path (skipNumber, used for RawMessage/ignoreunknown) already
 // rejected them — so decoding and skipping disagreed on the same bytes.
 func TestNumberGrammarStrict(t *testing.T) {
+	t.Parallel()
 	cases := []struct {
 		name    string
 		payload string
@@ -858,6 +875,7 @@ func TestNumberGrammarStrict(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			var v2 NumGrammar
 			if v2Reject := jsonv2.Unmarshal([]byte(c.payload), &v2) != nil; v2Reject != c.reject {
 				t.Fatalf("jsonv2 reject=%v, want %v", v2Reject, c.reject)
@@ -1301,10 +1319,14 @@ func TestParseError_BoolGiveUpPos(t *testing.T) {
 		{"slice_elem", `{"flags":[true,fals]}`, 19, shapes},
 		{"array_elem", `{"pair":[tru,true]}`, 12, shapes},
 		{"map_value", `{"byKey":{"a":trux}}`, 17, shapes},
-		{"any_field", `{"name":"a","body":falsy}`, 23,
-			func(p string, c int) (error, error) { return decodeBothPathsChunked[AnyStruct](p, c) }},
-		{"alias", `trux`, 3,
-			func(p string, c int) (error, error) { return decodeBothPathsChunked[AliasBool](p, c) }},
+		{
+			"any_field", `{"name":"a","body":falsy}`, 23,
+			func(p string, c int) (error, error) { return decodeBothPathsChunked[AnyStruct](p, c) },
+		},
+		{
+			"alias", `trux`, 3,
+			func(p string, c int) (error, error) { return decodeBothPathsChunked[AliasBool](p, c) },
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

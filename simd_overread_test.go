@@ -19,11 +19,12 @@ import (
 // reports the crash. Masked-off lanes never change a result, so no parity
 // test can catch this; only the guard page can.
 func TestSIMD_NoOverRead(t *testing.T) {
+	t.Parallel()
 	if os.Getenv("GGEN_OVERREAD_PROBE") == "1" {
 		overReadProbe(t)
 		return
 	}
-	cmd := exec.Command(os.Args[0], "-test.run=^TestSIMD_NoOverRead$", "-test.count=1")
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestSIMD_NoOverRead$", "-test.count=1")
 	cmd.Env = append(os.Environ(), "GGEN_OVERREAD_PROBE=1")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("probe child: %v\n%s", err, out)
@@ -34,6 +35,7 @@ func TestSIMD_NoOverRead(t *testing.T) {
 // src so its last byte is the last accessible byte; the returned slice's
 // capacity ends there too, so a Stream refilling into it stays flush.
 func guardPage(t *testing.T) (place func(src []byte) []byte, done func()) {
+	t.Helper()
 	page := syscall.Getpagesize()
 	mem, err := syscall.Mmap(-1, 0, 2*page, syscall.PROT_READ|syscall.PROT_WRITE, syscall.MAP_ANON|syscall.MAP_PRIVATE)
 	if err != nil {
@@ -49,10 +51,11 @@ func guardPage(t *testing.T) (place func(src []byte) []byte, done func()) {
 		dst := mem[page-len(src) : page : page]
 		copy(dst, src)
 		return dst
-	}, func() { syscall.Munmap(mem) }
+	}, func() { _ = syscall.Munmap(mem) }
 }
 
 func overReadProbe(t *testing.T) {
+	t.Helper()
 	place, done := guardPage(t)
 	defer done()
 
@@ -186,9 +189,21 @@ func overReadProbe(t *testing.T) {
 		{"SkipValueAVX", func(s *Stream) (string, error) { return "", s.SkipValueAVX() }, func(s *Stream) (string, error) { return "", s.SkipValue() }},
 		{"SkipValueAVX2", func(s *Stream) (string, error) { return "", s.SkipValueAVX2() }, func(s *Stream) (string, error) { return "", s.SkipValue() }},
 		{"SkipValueAVX512", func(s *Stream) (string, error) { return "", s.SkipValueAVX512() }, func(s *Stream) (string, error) { return "", s.SkipValue() }},
-		{"CaptureValueAVX", func(s *Stream) (string, error) { b, err := s.CaptureValueAVX(); return string(b), err }, func(s *Stream) (string, error) { b, err := s.CaptureValue(); return string(b), err }},
-		{"CaptureValueAVX2", func(s *Stream) (string, error) { b, err := s.CaptureValueAVX2(); return string(b), err }, func(s *Stream) (string, error) { b, err := s.CaptureValue(); return string(b), err }},
-		{"CaptureValueAVX512", func(s *Stream) (string, error) { b, err := s.CaptureValueAVX512(); return string(b), err }, func(s *Stream) (string, error) { b, err := s.CaptureValue(); return string(b), err }},
+		{
+			"CaptureValueAVX",
+			func(s *Stream) (string, error) { b, err := s.CaptureValueAVX(); return string(b), err },
+			func(s *Stream) (string, error) { b, err := s.CaptureValue(); return string(b), err },
+		},
+		{
+			"CaptureValueAVX2",
+			func(s *Stream) (string, error) { b, err := s.CaptureValueAVX2(); return string(b), err },
+			func(s *Stream) (string, error) { b, err := s.CaptureValue(); return string(b), err },
+		},
+		{
+			"CaptureValueAVX512",
+			func(s *Stream) (string, error) { b, err := s.CaptureValueAVX512(); return string(b), err },
+			func(s *Stream) (string, error) { b, err := s.CaptureValue(); return string(b), err },
+		},
 		{"SkipSpaceAVX", func(s *Stream) (string, error) { return "", s.SkipSpaceAVX() }, func(s *Stream) (string, error) { return "", s.SkipSpace() }},
 		{"SkipSpaceAVX2", func(s *Stream) (string, error) { return "", s.SkipSpaceAVX2() }, func(s *Stream) (string, error) { return "", s.SkipSpace() }},
 		{"SkipSpaceAVX512", func(s *Stream) (string, error) { return "", s.SkipSpaceAVX512() }, func(s *Stream) (string, error) { return "", s.SkipSpace() }},

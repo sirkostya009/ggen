@@ -215,6 +215,7 @@ func render(t *testing.T, set *gen.Set, dir string) {
 // whatever Go accepts must marshal to JSON the output schemas accept. It needs
 // node on PATH and `npm ci` at the repo root.
 func TestDifferential(t *testing.T) {
+	t.Parallel()
 	node, err := exec.LookPath("node")
 	modules := nodeModules()
 	if err != nil || modules == "" {
@@ -231,7 +232,7 @@ func TestDifferential(t *testing.T) {
 	}
 	cfg := `{"compilerOptions":{"strict":true,"noEmit":true,"target":"ES2022","lib":["ES2022","DOM"],"module":"ESNext","moduleResolution":"Bundler","allowImportingTsExtensions":true,"skipLibCheck":true},"include":["*/*.ts"]}`
 	write(t, filepath.Join(dir, "tsconfig.json"), []byte(cfg))
-	if b, err := exec.Command(filepath.Join(modules, ".bin", "tsc"), "-p", dir).CombinedOutput(); err != nil {
+	if b, err := exec.CommandContext(t.Context(), filepath.Join(modules, ".bin", "tsc"), "-p", dir).CombinedOutput(); err != nil {
 		t.Fatalf("tsc: %v\n%s", err, b)
 	}
 
@@ -438,7 +439,7 @@ process.stdout.write(JSON.stringify(out));
 	runner := filepath.Join(dir, "run.mjs")
 	write(t, runner, []byte(script))
 	var stderr bytes.Buffer
-	cmd := exec.Command(node, runner, in)
+	cmd := exec.CommandContext(t.Context(), node, runner, in)
 	cmd.Stderr = &stderr
 	raw, err := cmd.Output()
 	if err != nil {
@@ -482,6 +483,7 @@ var swiftDivergences = []laneDivergence{
 // types: Go must decode what Swift encodes to the same value. It needs
 // GGEN_SWIFTC, the path to swiftc.
 func TestDifferentialSwift(t *testing.T) {
+	t.Parallel()
 	swiftc := os.Getenv("GGEN_SWIFTC")
 	if swiftc == "" {
 		t.Skip("set GGEN_SWIFTC to a swiftc binary")
@@ -538,14 +540,25 @@ for c in cases {
 	main.WriteString("    default: results.append([\"err\", \"unknown type\"])\n    }\n}\n")
 	main.WriteString("print(String(decoding: try JSONEncoder().encode(results), as: UTF8.self))\n")
 	write(t, filepath.Join(dir, "main.swift"), []byte(main.String()))
-	build := exec.Command(swiftc, "-module-cache-path", filepath.Join(dir, "cache"), "-module-name", "Fixture", "-o", filepath.Join(dir, "app"),
-		filepath.Join(dir, "main.swift"), filepath.Join(dir, "Types.swift"), filepath.Join(dir, "JSON.swift"))
+	build := exec.CommandContext(
+		t.Context(),
+		swiftc,
+		"-module-cache-path",
+		filepath.Join(dir, "cache"),
+		"-module-name",
+		"Fixture",
+		"-o",
+		filepath.Join(dir, "app"),
+		filepath.Join(dir, "main.swift"),
+		filepath.Join(dir, "Types.swift"),
+		filepath.Join(dir, "JSON.swift"),
+	)
 	if b, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("swiftc: %v\n%s", err, b)
 	}
 
 	checkTypedLane(t, "Swift", set, dir, swiftDivergences, func(cases string) ([]byte, error) {
-		return exec.Command(filepath.Join(dir, "app"), cases).Output()
+		return exec.CommandContext(t.Context(), filepath.Join(dir, "app"), cases).Output()
 	})
 }
 
@@ -569,6 +582,7 @@ var kotlinDivergences = []laneDivergence{
 // data classes. It needs GGEN_KOTLIN_HOME, laid out as gen/kotlin's
 // TestRuntime expects.
 func TestDifferentialKotlin(t *testing.T) {
+	t.Parallel()
 	home := os.Getenv("GGEN_KOTLIN_HOME")
 	jres, _ := filepath.Glob(filepath.Join(home, "jdk*"))
 	if home == "" || len(jres) == 0 {
@@ -614,12 +628,14 @@ fun main(args: Array<String>) {
 	for _, n := range names {
 		fmt.Fprintf(&main, "            %q -> run(serializer<%s>(), json)\n", n, n)
 	}
-	main.WriteString("            else -> JsonArray(listOf(JsonPrimitive(\"err\"), JsonPrimitive(\"unknown type\")))\n        }\n    }\n    println(JsonArray(out))\n}\n")
+	main.WriteString(
+		"            else -> JsonArray(listOf(JsonPrimitive(\"err\"), JsonPrimitive(\"unknown type\")))\n        }\n    }\n    println(JsonArray(out))\n}\n",
+	)
 	write(t, filepath.Join(dir, "Main.kt"), []byte(main.String()))
 
 	env := append(os.Environ(), "JAVA_HOME="+jres[0], "PATH="+filepath.Join(jres[0], "bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
 	cp := filepath.Join(home, "kotlinx-serialization-core-jvm.jar") + ":" + filepath.Join(home, "kotlinx-serialization-json-jvm.jar")
-	build := exec.Command(filepath.Join(home, "kotlinc", "bin", "kotlinc"),
+	build := exec.CommandContext(t.Context(), filepath.Join(home, "kotlinc", "bin", "kotlinc"),
 		"-Xplugin="+filepath.Join(home, "kotlinc", "lib", "kotlinx-serialization-compiler-plugin.jar"),
 		"-cp", cp, "-d", filepath.Join(dir, "classes"), filepath.Join(dir, "Main.kt"), filepath.Join(dir, "Types.kt"))
 	build.Env = env
@@ -627,7 +643,7 @@ fun main(args: Array<String>) {
 		t.Fatalf("kotlinc: %v\n%s", err, b)
 	}
 	checkTypedLane(t, "Kotlin", set, dir, kotlinDivergences, func(cases string) ([]byte, error) {
-		cmd := exec.Command(filepath.Join(jres[0], "bin", "java"), "-Dstdout.encoding=UTF-8", "-cp",
+		cmd := exec.CommandContext(t.Context(), filepath.Join(jres[0], "bin", "java"), "-Dstdout.encoding=UTF-8", "-cp",
 			filepath.Join(dir, "classes")+":"+cp+":"+filepath.Join(home, "kotlinc", "lib", "kotlin-stdlib.jar"), "MainKt", cases)
 		cmd.Env = env
 		return cmd.Output()
@@ -784,6 +800,7 @@ func outsideEnum(t *gen.Type, probe string) bool {
 // what Go emits to the output type. It needs GGEN_NODE_MODULES, a node_modules
 // with typescript.
 func TestDifferentialTS(t *testing.T) {
+	t.Parallel()
 	modules := nodeModules()
 	if modules == "" {
 		t.Skip("needs `npm ci` at the repo root, or GGEN_NODE_MODULES")
@@ -849,11 +866,12 @@ func TestDifferentialTS(t *testing.T) {
 	}
 	write(t, filepath.Join(dir, "cases.ts"), []byte(body.String()))
 	write(t, filepath.Join(dir, "tsconfig.json"), []byte(
-		`{"compilerOptions":{"strict":true,"noEmit":true,"target":"ES2022","module":"ESNext","moduleResolution":"Bundler","allowImportingTsExtensions":true,"skipLibCheck":true},"include":["*.ts"]}`))
+		`{"compilerOptions":{"strict":true,"noEmit":true,"target":"ES2022","module":"ESNext","moduleResolution":"Bundler","allowImportingTsExtensions":true,"skipLibCheck":true},"include":["*.ts"]}`,
+	))
 	if err := os.Symlink(modules, filepath.Join(dir, "node_modules")); err != nil {
 		t.Fatal(err)
 	}
-	raw, _ := exec.Command(filepath.Join(modules, ".bin", "tsc"), "-p", dir).CombinedOutput()
+	raw, _ := exec.CommandContext(t.Context(), filepath.Join(modules, ".bin", "tsc"), "-p", dir).CombinedOutput()
 
 	explained := make([]int, len(tsDivergences))
 	byName := map[string]goCase{}
@@ -914,6 +932,7 @@ func onlyDeclaredKeys(input string, keys map[string]struct{}) bool {
 // TestUnloaded pins that a ggen-generated type reached in a package no pattern
 // matched is named, so a script can load it, and lowered as an external type.
 func TestUnloaded(t *testing.T) {
+	t.Parallel()
 	set, err := gen.Load(".")
 	if err != nil {
 		t.Fatal(err)

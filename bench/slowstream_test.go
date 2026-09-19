@@ -10,6 +10,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/mailru/easyjson"
+
 	"github.com/sirkostya009/ggen"
 )
 
@@ -63,7 +64,7 @@ func (s *slowReader) Read(p []byte) (int, error) {
 	// Delay: geometric decay — each read shaves the remaining gap by 75%.
 	extra := s.startDelay - s.endDelay
 	for range s.reads {
-		extra = extra >> 2 // ×0.25
+		extra >>= 2 // ×0.25
 	}
 	delay := s.endDelay + extra
 	time.Sleep(delay)
@@ -91,7 +92,7 @@ type slowState struct {
 // Run with a longer benchtime, e.g.
 // `go test -bench=BenchmarkSlowStream -benchtime=10s -cpu=1 .`.
 func BenchmarkSlowStream_Valid(b *testing.B) {
-	var slowValidCodecs = []struct {
+	slowValidCodecs := []struct {
 		name string
 		fn   func(*slowState) error
 	}{
@@ -158,7 +159,7 @@ func BenchmarkSlowStream_Invalid(b *testing.B) {
 	// Streaming's theoretical advantage is being able to reject
 	// invalid payloads without draining io.Reader. jsonv2 doesn't
 	// have this but is streaming so its also present for a baseline comparison.
-	var slowInvalidCodecs = []struct {
+	slowInvalidCodecs := []struct {
 		name    string
 		fn      func(*slowState) error
 		wantErr bool

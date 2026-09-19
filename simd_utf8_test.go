@@ -6,10 +6,11 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
-	"simd/archsimd"
 	"strings"
 	"testing"
 	"unicode/utf8"
+
+	"simd/archsimd"
 )
 
 // TestValidUTF8SIMD_Parity pins validUTF8x16's accept set to unicode/utf8.Valid
@@ -17,6 +18,7 @@ import (
 // lead/continuation classifications), directed multi-byte edge cases at every
 // block-boundary offset, and randomized fuzz.
 func TestValidUTF8SIMD_Parity(t *testing.T) {
+	t.Parallel()
 	check := func(b []byte) {
 		t.Helper()
 		if got, want := validUTF8x16(b), utf8.Valid(b); got != want {
@@ -37,26 +39,40 @@ func TestValidUTF8SIMD_Parity(t *testing.T) {
 		{},
 		[]byte("hello"),
 		[]byte("é"), []byte("ф"), []byte("ऄ"), []byte("😀"),
-		{0xC2, 0x80}, {0xDF, 0xBF}, // 2-byte bounds
-		{0xC0, 0x80}, {0xC1, 0xBF}, // overlong 2
-		{0xE0, 0xA0, 0x80}, {0xEF, 0xBF, 0xBF}, // 3-byte bounds
-		{0xE0, 0x80, 0x80}, {0xE0, 0x9F, 0xBF}, // overlong 3
-		{0xED, 0x9F, 0xBF},                     // U+D7FF (valid)
-		{0xED, 0xA0, 0x80}, {0xED, 0xBF, 0xBF}, // surrogates
-		{0xEE, 0x80, 0x80},                                 // U+E000 (valid)
-		{0xF0, 0x90, 0x80, 0x80}, {0xF4, 0x8F, 0xBF, 0xBF}, // 4-byte bounds
-		{0xF0, 0x80, 0x80, 0x80}, {0xF0, 0x8F, 0xBF, 0xBF}, // overlong 4
-		{0xF4, 0x90, 0x80, 0x80},                 // > U+10FFFF
-		{0xF5, 0x80, 0x80, 0x80}, {0xFF}, {0xFE}, // illegal leads
-		{0x80}, {0xBF}, // stray continuations
-		{0x80, 0x80}, {0xC2, 0x80, 0x80}, // continuation runs
-		{0xC2}, {0xE0, 0xA0}, {0xF0, 0x90, 0x80}, // truncated runes
-		{0xE1, 0x80}, {0xF1, 0x80, 0x80}, // truncated (non-edge leads)
+		{0xC2, 0x80},
+		{0xDF, 0xBF}, // 2-byte bounds
+		{0xC0, 0x80},
+		{0xC1, 0xBF}, // overlong 2
+		{0xE0, 0xA0, 0x80},
+		{0xEF, 0xBF, 0xBF}, // 3-byte bounds
+		{0xE0, 0x80, 0x80},
+		{0xE0, 0x9F, 0xBF}, // overlong 3
+		{0xED, 0x9F, 0xBF}, // U+D7FF (valid)
+		{0xED, 0xA0, 0x80},
+		{0xED, 0xBF, 0xBF}, // surrogates
+		{0xEE, 0x80, 0x80}, // U+E000 (valid)
+		{0xF0, 0x90, 0x80, 0x80},
+		{0xF4, 0x8F, 0xBF, 0xBF}, // 4-byte bounds
+		{0xF0, 0x80, 0x80, 0x80},
+		{0xF0, 0x8F, 0xBF, 0xBF}, // overlong 4
+		{0xF4, 0x90, 0x80, 0x80}, // > U+10FFFF
+		{0xF5, 0x80, 0x80, 0x80},
+		{0xFF},
+		{0xFE}, // illegal leads
+		{0x80},
+		{0xBF}, // stray continuations
+		{0x80, 0x80},
+		{0xC2, 0x80, 0x80}, // continuation runs
+		{0xC2},
+		{0xE0, 0xA0},
+		{0xF0, 0x90, 0x80}, // truncated runes
+		{0xE1, 0x80},
+		{0xF1, 0x80, 0x80}, // truncated (non-edge leads)
 	}
 	// Slide every sequence across block boundaries (prefix 0..33 ASCII bytes),
 	// standalone and with an ASCII suffix (so truncation-vs-mid-span differs).
 	for _, seq := range seqs {
-		for pad := 0; pad <= 33; pad++ {
+		for pad := range 34 {
 			prefix := strings.Repeat("a", pad)
 			check([]byte(prefix + string(seq)))
 			check([]byte(prefix + string(seq) + "zz"))
@@ -129,9 +145,9 @@ func TestValidUTF8SIMD_EOFTruncation(t *testing.T) {
 		// Slide the truncation across every offset near the block seams, so
 		// the dangling lead lands at each of the last three lanes of a full
 		// block and at every position of a padded one.
-		for fill := 0; fill <= 40; fill++ {
+		for fill := range 41 {
 			in := strings.Repeat("a", fill) + tail
-			want := utf8.Valid([]byte(in))
+			want := utf8.ValidString(in)
 			got := validUTF8x16([]byte(in))
 			if got != want {
 				t.Fatalf("fill=%d tail=%q (len %d): got %v want %v", fill, tail, len(in), got, want)
@@ -142,9 +158,9 @@ func TestValidUTF8SIMD_EOFTruncation(t *testing.T) {
 	// Valid inputs ending exactly on a block boundary must NOT be rejected —
 	// the check must not fire on a complete rune sitting in the last lanes.
 	for _, r := range runes {
-		for fill := 0; fill <= 40; fill++ {
+		for fill := range 41 {
 			in := strings.Repeat("a", fill) + r
-			if want, got := utf8.Valid([]byte(in)), validUTF8x16([]byte(in)); got != want {
+			if want, got := utf8.ValidString(in), validUTF8x16([]byte(in)); got != want {
 				t.Fatalf("valid case fill=%d rune=%q (len %d): got %v want %v", fill, r, len(in), got, want)
 			}
 		}
@@ -160,6 +176,7 @@ func TestValidUTF8SIMD_EOFTruncation(t *testing.T) {
 // bytes of (prev ++ cur) at offset i+15, i.e. prev1[0] = prev[15], prev1[i>0]
 // = cur[i-1].
 func TestConcatShiftSemantics(t *testing.T) {
+	t.Parallel()
 	var prevA, curA [16]uint8
 	for i := range 16 {
 		prevA[i] = uint8(i)      // 0..15
@@ -250,7 +267,7 @@ func TestValidUTF8x64_Parity(t *testing.T) {
 		}
 	}
 	// Dense non-ASCII of every length through the gate and past it.
-	for n := 0; n <= 300; n++ {
+	for n := range 301 {
 		body := []byte(strings.Repeat("аб😀", n))
 		if len(body) > 600 {
 			body = body[:600]

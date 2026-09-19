@@ -20,7 +20,7 @@ import (
 func buildCLI(t *testing.T) string {
 	t.Helper()
 	bin := filepath.Join(t.TempDir(), "ggen")
-	cmd := exec.Command("go", "build", "-o", bin, ".")
+	cmd := exec.CommandContext(t.Context(), "go", "build", "-o", bin, ".")
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		t.Fatalf("build ggen: %v", err)
@@ -32,7 +32,7 @@ func buildCLI(t *testing.T) string {
 // stdout+stderr plus the run error.
 func runCLI(t *testing.T, bin, dir string, args ...string) (string, error) {
 	t.Helper()
-	cmd := exec.Command(bin, args...)
+	cmd := exec.CommandContext(t.Context(), bin, args...)
 	cmd.Dir = dir
 	cmd.Env = os.Environ()
 	var buf bytes.Buffer
@@ -800,6 +800,7 @@ type C struct {
 			{
 				name: "SingleFile",
 				setup: func(t *testing.T) (string, []string, []string) {
+					t.Helper()
 					dir := t.TempDir()
 					writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 					return dir, []string{"-dry", "msg.go"}, []string{filepath.Join(dir, "msg_ggen.go")}
@@ -808,6 +809,7 @@ type C struct {
 			{
 				name: "Directory",
 				setup: func(t *testing.T) (string, []string, []string) {
+					t.Helper()
 					base := t.TempDir()
 					dir := filepath.Join(base, "fixture")
 					writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
@@ -817,6 +819,7 @@ type C struct {
 			{
 				name: "Walk",
 				setup: func(t *testing.T) (string, []string, []string) {
+					t.Helper()
 					base := t.TempDir()
 					writeGoMod(t, base, "drywalk")
 					a := filepath.Join(base, "a")
@@ -858,6 +861,7 @@ type C struct {
 			{
 				name: "SingleFile_AcrossFields",
 				setup: func(t *testing.T) (string, []string, []string, []string) {
+					t.Helper()
 					dir := t.TempDir()
 					writeFixture(t, filepath.Join(dir, "multi.go"), `package fixture
 
@@ -876,6 +880,7 @@ type Multi struct {
 			{
 				name: "Walk_AcrossPackages",
 				setup: func(t *testing.T) (string, []string, []string, []string) {
+					t.Helper()
 					base := t.TempDir()
 					writeGoMod(t, base, "drywalkerrs")
 					writeFixture(t, filepath.Join(base, "a", "msg.go"), `package a
@@ -1957,6 +1962,7 @@ type Msg struct {
 		// These need go/types (a real module): converter input classification
 		// and named-primitive rule applicability.
 		writeMod := func(t *testing.T, dir string) {
+			t.Helper()
 			writeFixture(t, filepath.Join(dir, "go.mod"), "module fixture\n\ngo 1.26\n")
 		}
 		t.Run("converter_container_input", func(t *testing.T) {
@@ -2498,13 +2504,17 @@ func fixtureGoMod(t *testing.T, dir, module string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeFixture(t, filepath.Join(dir, "go.mod"), "module "+module+"\n\ngo 1.27\n\nrequire github.com/sirkostya009/ggen v0.0.0\n\nreplace github.com/sirkostya009/ggen => "+root+"\n")
+	writeFixture(
+		t,
+		filepath.Join(dir, "go.mod"),
+		"module "+module+"\n\ngo 1.27\n\nrequire github.com/sirkostya009/ggen v0.0.0\n\nreplace github.com/sirkostya009/ggen => "+root+"\n",
+	)
 }
 
 // goBuild compiles the fixture module in dir, failing with the compiler output.
 func goBuild(t *testing.T, dir string) {
 	t.Helper()
-	cmd := exec.Command("go", "build", "./...")
+	cmd := exec.CommandContext(t.Context(), "go", "build", "./...")
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod", "GOTOOLCHAIN=local")
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -2591,7 +2601,11 @@ type ID struct {
 	if out, err := runCLI(t, bin, base, "./..."); err != nil {
 		t.Fatalf("ggen ./...: %v\n%s", err, out)
 	}
-	if body := mustReadOutput(t, filepath.Join(base, "jsonpkg", "jsonpkg_ggen.go")); !strings.Contains(body, `json_ "fixture/jsonpkg/json"`) || !strings.Contains(body, "[]json_.Val") {
+	if body := mustReadOutput(
+		t,
+		filepath.Join(base, "jsonpkg", "jsonpkg_ggen.go"),
+	); !strings.Contains(body, `json_ "fixture/jsonpkg/json"`) ||
+		!strings.Contains(body, "[]json_.Val") {
 		t.Errorf("user package `json` not aliased:\n%s", body)
 	}
 	goBuild(t, base)
@@ -2686,7 +2700,11 @@ func TestTargetOrder_CrossPackageRouting(t *testing.T) {
 	base := t.TempDir()
 	fixtureGoMod(t, base, "ord")
 	writeFixture(t, filepath.Join(base, "a", "a.go"), "package a\n\n//ggen:generate\ntype T struct {\n\tX int `json:\"x\"`\n}\n")
-	writeFixture(t, filepath.Join(base, "b", "b.go"), "package b\n\nimport \"ord/a\"\n\n//ggen:generate\ntype U struct {\n\tT  a.T   `json:\"t\"`\n\tTs []a.T `json:\"ts\"`\n}\n")
+	writeFixture(
+		t,
+		filepath.Join(base, "b", "b.go"),
+		"package b\n\nimport \"ord/a\"\n\n//ggen:generate\ntype U struct {\n\tT  a.T   `json:\"t\"`\n\tTs []a.T `json:\"ts\"`\n}\n",
+	)
 	gen := func(args ...string) string {
 		t.Helper()
 		_ = os.Remove(filepath.Join(base, "a", "a_ggen.go"))

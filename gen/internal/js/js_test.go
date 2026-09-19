@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -24,6 +25,7 @@ import (
 )
 
 func TestIntRange(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		bits     int
 		unsigned bool
@@ -52,12 +54,14 @@ func matchGo(t *testing.T, inputs []string, expr string, want func(s string) str
 		t.Skip("node not on PATH")
 	}
 	quoted, _ := json.Marshal(inputs)
-	script := Runtime() + "const out: string[] = [];\nfor (const s of " + string(quoted) + ") out.push(String(" + expr + "));\nconsole.log(JSON.stringify(out));\n"
+	script := Runtime() + "const out: string[] = [];\nfor (const s of " + string(
+		quoted,
+	) + ") out.push(String(" + expr + "));\nconsole.log(JSON.stringify(out));\n"
 	file := filepath.Join(t.TempDir(), "check.ts")
 	if err := os.WriteFile(file, []byte(script), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(node, file)
+	cmd := exec.CommandContext(t.Context(), node, file)
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	raw, err := cmd.Output()
@@ -79,6 +83,7 @@ func matchGo(t *testing.T, inputs []string, expr string, want func(s string) str
 }
 
 func TestIPHelpersMatchGo(t *testing.T) {
+	t.Parallel()
 	inputs := []string{
 		"1.2.3.4", "255.255.255.255", "256.1.1.1", "01.2.3.4", "1.2.3", "1.2.3.4.5", "0.0.0.0",
 		"::", "::1", "1::", "1:2:3:4:5:6:7:8", "1:2:3:4:5:6:7::", "1:2:3:4:5:6:7:8:9", "1::2::3",
@@ -120,39 +125,43 @@ var bigEdges = []string{
 }
 
 func TestBigFloatHelperMatchesGo(t *testing.T) {
+	t.Parallel()
 	inputs := append(enumerate("01.eEpP+-_xIinf", 4), bigEdges...)
 	matchGo(t, inputs, "ggenIsBigFloat(s)", func(s string) string {
 		_, _, err := new(big.Float).Parse(s, 10)
-		return fmt.Sprint(err == nil)
+		return strconv.FormatBool(err == nil)
 	})
 }
 
 func TestRationalHelperMatchesGo(t *testing.T) {
+	t.Parallel()
 	inputs := append(enumerate("018a_x.+-pe/o", 4), bigEdges...)
 	matchGo(t, inputs, "ggenIsRational(s)", func(s string) string {
 		_, ok := new(big.Rat).SetString(s)
-		return fmt.Sprint(ok)
+		return strconv.FormatBool(ok)
 	})
 }
 
 func TestURLHelperMatchesGo(t *testing.T) {
+	t.Parallel()
 	inputs := append(enumerate("h:/%2[]@?#1.f", 4),
 		"https://a.b/c", "http://%zz", "http://a:1:2", "mongodb://a:1,b:2", "http://[fe80::1%25en0]:80/p",
 		"http://[fe80::1%25%65n0]", "http://[fe80::1%25%0a]", "http://[1.2.3.4]", "http://[::ffff:1.2.3.4]",
 		"http://u:p@ss@h", "http://u%zz@h", "http://u^@h", "http://h%41", "http://h%c3%a9", "http://a b",
 		"//h/p", "///p", "a:b/c", "a/b:c", "*", "x#%zz", "x#a b", "?q=%zz", "mailto:%zz", "http://h/%zz",
-		"http://[::1]x", "http://[::1", "http://a[::1]", "http://h:80x", "\u007f", "a	b", "http://h/",
+		"http://[::1]x", "http://[::1", "http://a[::1]", "http://h:80x", "\u007f", "a	b", "http://h/\x01",
 		"cache_object:foo/bar", "1a:b", ":x", "http://ü/", "http://[fe80::1%25ü]",
 	)
 	matchGo(t, inputs, "ggenParsesURL(s)", func(s string) string {
 		_, err := url.Parse(s)
-		return fmt.Sprint(err == nil)
+		return strconv.FormatBool(err == nil)
 	})
 }
 
 // TestTimeHelperMatchesGo formats random times in each layout, mutates them,
 // and compares ggenIsTime with time.Parse.
 func TestTimeHelperMatchesGo(t *testing.T) {
+	t.Parallel()
 	layouts := []string{
 		time.DateOnly, time.TimeOnly, time.DateTime, time.RFC3339, time.RFC3339Nano, time.Kitchen,
 		time.ANSIC, time.UnixDate, time.RubyDate, time.RFC822, time.RFC850, time.RFC1123Z, time.Stamp,
@@ -166,7 +175,16 @@ func TestTimeHelperMatchesGo(t *testing.T) {
 	var pairs [][2]string
 	for _, layout := range layouts {
 		for range 300 {
-			tm := time.Date(rng.IntN(3000), time.Month(1+rng.IntN(12)), 1+rng.IntN(31), rng.IntN(24), rng.IntN(60), rng.IntN(60), rng.IntN(1e9), zones[rng.IntN(len(zones))])
+			tm := time.Date(
+				rng.IntN(3000),
+				time.Month(1+rng.IntN(12)),
+				1+rng.IntN(31),
+				rng.IntN(24),
+				rng.IntN(60),
+				rng.IntN(60),
+				rng.IntN(1e9),
+				zones[rng.IntN(len(zones))],
+			)
 			b := []byte(tm.Format(layout))
 			for range rng.IntN(3) {
 				i := rng.IntN(len(b) + 1)
@@ -199,11 +217,12 @@ func TestTimeHelperMatchesGo(t *testing.T) {
 	matchGo(t, inputs, `ggenIsTime(...(s.split("\0") as [string, string]))`, func(s string) string {
 		layout, value, _ := strings.Cut(s, "\x00")
 		_, err := time.Parse(layout, value)
-		return fmt.Sprint(err == nil)
+		return strconv.FormatBool(err == nil)
 	})
 }
 
 func TestDurationHelperMatchesGo(t *testing.T) {
+	t.Parallel()
 	inputs := []string{
 		"0", "1h", "1h2m", "1h2m3s", "1.5h", ".5s", "1.s", "-1.5s", "+1h", "1ns", "1us", "1µs", "1μs",
 		"1ms", "1m", "300ms", "-1.5h2m", "1d", "1w", "h", "s", "1", "", "-", "+", "1h ", " 1h", "1H",
@@ -213,17 +232,21 @@ func TestDurationHelperMatchesGo(t *testing.T) {
 	}
 	matchGo(t, inputs, "ggenIsDuration(s)", func(s string) string {
 		_, err := time.ParseDuration(s)
-		return fmt.Sprint(err == nil)
+		return strconv.FormatBool(err == nil)
 	})
 }
 
 func TestBinaryHelpersMatchGo(t *testing.T) {
+	t.Parallel()
 	inputs := append(enumerate("AQ=a1", 3),
 		"AQID", "AQIDBA==", "AQIDBA", "AQIDB===", "-_8=", "_-8=", "-_8", "+/8=", "MFRGG===", "mfrgg===",
 		"MFRGGZDF", "0102", "0x02", "abcdef", "ABCDEF", "0g", "012", "CO======", "CPNG====", "", "=",
 		"AA==AA==", "A", "AA", "AAA", "AAAA", "AAAAA", "AAAAAA", "AAAAAAA", "AAAAAAAA", "V0======",
 	)
-	matchGo(t, inputs, "`${ggenBase64.test(s)} ${ggenBase64URL.test(s)} ${ggenBase32.test(s)} ${ggenBase32Hex.test(s)} ${ggenHex.test(s)} ${ggenDecoded(s, 6)} ${ggenDecoded(s, 5)}`",
+	matchGo(
+		t,
+		inputs,
+		"`${ggenBase64.test(s)} ${ggenBase64URL.test(s)} ${ggenBase32.test(s)} ${ggenBase32Hex.test(s)} ${ggenHex.test(s)} ${ggenDecoded(s, 6)} ${ggenDecoded(s, 5)}`",
 		func(s string) string {
 			ok := func(err error) bool { return err == nil }
 			_, b64 := base64.StdEncoding.DecodeString(s)
@@ -234,10 +257,12 @@ func TestBinaryHelpersMatchGo(t *testing.T) {
 			trimmed := strings.TrimRight(s, "=")
 			return fmt.Sprintf("%v %v %v %v %v %d %d", ok(b64), ok(b64u), ok(b32), ok(b32h), ok(hexErr),
 				len(trimmed)*6/8, len(trimmed)*5/8)
-		})
+		},
+	)
 }
 
 func TestLengthHelpersMatchGo(t *testing.T) {
+	t.Parallel()
 	inputs := []string{
 		"", "a", "ab", "héé", "日本", "\U0001f600", "a\U0001f600b", "\u0085ab", "\ufeffab",
 		"ΟΔΟΣ", "İ", "ß", "\u0000", "\u007f", "\u0080", "\u07ff", "\u0800", "\uffff",
@@ -248,6 +273,7 @@ func TestLengthHelpersMatchGo(t *testing.T) {
 }
 
 func TestCaseHelpersMatchGo(t *testing.T) {
+	t.Parallel()
 	inputs := []string{
 		"", "a", "A", "aB", "ΟΔΟΣ", "οδος", "ΣΣ",
 		"ß", "İ", "ı", "I", "i", "  ab  ", "\u0085ab", "\ufeffab", "\u00a0a\u00a0",
@@ -259,6 +285,7 @@ func TestCaseHelpersMatchGo(t *testing.T) {
 }
 
 func TestNumberHelpersMatchGo(t *testing.T) {
+	t.Parallel()
 	inputs := []string{
 		"0", "-0", "1", "-1", "1.5", "1e2", "1E+2", "1e-2", "01", "1.", ".5", "+1", "1e", "e1", "",
 		" 1", "1 ", "0.0", "-0.0", "1e400", "-1e400", "1e-400", "9007199254740993", "18446744073709551616",
@@ -271,14 +298,22 @@ func TestNumberHelpersMatchGo(t *testing.T) {
 	inputs = slices.DeleteFunc(inputs, func(s string) bool { return !decimal.MatchString(s) })
 	matchGo(t, inputs, "ggenFits(s, -128n, 127n)", func(s string) string {
 		n, ok := new(big.Int).SetString(s, 10)
-		return fmt.Sprint(ok && n.Cmp(big.NewInt(-128)) >= 0 && n.Cmp(big.NewInt(127)) <= 0)
+		return strconv.FormatBool(ok && n.Cmp(big.NewInt(-128)) >= 0 && n.Cmp(big.NewInt(127)) <= 0)
 	})
 }
 
 func TestQuote(t *testing.T) {
+	t.Parallel()
 	for _, c := range [][2]string{
-		{"", `""`}, {"a", `"a"`}, {`a"b`, `"a\"b"`}, {`a\b`, `"a\\b"`}, {"a\nb", `"a\nb"`},
-		{"a\tb", `"a\tb"`}, {"\u0000", `"\u0000"`}, {"\u001f", `"\u001f"`}, {"日本", `"日本"`},
+		{"", `""`},
+		{"a", `"a"`},
+		{`a"b`, `"a\"b"`},
+		{`a\b`, `"a\\b"`},
+		{"a\nb", `"a\nb"`},
+		{"a\tb", `"a\tb"`},
+		{"\u0000", `"\u0000"`},
+		{"\u001f", `"\u001f"`},
+		{"日本", `"日本"`},
 	} {
 		if got := Quote(c[0]); got != c[1] {
 			t.Errorf("Quote(%q) = %s, want %s", c[0], got, c[1])
@@ -287,6 +322,7 @@ func TestQuote(t *testing.T) {
 }
 
 func TestIdents(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		in           string
 		ident        bool
@@ -326,6 +362,7 @@ func TestIdents(t *testing.T) {
 }
 
 func TestDoc(t *testing.T) {
+	t.Parallel()
 	for _, c := range [][3]string{
 		{"", "", ""},
 		{"one line", "", "/** one line */\n"},
@@ -339,6 +376,7 @@ func TestDoc(t *testing.T) {
 }
 
 func TestFileStemAndCount(t *testing.T) {
+	t.Parallel()
 	for _, c := range [][2]string{
 		{"a/b/c.ts", "c"}, {"c.ts", "c"}, {"a/b.c.ts", "b"},
 	} {

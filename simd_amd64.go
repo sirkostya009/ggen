@@ -21,8 +21,9 @@ package ggen
 import (
 	"bytes"
 	"math/bits"
-	"simd/archsimd"
 	"unsafe"
+
+	"simd/archsimd"
 )
 
 // classifyStructural finishes a fused scan: rest[k] is the first structural
@@ -70,7 +71,7 @@ func classifyStructural64(data, rest []byte, start, k int, hasHigh, validate boo
 		// to bounce to validUTF8x16, which measured +12% at a 16 B span.
 		if hasHigh {
 			span := rest[:k]
-			ok := true
+			var ok bool
 			if len(span) < utf8x64MinLen {
 				ok = validUTF8x16(span)
 			} else {

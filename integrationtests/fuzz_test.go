@@ -182,17 +182,22 @@ func FuzzPrimitivesCompat(f *testing.F) {
 		f.Add(p.B, p.I, p.I8, p.I16, p.I32, p.I64, p.U, p.U8, p.U16, p.U32, p.U64, p.F32, p.F64, p.Str)
 	}
 	add(PrimStruct{B: true, I: 1, I8: -1, I16: 1, I32: -1, I64: 1, U: 1, U8: 255, U16: 1, U32: 1, U64: 1, F32: 1.5, F64: 1.0, Str: "strang"})
-	add(PrimStruct{I8: math.MinInt8, I16: math.MinInt16, I32: math.MinInt32, I64: math.MinInt64,
+	add(PrimStruct{
+		I8: math.MinInt8, I16: math.MinInt16, I32: math.MinInt32, I64: math.MinInt64,
 		U8: math.MaxUint8, U16: math.MaxUint16, U32: math.MaxUint32, U64: math.MaxUint64,
-		F32: math.MaxFloat32, F64: math.MaxFloat64, Str: ""})
-	add(PrimStruct{I8: math.MaxInt8, I16: math.MaxInt16, I32: math.MaxInt32, I64: math.MaxInt64,
-		F32: math.SmallestNonzeroFloat32, F64: math.SmallestNonzeroFloat64, Str: "\"\\\n\t é\U0001f600"})
+		F32: math.MaxFloat32, F64: math.MaxFloat64, Str: "",
+	})
+	add(PrimStruct{
+		I8: math.MaxInt8, I16: math.MaxInt16, I32: math.MaxInt32, I64: math.MaxInt64,
+		F32: math.SmallestNonzeroFloat32, F64: math.SmallestNonzeroFloat64, Str: "\"\\\n\t é\U0001f600",
+	})
 	// Invalid UTF-8 seeds — routed to the reject-parity branch below.
 	add(PrimStruct{Str: "a\xffb"})
 	add(PrimStruct{Str: "a\xe2(z"})
 	add(PrimStruct{Str: "\xed\xa0\x80"})
 	f.Fuzz(func(t *testing.T, b bool, i int, i8 int8, i16 int16, i32 int32, i64 int64,
-		u uint, u8 uint8, u16 uint16, u32 uint32, u64 uint64, f32 float32, f64 float64, str string) {
+		u uint, u8 uint8, u16 uint16, u32 uint32, u64 uint64, f32 float32, f64 float64, str string,
+	) {
 		// Invalid UTF-8 can't round-trip through jsonv2.Marshal (it errors), so
 		// build the payload by hand and assert REJECT parity: both ggen and
 		// jsonv2 must refuse it (ggen with ggen.ErrInvalidUTF8). Only when the
@@ -214,8 +219,10 @@ func FuzzPrimitivesCompat(f *testing.F) {
 			}
 			return
 		}
-		want := PrimStruct{B: b, I: i, I8: i8, I16: i16, I32: i32, I64: i64,
-			U: u, U8: u8, U16: u16, U32: u32, U64: u64, F32: f32, F64: f64, Str: str}
+		want := PrimStruct{
+			B: b, I: i, I8: i8, I16: i16, I32: i32, I64: i64,
+			U: u, U8: u8, U16: u16, U32: u32, U64: u64, F32: f32, F64: f64, Str: str,
+		}
 		// NaN/Inf are the ONLY values with no JSON form — skip those upfront so
 		// any OTHER marshal failure is a real bug, not a silently-swallowed skip.
 		nonFinite := math.IsNaN(f64) || math.IsInf(f64, 0) ||

@@ -1,0 +1,166 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  default: all
+  # keep sorted alphabetically
+  disable:
+    - cyclop  # scanners and emitters are big: also funlen, gocognit, gocyclo, maintidx, nestif
+    - depguard
+    - dupl  # emitter blocks read better repeated
+    - err113  # raw sentinels are compared directly
+    - errchkjson  # noise on known-safe types
+    - exhaustruct  # partial struct literals are fine
+    - exhaustruct_v5
+    - forcetypeassert  # checks add branches on hot paths
+    - funcorder
+    - funlen
+    - gochecknoglobals  # package-level tables are deliberate
+    - gochecknoinits  # init registers tables and tiers
+    - gocognit
+    - goconst  # emitter literals repeat
+    - gocyclo
+    - godot
+    - godox  # todos live in the backlog
+    - gomoddirectives  # cli/go.mod replace is intentional
+    - gosmopolitan
+    - ireturn  # Decoder/Marshaler return interfaces
+    - maintidx
+    - mnd  # inline SIMD/protocol constants
+    - nestif
+    - nlreturn
+    - noinlineerr  # inline err checks are idiomatic
+    - nonamedreturns
+    - revive  # mostly doc comments on ABI symbols
+    - tagliatelle  # fixtures use odd tag names
+    - testpackage  # tests reach unexported code
+    - varnamelen  # short names are idiomatic
+    - wrapcheck  # wrapping breaks sentinel identity
+    - wsl
+    - wsl_v5
+  settings:
+    lll:
+      line-length: 160
+    exhaustive:
+      default-signifies-exhaustive: true
+    dogsled:
+      max-blank-identifiers: 3
+    gocritic:
+      enabled-tags:
+        - performance
+      disabled-checks:
+        # AppendURL takes url.URL by value
+        - hugeParam
+    errcheck:
+      exclude-functions:
+        # never errors
+        - (*github.com/sirkostya009/ggen/gen.Writer).WriteString
+    dupword:
+      ignore:
+        # Go source in test fixtures: `Field Type` where both are the same name
+        - Child
+        - Sub
+        - Role
+        - Plan
+    errorlint:
+      # errors.Is/As is slower on hot paths
+      comparison: false
+      asserts: false
+    gosec:
+      excludes:
+        # zero-copy aliasing via unsafe.String is the design (see BytesToString)
+        - G103
+    misspell:
+      ignore-rules:
+        # false literal scan
+        - alse
+  exclusions:
+    generated: lax
+    paths:
+      - node_modules
+    rules:
+      # G404 math/rand: tests seed it on purpose so failures reproduce.
+      # G115 int conversions: test values are in range.
+      - path: _test\.go
+        text: "^G(115|404):"
+        linters:
+          - gosec
+      # not hot paths
+      - path: ^(cli|gen)/|_test\.go
+        text: "rangeValCopy"
+        linters:
+          - gocritic
+      # generator writes and reads user paths
+      - path: ^(cli|gen)/
+        text: "^G(104|115|301|302|304|306|602):"
+        linters:
+          - gosec
+      # tests shell out and write temp files
+      - path: _test\.go
+        text: "^G(104|204|301|304|306|702|703):"
+        linters:
+          - gosec
+      # generator state is package-level
+      - path: ^cli/
+        linters:
+          - paralleltest
+          - tparallel
+      # bounded conversions
+      - path: ^bench/
+        text: "^G115:"
+        linters:
+          - gosec
+      # fixture Durations are named DSec/DMilli to say which wire unit they test
+      - path: ^integrationtests/gen/fixture\.go
+        text: "ST1011"
+        linters:
+          - staticcheck
+      # method value changes what is measured
+      - path: ^bench/
+        text: "unlambda"
+        linters:
+          - gocritic
+      # easyjson mixes receivers
+      - path: ^bench/
+        linters:
+          - recvcheck
+      # golines can't wrap long strings: templates, help text and test fixtures
+      - path: ^cli/|_test\.go
+        linters:
+          - lll
+      # golines wraps these long tags, tagalign can't agree
+      - path: ^integrationtests/extra_test\.go
+        linters:
+          - tagalign
+      # not worth it in tests
+      - path: _test\.go
+        linters:
+          - errcheck
+          - musttag
+          - prealloc
+
+formatters:
+  exclusions:
+    paths:
+      # gci and gofumpt disagree on where simd/archsimd goes
+      - ^(encode_simd|simd_skip_stream|simd_skip|simd_stream|simd)_amd64\.go$
+      - ^simd_utf8_test\.go$
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
+    - golines
+  settings:
+    gci:
+      sections:
+        - standard
+        - default
+        - prefix(github.com/sirkostya009/ggen)
+    goimports:
+      local-prefixes:
+        - github.com/sirkostya009/ggen
+    golines:
+      max-len: 160

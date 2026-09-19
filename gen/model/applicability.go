@@ -142,7 +142,7 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 		// level, so a rule mismatched deep in the nest is judged on the same
 		// terms as one at level 1.
 		levelType := fi.ElemType
-		for li := 0; li < max(len(fi.InnerValidation), len(fi.InnerMods)); li++ {
+		for li := range max(len(fi.InnerValidation), len(fi.InnerMods)) {
 			var levelKind TypeKind
 			var ok bool
 			levelType, levelKind, ok = peelTypeOnce(levelType)
@@ -322,6 +322,7 @@ func isLenKind(k TypeKind) bool {
 // isIntegralNumeric reports whether modulo (`%`) is legal on the kind —
 // `multiple=N` emits `x % N`, which the Go compiler rejects on floats.
 func isIntegralNumeric(k TypeKind) bool {
+	//exhaustive:ignore not every kind applies here
 	switch k {
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
 		KindUint, KindUint8, KindUint16, KindUint32, KindUint64:
@@ -547,7 +548,7 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 				example = "oneof=1|2|3"
 			}
 			return &RichError{
-				Msg:      fmt.Sprintf("%s: `oneof` requires a `|`-separated list of allowed values", fieldDesc),
+				Msg:      fieldDesc + ": `oneof` requires a `|`-separated list of allowed values",
 				CodeSpan: "oneof",
 				BotHint:  "empty oneof list",
 				UserHint: fmt.Sprintf("provide values like `%s`", example),
@@ -716,7 +717,7 @@ func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDes
 		parts := SplitPipeParts(m.Value)
 		if len(parts) != 2 || parts[0] == "" {
 			return &RichError{
-				Msg:      fmt.Sprintf("%s: `replace` requires `old|new` form (old cannot be empty)", fieldDesc),
+				Msg:      fieldDesc + ": `replace` requires `old|new` form (old cannot be empty)",
 				CodeSpan: "replace=" + m.Value,
 				BotHint:  "malformed replace parameter",
 				UserHint: "use `replace=old|new`, e.g. `replace=foo|bar`; quote a part containing `|`: `replace='a|b'|c`",
@@ -734,7 +735,7 @@ func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDes
 		cparts := SplitPipeParts(m.Value)
 		if len(cparts) != 2 {
 			return &RichError{
-				Msg:      fmt.Sprintf("%s: `clamp` needs exactly one lo`|`hi separator", fieldDesc),
+				Msg:      fieldDesc + ": `clamp` needs exactly one lo`|`hi separator",
 				CodeSpan: "clamp=" + m.Value,
 				BotHint:  "malformed clamp parameter",
 				UserHint: "use `clamp=lo|hi`, leave either bound empty for one-sided: `clamp=0|` or `clamp=|100`",
@@ -743,7 +744,7 @@ func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDes
 		lo, hi := strings.TrimSpace(cparts[0]), strings.TrimSpace(cparts[1])
 		if lo == "" && hi == "" {
 			return &RichError{
-				Msg:      fmt.Sprintf("%s: `clamp` requires at least one of lo or hi", fieldDesc),
+				Msg:      fieldDesc + ": `clamp` requires at least one of lo or hi",
 				CodeSpan: "clamp",
 				BotHint:  "clamp with no bounds",
 				UserHint: "provide at least one bound, e.g. `clamp=0|100` or `clamp=|100`",
@@ -833,6 +834,7 @@ func mismatchMod(m ModRule, source, fieldDesc, typeName, requiredKind, botHint, 
 // kindIntBits returns (bits, unsigned) for integral kinds, (0, false)
 // otherwise.
 func kindIntBits(kind TypeKind) (int, bool) {
+	//exhaustive:ignore not every kind applies here
 	switch kind {
 	case KindInt, KindInt64:
 		return 64, false

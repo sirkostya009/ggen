@@ -23,14 +23,18 @@ func writeGgenModule(t *testing.T, dir, module string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	writeFixture(t, filepath.Join(dir, "go.mod"), "module "+module+"\n\ngo 1.27\n\nrequire github.com/sirkostya009/ggen v0.0.0\n\nreplace github.com/sirkostya009/ggen => "+root+"\n")
+	writeFixture(
+		t,
+		filepath.Join(dir, "go.mod"),
+		"module "+module+"\n\ngo 1.27\n\nrequire github.com/sirkostya009/ggen v0.0.0\n\nreplace github.com/sirkostya009/ggen => "+root+"\n",
+	)
 }
 
 // runGo runs the go tool inside dir with the module fixture isolated from the
 // workspace, returning combined output.
 func runGo(t *testing.T, dir string, env []string, args ...string) (string, error) {
 	t.Helper()
-	cmd := exec.Command("go", args...)
+	cmd := exec.CommandContext(t.Context(), "go", args...)
 	cmd.Dir = dir
 	cmd.Env = append(append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod", "GOTOOLCHAIN=local"), env...)
 	var buf bytes.Buffer
@@ -51,7 +55,11 @@ func TestParseLoad(t *testing.T) {
 		pkg := filepath.Join(base, "pkg")
 		writeFixture(t, filepath.Join(pkg, "a.go"), "package pkg\n\n//ggen:generate\ntype A struct {\n\tX int `json:\"x\"`\n}\n")
 		writeFixture(t, filepath.Join(pkg, "i_test.go"), "package pkg\n\n//ggen:generate\ntype I struct {\n\tX int `json:\"x\"`\n}\n")
-		writeFixture(t, filepath.Join(pkg, "x_test.go"), "package pkg_test\n\nimport \"xtestmod/pkg\"\n\n//ggen:generate\ntype E1 struct {\n\tY int   `json:\"y\"`\n\tA pkg.A `json:\"a\"`\n}\n")
+		writeFixture(
+			t,
+			filepath.Join(pkg, "x_test.go"),
+			"package pkg_test\n\nimport \"xtestmod/pkg\"\n\n//ggen:generate\ntype E1 struct {\n\tY int   `json:\"y\"`\n\tA pkg.A `json:\"a\"`\n}\n",
+		)
 		writeFixture(t, filepath.Join(pkg, "y_test.go"), "package pkg_test\n\n//ggen:generate\ntype E2 struct {\n\tZ int `json:\"z\"`\n}\n")
 
 		check := func(t *testing.T) {
@@ -112,7 +120,11 @@ func TestParseLoad(t *testing.T) {
 		writeGgenModule(t, base, "xtestfp")
 		pkg := filepath.Join(base, "pkg")
 		writeFixture(t, filepath.Join(pkg, "a.go"), "package pkg\n\n//ggen:generate\ntype A struct {\n\tV int `json:\"v\"`\n}\n")
-		writeFixture(t, filepath.Join(pkg, "x_test.go"), "package pkg_test\n\nimport \"xtestfp/pkg\"\n\n//ggen:generate\ntype E struct {\n\tA pkg.A  `json:\"a\"`\n\tS string `json:\"s\"`\n}\n")
+		writeFixture(
+			t,
+			filepath.Join(pkg, "x_test.go"),
+			"package pkg_test\n\nimport \"xtestfp/pkg\"\n\n//ggen:generate\ntype E struct {\n\tA pkg.A  `json:\"a\"`\n\tS string `json:\"s\"`\n}\n",
+		)
 
 		out := filepath.Join(pkg, "pkg_xtest_ggen_test.go")
 		if o, err := runCLI(t, bin, base, "./pkg"); err != nil {
@@ -141,7 +153,11 @@ func TestParseLoad(t *testing.T) {
 
 		// A base type this run does NOT generate must not be called
 		// directly, whatever a previous run left in the base output.
-		writeFixture(t, filepath.Join(pkg, "a.go"), "package pkg\n\ntype A struct {\n\tV int `json:\"v\"`\n}\n\n//ggen:generate\ntype B struct {\n\tW int `json:\"w\"`\n}\n")
+		writeFixture(
+			t,
+			filepath.Join(pkg, "a.go"),
+			"package pkg\n\ntype A struct {\n\tV int `json:\"v\"`\n}\n\n//ggen:generate\ntype B struct {\n\tW int `json:\"w\"`\n}\n",
+		)
 		if o, err := runCLI(t, bin, base, "./pkg"); err != nil {
 			t.Fatalf("ggen ./pkg (3rd): %v\n%s", err, o)
 		}
@@ -224,7 +240,11 @@ func TestParseLoad(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		writeGgenModule(t, dir, "embedmsg")
-		writeFixture(t, filepath.Join(dir, "msg.go"), "package embedmsg\n\ntype M map[string]any\n\n//ggen:generate\ntype Msg struct {\n\tExtra M `json:\",embed\"`\n}\n")
+		writeFixture(
+			t,
+			filepath.Join(dir, "msg.go"),
+			"package embedmsg\n\ntype M map[string]any\n\n//ggen:generate\ntype Msg struct {\n\tExtra M `json:\",embed\"`\n}\n",
+		)
 		out, err := runCLI(t, bin, dir, "msg.go")
 		if err == nil {
 			t.Fatalf("named map accepted for embed:\n%s", out)
@@ -251,7 +271,11 @@ func TestParseLoad(t *testing.T) {
 		base := t.TempDir()
 		writeGgenModule(t, base, "osconstraint")
 		pkg := filepath.Join(base, "pkg")
-		writeFixture(t, filepath.Join(pkg, "os_linux.go"), "//go:build !nope\n\npackage pkg\n\n//ggen:generate\ntype OnlyLinux struct {\n\tX int `json:\"x\"`\n}\n")
+		writeFixture(
+			t,
+			filepath.Join(pkg, "os_linux.go"),
+			"//go:build !nope\n\npackage pkg\n\n//ggen:generate\ntype OnlyLinux struct {\n\tX int `json:\"x\"`\n}\n",
+		)
 		writeFixture(t, filepath.Join(pkg, "arch_amd64_test.go"), "package pkg\n\n//ggen:generate\ntype OnlyAMD64 struct {\n\tX int `json:\"x\"`\n}\n")
 		writeFixture(t, filepath.Join(pkg, "common.go"), "package pkg\n\n//ggen:generate\ntype Common struct {\n\tY int `json:\"y\"`\n}\n")
 		if out, err := runCLI(t, bin, base, "./pkg"); err != nil {
@@ -296,7 +320,11 @@ func TestParseLoad(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		writeGgenModule(t, dir, "fixture")
-		writeFixture(t, filepath.Join(dir, "msg.go"), "package fixture\n\n//ggen:generate\ntype Box[T any] struct {\n\tV T `json:\"v\"`\n}\n\n//ggen:generate\ntype IntBox Box[int]\n")
+		writeFixture(
+			t,
+			filepath.Join(dir, "msg.go"),
+			"package fixture\n\n//ggen:generate\ntype Box[T any] struct {\n\tV T `json:\"v\"`\n}\n\n//ggen:generate\ntype IntBox Box[int]\n",
+		)
 		out, err := runCLI(t, bin, dir, "msg.go")
 		if err == nil {
 			t.Fatalf("generic struct accepted:\n%s", out)
@@ -357,7 +385,11 @@ type Baz = Local
 		t.Parallel()
 		dir := t.TempDir()
 		writeGgenModule(t, dir, "fixture")
-		writeFixture(t, filepath.Join(dir, "msg.go"), "package fixture\n\n//ggen:generate marshl\ntype Typo struct {\n\tA int `json:\"a\"`\n}\n\n//ggen:generate marshal ignore-unknown\ntype Two struct {\n\tA int `json:\"a\"`\n}\n")
+		writeFixture(
+			t,
+			filepath.Join(dir, "msg.go"),
+			"package fixture\n\n//ggen:generate marshl\ntype Typo struct {\n\tA int `json:\"a\"`\n}\n\n//ggen:generate marshal ignore-unknown\ntype Two struct {\n\tA int `json:\"a\"`\n}\n",
+		)
 		out, err := runCLI(t, bin, dir, "msg.go")
 		if err == nil {
 			t.Fatalf("typo'd annotation accepted:\n%s", out)
@@ -381,7 +413,11 @@ type Baz = Local
 		base := t.TempDir()
 		writeGgenModule(t, base, "twoerrs")
 		pkg := filepath.Join(base, "pkg")
-		writeFixture(t, filepath.Join(pkg, "pkg.go"), "package pkg\n\n//ggen:generate\ntype First struct {\n\tA string `json:\"a\" pipe:\"maxlen=abc\"`\n}\n\n//ggen:generate\ntype Second struct {\n\tB int `json:\"b\" pipe:\"trim\"`\n}\n")
+		writeFixture(
+			t,
+			filepath.Join(pkg, "pkg.go"),
+			"package pkg\n\n//ggen:generate\ntype First struct {\n\tA string `json:\"a\" pipe:\"maxlen=abc\"`\n}\n\n//ggen:generate\ntype Second struct {\n\tB int `json:\"b\" pipe:\"trim\"`\n}\n",
+		)
 		for _, args := range [][]string{{"./pkg"}, {"-dry", "./pkg"}, {"./..."}, {"-dry", "./..."}, {"pkg/pkg.go"}} {
 			out, err := runCLI(t, bin, base, args...)
 			if err == nil {
@@ -400,7 +436,11 @@ type Baz = Local
 		base := t.TempDir()
 		writeGgenModule(t, base, "idem")
 		pkg := filepath.Join(base, "pkg")
-		writeFixture(t, filepath.Join(pkg, "pkg.go"), "package pkg\n\n//ggen:generate\ntype Inner struct {\n\tX int `json:\"x\"`\n}\n\n//ggen:generate\ntype Local Inner\n\n// Reached only as a dependency, still generated in the pass.\ntype Dep struct {\n\tX int `json:\"x\"`\n}\n\n//ggen:generate\ntype Root struct {\n\tD Dep `json:\"d\"`\n}\n\n//ggen:generate\ntype LocalDep Dep\n")
+		writeFixture(
+			t,
+			filepath.Join(pkg, "pkg.go"),
+			"package pkg\n\n//ggen:generate\ntype Inner struct {\n\tX int `json:\"x\"`\n}\n\n//ggen:generate\ntype Local Inner\n\n// Reached only as a dependency, still generated in the pass.\ntype Dep struct {\n\tX int `json:\"x\"`\n}\n\n//ggen:generate\ntype Root struct {\n\tD Dep `json:\"d\"`\n}\n\n//ggen:generate\ntype LocalDep Dep\n",
+		)
 		var runs [2]string
 		for i := range runs {
 			if out, err := runCLI(t, bin, base, "./pkg"); err != nil {

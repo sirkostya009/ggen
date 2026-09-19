@@ -3,6 +3,7 @@
 package ggen
 
 import (
+	"bytes"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -56,7 +57,7 @@ func TestAppendStringSIMD_Parity(t *testing.T) {
 		for _, in := range cases {
 			want := p.scalar([]byte{}, in)
 			got := p.tiered([]byte{}, in)
-			if string(want) != string(got) {
+			if !bytes.Equal(want, got) {
 				t.Fatalf("%s(%q):\n got %q\nwant %q", p.name, in, got, want)
 			}
 		}
@@ -137,7 +138,7 @@ func TestAppendStringSIMD_OverlapTailParity(t *testing.T) {
 						in := string(b)
 						want := tr.scalar([]byte{}, in)
 						got := tr.tiered([]byte{}, in)
-						if string(want) != string(got) {
+						if !bytes.Equal(want, got) {
 							t.Fatalf("n=%d pos=%d esc=%q:\n got %q\nwant %q", n, pos, e, got, want)
 						}
 					}
@@ -150,7 +151,7 @@ func TestAppendStringSIMD_OverlapTailParity(t *testing.T) {
 						in := string(b)
 						want := tr.scalar([]byte{}, in)
 						got := tr.tiered([]byte{}, in)
-						if string(want) != string(got) {
+						if !bytes.Equal(want, got) {
 							t.Fatalf("n=%d straddle esc=%q:\n got %q\nwant %q", n, e, got, want)
 						}
 					}

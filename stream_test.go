@@ -294,6 +294,7 @@ func TestFloatNumberBufBounded(t *testing.T) {
 		return sb.String()
 	}
 	drive := func(t *testing.T, data string, scan func(s *Stream) error) {
+		t.Helper()
 		var s Stream
 		s.Reset(strings.NewReader(data), make([]byte, 0, 64))
 		if err := s.SkipSpace(); err != nil {
@@ -969,6 +970,7 @@ func (recv sliceT) DecodeFromStream(s *Stream) (sliceT, error) {
 // and both leave the cursor positioned so the caller can keep reading — the
 // capability the bytes walkers cannot offer.
 func TestStreamMethods(t *testing.T) {
+	t.Parallel()
 	v, err := NewStream(strings.NewReader("42"), nil).Value[intT]()
 	if err != nil || v != 42 {
 		t.Fatalf("Value = %v, %v; want 42", v, err)
@@ -1016,7 +1018,7 @@ func TestStreamMethods(t *testing.T) {
 // TestStreamSeq pins the iterator: consecutive top-level values, a clean end
 // when the reader drains, early break leaving the Stream usable, and the
 // one-value reuse that makes a long run allocation-free.
-func TestStreamSeq(t *testing.T) {
+func TestStreamSeq(t *testing.T) { //nolint:paralleltest // measures allocations
 	var got []intT
 	for v, err := range NewStream(strings.NewReader("1 2\n3\n"), nil).Seq[intT]() {
 		if err != nil {
@@ -1119,7 +1121,7 @@ func TestStreamSeq(t *testing.T) {
 
 // TestStreamBufferReuse pins that rcv recycles containers — the outer slice
 // AND each element's own slice — so a steady-state re-decode stops allocating.
-func TestStreamBufferReuse(t *testing.T) {
+func TestStreamBufferReuse(t *testing.T) { //nolint:paralleltest // measures allocations
 	const payload = `[[1,2,3],[4,5,6]]`
 	// Reuse the reader, the Stream and its buffer so the only allocations left
 	// to measure are the decode's own.
@@ -1168,6 +1170,7 @@ func TestStreamBufferReuse(t *testing.T) {
 // TestStreamArray pins the lazy array iterator: same grammar as Slice, cursor
 // left past the closing bracket, one error then stop, and no accumulation.
 func TestStreamArray(t *testing.T) {
+	t.Parallel()
 	// Agrees with Slice on element values.
 	var got []intT
 	for v, err := range NewStream(strings.NewReader("[1, 2,3]"), nil).Array[intT]() {
@@ -1255,7 +1258,7 @@ func TestStreamArray(t *testing.T) {
 }
 
 // Array must not allocate per element once the reused value is warm.
-func TestStreamArrayNoAlloc(t *testing.T) {
+func TestStreamArrayNoAlloc(t *testing.T) { //nolint:paralleltest // measures allocations
 	payload := "[[1,2,3],[4,5,6],[7,8,9]]"
 	var r strings.Reader
 	var s Stream
@@ -1381,26 +1384,42 @@ func TestStreamNumberLosslessRetry(t *testing.T) {
 		want  string
 		off   int
 	}{
-		{"Int64 sign", []any{"[1,-", errFlaky, "123]"}, 4, 3,
+		{
+			"Int64 sign",
+			[]any{"[1,-", errFlaky, "123]"},
+			4, 3,
 			func(s *Stream) (string, error) {
 				v, err := s.Int64()
 				return strconv.FormatInt(v, 10), err
-			}, "-123", 3},
-		{"Uint64 digits", []any{"[9,12", errFlaky, "345]"}, 5, 3,
+			}, "-123", 3,
+		},
+		{
+			"Uint64 digits",
+			[]any{"[9,12", errFlaky, "345]"},
+			5, 3,
 			func(s *Stream) (string, error) {
 				v, err := s.Uint64()
 				return strconv.FormatUint(v, 10), err
-			}, "12345", 3},
-		{"Float64 digits", []any{"[0,22", errFlaky, "23]"}, 5, 3,
+			}, "12345", 3,
+		},
+		{
+			"Float64 digits",
+			[]any{"[0,22", errFlaky, "23]"},
+			5, 3,
 			func(s *Stream) (string, error) {
 				v, err := s.Float64()
 				return strconv.FormatFloat(v, 'f', -1, 64), err
-			}, "2223", 3},
-		{"Number digits", []any{"[0,22", errFlaky, "23]"}, 5, 3,
+			}, "2223", 3,
+		},
+		{
+			"Number digits",
+			[]any{"[0,22", errFlaky, "23]"},
+			5, 3,
 			func(s *Stream) (string, error) {
 				v, err := s.Number()
 				return string(v), err
-			}, "2223", 3},
+			}, "2223", 3,
+		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -1581,15 +1600,21 @@ func TestStreamString_LiveMalformedTailDoesNotHang(t *testing.T) {
 		bytes  func([]byte) error
 		stream func(*Stream) error
 	}{
-		{"String",
+		{
+			"String",
 			func(d []byte) error { _, _, err := String(d, 0, true); return err },
-			func(s *Stream) error { _, err := s.String(true); return err }},
-		{"SkipValue",
+			func(s *Stream) error { _, err := s.String(true); return err },
+		},
+		{
+			"SkipValue",
 			func(d []byte) error { _, err := SkipValue(d, 0); return err },
-			func(s *Stream) error { return s.SkipValue() }},
-		{"CaptureValue",
+			func(s *Stream) error { return s.SkipValue() },
+		},
+		{
+			"CaptureValue",
 			func(d []byte) error { _, err := SkipValue(d, 0); return err },
-			func(s *Stream) error { _, err := s.CaptureValue(); return err }},
+			func(s *Stream) error { _, err := s.CaptureValue(); return err },
+		},
 	}
 	payloads := []string{`"\u12"`, `"ab\uZ"`, `"\u"`, `"\ud83d"`, `"\ud83d\n"`, "\"ab\x01}"}
 	for _, payload := range payloads {
@@ -1752,27 +1777,74 @@ func TestStreamErrorPos_MatchesBytes(t *testing.T) {
 		stream func(*Stream) error
 	}{
 		{"Int64", numbers, func(d []byte, i int) (int, error) { _, p, e := Int64(d, i); return p, e }, func(s *Stream) error { _, e := s.Int64(); return e }},
-		{"Uint64", numbers, func(d []byte, i int) (int, error) { _, p, e := Uint64(d, i); return p, e }, func(s *Stream) error { _, e := s.Uint64(); return e }},
-		{"Float64", numbers, func(d []byte, i int) (int, error) { _, p, e := Float64(d, i); return p, e }, func(s *Stream) error { _, e := s.Float64(); return e }},
-		{"Number", numbers, func(d []byte, i int) (int, error) { _, p, e := Number(d, i); return p, e }, func(s *Stream) error { _, e := s.Number(); return e }},
+		{
+			"Uint64",
+			numbers,
+			func(d []byte, i int) (int, error) { _, p, e := Uint64(d, i); return p, e },
+			func(s *Stream) error { _, e := s.Uint64(); return e },
+		},
+		{
+			"Float64",
+			numbers,
+			func(d []byte, i int) (int, error) { _, p, e := Float64(d, i); return p, e },
+			func(s *Stream) error { _, e := s.Float64(); return e },
+		},
+		{
+			"Number",
+			numbers,
+			func(d []byte, i int) (int, error) { _, p, e := Number(d, i); return p, e },
+			func(s *Stream) error { _, e := s.Number(); return e },
+		},
 		// Bool is a head probe; generated code stamps BoolEnd's give-up byte.
-		{"Bool", []string{"", "t", "tru", "trux", "true", "f", "fals", "false", "x", "null", "1"},
+		{
+			"Bool",
+			[]string{"", "t", "tru", "trux", "true", "f", "fals", "false", "x", "null", "1"},
 			func(d []byte, i int) (int, error) {
 				_, p, e := Bool(d, i)
 				if e != nil {
 					p = BoolEnd(d, i)
 				}
 				return p, e
-			}, func(s *Stream) error { _, e := s.Bool(); return e }},
-		{"String", []string{"", "x", `"ab"`, `"ab`, `"a\`, `"a\u12`, `"a\uzzzz"`, `"a\x"`, "\"ab\x01c\"", "\"abc\x01", `"\ud83d"`, `"a\ud83d`, "\"a\\n\x01\"", "\"\xff\"", `"a\n"`, "\"a\\n\xff\"",
-			// A drained reader mid-`\uXXXX` is truncated, not a lone
-			// surrogate: both paths report the end of what arrived.
-			`"\ud83d\ude0`, `"\ud83d\`, `"\ud83d\u`, `"\ud83dx"`},
-			func(d []byte, i int) (int, error) { _, p, e := String(d, i, true); return p, e }, func(s *Stream) error { _, e := s.String(true); return e }},
+			}, func(s *Stream) error { _, e := s.Bool(); return e },
+		},
+		{
+			"String",
+			[]string{
+				"",
+				"x",
+				`"ab"`,
+				`"ab`,
+				`"a\`,
+				`"a\u12`,
+				`"a\uzzzz"`,
+				`"a\x"`,
+				"\"ab\x01c\"",
+				"\"abc\x01",
+				`"\ud83d"`,
+				`"a\ud83d`,
+				"\"a\\n\x01\"",
+				"\"\xff\"",
+				`"a\n"`,
+				"\"a\\n\xff\"",
+				// A drained reader mid-`\uXXXX` is truncated, not a lone
+				// surrogate: both paths report the end of what arrived.
+				`"\ud83d\ude0`,
+				`"\ud83d\`,
+				`"\ud83d\u`,
+				`"\ud83dx"`,
+			},
+			func(d []byte, i int) (int, error) { _, p, e := String(d, i, true); return p, e },
+			func(s *Stream) error { _, e := s.String(true); return e },
+		},
 		{"SkipValue", skips, SkipValue, (*Stream).SkipValue},
 		{"CaptureValue", captures, SkipValue, func(s *Stream) error { _, e := s.CaptureValue(); return e }},
 		{"Any", anys, func(d []byte, i int) (int, error) { _, p, e := Any(d, i, true); return p, e }, func(s *Stream) error { _, e := s.Any(true); return e }},
-		{"AnyNumber", anys, func(d []byte, i int) (int, error) { _, p, e := AnyNumber(d, i, true); return p, e }, func(s *Stream) error { _, e := s.AnyNumber(true); return e }},
+		{
+			"AnyNumber",
+			anys,
+			func(d []byte, i int) (int, error) { _, p, e := AnyNumber(d, i, true); return p, e },
+			func(s *Stream) error { _, e := s.AnyNumber(true); return e },
+		},
 	}
 	for _, p := range prims {
 		t.Run(p.name, func(t *testing.T) {

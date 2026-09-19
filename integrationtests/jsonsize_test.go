@@ -16,6 +16,7 @@ import (
 
 	gofrs "github.com/gofrs/uuid/v5"
 	"github.com/google/uuid"
+
 	"github.com/sirkostya009/ggen"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty2"
 )
@@ -484,7 +485,9 @@ func TestJSONSize_AnyPositions_NoRealloc(t *testing.T) {
 			time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.FixedZone("", -7*3600)),
 			new(big.Int).Exp(big.NewInt(10), big.NewInt(200), nil),
 			Address{Street: s, City: s, ZipCode: "12345"},
-			[]string{s, s}, map[string]int{s: math.MinInt}, json.RawMessage(`{"k":[1,2,3]}`),
+			[]string{s, s},
+			map[string]int{s: math.MinInt},
+			json.RawMessage(`{"k":[1,2,3]}`),
 		}
 	}
 	cases := []struct {

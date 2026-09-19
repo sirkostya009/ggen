@@ -495,7 +495,8 @@ func rejectedTypeDecl(fset *token.FileSet, ts *ast.TypeSpec) error {
 }
 
 // annotationTokens is every word a //ggen:generate directive accepts.
-const annotationTokens = "marshal, unmarshal, multierr, allowdups, novalidate, ignoreunknown, nullzero, nosortkeys, usenumber, htmlescape, copy, allowinvalidutf8"
+const annotationTokens = "marshal, unmarshal, multierr, allowdups, novalidate, ignoreunknown, nullzero, nosortkeys, " +
+	"usenumber, htmlescape, copy, allowinvalidutf8"
 
 // parseAnnotation looks for a "//ggen:generate" directive (optionally followed
 // by whitespace-separated flags) and returns the flags + whether it was
@@ -529,7 +530,7 @@ func isDirective(c string) bool {
 			continue
 		}
 		b := c[i]
-		if !('a' <= b && b <= 'z' || '0' <= b && b <= '9') {
+		if ('a' > b || b > 'z') && ('0' > b || b > '9') {
 			return false
 		}
 	}
@@ -904,9 +905,12 @@ func ParseFile(filename string, wanted []string) (FileParse, error) {
 			// loudly. RichError so the pretty logger shows the escape hatch;
 			// no source position — this is file-level.
 			return FileParse{PkgName: set.pkgName}, &RichError{
-				Msg:      fmt.Sprintf("%s: no //ggen:generate-annotated struct found in file", RelPath(filename)),
-				BotHint:  "missing //ggen:generate directive",
-				UserHint: fmt.Sprintf("Add `//ggen:generate` above each struct you want generated, or pass struct names explicitly: `ggen %s Name1 Name2 ...`.", filepath.Base(filename)),
+				Msg:     RelPath(filename) + ": no //ggen:generate-annotated struct found in file",
+				BotHint: "missing //ggen:generate directive",
+				UserHint: fmt.Sprintf(
+					"Add `//ggen:generate` above each struct you want generated, or pass struct names explicitly: `ggen %s Name1 Name2 ...`.",
+					filepath.Base(filename),
+				),
 			}
 		}
 	}
@@ -1140,7 +1144,11 @@ func (s *structSet) extractAlias(name string, ts *ast.TypeSpec) (StructInfo, err
 	}
 	kind := ResolveKind(ident.Name)
 	if !isSupportedAliasPrimitive(kind) {
-		return info, fmt.Errorf("type %s: unsupported alias underlying type %q (primitives, structs, slices/maps/arrays of primitives accepted)", name, ident.Name)
+		return info, fmt.Errorf(
+			"type %s: unsupported alias underlying type %q (primitives, structs, slices/maps/arrays of primitives accepted)",
+			name,
+			ident.Name,
+		)
 	}
 	info.AliasKind = kind
 	info.AliasUnderlying = ident.Name
@@ -1288,7 +1296,7 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 			// Synthesize a FieldInfo per exported field and treat the alias as
 			// a plain struct (IsAlias→false) — same memory layout, so
 			// `result.X` access is sound.
-			for i := 0; i < structType.NumFields(); i++ {
+			for i := range structType.NumFields() {
 				fv := structType.Field(i)
 				if !fv.Exported() {
 					continue
@@ -1559,6 +1567,7 @@ func aliasCanDelegate(f FieldInterfaces) bool {
 }
 
 func isSupportedAliasPrimitive(k TypeKind) bool {
+	//exhaustive:ignore not every kind applies here
 	switch k {
 	case KindString, KindBool,
 		KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
@@ -1857,7 +1866,9 @@ func (s *structSet) extractStructSeen(name string, st *ast.StructType, seen map[
 			if hasNonLiteralArrayLen(field.Type) && !s.fixConstArrayLens(&fi, fieldType) {
 				errs = append(errs, attachPosition(fmt.Errorf(
 					"%s.%s: fixed-array length must be an integer literal here (constant lengths need type info, and pointer-wrapped const-length arrays are unsupported)",
-					name, ident.Name), s.fileSet.Position(field.Pos())))
+					name,
+					ident.Name,
+				), s.fileSet.Position(field.Pos())))
 				continue
 			}
 			foldByteArray(&fi)
@@ -1958,9 +1969,17 @@ func resolveFieldCollisions(parent string, fields []FieldInfo, errs *[]error) []
 		}
 		if j, clash := byGo[f.GoName]; clash {
 			*errs = append(*errs, fmt.Errorf(
-				"%s: fields %s.%s (json %q) and %s.%s (json %q) share Go name %s — ggen addresses a promoted field by name and cannot keep both; rename one or drop the embedding",
-				parent, fields[j].StructName, fields[j].GoName, fields[j].JSONName,
-				f.StructName, f.GoName, f.JSONName, f.GoName))
+				"%s: fields %s.%s (json %q) and %s.%s (json %q) share Go name %s — ggen addresses a promoted field by name "+
+					"and cannot keep both; rename one or drop the embedding",
+				parent,
+				fields[j].StructName,
+				fields[j].GoName,
+				fields[j].JSONName,
+				f.StructName,
+				f.GoName,
+				f.JSONName,
+				f.GoName,
+			))
 			drop[i] = struct{}{}
 			continue
 		}
@@ -1985,7 +2004,7 @@ func (s *structSet) extractEmbedded(parent string, field *ast.Field, seen map[st
 	if field.Tag != nil {
 		return nil, fmt.Errorf("tagged embedded field in %s is not supported", parent)
 	}
-	typeName := ""
+	var typeName string
 	switch t := field.Type.(type) {
 	case *ast.Ident:
 		typeName = t.Name
@@ -2493,6 +2512,7 @@ func sqlNullGenericInner(goType string) (string, bool) {
 // on the AST-only path (anything else degrades to encoding/json). The go/types
 // path (sqlNullGenericInfo) isn't gated by this — it handles any renderable T.
 func isSupportedSQLNullInner(k TypeKind) bool {
+	//exhaustive:ignore not every kind applies here
 	switch k {
 	case KindString, KindBool,
 		KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
@@ -2783,7 +2803,7 @@ func WalkPackages(targets []string, act func(dir string) error, report func(erro
 	// A broken-import package shouldn't hide its siblings.
 	for _, p := range pkgs {
 		for _, e := range p.Errors {
-			report(fmt.Errorf("%s: %s", p.PkgPath, e))
+			report(fmt.Errorf("%s: %w", p.PkgPath, e))
 		}
 	}
 

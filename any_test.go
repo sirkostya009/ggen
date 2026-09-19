@@ -1,6 +1,7 @@
 package ggen
 
 import (
+	"bytes"
 	"encoding/json"
 	jsonv2 "encoding/json/v2"
 	"errors"
@@ -603,6 +604,7 @@ func TestAppendAny_Struct_Embedded(t *testing.T) {
 	}
 	type Derived struct {
 		Base
+
 		Name string `json:"name"`
 	}
 	checkAny(t, Derived{ID: "abc", Meta: "m", Name: "alice"})
@@ -616,6 +618,7 @@ func TestAppendAny_Struct_NilEmbeddedPointer(t *testing.T) {
 	}
 	type Derived struct {
 		*Base
+
 		Name string `json:"name"`
 	}
 	checkAny(t, Derived{Name: "alice"})
@@ -633,6 +636,7 @@ func TestAppendAny_Struct_EmbeddedShadowing(t *testing.T) {
 	}
 	type Outer struct {
 		Base
+
 		ID int `json:"id"` // shadows Base.ID
 	}
 	out, err := AppendAny(nil, Outer{Base: Base{ID: 1, Note: "n"}, ID: 2})
@@ -650,7 +654,8 @@ func TestAppendAny_Struct_EmbeddedShadowing(t *testing.T) {
 	}
 	type Clash struct {
 		Base
-		Other
+		Other //nolint:govet
+
 		Name string `json:"name"`
 	}
 	checkAny(t, Clash{Base: Base{ID: 1, Note: "n"}, Other: Other{ID: 2}, Name: "x"})
@@ -742,7 +747,7 @@ func TestAppendAny_Time(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(out) != string(want) {
+	if !bytes.Equal(out, want) {
 		t.Errorf("time.Time fast path: got %s, want %s", out, want)
 	}
 	// *time.Time non-nil: same wire shape as value.
@@ -750,7 +755,7 @@ func TestAppendAny_Time(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(out) != string(want) {
+	if !bytes.Equal(out, want) {
 		t.Errorf("*time.Time non-nil: got %s, want %s", out, want)
 	}
 	// *time.Time nil: null.
@@ -1031,7 +1036,7 @@ func init() {
 		{name: "[]uint32", val: func() []uint32 {
 			out := make([]uint32, n)
 			for i := range out {
-				out[i] = uint32(r.Uint32())
+				out[i] = r.Uint32()
 			}
 			return out
 		}()},
@@ -1181,11 +1186,11 @@ func init() {
 // MB/s is computed against the jsonv2-encoded byte length so the
 // reported throughput is comparable across rows for the same shape.
 func BenchmarkAppendAny(b *testing.B) {
-	var codecs = []struct {
+	codecs := []struct {
 		name string
 		fn   func(v any) ([]byte, error)
 	}{
-		{"stdjson", func(v any) ([]byte, error) { return json.Marshal(v) }},
+		{"stdjson", json.Marshal},
 		{"jsonv2", func(v any) ([]byte, error) { return jsonv2.Marshal(v) }},
 		{"ggen", func(v any) ([]byte, error) { return AppendAny(nil, v) }},
 	}
@@ -1233,8 +1238,10 @@ func BenchmarkAppendAny_Presized(b *testing.B) {
 
 type namedStr string
 
-type namedIntMap map[string]int
-type namedStrMap map[string]string
+type (
+	namedIntMap map[string]int
+	namedStrMap map[string]string
+)
 
 type ptStruct struct {
 	X int    `json:"x"`
@@ -1288,7 +1295,7 @@ func TestAppendAny_NoHTMLEscapeDefault(t *testing.T) {
 		if err != nil {
 			t.Fatalf("jsonv2.Marshal(%#v): %v", v, err)
 		}
-		if string(got) != string(want) {
+		if !bytes.Equal(got, want) {
 			t.Errorf("AppendAny escaping mismatch\n in:   %#v\n got:  %s\n want: %s", v, got, want)
 		}
 	}
@@ -1385,7 +1392,7 @@ func TestAppendAny_BigIntStaysNumeric(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%T: jsonv2: %v", v, err)
 		}
-		if string(got) != string(want) {
+		if !bytes.Equal(got, want) {
 			t.Errorf("%T: ggen %s, jsonv2 %s", v, got, want)
 		}
 	}
@@ -1410,7 +1417,7 @@ func TestAppendAny_NumberStringTag(t *testing.T) {
 		t.Fatal(err)
 	}
 	want, _ := jsonv2.Marshal(v)
-	if string(got) != string(want) {
+	if !bytes.Equal(got, want) {
 		t.Errorf("ggen %s, jsonv2 %s", got, want)
 	}
 }
@@ -1419,8 +1426,10 @@ func TestAppendAny_NumberStringTag(t *testing.T) {
 // collectFields (fatal stack overflow); stdlib breaks the cycle and emits
 // the reachable fields.
 func TestAppendAny_RecursiveEmbedNoOverflow(t *testing.T) {
+	t.Parallel()
 	type node struct {
-		*node
+		*node //nolint:unused
+
 		X int
 	}
 	got, err := AppendAny(nil, node{X: 1})
@@ -1435,6 +1444,7 @@ func TestAppendAny_RecursiveEmbedNoOverflow(t *testing.T) {
 // Value-level cycles used to recurse until the process died with a fatal
 // stack overflow.
 func TestAppendAny_CyclicValue(t *testing.T) {
+	t.Parallel()
 	s := make([]any, 1)
 	s[0] = s
 	if _, err := AppendAny(nil, s); !errors.Is(err, ErrMaxDepth) {
@@ -1458,6 +1468,7 @@ func TestAppendAny_CyclicValue(t *testing.T) {
 }
 
 func TestAppendAny_DepthCap(t *testing.T) {
+	t.Parallel()
 	var under any = 1
 	for range maxDepth - 1 {
 		under = []any{under}
@@ -1479,12 +1490,14 @@ func TestAppendAny_DepthCap(t *testing.T) {
 // at the boundary and leave a value ggen accepts but cannot re-emit. Anything
 // that decodes must re-encode.
 func TestAppendAny_DepthCapMatchesDecode(t *testing.T) {
+	t.Parallel()
 	shapes := map[string]func(int) []byte{
 		"array":  func(n int) []byte { return []byte(strings.Repeat("[", n) + strings.Repeat("]", n)) },
 		"object": func(n int) []byte { return []byte(strings.Repeat(`{"k":`, n) + "1" + strings.Repeat("}", n)) },
 	}
 	for name, mk := range shapes {
 		t.Run(name, func(t *testing.T) {
+			t.Parallel()
 			for _, n := range []int{maxDepth - 1, maxDepth} {
 				v, _, err := Any(mk(n), 0, true)
 				if err != nil {
@@ -1550,7 +1563,7 @@ func TestAppendAny_PointerReceiverMarshalers(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%T: jsonv2: %v", v, err)
 		}
-		if string(got) != string(want) {
+		if !bytes.Equal(got, want) {
 			t.Errorf("%T:\n ggen   %s\n jsonv2 %s", v, got, want)
 		}
 	}
@@ -1583,8 +1596,10 @@ func TestAppendAny_OmitEmptyJSONv2Semantics(t *testing.T) {
 	n := 0
 	for _, v := range []any{
 		s{},
-		s{N: 1, B: true, F: 0.5, In: inner{S: "x"}, P: &n, A: []int{}, M: map[string]int{"k": 0},
-			S: "s", I: map[string]any{}, R: json.RawMessage(`{}`), Q: `"`},
+		s{
+			N: 1, B: true, F: 0.5, In: inner{S: "x"}, P: &n, A: []int{}, M: map[string]int{"k": 0},
+			S: "s", I: map[string]any{}, R: json.RawMessage(`{}`), Q: `"`,
+		},
 		s{A: []int{0}, I: []any{}, R: json.RawMessage(`null`)},
 	} {
 		got, err := AppendAny(nil, v)
@@ -1595,7 +1610,7 @@ func TestAppendAny_OmitEmptyJSONv2Semantics(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if string(got) != string(want) {
+		if !bytes.Equal(got, want) {
 			t.Errorf("%+v:\n ggen   %s\n jsonv2 %s", v, got, want)
 		}
 	}
@@ -1655,24 +1670,26 @@ type r10PtrZeroer struct{ A int }
 
 func (z *r10PtrZeroer) IsZero() bool { return z.A < 0 }
 
-type r10IsZeroer interface{ IsZero() bool }
-
 func TestAppendAny_OmitZeroIsZeroMethod(t *testing.T) {
 	t.Parallel()
 	type s struct {
 		Z  r10Zeroer    `json:"z,omitzero"`
 		PZ *r10Zeroer   `json:"pz,omitzero"`
 		AZ r10PtrZeroer `json:"az,omitzero"`
-		IZ r10IsZeroer  `json:"iz,omitzero"`
+		IZ isZeroer     `json:"iz,omitzero"`
 		T  time.Time    `json:"t,omitzero"`
 		N  int          `json:"n,omitzero"`
 	}
 	for _, v := range []any{
 		s{},
-		s{Z: r10Zeroer{3, 3}, PZ: &r10Zeroer{1, 1}, AZ: r10PtrZeroer{-1}, IZ: r10Zeroer{2, 2},
-			T: time.Time{}.In(time.FixedZone("X", 0))},
-		s{Z: r10Zeroer{1, 2}, PZ: &r10Zeroer{1, 2}, AZ: r10PtrZeroer{5}, IZ: (*r10Zeroer)(nil),
-			T: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), N: 1},
+		s{
+			Z: r10Zeroer{3, 3}, PZ: &r10Zeroer{1, 1}, AZ: r10PtrZeroer{-1}, IZ: r10Zeroer{2, 2},
+			T: time.Time{}.In(time.FixedZone("X", 0)),
+		},
+		s{
+			Z: r10Zeroer{1, 2}, PZ: &r10Zeroer{1, 2}, AZ: r10PtrZeroer{5}, IZ: (*r10Zeroer)(nil),
+			T: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), N: 1,
+		},
 		&s{Z: r10Zeroer{1, 2}, IZ: &r10Zeroer{1, 2}},
 	} {
 		got, err := AppendAny(nil, v)
@@ -1683,7 +1700,7 @@ func TestAppendAny_OmitZeroIsZeroMethod(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if string(got) != string(want) {
+		if !bytes.Equal(got, want) {
 			t.Errorf("%+v:\n ggen   %s\n jsonv2 %s", v, got, want)
 		}
 	}
@@ -1722,7 +1739,7 @@ func TestAppendAny_EmbedSplices(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if string(got) != string(want) {
+		if !bytes.Equal(got, want) {
 			t.Errorf("%T:\n ggen   %s\n jsonv2 %s", v, got, want)
 		}
 	}
@@ -1766,7 +1783,7 @@ func TestAppendAny_MapKeyTextMarshaler(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%T: jsonv2: %v", v, err)
 		}
-		if string(got) != string(want) {
+		if !bytes.Equal(got, want) {
 			t.Errorf("%T:\n ggen   %s\n jsonv2 %s", v, got, want)
 		}
 	}
@@ -1832,6 +1849,7 @@ type sizeInner struct {
 
 type sizeOuter struct {
 	sizeInner
+
 	Name   string          `json:"na<me>"`
 	N      int64           `json:"n,string"`
 	F      float64         `json:"f,omitempty"`
@@ -1840,7 +1858,7 @@ type sizeOuter struct {
 	Rows   []sizeInner     `json:"rows"`
 	Keys   map[sizeKey]int `json:"keys"`
 	Extra  map[string]any  `json:",embed"`
-	hidden int
+	hidden int             //nolint:unused
 }
 
 // AnySize must bound what AppendAny writes for every dispatch arm, in both
@@ -1864,16 +1882,27 @@ func TestAnySize_BoundsAppendAny(t *testing.T) {
 		float32(math.MaxFloat32), int64(math.MinInt64), uint64(math.MaxUint64), int8(-128),
 		[]any{nil, str, 1.5, []any{map[string]any{long: []any{true}}}},
 		map[string]any{str: map[string]any{long: []string{str, ""}}},
-		[]string{str, "", long}, []int{math.MinInt, 0}, []uint64{math.MaxUint64}, []float64{-math.MaxFloat64},
-		[]bool{false, true}, []time.Time{when, {}}, []json.RawMessage{nil, json.RawMessage(`{"a":[1,2]}`)},
-		map[string]string{str: long}, map[string]int{long: math.MinInt}, map[string]float64{str: -math.MaxFloat64},
-		map[string]bool{str: false}, map[string]uint8{"x": 255},
+		[]string{str, "", long},
+		[]int{math.MinInt, 0},
+		[]uint64{math.MaxUint64},
+		[]float64{-math.MaxFloat64},
+		[]bool{false, true},
+		[]time.Time{when, {}},
+		[]json.RawMessage{nil, json.RawMessage(`{"a":[1,2]}`)},
+		map[string]string{str: long},
+		map[string]int{long: math.MinInt},
+		map[string]float64{str: -math.MaxFloat64},
+		map[string]bool{str: false},
+		map[string]uint8{"x": 255},
 		json.RawMessage(nil), json.RawMessage(`[1,2,3]`),
 		*bigHuge, bigNeg, (*big.Int)(nil), bigF,
 		when, &when, (*time.Time)(nil), time.Duration(math.MinInt64),
 		&ptrStr, (*string)(nil), &ptrInt, (*int)(nil), &ptrF,
 		netip.MustParseAddr("fe80::1:2:3:4%eth0"), netip.MustParsePrefix("2001:db8::/32"),
-		sizeText{long}, sizeJSON{50}, myInt(math.MinInt), myStr(long), myBytes(long), [16]byte{1, 2, 3},
+		sizeText{long},
+		sizeJSON{50},
+		myInt(math.MinInt), myStr(long), myBytes(long),
+		[16]byte{1, 2, 3},
 		[]byte(nil), []byte(long),
 		map[sizeKey]int{{7}: 1, {123456}: math.MinInt},
 		sizeOuter{
@@ -1884,7 +1913,8 @@ func TestAnySize_BoundsAppendAny(t *testing.T) {
 			Keys:  map[sizeKey]int{{1}: 2},
 			Extra: map[string]any{long: map[string]any{str: bigNeg}},
 		},
-		&sizeOuter{}, []sizeOuter{{}, {Name: long}},
+		&sizeOuter{},
+		[]sizeOuter{{}, {Name: long}},
 	}
 	for i, v := range cases {
 		b, err := AppendAny(nil, v)

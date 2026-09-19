@@ -7,6 +7,7 @@ import (
 )
 
 func TestLowerCamel(t *testing.T) {
+	t.Parallel()
 	for _, c := range [][2]string{
 		{"ID", "id"},
 		{"URLPath", "urlPath"},
@@ -26,6 +27,7 @@ func TestLowerCamel(t *testing.T) {
 }
 
 func TestWords(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		in   string
 		want []string
@@ -49,12 +51,21 @@ func TestWords(t *testing.T) {
 }
 
 func TestIdent(t *testing.T) {
+	t.Parallel()
 	for _, c := range []struct {
 		in string
 		ok bool
 	}{
-		{"a", true}, {"_a", true}, {"a1", true}, {"a_b", true}, {"Ünicode", true},
-		{"", false}, {"1a", false}, {"a-b", false}, {"a b", false}, {"a.b", false},
+		{"a", true},
+		{"_a", true},
+		{"a1", true},
+		{"a_b", true},
+		{"Ünicode", true},
+		{"", false},
+		{"1a", false},
+		{"a-b", false},
+		{"a b", false},
+		{"a.b", false},
 	} {
 		if got := Ident(c.in); got != c.ok {
 			t.Errorf("Ident(%q) = %v", c.in, got)
@@ -63,6 +74,7 @@ func TestIdent(t *testing.T) {
 }
 
 func TestTitleAndJoin(t *testing.T) {
+	t.Parallel()
 	for _, c := range [][2]string{{"", ""}, {"a", "A"}, {"ab", "Ab"}, {"Ab", "Ab"}, {"ünicode", "Ünicode"}} {
 		if got := Title(c[0]); got != c[1] {
 			t.Errorf("Title(%q) = %q, want %q", c[0], got, c[1])

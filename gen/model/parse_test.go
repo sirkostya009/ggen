@@ -14,7 +14,7 @@ func writeGoFile(t *testing.T, src string) string {
 	t.Helper()
 	dir := t.TempDir()
 	file := filepath.Join(dir, "test.go")
-	if err := os.WriteFile(file, []byte(src), 0644); err != nil {
+	if err := os.WriteFile(file, []byte(src), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	return file
@@ -319,7 +319,7 @@ type A struct { X int `+"`"+`json:"x"`+"`"+` }
 
 func writeFile(t *testing.T, dir, name, content string) {
 	t.Helper()
-	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, name), []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -377,8 +377,10 @@ func TestSQLNullGeneric(t *testing.T) {
 
 // Round-9 parse-layer pins.
 func TestParseFile_round9(t *testing.T) {
+	t.Parallel()
 	t.Run("tab_after_directive", func(t *testing.T) {
-		// go:generate accepts tab separators; a tab used to silently drop
+		t.Parallel()
+		// Like go:generate, the directive accepts tab separators; a tab used to silently drop
 		// the whole annotation (no output, exit 0).
 		file := writeGoFile(t, "package test\n//ggen:generate\tmarshal\ntype A struct{ X int `json:\"x\"` }\n")
 		res, err := ParseFile(file, nil)
@@ -392,6 +394,7 @@ func TestParseFile_round9(t *testing.T) {
 	})
 
 	t.Run("depth_dominance", func(t *testing.T) {
+		t.Parallel()
 		// A depth-1 promoted field beats a depth-2 one (stdlib dominant-field
 		// rule); the flat resolver used to drop BOTH → `{}` on the wire.
 		src := `package test
@@ -431,6 +434,7 @@ type C struct{ X int ` + "`json:\"x\"`" + ` }
 	})
 
 	t.Run("cyclic_embedding_errors", func(t *testing.T) {
+		t.Parallel()
 		// Invalid Go, but ggen walks syntax first: must diagnose, not
 		// stack-overflow the generator.
 		src := `package test
@@ -446,6 +450,7 @@ type B struct{ A }
 	})
 
 	t.Run("map_value_sibling_generated", func(t *testing.T) {
+		t.Parallel()
 		// A struct reached only through map[string]Inner used to miss
 		// generatedTypes and fall to the json.Unmarshal fallback.
 		src := `package test
@@ -504,6 +509,7 @@ func TestFilenameConstraint(t *testing.T) {
 }
 
 func TestParseFile_round10(t *testing.T) {
+	t.Parallel()
 	embedFields := func(t *testing.T, structs []StructInfo, name string) []FieldInfo {
 		t.Helper()
 		for _, st := range structs {
@@ -523,6 +529,7 @@ func TestParseFile_round10(t *testing.T) {
 	}
 
 	t.Run("embed_own_dominates_promoted", func(t *testing.T) {
+		t.Parallel()
 		// jsonv2 keeps the shallowest catch-all; the emitters read exactly
 		// one, so the promoted one must be gone.
 		src := `package test
@@ -544,6 +551,7 @@ type Outer struct {
 	})
 
 	t.Run("embed_promoted_tie_drops_both", func(t *testing.T) {
+		t.Parallel()
 		src := `package test
 //ggen:generate
 type Top struct {
@@ -565,6 +573,7 @@ type B struct{ More map[string]any ` + "`json:\",embed\"`" + ` }
 	})
 
 	t.Run("embed_two_own_rejected", func(t *testing.T) {
+		t.Parallel()
 		src := `package test
 //ggen:generate
 type Two struct {
@@ -579,6 +588,7 @@ type Two struct {
 	})
 
 	t.Run("promoted_go_name_clash_rejected", func(t *testing.T) {
+		t.Parallel()
 		// Distinct JSON names, one Go name: stdlib keeps both, ggen cannot
 		// address them and must say so instead of dropping the pair.
 		src := `package test
@@ -597,6 +607,7 @@ type E2 struct{ A int ` + "`json:\"a2\"`" + ` }
 	})
 
 	t.Run("shapeless_field_types_rejected", func(t *testing.T) {
+		t.Parallel()
 		for _, decl := range []string{
 			"S struct{ X int }",
 			"P *struct{ X int }",
@@ -628,6 +639,7 @@ type E2 struct{ A int ` + "`json:\"a2\"`" + ` }
 }
 
 func TestParsePackage_docsDirectivesConsts(t *testing.T) {
+	t.Parallel()
 	dir := t.TempDir()
 	writeFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.27\n")
 	writeFile(t, dir, "m.go", `package m

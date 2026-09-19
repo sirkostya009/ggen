@@ -1,3 +1,12 @@
 {
-	"go.buildTags": "goexperiment.jsonv2"
+	"go.lintTool": "golangci-lint-v2",
+	"go.lintOnSave": "workspace",
+	"go.toolsEnvVars": {
+		"GOEXPERIMENT": "simd"
+	},
+	"gopls": {
+		"build.env": {
+			"GOEXPERIMENT": "simd"
+		}
+	}
 }

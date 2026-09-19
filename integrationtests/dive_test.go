@@ -3,6 +3,7 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -19,7 +20,7 @@ type DiveStruct struct {
 	Title string `json:"title" pipe:"minrunes=1 maxrunes=5"`
 	// each score 0..100
 	Scores []int `json:"scores" pipe:"inner:(gte=0 lte=100)"`
-	Count  int   `json:"count" pipe:"@EvenOnly"`
+	Count  int   `json:"count"  pipe:"@EvenOnly"`
 }
 
 // EvenOnly is the custom validator for DiveStruct.Count.
@@ -104,17 +105,17 @@ func TestTags_sliceLengthVsElement(t *testing.T) {
 //
 //ggen:generate
 type CustomDiveStruct struct {
-	Tags   []string       `json:"tags" pipe:"inner:@NotBlank"`
-	Trim   []string       `json:"trim" pipe:"inner:@TrimSpace"`
+	Tags   []string       `json:"tags"   pipe:"inner:@NotBlank"`
+	Trim   []string       `json:"trim"   pipe:"inner:@TrimSpace"`
 	Lookup map[string]int `json:"lookup" pipe:"keys:@KeyShape"`
-	Mixed  map[string]int `json:"mixed" pipe:"keys:@LowerKey"`
-	Ptr    *int           `json:"ptr" pipe:"@PointerCheck"`
+	Mixed  map[string]int `json:"mixed"  pipe:"keys:@LowerKey"`
+	Ptr    *int           `json:"ptr"    pipe:"@PointerCheck"`
 }
 
 // NotBlank is invoked once per slice element via `inner:@NotBlank`.
 func NotBlank(s string) error {
 	if strings.TrimSpace(s) == "" {
-		return fmt.Errorf("blank element")
+		return errors.New("blank element")
 	}
 	return nil
 }
@@ -125,7 +126,7 @@ func TrimSpace(s string) string { return strings.TrimSpace(s) }
 // KeyShape is invoked once per map key via `keys:@KeyShape`.
 func KeyShape(s string) error {
 	for _, r := range s {
-		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')) {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') {
 			return fmt.Errorf("bad key %q", s)
 		}
 	}
@@ -138,7 +139,7 @@ func LowerKey(s string) string { return strings.ToLower(s) }
 // PointerCheck verifies a pointer field passes *T, not T.
 func PointerCheck(p *int) error {
 	if p != nil && *p < 0 {
-		return fmt.Errorf("negative")
+		return errors.New("negative")
 	}
 	return nil
 }

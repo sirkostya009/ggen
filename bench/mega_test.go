@@ -12,6 +12,7 @@ import (
 
 	"github.com/bytedance/sonic"
 	"github.com/mailru/easyjson"
+
 	"github.com/sirkostya009/ggen"
 )
 
@@ -39,7 +40,7 @@ func runBench[S any](b *testing.B, bytesPerOp int64, setup func() S, body func(*
 }
 
 func BenchmarkMega_Unmarshal(b *testing.B) {
-	var unmarshalCodecs = []struct {
+	unmarshalCodecs := []struct {
 		name string
 		fn   func([]byte) error
 	}{
@@ -68,7 +69,7 @@ func BenchmarkMega_Unmarshal(b *testing.B) {
 }
 
 func BenchmarkMega_Marshal(b *testing.B) {
-	var marshalCodecs = []struct {
+	marshalCodecs := []struct {
 		name string
 		fn   func() ([]byte, error)
 	}{
@@ -120,7 +121,7 @@ func BenchmarkMega_Reader(b *testing.B) {
 		buf []byte
 	}
 
-	var readerCodecs = []struct {
+	readerCodecs := []struct {
 		name string
 		fn   func(*readerState) error
 	}{
@@ -192,7 +193,7 @@ func BenchmarkMega_Reader(b *testing.B) {
 // Always warm up first and check the jsonv2 row as an in-run control before
 // believing any delta here (see bench/CLAUDE.md "Running benchmarks").
 func BenchmarkDeepNested_Unmarshal(b *testing.B) {
-	var codecs = []struct {
+	codecs := []struct {
 		name string
 		fn   func([]byte) error
 	}{
@@ -218,7 +219,7 @@ func BenchmarkDeepNested_Unmarshal(b *testing.B) {
 // BenchmarkMapHeavy_Unmarshal — 1024-entry string→string map. Measures
 // per-entry hash + alloc + insert cost.
 func BenchmarkMapHeavy_Unmarshal(b *testing.B) {
-	var codecs = []struct {
+	codecs := []struct {
 		name string
 		fn   func([]byte) error
 	}{
@@ -245,7 +246,7 @@ func BenchmarkMapHeavy_Unmarshal(b *testing.B) {
 // receiver, where each entry's previous value becomes the decode target; the
 // plain ggen row starts from a zero value, where that machinery can only cost.
 func BenchmarkMapValues_Unmarshal(b *testing.B) {
-	var codecs = []struct {
+	codecs := []struct {
 		name string
 		fn   func([]byte) error
 	}{

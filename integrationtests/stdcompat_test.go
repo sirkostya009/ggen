@@ -6,6 +6,7 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"bytes"
 	"encoding/json"
 	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
@@ -20,6 +21,7 @@ import (
 
 	gofrs "github.com/gofrs/uuid/v5"
 	"github.com/google/uuid"
+
 	"github.com/sirkostya009/ggen"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty2"
@@ -35,6 +37,7 @@ type ggenCompat[T any] interface {
 // side re-marshals through jsonv2 and parses into `any`, so map ordering and
 // nil-vs-empty differences don't register but wire divergence does.
 func crossCompat[T ggenCompat[T]](t *testing.T, in T) {
+	t.Helper()
 	// ggen marshal → jsonv2 unmarshal.
 	ggenBytes, mErr := ggen.Marshal(in)
 	if mErr != nil {
@@ -64,22 +67,22 @@ func crossCompat[T ggenCompat[T]](t *testing.T, in T) {
 
 // sameWire reports whether a and b produce the same canonical JSON, both via
 // jsonv2 then parsed into `any` (ignores map ordering, nil/empty differences).
-func sameWire(t testing.TB, a, b any) bool {
-	t.Helper()
+func sameWire(tb testing.TB, a, b any) bool {
+	tb.Helper()
 	ba, err := jsonv2.Marshal(a)
 	if err != nil {
-		t.Fatalf("jsonv2.Marshal(a): %v", err)
+		tb.Fatalf("jsonv2.Marshal(a): %v", err)
 	}
 	bb, err := jsonv2.Marshal(b)
 	if err != nil {
-		t.Fatalf("jsonv2.Marshal(b): %v", err)
+		tb.Fatalf("jsonv2.Marshal(b): %v", err)
 	}
 	var va, vb any
 	if err := jsonv2.Unmarshal(ba, &va); err != nil {
-		t.Fatalf("jsonv2.Unmarshal(a): %v", err)
+		tb.Fatalf("jsonv2.Unmarshal(a): %v", err)
 	}
 	if err := jsonv2.Unmarshal(bb, &vb); err != nil {
-		t.Fatalf("jsonv2.Unmarshal(b): %v", err)
+		tb.Fatalf("jsonv2.Unmarshal(b): %v", err)
 	}
 	return reflect.DeepEqual(va, vb)
 }
@@ -101,7 +104,7 @@ func exactWire[T ggenCompat[T]](t *testing.T, name string, in T) {
 		if err != nil {
 			t.Fatalf("jsonv2.Marshal for %T: %v", in, err)
 		}
-		if string(ggenBytes) != string(stdBytes) {
+		if !bytes.Equal(ggenBytes, stdBytes) {
 			t.Errorf("wire mismatch for %T\n ggen:   %s\n jsonv2: %s", in, ggenBytes, stdBytes)
 		}
 	})
@@ -189,7 +192,7 @@ func TestStdCompat_NativeTypes(t *testing.T) {
 //
 //ggen:generate
 type TimeCustomComma struct {
-	CustomComma time.Time `json:"customComma,format:'Jan 2, 2006'"`
+	CustomComma time.Time `json:"customComma,format:'Jan 2, 2006'"` //nolint:govet // layout carries spaces
 }
 
 // Verbose custom layout with literals: jsonv2-accepted and value-exact on

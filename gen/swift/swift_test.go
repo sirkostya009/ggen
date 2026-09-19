@@ -1,6 +1,7 @@
 package swift_test
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
@@ -58,6 +59,7 @@ func render(t *testing.T) (string, *gen.Output) {
 }
 
 func TestTypes(t *testing.T) {
+	t.Parallel()
 	dir, out := render(t)
 	var issues []string
 	for _, i := range out.Report().Issues {
@@ -88,7 +90,7 @@ func TestTypes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v (run with -update)", err)
 		}
-		if string(got) != string(want) {
+		if !bytes.Equal(got, want) {
 			t.Errorf("%s differs from %s:\n%s", name, golden, got)
 		}
 	}
@@ -97,6 +99,7 @@ func TestTypes(t *testing.T) {
 // TestRuntime compiles the types with swiftc, decodes inputs and round-trips
 // them through JSONEncoder. It needs GGEN_SWIFTC, the path to swiftc.
 func TestRuntime(t *testing.T) {
+	t.Parallel()
 	swiftc := os.Getenv("GGEN_SWIFTC")
 	if swiftc == "" {
 		t.Skip("set GGEN_SWIFTC to a swiftc binary")
@@ -129,7 +132,11 @@ func TestRuntime(t *testing.T) {
 		{"User", user(`,"plan":2`), true},
 		{"User", user(`,"plan":3`), false},
 		{"User", strings.Replace(user(``), `"id":1`, `"id":9223372036854775807`, 1), true},
-		{"Edges", `{"list":null,"max":null,"plist":null,"dict":null,"quoted":"1","unix":1,"date":"2020-01-01","dur":"1s","hex":"","fixed":"AAAAAA==","ip":"","addr":"","ns":null,"raw":null,"lower":"x","nz":0,"conv":0,"tags":null}`, true},
+		{
+			"Edges",
+			`{"list":null,"max":null,"plist":null,"dict":null,"quoted":"1","unix":1,"date":"2020-01-01","dur":"1s","hex":"","fixed":"AAAAAA==","ip":"","addr":"","ns":null,"raw":null,"lower":"x","nz":0,"conv":0,"tags":null}`,
+			true,
+		},
 		{"Shared.User", `{"amount":1,"currency":""}`, true},
 	}
 	var main strings.Builder
@@ -148,7 +155,7 @@ func TestRuntime(t *testing.T) {
 
 	run := func(args ...string) {
 		t.Helper()
-		cmd := exec.Command(swiftc, append([]string{"-swift-version", "6", "-module-cache-path", filepath.Join(dir, "cache")}, args...)...)
+		cmd := exec.CommandContext(t.Context(), swiftc, append([]string{"-swift-version", "6", "-module-cache-path", filepath.Join(dir, "cache")}, args...)...)
 		if b, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("swiftc %s: %v\n%s", strings.Join(args, " "), err, b)
 		}
@@ -162,7 +169,7 @@ func TestRuntime(t *testing.T) {
 		args = append(args, filepath.Join(dir, f))
 	}
 	run(args...)
-	raw, err := exec.Command(filepath.Join(dir, "app")).Output()
+	raw, err := exec.CommandContext(t.Context(), filepath.Join(dir, "app")).Output()
 	if err != nil {
 		t.Fatalf("app: %v", err)
 	}
@@ -180,6 +187,7 @@ func TestRuntime(t *testing.T) {
 // TestManual renders a recursive type as a final class and drops the
 // synthesized protocols, for callers who handle both themselves.
 func TestManual(t *testing.T) {
+	t.Parallel()
 	set, err := gen.Load("../testdata/api", "../testdata/other")
 	if err != nil {
 		t.Fatal(err)
@@ -229,7 +237,7 @@ run()
 	os.WriteFile(filepath.Join(dir, "main.swift"), []byte(main), 0o644)
 	compileSwift(t, swiftc, dir, "API", filepath.Join(dir, "app"), nil,
 		filepath.Join(dir, "Types.swift"), filepath.Join(dir, "JSON.swift"), filepath.Join(dir, "main.swift"))
-	printed, err := exec.Command(filepath.Join(dir, "app")).Output()
+	printed, err := exec.CommandContext(t.Context(), filepath.Join(dir, "app")).Output()
 	if err != nil {
 		t.Fatalf("app: %v", err)
 	}
@@ -245,9 +253,11 @@ func compileSwift(t *testing.T, swiftc, dir, module, exe string, extra []string,
 	if err := os.MkdirAll(filepath.Dir(exe), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	args := append([]string{"-swift-version", "6", "-module-cache-path", filepath.Join(dir, "cache"),
-		"-module-name", module, "-o", exe}, extra...)
-	if b, err := exec.Command(swiftc, append(args, files...)...).CombinedOutput(); err != nil {
+	args := append([]string{
+		"-swift-version", "6", "-module-cache-path", filepath.Join(dir, "cache"),
+		"-module-name", module, "-o", exe,
+	}, extra...)
+	if b, err := exec.CommandContext(t.Context(), swiftc, append(args, files...)...).CombinedOutput(); err != nil {
 		t.Fatalf("swiftc: %v\n%s", err, b)
 	}
 }
@@ -255,6 +265,7 @@ func compileSwift(t *testing.T, swiftc, dir, module, exe string, extra []string,
 // TestFor decides protocols, access, recursion, headers and external types
 // per package, type, directive and output file.
 func TestFor(t *testing.T) {
+	t.Parallel()
 	set, err := gen.Load("../testdata/api", "../testdata/other")
 	if err != nil {
 		t.Fatal(err)
@@ -313,6 +324,7 @@ func TestFor(t *testing.T) {
 // compiles the same per-type rendering, with a stand-in for the module the
 // external type comes from.
 func TestForCompiles(t *testing.T) {
+	t.Parallel()
 	swiftc := os.Getenv("GGEN_SWIFTC")
 	if swiftc == "" {
 		t.Skip("set GGEN_SWIFTC to a swiftc binary")
@@ -349,18 +361,23 @@ func TestForCompiles(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "Geometry.swift"), []byte(
 		"public struct Point: Codable, Hashable {\n    public var X: Int\n    public var Y: Int\n}\n"), 0o644)
 	compileSwift(t, swiftc, dir, "Geometry", filepath.Join(lib, "libGeometry.a"),
-		[]string{"-parse-as-library", "-emit-library", "-static", "-emit-module",
-			"-emit-module-path", filepath.Join(lib, "Geometry.swiftmodule")},
+		[]string{
+			"-parse-as-library", "-emit-library", "-static", "-emit-module",
+			"-emit-module-path", filepath.Join(lib, "Geometry.swiftmodule"),
+		},
 		filepath.Join(dir, "Geometry.swift"))
 	compileSwift(t, swiftc, dir, "API", filepath.Join(lib, "libAPI.a"),
-		[]string{"-parse-as-library", "-emit-library", "-static", "-emit-module",
-			"-emit-module-path", filepath.Join(lib, "API.swiftmodule"), "-I", lib},
+		[]string{
+			"-parse-as-library", "-emit-library", "-static", "-emit-module",
+			"-emit-module-path", filepath.Join(lib, "API.swiftmodule"), "-I", lib,
+		},
 		filepath.Join(dir, "Internal/User.swift"), filepath.Join(dir, "Public/Money.swift"))
 }
 
 // TestAwkwardNames pins the escaping a Swift property needs, the report for
 // two fields that spell one property, and that the result compiles.
 func TestAwkwardNames(t *testing.T) {
+	t.Parallel()
 	set, err := gen.Load("../testdata/api", "../testdata/other")
 	if err != nil {
 		t.Fatal(err)

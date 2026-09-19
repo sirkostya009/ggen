@@ -101,7 +101,7 @@ func TestString_ErrorParity(t *testing.T) {
 // survives a scribble of the source, whether String aliased (clean path → Detach
 // clones) or owned it (escape path → Detach is a no-op). The alloc contract
 // (clone IFF the string aliases data) is what makes -copy single-copy on escapes.
-func TestDetach(t *testing.T) {
+func TestDetach(t *testing.T) { //nolint:paralleltest // measures allocations
 	// Value + scribble-survival across clean (aliased) and escaped (owned) inputs.
 	cases := []struct{ in, want string }{
 		{`"hello"`, "hello"}, // clean → String aliases → Detach clones
@@ -236,7 +236,7 @@ func TestString_ZeroCopyAlias(t *testing.T) {
 // payload, and must not pay a second exact-size copy on return. A 1 MiB
 // payload with a short escaped string at the front must not allocate
 // megabytes per decode.
-func TestStringEscapeAllocBounded(t *testing.T) {
+func TestStringEscapeAllocBounded(t *testing.T) { //nolint:paralleltest // measures allocations
 	payload := append([]byte(`"ab\nc"`), bytes.Repeat([]byte{' '}, 1<<20)...)
 	var got string
 	allocs := testing.AllocsPerRun(100, func() {
@@ -256,7 +256,7 @@ func TestStringEscapeAllocBounded(t *testing.T) {
 	runtime.GC()
 	runtime.ReadMemStats(&m0)
 	for range 16 {
-		String(payload, 0, true)
+		_, _, _ = String(payload, 0, true)
 	}
 	runtime.ReadMemStats(&m1)
 	if total := m1.TotalAlloc - m0.TotalAlloc; total > 16*1024 {
@@ -307,6 +307,7 @@ func TestSkipString_ParityWithString(t *testing.T) {
 // the same far quote per escape — O(n·escapes), ~7 ms for a 48 KB string.
 // Parity (incl. escaped quotes, which force a re-locate) plus a growth guard.
 func TestSkipString_EscapeDenseLinear(t *testing.T) {
+	t.Parallel()
 	build := func(n int) []byte {
 		var b strings.Builder
 		b.WriteByte('"')
@@ -353,7 +354,7 @@ func TestSkipString_EscapeDenseLinear(t *testing.T) {
 
 // TestSkipValue_EscapedStringNoAlloc pins that skipping an escaped string
 // never allocates (String's stringSlow scratch would).
-func TestSkipValue_EscapedStringNoAlloc(t *testing.T) {
+func TestSkipValue_EscapedStringNoAlloc(t *testing.T) { //nolint:paralleltest // measures allocations
 	data := []byte(`"a\nbéc\t` + strings.Repeat("x", 100) + `"`)
 	allocs := testing.AllocsPerRun(100, func() {
 		if _, err := SkipValue(data, 0); err != nil {
@@ -574,7 +575,7 @@ func TestHasCtrlByte_DifferentialExhaustive(t *testing.T) {
 	t.Parallel()
 	// Base spans cover lengths around the 8-byte word boundary (0..40) so
 	// the SWAR loop, the scalar tail, and their seam are all exercised.
-	for n := 0; n <= 40; n++ {
+	for n := range 41 {
 		// All-clean baseline: mix ASCII printable and high (UTF-8) bytes,
 		// none of which are control chars.
 		base := make([]byte, n)
@@ -589,7 +590,7 @@ func TestHasCtrlByte_DifferentialExhaustive(t *testing.T) {
 			t.Fatalf("clean n=%d: hasCtrlByte=%v naive=%v (%v)", n, got, want, base)
 		}
 		// Inject a control byte at every position, with every control value.
-		for pos := 0; pos < n; pos++ {
+		for pos := range n {
 			for _, ctrl := range []byte{0x00, 0x01, 0x09, 0x0a, 0x0d, 0x1f} {
 				b := append([]byte(nil), base...)
 				b[pos] = ctrl
@@ -704,8 +705,12 @@ func TestString_MalformedTailIsFinal(t *testing.T) {
 		in  string
 		pos int
 	}{
-		{`"\ud83d\uDE`, 11}, {`"\ud83d\u`, 9}, {`"\ud83d`, 7},
-		{`"\ud83d"`, 7}, {`"\ud83d\n"`, 7}, {`"\ud83dx"`, 7},
+		{`"\ud83d\uDE`, 11},
+		{`"\ud83d\u`, 9},
+		{`"\ud83d`, 7},
+		{`"\ud83d"`, 7},
+		{`"\ud83d\n"`, 7},
+		{`"\ud83dx"`, 7},
 	} {
 		if _, p, err := String([]byte(tc.in), 0, true); err != ErrInvalidUTF8 || p != tc.pos {
 			t.Errorf("String(%q) = (%d, %v), want (%d, %v)", tc.in, p, err, tc.pos, ErrInvalidUTF8)
@@ -715,7 +720,7 @@ func TestString_MalformedTailIsFinal(t *testing.T) {
 
 // String's no-closing-quote branch classifies the error without copying the
 // payload.
-func TestStringUnterminatedEscapedNoAlloc(t *testing.T) {
+func TestStringUnterminatedEscapedNoAlloc(t *testing.T) { //nolint:paralleltest // measures allocations
 	data := append([]byte(`"a\n`), bytes.Repeat([]byte("x"), 1<<20)...)
 	var pos int
 	var err error
@@ -732,6 +737,7 @@ func TestStringUnterminatedEscapedNoAlloc(t *testing.T) {
 // stringUnterminated must be (pos, err)-identical to the stringSlow walk it
 // replaces, for every escape/surrogate/ctrl shape and both validate modes.
 func TestStringUnterminatedParity(t *testing.T) {
+	t.Parallel()
 	bodies := []string{
 		`a\n`, `a\`, `a\u`, `a\u12`, `a\u12zz`, `a\q`, `a\nx`, `\ud800`, `\ud800abc`,
 		"\xf0\x90\x80\x80\\n", `\ud800\udc0`, `\ud800A`, "x\xc3\xa9y\\t", `\/\b\f\r\t`,

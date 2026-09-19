@@ -2,6 +2,7 @@
 package swift
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -242,7 +243,10 @@ func (e *Emitter) object(ctx *gen.Context, pl gen.Placed) {
 	class := s.Recursive && wrapper == ""
 	if class {
 		if protos := e.protocols(ctx.File, pl); len(protos) > 0 {
-			ctx.Report.Add(declName(s), "a class conforms to Codable alone: Swift synthesizes "+strings.Join(protos, ", ")+" for a struct only, so write them in an extension")
+			ctx.Report.Add(
+				declName(s),
+				"a class conforms to Codable alone: Swift synthesizes "+strings.Join(protos, ", ")+" for a struct only, so write them in an extension",
+			)
 			if slices.Contains(protos, "Sendable") {
 				ctx.Report.Add(declName(s), "Sendable is not one of them: a class whose properties are mutable cannot conform to it at all")
 			}
@@ -387,6 +391,7 @@ func (e *Emitter) base(ctx *gen.Context, s *gen.Shape, t *gen.Type, where string
 			ctx.Report.Add(where, "the enum admits Go's zero value, which no Swift enum case holds; rendered as "+primitive(t)+" (Strict keeps the enum)")
 		}
 	}
+	//exhaustive:ignore not every kind applies here
 	switch t.Wire {
 	case gen.WireString:
 		if t.Go == gen.Bytes && t.Format == gen.FormatBase64 {
@@ -419,18 +424,6 @@ func (e *Emitter) jsonValue(ctx *gen.Context, where string) string {
 	return e.fromRuntime(ctx, where, "JSONValue")
 }
 
-// checkRuntimeAccess reports a public type whose runtime file is internal:
-// Swift refuses a public property whose type, or whose property wrapper, is
-// less visible.
-func (e *Emitter) checkRuntimeAccess(ctx *gen.Context, pl gen.Placed, name string) {
-	if !e.public(ctx.File, pl) || e.runtime == nil {
-		return
-	}
-	if r, ok := e.runtime.Emitter().(runtime); ok && !r.public {
-		ctx.Report.Add(declName(pl.Shape), "is public but "+name+" comes from an internal runtime file: pass swift.Public() to swift.NewRuntime too")
-	}
-}
-
 // fromRuntime returns name, a declaration of the NewRuntime file, importing
 // its module when it is another one.
 func (e *Emitter) fromRuntime(ctx *gen.Context, where, name string) string {
@@ -451,6 +444,7 @@ func (e *Emitter) fromRuntime(ctx *gen.Context, where, name string) string {
 
 // primitive is the Swift type of a scalar by its wire and Go kind.
 func primitive(t *gen.Type) string {
+	//exhaustive:ignore not every kind applies here
 	switch t.Wire {
 	case gen.WireString:
 		return "String"
@@ -602,7 +596,7 @@ func (r runtime) Begin(ctx *gen.Context) error {
 }
 
 func (runtime) Decl(*gen.Context, gen.Placed) error {
-	return fmt.Errorf("a runtime file holds no types")
+	return errors.New("a runtime file holds no types")
 }
 
 func (r runtime) End(ctx *gen.Context) error {

@@ -7,13 +7,15 @@
 //
 //	res, _, err := T{}.DecodeFrom(data)
 //	res, err := NewStream(r, buf).Value[T]()
+
 package ggen
 
 import (
-	"github.com/sirkostya009/ggen/internal/prealloc"
 	"io"
 	"strconv"
 	"unsafe"
+
+	"github.com/sirkostya009/ggen/internal/prealloc"
 )
 
 // Decoder is the BYTES-path interface. DecodeFrom reads one value and returns
@@ -98,5 +100,6 @@ func arrField(n int) string {
 	buf = append(buf, '[')
 	buf = strconv.AppendInt(buf, int64(n), 10)
 	buf = append(buf, ']')
+	// buf is local and never mutated after this point.
 	return unsafe.String(unsafe.SliceData(buf), len(buf))
 }

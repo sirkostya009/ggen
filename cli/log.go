@@ -32,9 +32,9 @@ const (
 // valid fixes — surfacing the latter to agents as authoritative would railroad
 // downstream decisions.
 type Logger interface {
-	Info(format string, args ...any)
-	Debug(format string, args ...any)
-	Trace(format string, args ...any)
+	Infof(format string, args ...any)
+	Debugf(format string, args ...any)
+	Tracef(format string, args ...any)
 	// Error queues a non-fatal error for batch emission by Flush — the run
 	// continues so one invocation surfaces every problem at once.
 	Error(err error)
@@ -117,7 +117,7 @@ type conciseLogger struct {
 	errSet bool    // sticky: true once any error has been seen (queue or Fatal)
 }
 
-func (l *conciseLogger) Info(format string, args ...any) {
+func (l *conciseLogger) Infof(format string, args ...any) {
 	if l.level < LevelInfo {
 		return
 	}
@@ -127,7 +127,7 @@ func (l *conciseLogger) Info(format string, args ...any) {
 	_, _ = fmt.Fprintf(l.w, "inf: %s\n", msg)
 }
 
-func (l *conciseLogger) Debug(format string, args ...any) {
+func (l *conciseLogger) Debugf(format string, args ...any) {
 	if l.level < LevelDebug {
 		return
 	}
@@ -137,7 +137,7 @@ func (l *conciseLogger) Debug(format string, args ...any) {
 	_, _ = fmt.Fprintf(l.w, "dbg: %s\n", msg)
 }
 
-func (l *conciseLogger) Trace(format string, args ...any) {
+func (l *conciseLogger) Tracef(format string, args ...any) {
 	if l.level < LevelTrace {
 		return
 	}
@@ -205,9 +205,9 @@ func (l *conciseLogger) HasErrors() bool {
 func (l *conciseLogger) Fatal(err error) {
 	l.Flush()
 	l.mu.Lock()
-	defer l.mu.Unlock()
 	l.renderError(err)
 	l.errSet = true
+	l.mu.Unlock()
 	os.Exit(1)
 }
 
@@ -241,7 +241,7 @@ func (l *prettyLogger) paint(c, s string) string {
 	return c + s + ansiReset
 }
 
-func (l *prettyLogger) Info(format string, args ...any) {
+func (l *prettyLogger) Infof(format string, args ...any) {
 	if l.level < LevelInfo {
 		return
 	}
@@ -251,7 +251,7 @@ func (l *prettyLogger) Info(format string, args ...any) {
 	_, _ = fmt.Fprintf(l.w, "%s %s\n", l.paint(ansiGreen+ansiBold, "✓"), msg)
 }
 
-func (l *prettyLogger) Debug(format string, args ...any) {
+func (l *prettyLogger) Debugf(format string, args ...any) {
 	if l.level < LevelDebug {
 		return
 	}
@@ -261,7 +261,7 @@ func (l *prettyLogger) Debug(format string, args ...any) {
 	_, _ = fmt.Fprintf(l.w, "%s %s\n", l.paint(ansiYellow, "[debug]"), msg)
 }
 
-func (l *prettyLogger) Trace(format string, args ...any) {
+func (l *prettyLogger) Tracef(format string, args ...any) {
 	if l.level < LevelTrace {
 		return
 	}
@@ -428,7 +428,7 @@ func (l *prettyLogger) emphasize(s, baseColor string) string {
 	if !l.color {
 		var b strings.Builder
 		b.Grow(len(s))
-		for i := 0; i < len(s); i++ {
+		for i := range len(s) {
 			if s[i] == '`' || s[i] == '"' {
 				continue
 			}
@@ -442,7 +442,7 @@ func (l *prettyLogger) emphasize(s, baseColor string) string {
 	var b strings.Builder
 	b.WriteString(baseColor)
 	var open byte
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if open == 0 && (c == '`' || c == '"') {
 			b.WriteString(ansiBold)
@@ -542,7 +542,7 @@ func caretIndent(line, prefix string, posCol int, span, anchor string) string {
 	col := min(max(model.ResolveSpanCol(line, posCol, span, anchor)-1, 0), len(line))
 	var b strings.Builder
 	b.Grow(len(prefix) + col)
-	for i := 0; i < len(prefix); i++ {
+	for range len(prefix) {
 		b.WriteByte(' ')
 	}
 	for i := range col {

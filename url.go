@@ -119,7 +119,7 @@ func appendUserinfo(dst []byte, u *url.Userinfo) []byte {
 // escaping under mode. Space in encodeQueryComponent becomes '+'.
 func appendURLEscape(dst []byte, s string, mode urlEncoding) []byte {
 	const upperhex = "0123456789ABCDEF"
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		switch {
 		case urlTable[c]&mode != 0:
@@ -137,7 +137,7 @@ func appendURLEscape(dst []byte, s string, mode urlEncoding) []byte {
 // given mode (every char is an unreserved/sub-delim, an `@`/`:`, or part of
 // a %XX escape).
 func validURLEncoded(s string, mode urlEncoding) bool {
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		switch s[i] {
 		case '!', '$', '&', '\'', '(', ')', '*', '+', ',', ';', '=', ':', '@':
 			// sub-delims + ":" + "@" — always allowed
@@ -201,7 +201,7 @@ func unhexURL(c byte) (byte, bool) {
 }
 
 func pathFirstSegment(s string) string {
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] == '/' {
 			return s[:i]
 		}
@@ -210,7 +210,7 @@ func pathFirstSegment(s string) string {
 }
 
 func containsColon(s string) bool {
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		if s[i] == ':' {
 			return true
 		}

@@ -114,8 +114,10 @@ func TestFloat64_ErrorParity(t *testing.T) {
 }
 
 func TestInt64_StdlibParity(t *testing.T) {
-	cases := []string{"0", "-0", "1", "-1", "42", "-42",
-		"9223372036854775807", "-9223372036854775808"}
+	cases := []string{
+		"0", "-0", "1", "-1", "42", "-42",
+		"9223372036854775807", "-9223372036854775808",
+	}
 	t.Parallel()
 	for _, in := range cases {
 		t.Run(in, func(t *testing.T) {
@@ -575,7 +577,7 @@ func TestSkipNumber_AcceptSetMatchesJSONGrammar(t *testing.T) {
 		// json.Valid accepts it. Tokens not starting with -/digit are not
 		// routed to skipNumber at all, so restrict the comparison.
 		want := json.Valid([]byte(tok))
-		if tok == "" || !(tok[0] == '-' || (tok[0] >= '0' && tok[0] <= '9')) {
+		if tok == "" || tok[0] != '-' && (tok[0] < '0' || tok[0] > '9') {
 			// not a number token — skipNumber is never reached; skip oracle
 			if got {
 				t.Errorf("%q: skipNumber accepted a non-number-leading token", tok)

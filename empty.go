@@ -21,6 +21,7 @@ func AnyIsEmpty(v any) bool {
 		return false
 	}
 	rv := reflect.ValueOf(v)
+	//exhaustive:ignore not every kind applies here
 	switch rv.Kind() {
 	case reflect.String, reflect.Slice, reflect.Map, reflect.Array:
 		return rv.Len() == 0

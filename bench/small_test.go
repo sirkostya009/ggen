@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/bytedance/sonic"
+
 	"github.com/sirkostya009/ggen"
 )
 
@@ -18,7 +19,7 @@ import (
 // Validated value. Companion to BenchmarkSmall_Reader; isolates the
 // codegen+parse overhead from streaming buffer management.
 func BenchmarkSmall_Unmarshal(b *testing.B) {
-	var codecs = []struct {
+	codecs := []struct {
 		name string
 		fn   func([]byte) error
 	}{
@@ -53,7 +54,7 @@ func BenchmarkSmall_Reader(b *testing.B) {
 		buf []byte
 	}
 
-	var codecs = []struct {
+	codecs := []struct {
 		name   string
 		bufCap int // initial buf cap for ggen-stream variants; 0 elsewhere
 		fn     func(*readerState) error
@@ -102,9 +103,9 @@ func BenchmarkSmall_Reader(b *testing.B) {
 
 	for _, c := range codecs {
 		b.Run(c.name, func(b *testing.B) {
-			cap := c.bufCap
+			bufCap := c.bufCap
 			runBench(b, int64(len(ValidPayload)),
-				func() readerState { return readerState{buf: make([]byte, 0, cap)} },
+				func() readerState { return readerState{buf: make([]byte, 0, bufCap)} },
 				func(s *readerState) {
 					if err := c.fn(s); err != nil {
 						b.Fatal(err)
@@ -118,7 +119,7 @@ func BenchmarkSmall_Reader(b *testing.B) {
 // BenchmarkTiny_Unmarshal — overhead floor of the dispatch path at a
 // payload size where per-call setup costs dominate the actual scan work.
 func BenchmarkTiny_Unmarshal(b *testing.B) {
-	var codecs = []struct {
+	codecs := []struct {
 		name string
 		fn   func([]byte) error
 	}{
@@ -149,7 +150,7 @@ func BenchmarkTiny_Unmarshal(b *testing.B) {
 // per-call buffer alloc is a larger fraction of total cost than at mega
 // scale.
 func BenchmarkTiny_Marshal(b *testing.B) {
-	var codecs = []struct {
+	codecs := []struct {
 		name string
 		fn   func() ([]byte, error)
 	}{
@@ -178,7 +179,7 @@ func BenchmarkTiny_Marshal(b *testing.B) {
 // every field. ggen runs ~25 validation checks per payload (vs jsonv2/
 // sonic which do zero). The per-check cost is the headline number.
 func BenchmarkValidationHeavy_Unmarshal(b *testing.B) {
-	var codecs = []struct {
+	codecs := []struct {
 		name string
 		fn   func([]byte) error
 	}{
@@ -219,7 +220,7 @@ func BenchmarkRuneGated_Unmarshal(b *testing.B) {
 // BenchmarkHTMLEscape_MarshalParity — htmlescape opt-in (\uXXXX expansion of
 // `<` / `>` / `&`) vs the default literal output, which matches jsonv2.
 func BenchmarkHTMLEscape_MarshalParity(b *testing.B) {
-	var codecs = []struct {
+	codecs := []struct {
 		name string
 		fn   func() ([]byte, error)
 	}{

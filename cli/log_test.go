@@ -151,11 +151,11 @@ func TestLogger_LevelFiltering(t *testing.T) {
 					log, buf := captured(c.level, mode.pretty, false)
 					switch e.method {
 					case "info":
-						log.Info("hello")
+						log.Infof("hello")
 					case "debug":
-						log.Debug("hello")
+						log.Debugf("hello")
 					case "trace":
-						log.Trace("hello")
+						log.Tracef("hello")
 					case "error":
 						log.Error(errors.New("boom"))
 					}
@@ -175,9 +175,9 @@ func TestLogger_LevelFiltering(t *testing.T) {
 func TestConciseLogger_FormatPrefixes(t *testing.T) {
 	t.Parallel()
 	log, buf := captured(LevelTrace, false, false)
-	log.Info("wrote %s", "x.go")
-	log.Debug("parsing %s", "pkg/")
-	log.Trace("field %s", "N")
+	log.Infof("wrote %s", "x.go")
+	log.Debugf("parsing %s", "pkg/")
+	log.Tracef("field %s", "N")
 	log.Error(errors.New("bad rule"))
 	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
 	want := []string{
@@ -196,9 +196,9 @@ func TestConciseLogger_FormatPrefixes(t *testing.T) {
 func TestPrettyLogger_ColorAndFormat(t *testing.T) {
 	t.Parallel()
 	log, buf := captured(LevelTrace, true, true)
-	log.Info("wrote x.go")
-	log.Debug("parsing pkg/")
-	log.Trace("field N")
+	log.Infof("wrote x.go")
+	log.Debugf("parsing pkg/")
+	log.Tracef("field N")
 	out := buf.String()
 	// Color codes must be present in pretty + color mode.
 	if !strings.Contains(out, ansiGreen) {
@@ -218,7 +218,7 @@ func TestPrettyLogger_ColorAndFormat(t *testing.T) {
 func TestPrettyLogger_NoColorWhenDisabled(t *testing.T) {
 	t.Parallel()
 	log, buf := captured(LevelInfo, true, false)
-	log.Info("wrote x.go")
+	log.Infof("wrote x.go")
 	out := buf.String()
 	if strings.Contains(out, "\x1b[") {
 		t.Errorf("expected no ANSI codes with color=false, got: %q", out)
@@ -401,22 +401,30 @@ func TestRichError_ErrorString(t *testing.T) {
 		re   *model.RichError
 		want string
 	}{
-		{"all_fields",
+		{
+			"all_fields",
 			&model.RichError{
 				Pos:     token.Position{Filename: "x.go", Line: 1, Column: 2},
 				Msg:     "bad",
 				BotHint: "hint",
 			},
-			"./x.go:1:2: bad (hint)"},
-		{"no_pos",
+			"./x.go:1:2: bad (hint)",
+		},
+		{
+			"no_pos",
 			&model.RichError{Msg: "bare", BotHint: "h"},
-			"bare (h)"},
-		{"no_hint",
+			"bare (h)",
+		},
+		{
+			"no_hint",
 			&model.RichError{Pos: token.Position{Filename: "x.go", Line: 1, Column: 2}, Msg: "bad"},
-			"./x.go:1:2: bad"},
-		{"naked",
+			"./x.go:1:2: bad",
+		},
+		{
+			"naked",
 			&model.RichError{Msg: "alone"},
-			"alone"},
+			"alone",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -519,7 +527,7 @@ func TestCaretIndent_AnchorsToCodeSpan(t *testing.T) {
 			t.Parallel()
 			got := caretIndent(c.line, c.prefix, c.posCol, c.span, "")
 			// Prefix padding must be spaces.
-			for i := 0; i < len(c.prefix); i++ {
+			for i := range len(c.prefix) {
 				if got[i] != ' ' {
 					t.Fatalf("byte %d of indent should be space, got %q in %q", i, got[i], got)
 				}
@@ -804,9 +812,9 @@ func TestLogger_HasErrors_FalseUntilError(t *testing.T) {
 	} {
 		t.Run(mode.name, func(t *testing.T) {
 			t.Parallel()
-			mode.log.Info("hi")
-			mode.log.Debug("hi")
-			mode.log.Trace("hi")
+			mode.log.Infof("hi")
+			mode.log.Debugf("hi")
+			mode.log.Tracef("hi")
 			if mode.log.HasErrors() {
 				t.Errorf("Info/Debug/Trace must not set HasErrors")
 			}
@@ -828,9 +836,9 @@ func TestLogger_InterleavedInfoAndErrors(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
 	log := &conciseLogger{level: LevelInfo, w: &buf}
-	log.Info("wrote ./a")
+	log.Infof("wrote ./a")
 	log.Error(errors.New("bad ./b"))
-	log.Info("wrote ./c")
+	log.Infof("wrote ./c")
 	log.Error(errors.New("bad ./d"))
 
 	mid := buf.String()

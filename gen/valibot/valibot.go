@@ -290,7 +290,8 @@ func (e *Emitter) typ(ctx *gen.Context, s *gen.Shape, t *gen.Type, where string)
 	e.rules(ctx, t, &sc, where)
 	out := sc.String()
 	if len(t.OneOf) > 0 {
-		parts := []string{out}
+		parts := make([]string, 1, 1+len(t.OneOf))
+		parts[0] = out
 		for _, o := range t.OneOf {
 			parts = append(parts, e.typ(ctx, s, o, where))
 		}
@@ -341,6 +342,7 @@ func (e *Emitter) base(ctx *gen.Context, s *gen.Shape, t *gen.Type, where string
 		}
 		return pipe("v.picklist(["+strings.Join(vals, ", ")+"])", other)
 	}
+	//exhaustive:ignore not every kind applies here
 	switch t.Wire {
 	case gen.WireString:
 		return e.str(t)
@@ -391,6 +393,7 @@ func widthOf(g gen.GoKind) (bits int, unsigned bool) {
 	default:
 		bits = 64
 	}
+	//exhaustive:ignore not every kind applies here
 	switch g {
 	case gen.Uint, gen.Uint8, gen.Uint16, gen.Uint32, gen.Uint64:
 		unsigned = true
@@ -426,7 +429,10 @@ func (e *Emitter) str(t *gen.Type) schema {
 	predicate := func(fn, msg string) schema {
 		sc := pipe("v.string()", str, "v.check("+fn+", "+js.Quote(msg)+")")
 		if t.Empty {
-			return pipe("v.union([v.pipe(v.string(), v.empty()), "+sc.String()+"], "+js.Quote("must be empty or "+strings.TrimPrefix(msg, "must be "))+")", other)
+			return pipe(
+				"v.union([v.pipe(v.string(), v.empty()), "+sc.String()+"], "+js.Quote("must be empty or "+strings.TrimPrefix(msg, "must be "))+")",
+				other,
+			)
 		}
 		return sc
 	}
@@ -434,7 +440,10 @@ func (e *Emitter) str(t *gen.Type) schema {
 	case t.Format == gen.FormatBase64:
 		sc := pipe("v.string()", str, "v.base64()")
 		if t.Len > 0 {
-			sc.actions = append(sc.actions, check(fmt.Sprintf("%s(x, 6) === %d", e.helpers.Use("ggenDecoded"), t.Len), fmt.Sprintf("must decode to %d bytes", t.Len)))
+			sc.actions = append(
+				sc.actions,
+				check(fmt.Sprintf("%s(x, 6) === %d", e.helpers.Use("ggenDecoded"), t.Len), fmt.Sprintf("must decode to %d bytes", t.Len)),
+			)
 		}
 		return sc
 	case t.Format == gen.FormatIP:
@@ -468,7 +477,10 @@ func (e *Emitter) str(t *gen.Type) schema {
 		sc = pipe("v.string()", str, "v.check("+c.Name+", "+js.Quote("must be a "+formatWord(t.Format))+")")
 	}
 	if c.Bits > 0 && t.Len > 0 {
-		sc.actions = append(sc.actions, check(fmt.Sprintf("%s(x, %d) === %d", e.helpers.Use("ggenDecoded"), c.Bits, t.Len), fmt.Sprintf("must decode to %d bytes", t.Len)))
+		sc.actions = append(
+			sc.actions,
+			check(fmt.Sprintf("%s(x, %d) === %d", e.helpers.Use("ggenDecoded"), c.Bits, t.Len), fmt.Sprintf("must decode to %d bytes", t.Len)),
+		)
 	}
 	if t.Format == gen.FormatIntString || t.Format == gen.FormatUintString {
 		// Go parses the quoted text at the field's own width, 64 bits too.
@@ -619,7 +631,8 @@ func escapeDollar(s string) string { return strings.ReplaceAll(s, "$", "$$$$") }
 // wrap adds what every type carries regardless of how its base rendered.
 func (e *Emitter) wrap(ctx *gen.Context, s *gen.Shape, t *gen.Type, out string, where string) string {
 	if len(t.OneOf) > 0 {
-		parts := []string{out}
+		parts := make([]string, 1, 1+len(t.OneOf))
+		parts[0] = out
 		for _, o := range t.OneOf {
 			parts = append(parts, e.typ(ctx, s, o, where))
 		}
@@ -643,6 +656,7 @@ func (e *Emitter) checkSafe(ctx *gen.Context, arg, where string) {
 }
 
 func lenOp(op gen.Op) (cmp, word string) {
+	//exhaustive:ignore not every kind applies here
 	switch op {
 	case gen.MinLen:
 		return ">=", "must be at least"

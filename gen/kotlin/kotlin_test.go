@@ -1,6 +1,7 @@
 package kotlin_test
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
 	"os"
@@ -57,6 +58,7 @@ func render(t *testing.T) (string, *gen.Output) {
 }
 
 func TestClasses(t *testing.T) {
+	t.Parallel()
 	dir, out := render(t)
 	var issues []string
 	for _, i := range out.Report().Issues {
@@ -88,7 +90,7 @@ func TestClasses(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v (run with -update)", err)
 		}
-		if string(got) != string(want) {
+		if !bytes.Equal(got, want) {
 			t.Errorf("%s differs from %s:\n%s", name, golden, got)
 		}
 	}
@@ -98,6 +100,7 @@ func TestClasses(t *testing.T) {
 // It needs GGEN_KOTLIN_HOME holding kotlinc/, a JRE directory starting with
 // "jdk", and the kotlinx-serialization-{core,json}-jvm jars.
 func TestRuntime(t *testing.T) {
+	t.Parallel()
 	home := os.Getenv("GGEN_KOTLIN_HOME")
 	if home == "" {
 		t.Skip("set GGEN_KOTLIN_HOME to a directory with kotlinc, a JRE and the kotlinx.serialization jars")
@@ -165,16 +168,30 @@ fun main() {
 
 	env := append(os.Environ(), "JAVA_HOME="+jres[0], "PATH="+filepath.Join(jres[0], "bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
 	cp := filepath.Join(home, "kotlinx-serialization-core-jvm.jar") + ":" + filepath.Join(home, "kotlinx-serialization-json-jvm.jar")
-	args := []string{"-Xplugin=" + filepath.Join(home, "kotlinc", "lib", "kotlinx-serialization-compiler-plugin.jar"), "-cp", cp, "-d", filepath.Join(dir, "classes"), mainFile}
+	args := []string{
+		"-Xplugin=" + filepath.Join(home, "kotlinc", "lib", "kotlinx-serialization-compiler-plugin.jar"),
+		"-cp",
+		cp,
+		"-d",
+		filepath.Join(dir, "classes"),
+		mainFile,
+	}
 	for _, f := range files {
 		args = append(args, filepath.Join(dir, f))
 	}
-	compile := exec.Command(filepath.Join(home, "kotlinc", "bin", "kotlinc"), args...)
+	compile := exec.CommandContext(t.Context(), filepath.Join(home, "kotlinc", "bin", "kotlinc"), args...)
 	compile.Env = env
 	if b, err := compile.CombinedOutput(); err != nil {
 		t.Fatalf("kotlinc: %v\n%s", err, b)
 	}
-	run := exec.Command(filepath.Join(jres[0], "bin", "java"), "-Dstdout.encoding=UTF-8", "-cp", filepath.Join(dir, "classes")+":"+cp+":"+filepath.Join(home, "kotlinc", "lib", "kotlin-stdlib.jar"), "MainKt")
+	run := exec.CommandContext(
+		t.Context(),
+		filepath.Join(jres[0], "bin", "java"),
+		"-Dstdout.encoding=UTF-8",
+		"-cp",
+		filepath.Join(dir, "classes")+":"+cp+":"+filepath.Join(home, "kotlinc", "lib", "kotlin-stdlib.jar"),
+		"MainKt",
+	)
 	run.Env = env
 	raw, err := run.Output()
 	if err != nil {
@@ -190,6 +207,7 @@ fun main() {
 
 // TestFor decides headers and external types per output file and placed type.
 func TestFor(t *testing.T) {
+	t.Parallel()
 	set, err := gen.Load("../testdata/api", "../testdata/other")
 	if err != nil {
 		t.Fatal(err)
@@ -225,6 +243,7 @@ func TestFor(t *testing.T) {
 // TestAwkwardNames pins the backticks a Kotlin property needs, the report for
 // two fields that spell one property, and that the result compiles.
 func TestAwkwardNames(t *testing.T) {
+	t.Parallel()
 	set, err := gen.Load("../testdata/api", "../testdata/other")
 	if err != nil {
 		t.Fatal(err)
@@ -264,7 +283,7 @@ func TestAwkwardNames(t *testing.T) {
 	}
 	env := append(os.Environ(), "JAVA_HOME="+jres[0], "PATH="+filepath.Join(jres[0], "bin")+string(os.PathListSeparator)+os.Getenv("PATH"))
 	cp := filepath.Join(home, "kotlinx-serialization-core-jvm.jar") + ":" + filepath.Join(home, "kotlinx-serialization-json-jvm.jar")
-	compile := exec.Command(filepath.Join(home, "kotlinc", "bin", "kotlinc"),
+	compile := exec.CommandContext(t.Context(), filepath.Join(home, "kotlinc", "bin", "kotlinc"),
 		"-Xplugin="+filepath.Join(home, "kotlinc", "lib", "kotlinx-serialization-compiler-plugin.jar"),
 		"-cp", cp, "-d", filepath.Join(dir, "classes"), filepath.Join(dir, "Types.kt"))
 	compile.Env = env

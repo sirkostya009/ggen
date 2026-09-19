@@ -30,6 +30,7 @@ type PermissiveDoc struct {
 // map key+value, raw capture), bytes + stream, against the strict default
 // (Address) as control.
 func TestAllowInvalidUTF8(t *testing.T) {
+	t.Parallel()
 	long := strings.Repeat("x", 40)
 	cases := []struct {
 		name    string
@@ -37,36 +38,43 @@ func TestAllowInvalidUTF8(t *testing.T) {
 		check   func(t *testing.T, v PermissiveDoc)
 	}{
 		{"short_raw_ff", "{\"name\":\"a\xffb\"}", func(t *testing.T, v PermissiveDoc) {
+			t.Helper()
 			if v.Name != "a\xffb" {
 				t.Errorf("Name = %q, want raw bytes through", v.Name)
 			}
 		}},
 		{"long_raw_ff", "{\"long\":\"" + long + "\xff\"}", func(t *testing.T, v PermissiveDoc) {
+			t.Helper()
 			if v.Long != long+"\xff" {
 				t.Errorf("Long = %q, want raw bytes through", v.Long)
 			}
 		}},
 		{"escape_with_invalid", "{\"name\":\"a\\n\xffz\"}", func(t *testing.T, v PermissiveDoc) {
+			t.Helper()
 			if v.Name != "a\n\xffz" {
 				t.Errorf("Name = %q, want unescaped + raw byte", v.Name)
 			}
 		}},
 		{"lone_surrogate_fffd", `{"name":"\uD83D"}`, func(t *testing.T, v PermissiveDoc) {
+			t.Helper()
 			if v.Name != "�" {
 				t.Errorf("Name = %q, want U+FFFD substitution", v.Name)
 			}
 		}},
 		{"slice_elem", "{\"tags\":[\"ok\",\"a\xffb\"]}", func(t *testing.T, v PermissiveDoc) {
+			t.Helper()
 			if len(v.Tags) != 2 || v.Tags[1] != "a\xffb" {
 				t.Errorf("Tags = %q", v.Tags)
 			}
 		}},
 		{"map_key_value", "{\"props\":{\"k\xff\":\"v\xfe\"}}", func(t *testing.T, v PermissiveDoc) {
+			t.Helper()
 			if v.Props["k\xff"] != "v\xfe" {
 				t.Errorf("Props = %q", v.Props)
 			}
 		}},
 		{"raw_span", "{\"raw\":{\"k\":\"a\xffb\"}}", func(t *testing.T, v PermissiveDoc) {
+			t.Helper()
 			if string(v.Raw) != "{\"k\":\"a\xffb\"}" {
 				t.Errorf("Raw = %q", v.Raw)
 			}
@@ -74,6 +82,7 @@ func TestAllowInvalidUTF8(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			got, _, err := PermissiveDoc{}.DecodeFrom([]byte(c.payload))
 			if err != nil {
 				t.Fatalf("bytes: %v", err)
@@ -142,6 +151,7 @@ func TestAllowInvalidUTF8_anyValues(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			got, _, err := R10PermissiveAny{}.DecodeFrom([]byte(c.payload))
 			if err != nil || !c.check(got) {
 				t.Errorf("bytes: %+v (%v)", got, err)

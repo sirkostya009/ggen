@@ -6,6 +6,7 @@
 // In multierr mode the decoder returns [Errors], a flat slice of failures.
 // Every leaf carries its own root-relative Path; nested-struct decodes have
 // the outer segment prepended via [Append].
+
 package ggen
 
 import (
@@ -89,7 +90,7 @@ type NotEmptyError struct {
 }
 
 func (e *NotEmptyError) Error() string {
-	return fmt.Sprintf("%s: must not be empty", strings.Join(e.Path, "."))
+	return strings.Join(e.Path, ".") + ": must not be empty"
 }
 func (*NotEmptyError) Rule() Rule             { return NotEmpty }
 func (e *NotEmptyError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
@@ -510,6 +511,8 @@ func (e *PredicateError) AddPos(d int)         { e.Pos += d }
 // Errors is a flat slice of validation failures from a multierr decoder.
 // Each entry's Path is root-relative. Implements error and Unwrap() []error so
 // errors.Is/As walk every leaf.
+//
+//nolint:recvcheck // append needs a pointer receiver
 type Errors []Error
 
 func (es Errors) Error() string {
@@ -531,12 +534,11 @@ func (es Errors) Error() string {
 
 func (Errors) Rule() Rule { return MultiErr }
 
-// PrependPath propagates the segment into every leaf.
 // AddPos rebases every leaf's byte offset by d — the bytes-path nested-
 // decode rebase (see ShiftPos).
 func (es Errors) AddPos(d int) {
 	for _, e := range es {
-		if ap, ok := e.(interface{ AddPos(int) }); ok {
+		if ap, ok := e.(interface{ AddPos(d int) }); ok {
 			ap.AddPos(d)
 		}
 	}
@@ -547,15 +549,16 @@ func (es Errors) AddPos(d int) {
 // callee ran on data[start:], so its positions are sub-slice-relative until
 // shifted by start. Stream positions are already payload-global.
 func ShiftPos(e Error, d int) Error {
-	if ap, ok := e.(interface{ AddPos(int) }); ok {
+	if ap, ok := e.(interface{ AddPos(d int) }); ok {
 		ap.AddPos(d)
 	}
 	return e
 }
 
+// PrependPath propagates the segment into every leaf.
 func (es Errors) PrependPath(segment string) {
 	for _, e := range es {
-		if p, ok := e.(interface{ PrependPath(string) }); ok {
+		if p, ok := e.(interface{ PrependPath(segment string) }); ok {
 			p.PrependPath(segment)
 		}
 	}
@@ -579,7 +582,7 @@ func (es *Errors) Append(segment string, inner Error) {
 	}
 	// A single leaf gets the segment too — a fail-fast child nested under a
 	// multierr parent used to surface its path missing the outer field.
-	if p, ok := inner.(interface{ PrependPath(string) }); ok {
+	if p, ok := inner.(interface{ PrependPath(segment string) }); ok {
 		p.PrependPath(segment)
 	}
 	*es = append(*es, inner)

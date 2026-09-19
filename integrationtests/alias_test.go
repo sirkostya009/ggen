@@ -181,7 +181,7 @@ func TestAlias_Bool_Roundtrip(t *testing.T) {
 // A JSON number into a string alias must error, not silently coerce.
 func TestAlias_String_RejectsNonString(t *testing.T) {
 	t.Parallel()
-	if _, _, err := (AliasString("")).DecodeFrom([]byte("42")); err == nil {
+	if _, _, err := AliasString("").DecodeFrom([]byte("42")); err == nil {
 		t.Error("expected scan error on number → string-alias")
 	}
 }
@@ -198,7 +198,7 @@ func TestAlias_String_ZeroCopy(t *testing.T) {
 		t.Fatalf("initial decode = %q, want %q", got, "alpha")
 	}
 	// Find the 'a' inside the JSON string body and mutate it.
-	off := strings.Index(string(in), "alpha")
+	off := bytes.Index(in, []byte("alpha"))
 	if off < 0 {
 		t.Skip("payload reshaped, can't verify alias")
 	}
@@ -343,7 +343,7 @@ func TestAlias_StructDelegation_OpaqueFallback(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if (OpaqueWithMethods)(got).hidden != "secret" {
+	if OpaqueWithMethods(got).hidden != "secret" {
 		t.Errorf("roundtrip mismatch: %+v", got)
 	}
 }
@@ -370,7 +370,7 @@ func TestAlias_StructDelegation_AsField(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Name != "bob" || (OpaqueWithMethods)(got.O).hidden != "secret" {
+	if got.Name != "bob" || OpaqueWithMethods(got.O).hidden != "secret" {
 		t.Errorf("roundtrip mismatch: %+v", got)
 	}
 }
@@ -479,7 +479,7 @@ func TestAlias_Array_StrictLen(t *testing.T) {
 }
 
 // Decoding an escape-free string alias does zero allocations.
-func TestAlias_String_ZeroAllocations(t *testing.T) {
+func TestAlias_String_ZeroAllocations(t *testing.T) { //nolint:paralleltest // measures allocations
 	in := []byte(`"some-typical-html-payload-here"`)
 	allocs := testing.AllocsPerRun(100, func() {
 		v, _, err := AliasString("").DecodeFrom(in)
@@ -500,7 +500,7 @@ func TestAlias_String_ZeroAllocations(t *testing.T) {
 //
 //ggen:generate
 type AliasFieldExample struct {
-	Body  AliasString `json:"body" pipe:"required trim tolower minlen=2 maxlen=10"`
+	Body  AliasString `json:"body"  pipe:"required trim tolower minlen=2 maxlen=10"`
 	Count AliasInt    `json:"count" pipe:"clamp=1|100 gte=1 lte=100"`
 }
 
@@ -566,6 +566,7 @@ type NamedPrims struct {
 const npValid = `{"pri":"high","tag":" A-B ","eq":"low","neq":"high","zero":null}`
 
 func TestNamedPrim_Accepts(t *testing.T) {
+	t.Parallel()
 	v, _, err := NamedPrims{}.DecodeFrom([]byte(npValid))
 	if err != nil {
 		t.Fatalf("valid payload rejected: %v", err)
@@ -579,6 +580,7 @@ func TestNamedPrim_Accepts(t *testing.T) {
 }
 
 func TestNamedPrim_Rejects(t *testing.T) {
+	t.Parallel()
 	for _, tc := range []struct {
 		name, body string
 		target     any
@@ -590,6 +592,7 @@ func TestNamedPrim_Rejects(t *testing.T) {
 		{"contains", `{"pri":"low","tag":"abc","eq":"low","neq":"high","zero":null}`, new(*ggen.ContainsError)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 			_, _, err := NamedPrims{}.DecodeFrom([]byte(tc.body))
 			if err == nil {
 				t.Fatalf("%s rule did not fire", tc.name)
@@ -603,6 +606,7 @@ func TestNamedPrim_Rejects(t *testing.T) {
 
 // maxrunes counts runes, not bytes, through the named type too.
 func TestNamedPrim_RunesNotBytes(t *testing.T) {
+	t.Parallel()
 	// 8 runes, 16 bytes — inside maxrunes=8.
 	body := `{"pri":"low","tag":"ыыыыыыы-","eq":"low","neq":"high","zero":null}`
 	_, _, err := NamedPrims{}.DecodeFrom([]byte(body))
@@ -909,7 +913,7 @@ func TestAlias_byteArrayIsBase64(t *testing.T) {
 
 // ggen.Marshal presizes from JSONSize exactly, so an undersized float budget
 // costs a second alloc on the widest 'f'-form value.
-func TestAlias_floatSizeIsSingleAlloc(t *testing.T) {
+func TestAlias_floatSizeIsSingleAlloc(t *testing.T) { //nolint:paralleltest // measures allocations
 	v := AliasFloat64(-1.2345678901234567e-06)
 	out, err := ggen.Marshal(v)
 	if err != nil {
@@ -978,6 +982,7 @@ func R10NonEmpty(s string) error {
 func R10ParseInt(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }
 
 func TestAlias_StructIntrospect_CustomSteps(t *testing.T) {
+	t.Parallel()
 	v, _, err := R10IntroAlias{}.DecodeFrom([]byte(`{"a":"x","b":"ok","n":"12"}`))
 	if err != nil {
 		t.Fatal(err)

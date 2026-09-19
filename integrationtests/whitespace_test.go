@@ -14,7 +14,7 @@ func wsify(s string) string {
 	const ws = " \t\n\r "
 	var b strings.Builder
 	inStr, esc := false, false
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if inStr {
 			b.WriteByte(c)
@@ -89,6 +89,7 @@ func TestWhitespace_Tolerance(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			want, err := c.decode([]byte(c.compact))
 			if err != nil {
 				t.Fatalf("compact decode: %v", err)

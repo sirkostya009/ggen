@@ -1,6 +1,7 @@
 // Package encode provides JSON marshaling helpers used by ggen-generated
 // code. Values implement Marshaler by emitting themselves into a caller-owned
 // byte slice via AppendJSON, avoiding intermediate allocations.
+
 package ggen
 
 import (
@@ -121,6 +122,7 @@ func BytesToString(buf []byte) string {
 	if len(buf) == 0 {
 		return ""
 	}
+	// Documented contract: caller never mutates buf afterwards.
 	return unsafe.String(unsafe.SliceData(buf), len(buf))
 }
 

@@ -196,7 +196,7 @@ func (s *Set) enumValues(key, ownPkg string) *Enum {
 		}
 	}
 	slices.SortStableFunc(others, func(a, b model.Const) int { return strings.Compare(a.Pkg, b.Pkg) })
-	all := append(own, others...)
+	all := slices.Concat(own, others)
 	if len(all) == 0 {
 		return nil
 	}

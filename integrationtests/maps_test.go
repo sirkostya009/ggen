@@ -16,8 +16,8 @@ import (
 //
 //ggen:generate
 type MapStruct struct {
-	Counts    map[string]int     `json:"counts" pipe:"maxlen=10"`
-	Labels    map[string]string  `json:"labels" pipe:"inner:(trim tolower)"`
+	Counts    map[string]int     `json:"counts"    pipe:"maxlen=10"`
+	Labels    map[string]string  `json:"labels"    pipe:"inner:(trim tolower)"`
 	Addresses map[string]Address `json:"addresses"`
 }
 
@@ -25,14 +25,14 @@ type MapStruct struct {
 //
 //ggen:generate
 type MapDiveStruct struct {
-	Counts  map[string]int    `json:"counts" pipe:"inner:(gte=0 lte=100)"`
-	Names   map[string]string `json:"names"  pipe:"inner:(minlen=1 maxlen=5)"`
+	Counts  map[string]int    `json:"counts"  pipe:"inner:(gte=0 lte=100)"`
+	Names   map[string]string `json:"names"   pipe:"inner:(minlen=1 maxlen=5)"`
 	Clamped map[string]int    `json:"clamped" pipe:"inner:clamp=0|100"`
 }
 
 // Base is embedded into Derived to exercise field promotion.
 type Base struct {
-	ID   string `json:"id" pipe:"required"`
+	ID   string `json:"id"             pipe:"required"`
 	Meta string `json:"meta,omitempty"`
 }
 
@@ -41,6 +41,7 @@ type Base struct {
 //ggen:generate
 type Derived struct {
 	Base
+
 	Name string `json:"name" pipe:"required minlen=1"`
 }
 

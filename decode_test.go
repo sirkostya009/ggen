@@ -1,6 +1,7 @@
 package ggen
 
 import (
+	"bytes"
 	"errors"
 	"strings"
 	"testing"
@@ -18,6 +19,7 @@ func (intT) DecodeFrom(data []byte) (intT, int, error) {
 // — generated slice fields and jsonv2 agree. The Stream walker's half of this
 // contract lives in scan's TestStreamMethods.
 func TestUnmarshalSliceEmptyNonNil(t *testing.T) {
+	t.Parallel()
 	got, err := UnmarshalSlice[intT]([]byte(" [ ] "))
 	if err != nil {
 		t.Fatalf("UnmarshalSlice: %v", err)
@@ -43,6 +45,7 @@ func (testElem) DecodeFrom(data []byte) (testElem, int, error) {
 // way for the caller to detect the remainder (jsonv2 whole-input parity),
 // and started from a nil slice ignoring the package's own prealloc.Cap.
 func TestUnmarshalSlice_TrailingGarbage(t *testing.T) {
+	t.Parallel()
 	for _, in := range []string{`[]x`, `[] ]`, `["a"]]]`, `["a"] {"junk":1}`} {
 		if _, err := UnmarshalSlice[testElem]([]byte(in)); !errors.Is(err, ErrTrailingData) {
 			t.Errorf("%q: got %v, want ErrTrailingData", in, err)
@@ -62,7 +65,11 @@ func TestParseError_ErrorString(t *testing.T) {
 		pe   *ParseError
 		want string
 	}{
-		{"with field", &ParseError{Path: []string{"addr", "street"}, Pos: 42, Err: ErrBadString}, "parse error at addr.street (pos 42): " + ErrBadString.Error()},
+		{
+			"with field",
+			&ParseError{Path: []string{"addr", "street"}, Pos: 42, Err: ErrBadString},
+			"parse error at addr.street (pos 42): " + ErrBadString.Error(),
+		},
 		{"no field", &ParseError{Pos: 7, Err: ErrBadObject}, "parse error (pos 7): " + ErrBadObject.Error()},
 		{"zero pos", &ParseError{Path: []string{"x"}, Err: ErrBadNumber}, "parse error at x (pos 0): " + ErrBadNumber.Error()},
 		{"nil err", &ParseError{Path: []string{"y"}, Pos: 1}, "parse error at y (pos 1)"},
@@ -166,7 +173,7 @@ type stubElem struct{}
 
 func (stubElem) DecodeFrom(data []byte) (stubElem, int, error) {
 	if len(data) > 0 && data[0] == '{' {
-		end := strings.IndexByte(string(data), '}')
+		end := bytes.IndexByte(data, '}')
 		if end < 0 {
 			return stubElem{}, 0, ErrBadObject
 		}
@@ -282,8 +289,17 @@ func TestBoolEnd_GiveUpPosition(t *testing.T) {
 		i    int
 		want int
 	}{
-		{"tru", 0, 3}, {"trux", 0, 3}, {"t", 0, 1}, {"fals", 0, 4}, {"falsy", 0, 4},
-		{"f", 0, 1}, {"fx", 0, 1}, {"  tru", 2, 5}, {"[fals", 1, 5}, {"x", 0, 0}, {"", 0, 0},
+		{"tru", 0, 3},
+		{"trux", 0, 3},
+		{"t", 0, 1},
+		{"fals", 0, 4},
+		{"falsy", 0, 4},
+		{"f", 0, 1},
+		{"fx", 0, 1},
+		{"  tru", 2, 5},
+		{"[fals", 1, 5},
+		{"x", 0, 0},
+		{"", 0, 0},
 	}
 	for _, tc := range cases {
 		data := []byte(tc.in)

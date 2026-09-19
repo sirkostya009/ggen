@@ -9,7 +9,7 @@ import (
 // ValidateUpper enforces all-uppercase ASCII. Used cross-package via
 // `pipe:"@thirdparty.ValidateUpper"` to exercise the @pkg.Func resolver.
 func ValidateUpper(s string) error {
-	for i := 0; i < len(s); i++ {
+	for i := range len(s) {
 		c := s[i]
 		if c >= 'a' && c <= 'z' {
 			return fmt.Errorf("must be uppercase: %q", s)

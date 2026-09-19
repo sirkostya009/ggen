@@ -15,7 +15,7 @@ import (
 //ggen:generate multierr
 type MultiErrStruct struct {
 	Name string `json:"name" pipe:"required minlen=1 maxlen=5"`
-	Age  int    `json:"age" pipe:"gte=0 lte=100"`
+	Age  int    `json:"age"  pipe:"gte=0 lte=100"`
 	Role string `json:"role" pipe:"oneof=admin|user|guest"`
 }
 

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
 	"github.com/sirkostya009/ggen"
 )
 
@@ -98,8 +99,10 @@ type SQLNullGenTimeStruct struct {
 // via the per-inner fallback; a TextMarshaler type (uuid.UUID) routes through
 // its text methods. All carry the inner-or-null wire shape.
 
-type SQLAccountID int64
-type SQLLabel string
+type (
+	SQLAccountID int64
+	SQLLabel     string
+)
 
 //ggen:generate
 type SQLNullGenAccountStruct struct {
@@ -367,6 +370,7 @@ func TestSQLNull_NarrowOverflow(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
 			bytesErr, streamErr := c.run(c.payload)
 			for path, err := range map[string]error{"bytes": bytesErr, "stream": streamErr} {
 				if (err != nil) != c.reject {

@@ -65,7 +65,7 @@ func identChars(s string) bool {
 func Ident(s string) string {
 	b := []byte(s)
 	for i, c := range b {
-		if !(c == '_' || c == '$' || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') || ('0' <= c && c <= '9')) {
+		if c != '_' && c != '$' && (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && (c < '0' || c > '9') {
 			b[i] = '_'
 		}
 	}

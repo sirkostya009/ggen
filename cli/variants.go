@@ -70,8 +70,20 @@ func renderVariantDispatch(b *bytes.Buffer, f model.FieldInfo, ref, posVar strin
 		fmt.Fprintf(b, "case %s:\n", labels)
 		switch v.Kind {
 		case model.VariantNullZero:
-			fmt.Fprintf(b, "if %s+4 > len(data) || data[%s+1] != 'u' || data[%s+2] != 'l' || data[%s+3] != 'l' {\nreturn result, %s, ggen.NewParseErr(%s, %s, ggen.ErrBadLiteral)\n}\n%s += 4\n%s = %s\n",
-				posVar, posVar, posVar, posVar, posVar, field, posVar, posVar, ref, zeroLit(f.GoType, f.Kind))
+			fmt.Fprintf(
+				b,
+				"if %s+4 > len(data) || data[%s+1] != 'u' || data[%s+2] != 'l' || data[%s+3] != 'l' {\nreturn result, %s, ggen.NewParseErr(%s, %s, ggen.ErrBadLiteral)\n}\n%s += 4\n%s = %s\n",
+				posVar,
+				posVar,
+				posVar,
+				posVar,
+				posVar,
+				field,
+				posVar,
+				posVar,
+				ref,
+				zeroLit(f.GoType, f.Kind),
+			)
 		case model.VariantNative:
 			renderField(b, nativeVariantField(f), ref, posVar)
 		case model.VariantConvert:
@@ -97,8 +109,14 @@ func renderVariantDispatchStream(f model.FieldInfo, ref, posVar string) string {
 		switch v.Kind {
 		case model.VariantNullZero:
 			rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
-			fmt.Fprintf(b, "for ki := 1; ki < 4; ki++ {\n%sif s.Bytes()[s.Pos+ki] != \"null\"[ki] {\nreturn result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrBadLiteral)\n}\n}\ns.Pos += 4\n%s = %s\n",
-				rmKi, field, ref, zeroLit(f.GoType, f.Kind))
+			fmt.Fprintf(
+				b,
+				"for ki := 1; ki < 4; ki++ {\n%sif s.Bytes()[s.Pos+ki] != \"null\"[ki] {\nreturn result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrBadLiteral)\n}\n}\ns.Pos += 4\n%s = %s\n",
+				rmKi,
+				field,
+				ref,
+				zeroLit(f.GoType, f.Kind),
+			)
 		case model.VariantNative:
 			b.WriteString(renderStreamField(nativeVariantField(f), ref, posVar))
 		case model.VariantConvert:
@@ -129,7 +147,16 @@ func emitConvAssign(b *bytes.Buffer, v model.Variant, field, ref, tmp, posVar st
 	// A converter's own error is foreign — wrap it so it carries the field
 	// path and offset every other decode failure does (errors.As still
 	// reaches the converter's error through the ParseError).
-	fmt.Fprintf(b, "if cv, err := %s(%s); err != nil {\nreturn result, %s, ggen.NewParseErr(%s, %s, err)\n} else {\n%s = cv\n}\n", call, tmp, posVar, field, posVar, ref)
+	fmt.Fprintf(
+		b,
+		"if cv, err := %s(%s); err != nil {\nreturn result, %s, ggen.NewParseErr(%s, %s, err)\n} else {\n%s = cv\n}\n",
+		call,
+		tmp,
+		posVar,
+		field,
+		posVar,
+		ref,
+	)
 }
 
 // emitConvAssignStream is the stream-path counterpart (2-tuple returns).

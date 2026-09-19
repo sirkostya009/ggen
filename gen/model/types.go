@@ -83,19 +83,21 @@ type ModRule struct {
 }
 
 type FieldInfo struct {
-	Doc             string     // doc comment (or trailing comment), directive lines removed
-	Directives      []string   // `//word:...` lines of the doc comment, without the slashes
-	Type            types.Type // resolved go/types type; nil in the AST-only degraded mode
-	GoName          string
-	StructName      string // owning struct's Go name; used in error diagnostics
-	EmbedDepth      int    // embedding levels between the declaring struct and the parent (0 = the parent's own field); dominant-field rule keeps the shallowest
-	JSONName        string
-	GoType          string // full Go type as string, e.g. "string", "[]int", "*Address"
-	Kind            TypeKind
-	ElemType        string // for slices/arrays: element type (e.g. "string" for []string)
-	ElemKind        TypeKind
-	ArrayLen        int                // for KindArray: fixed array length N (peel sets it on nested inners)
-	ElemArrayLen    int                // when ElemKind == KindArray, N of the inner [N]T at this level (slice/array elements; a map value leaves it 0 — read N from ElemType)
+	Doc        string     // doc comment (or trailing comment), directive lines removed
+	Directives []string   // `//word:...` lines of the doc comment, without the slashes
+	Type       types.Type // resolved go/types type; nil in the AST-only degraded mode
+	GoName     string
+	StructName string // owning struct's Go name; used in error diagnostics
+	EmbedDepth int    // embedding levels between the declaring struct and the parent (0 = the parent's own field); dominant-field rule keeps the shallowest
+	JSONName   string
+	GoType     string // full Go type as string, e.g. "string", "[]int", "*Address"
+	Kind       TypeKind
+	ElemType   string // for slices/arrays: element type (e.g. "string" for []string)
+	ElemKind   TypeKind
+	ArrayLen   int // for KindArray: fixed array length N (peel sets it on nested inners)
+	// when ElemKind == KindArray, N of the inner [N]T at this level (slice/array elements; a map value
+	// leaves it 0 — read N from ElemType)
+	ElemArrayLen    int
 	ElemPointer     bool               // true when the slice/array element is `*T`; ElemType is the pointee
 	Pointer         bool               // true when the field is *T; Kind describes the pointee
 	PointeeType     string             // for pointer fields: pointee Go type ("string", "Address")
@@ -112,31 +114,41 @@ type FieldInfo struct {
 	// SOURCE OF TRUTH for value-stage emit order (mods + validators interleaved
 	// per level); the split buckets above are DERIVED for the order-independent
 	// consumers.
-	Presence         Presence        // required / optional (lifted from the pipe)
-	Variants         []Variant       // decode stage; nil => implicit native decode of the field type
-	Pipe             []Step          // outer value steps (whole field / container, after decode)
-	KeyPipe          []Step          // map-key value steps
-	Levels           [][]Step        // dive levels: Levels[0] per-element, Levels[1] deeper, …
-	HintLen          int             // explicit preallocation hint for slices/maps; -1=unset (fall through to len/minlen/default), 0=user opt-out (no prealloc), N>0=use N as cap. Overrides len/minlen.
-	HintLevels       []int           // per-dive prealloc hints from the `hint:` tag (entry -1 = unset); HintLevels[0] sizes the level-1 row, etc.
-	Iface            FieldInterfaces // statically detected method-set membership (TextMarshaler, ByteDecoder, ...)
-	ElemIface        FieldInterfaces // method-set probe on the slice/array/map element type (used by size estimators for struct elements)
-	OmitEmpty        bool
-	OmitZero         bool
-	NullZero         bool   // decode: accept an explicit JSON null on this (non-pointer) value field, setting it to its Go zero value instead of erroring. No-op on already-null-aware kinds (pointer/slice/map/[]byte/sql.Null*/raw/any)
-	String           bool   // marshal/unmarshal the field as a JSON-quoted string
-	Format           string // jsonv2 format flag ("RFC3339", "unix", "hex", ...)
-	Embed            bool   // embedded fallback map: absorbs unknown JSON keys on decode, splices entries on encode
-	MultiErr         bool   // propagated from parent struct: use errs collection
-	AllowDups        bool   // propagated from parent struct: skip duplicate-key guard
-	NoValidate       bool   // propagated from parent struct: skip validation + mods
-	UseNumber        bool   // propagated from parent struct: scan numbers into json.Number on KindAny fields
-	HTMLEscape       bool   // propagated from parent struct: HTML-safe escape <, >, & when emitting strings (default: literal, matches jsonv2)
-	Copy             bool   // propagated from parent struct: bytes-path decode copies retained strings/RawMessage/any instead of aliasing data
-	AllowInvalidUTF8 bool   // propagated from parent struct: skip decode UTF-8 validation (strings pass raw bytes through, unpaired surrogates → U+FFFD, raw spans unchecked)
+	Presence Presence  // required / optional (lifted from the pipe)
+	Variants []Variant // decode stage; nil => implicit native decode of the field type
+	Pipe     []Step    // outer value steps (whole field / container, after decode)
+	KeyPipe  []Step    // map-key value steps
+	Levels   [][]Step  // dive levels: Levels[0] per-element, Levels[1] deeper, …
+	// explicit preallocation hint for slices/maps; -1=unset (fall through to len/minlen/default),
+	// 0=user opt-out (no prealloc), N>0=use N as cap. Overrides len/minlen.
+	HintLen    int
+	HintLevels []int           // per-dive prealloc hints from the `hint:` tag (entry -1 = unset); HintLevels[0] sizes the level-1 row, etc.
+	Iface      FieldInterfaces // statically detected method-set membership (TextMarshaler, ByteDecoder, ...)
+	ElemIface  FieldInterfaces // method-set probe on the slice/array/map element type (used by size estimators for struct elements)
+	OmitEmpty  bool
+	OmitZero   bool
+	// decode: accept an explicit JSON null on this (non-pointer) value field, setting it to its Go
+	// zero value instead of erroring. No-op on already-null-aware kinds
+	// (pointer/slice/map/[]byte/sql.Null*/raw/any)
+	NullZero   bool
+	String     bool   // marshal/unmarshal the field as a JSON-quoted string
+	Format     string // jsonv2 format flag ("RFC3339", "unix", "hex", ...)
+	Embed      bool   // embedded fallback map: absorbs unknown JSON keys on decode, splices entries on encode
+	MultiErr   bool   // propagated from parent struct: use errs collection
+	AllowDups  bool   // propagated from parent struct: skip duplicate-key guard
+	NoValidate bool   // propagated from parent struct: skip validation + mods
+	UseNumber  bool   // propagated from parent struct: scan numbers into json.Number on KindAny fields
+	HTMLEscape bool   // propagated from parent struct: HTML-safe escape <, >, & when emitting strings (default: literal, matches jsonv2)
+	Copy       bool   // propagated from parent struct: bytes-path decode copies retained strings/RawMessage/any instead of aliasing data
+	// propagated from parent struct: skip decode UTF-8 validation (strings pass raw bytes through,
+	// unpaired surrogates → U+FFFD, raw spans unchecked)
+	AllowInvalidUTF8 bool
 	Ignored          bool
 	NotComparable    bool // go/types says the field's type is not comparable (omitzero needs a reflect zero probe, `!= (T{})` would not compile)
-	UnderlyingStruct bool // go/types says the field's OWN type (pointers not peeled) has a struct underlying; only go/types separates a struct from the named containers and foreign array types that also read as KindStruct
+	// go/types says the field's OWN type (pointers not peeled) has a struct underlying; only go/types
+	// separates a struct from the named containers and foreign array types that also read as
+	// KindStruct
+	UnderlyingStruct bool
 
 	// SQLNullInner, when non-nil, marks a generic database/sql.Null[T] (Go
 	// 1.22): the synthetic FieldInfo for T. Renderers delegate the V slot to
@@ -166,33 +178,41 @@ type FieldInfo struct {
 	NamedPrims map[string]TypeKind
 
 	// Codegen-internal flags — never set by the parse layer.
-	AtDispatch bool // value emit sits directly inside the key-dispatch switch; a `null` match may `break` to the comma handling instead of nesting the whole value decode in an else
-	TargetNil  bool // decode target is a freshly-declared nil local (map-value temp, pre-grown []**T slot) — skip the receiver seed and collapse the pointer assign cascade to a straight new-chain
-	NullDone   bool // the parent element loop already consumed a `null` for this slot (nil-elem fast path) — the nested container emitter skips its own null peek, so its body isn't wrapped in an else
+	// value emit sits directly inside the key-dispatch switch; a `null` match may `break` to the comma
+	// handling instead of nesting the whole value decode in an else
+	AtDispatch bool
+	// decode target is a freshly-declared nil local (map-value temp, pre-grown []**T slot) — skip the
+	// receiver seed and collapse the pointer assign cascade to a straight new-chain
+	TargetNil bool
+	// the parent element loop already consumed a `null` for this slot (nil-elem fast path) — the
+	// nested container emitter skips its own null peek, so its body isn't wrapped in an else
+	NullDone bool
 }
 
 type StructInfo struct {
-	Doc              string     // doc comment, directive lines removed
-	Directives       []string   // `//word:...` lines of the doc comment, without the slashes
-	File             string     // declaring source file; empty in the AST-only degraded mode
-	Type             types.Type // the declared named type; nil in the AST-only degraded mode
-	Name             string
-	Fields           []FieldInfo
-	BuildTag         string // canonical //go:build expression from the source file (empty when unconstrained)
-	Marshal          bool   // emit json.Marshaler / json.MarshalerTo hooks
-	Unmarshal        bool   // emit json.Unmarshaler / json.UnmarshalerFrom hooks
-	MultiErr         bool   // collect validation errors instead of stopping on first
-	AllowDups        bool   // do NOT error on duplicate JSON keys (opt-out of default)
-	NoValidate       bool   // skip validation rules, required-field checks, and mods
-	IgnoreUnknown    bool   // skip unknown JSON keys silently (default: emit ggen.Error{UnknownKey})
-	NullZero         bool   // accept explicit JSON null on every non-pointer value field (null → Go zero); per-field json:",nullzero" can opt a single field in
-	NoSort           bool   // opt out of codegen-time struct-field sort by JSON name
-	UseNumber        bool   // decode JSON numbers into `any` fields as json.Number instead of float64
-	HTMLEscape       bool   // HTML-safe escape <, >, & in emitted strings (default: literal, matches jsonv2)
-	Copy             bool   // bytes-path DecodeFrom copies retained strings/RawMessage/any out of data instead of aliasing it (matches the stream path's lifetime semantics)
-	AllowInvalidUTF8 bool   // opt out of decode UTF-8 validation (jsonv2 parity) for this struct's strings + raw spans
-	Test             bool   // declared in a *_test.go file — route output to *_ggen_test.go
-	XTest            bool   // declared in the external test package (`package foo_test`) — own output file + package clause
+	Doc           string     // doc comment, directive lines removed
+	Directives    []string   // `//word:...` lines of the doc comment, without the slashes
+	File          string     // declaring source file; empty in the AST-only degraded mode
+	Type          types.Type // the declared named type; nil in the AST-only degraded mode
+	Name          string
+	Fields        []FieldInfo
+	BuildTag      string // canonical //go:build expression from the source file (empty when unconstrained)
+	Marshal       bool   // emit json.Marshaler / json.MarshalerTo hooks
+	Unmarshal     bool   // emit json.Unmarshaler / json.UnmarshalerFrom hooks
+	MultiErr      bool   // collect validation errors instead of stopping on first
+	AllowDups     bool   // do NOT error on duplicate JSON keys (opt-out of default)
+	NoValidate    bool   // skip validation rules, required-field checks, and mods
+	IgnoreUnknown bool   // skip unknown JSON keys silently (default: emit ggen.Error{UnknownKey})
+	NullZero      bool   // accept explicit JSON null on every non-pointer value field (null → Go zero); per-field json:",nullzero" can opt a single field in
+	NoSort        bool   // opt out of codegen-time struct-field sort by JSON name
+	UseNumber     bool   // decode JSON numbers into `any` fields as json.Number instead of float64
+	HTMLEscape    bool   // HTML-safe escape <, >, & in emitted strings (default: literal, matches jsonv2)
+	// bytes-path DecodeFrom copies retained strings/RawMessage/any out of data instead of aliasing it
+	// (matches the stream path's lifetime semantics)
+	Copy             bool
+	AllowInvalidUTF8 bool // opt out of decode UTF-8 validation (jsonv2 parity) for this struct's strings + raw spans
+	Test             bool // declared in a *_test.go file — route output to *_ggen_test.go
+	XTest            bool // declared in the external test package (`package foo_test`) — own output file + package clause
 
 	// IsAlias marks a top-level named type aliasing a primitive or struct
 	// (`type Count int`, `type LocalUUID uuid.UUID`). Aliases get the same
@@ -305,6 +325,7 @@ func (s StructInfo) EmbedField() FieldInfo {
 }
 
 func IsNumeric(k TypeKind) bool {
+	//exhaustive:ignore not every kind applies here
 	switch k {
 	case KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
 		KindUint, KindUint8, KindUint16, KindUint32, KindUint64,

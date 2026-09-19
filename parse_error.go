@@ -47,7 +47,7 @@ func (e *ParseError) Unwrap() error { return e.Err }
 // carries its own position (a nested fallible mod's ModError).
 func (e *ParseError) AddPos(d int) {
 	e.Pos += d
-	if ap, ok := e.Err.(interface{ AddPos(int) }); ok {
+	if ap, ok := e.Err.(interface{ AddPos(d int) }); ok {
 		ap.AddPos(d)
 	}
 }
@@ -61,7 +61,7 @@ func (e *ParseError) AddPos(d int) {
 // Stream call sites keep NewParseErr — stream positions are already global —
 // except the UnmarshalJSON rung, whose callee runs on a captured span.
 func NewParseErrShift(segment string, pos, n int, err error) error {
-	if ap, ok := err.(interface{ AddPos(int) }); ok {
+	if ap, ok := err.(interface{ AddPos(d int) }); ok {
 		ap.AddPos(pos - n)
 	}
 	return NewParseErr(segment, pos, err)
@@ -83,7 +83,7 @@ func NewParseErr(segment string, pos int, err error) error {
 		// Complete the path like the *ParseError arm does — pass-through
 		// left fail-fast nested validation errors without their outer
 		// segments. Typed pointers stay reachable via errors.As.
-		if p, ok := err.(interface{ PrependPath(string) }); ok && segment != "" {
+		if p, ok := err.(interface{ PrependPath(segment string) }); ok && segment != "" {
 			p.PrependPath(segment)
 		}
 		return err
