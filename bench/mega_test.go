@@ -182,7 +182,7 @@ func BenchmarkMega_Reader(b *testing.B) {
 
 // BenchmarkDeepNested_Unmarshal — single 50-level chain, isolating per-codec
 // recursion cost from mega's fanout work. As the maximally depth-sensitive
-// bench it's also the one that shows the recursion depth-cap cost (cli
+// bench it's also the one that shows the recursion depth-cap cost (cmd/ggen
 // CLAUDE.md opt #51): +5.4% scalar, +0.4% (flat) avx512 vs uncapped, from the
 // per-level depth thread + `> the runtime maxDepth cap (10000)` compare in Node's
 // decodeFromDepth core. Mega (realistic shallow nesting) is flat — the compare

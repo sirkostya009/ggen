@@ -1,6 +1,6 @@
 # ggen CLI — generator / codegen surface
 
-The `cli/` module (`github.com/sirkostya009/ggen/cli`, package `main`) is the
+The `cmd/ggen/` module (`github.com/sirkostya009/ggen/cmd/ggen`, package `main`) is the
 code generator: it emits `DecodeFrom`/`DecodeFromStream`/`JSONSize`/
 `AppendJSON` methods for the annotated Go structs that `gen/model` parses.
 This file documents the **CLI / codegen surface**, the tag grammar the parser
@@ -34,7 +34,7 @@ also run at render time take a `KindResolver` (`nil` at parse time,
 - `parse_test.go`, `tags_test.go`, `pipe_test.go`, `applicability_test.go` —
   parser tests
 
-`cli/` (package `main`):
+`cmd/ggen/` (package `main`):
 
 - `main.go`, `generate.go` — CLI entry and Go emitter
 - `variants.go` — multi-shape decode dispatch codegen (`/` variants)
@@ -509,7 +509,7 @@ pass — they were already emptied and keep their backing.
   the opt #76 swap. Primitive leaves skip the seed. Widened numeric leaves
   scan into a wide temp and cast at the assign site. The leaf decodes
   natively at every depth — NO encoding/json fallback. Same emit on bytes +
-  stream paths. Pinned by `TestPointerContainer_LeafSeedEmptied` (cli),
+  stream paths. Pinned by `TestPointerContainer_LeafSeedEmptied` (cmd/ggen),
   `TestMerge_pointerContainerLeavesReset` + `TestMerge_crossPkgFallbackDecodesFresh`
   (integ)
 - fixed arrays `[N]T`: every slot decodes fresh or strict-length-errors; no
@@ -1370,7 +1370,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
 
     A second, unrelated `,string` bug from the same round: on the bytes
     path, a `*int`/`*int64`-kind pointer field took the pointer-leaf FAST
-    PATH (`cli/generate.go`'s inline int/uint scanner) unconditionally,
+    PATH (`cmd/ggen/generate.go`'s inline int/uint scanner) unconditionally,
     which never checks `f.String` — a `*int` field tagged `,string` decoded
     a bare unquoted number and REJECTED the documented quoted wire form. The
     fast path now excludes `f.String` fields, falling through to the normal
@@ -1683,7 +1683,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
     `AppendDecode(nil, "")` is nil and an immediate `]` appends nothing — so
     `[]byte{}` marshalled `""`, decoded to nil, and re-marshalled `null`,
     breaking the round-trip fixed point that every other container honours
-    (cli/CLAUDE.md's empty-non-nil rule). `emitEmptyBytesNonNil` closes all six
+    (this file's empty-non-nil rule). `emitEmptyBytesNonNil` closes all six
     arms (bytes + stream × base64/hex/array). Pinned by
     `TestBytes_emptyDecodesNonNil`.
 
@@ -1771,7 +1771,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       user-raised precision, breaking the single-alloc Marshal contract);
       dropped from `constSizePerEntry` so container elements take the
       per-element loop.
-    Pinned by `TestGenerate_round8Fixes` (cli) + `TestAppendUnixSeconds`
+    Pinned by `TestGenerate_round8Fixes` (cmd/ggen) + `TestAppendUnixSeconds`
     (encode).
 
 69. **Round-9 fixes (parse layer + stream emitters).** Nine defects, all
@@ -1825,7 +1825,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       family's missed site).
     - **sql.NullTime's synthesized inner field dropped
       Copy/AllowInvalidUTF8/MultiErr** (both paths — opt #67 class).
-    Pinned by `TestParseFile_round9` (cli) and
+    Pinned by `TestParseFile_round9` (cmd/ggen) and
     `TestTruncationSentinelParity` / `TestStringTag_StreamStringDetached` /
     `TestFormatArray_ByteOverflow` (integrationtests).
 
@@ -1874,7 +1874,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       accepts unknown keys, case-insensitive names and dups. Slice/array/map/
       pointer underlyings now run `referencedStructName`.
     Pinned by `TestForeignElementCodegen` /
-    `TestForeignGgenElementDecodesDirectly` (cli) and
+    `TestForeignGgenElementDecodesDirectly` (cmd/ggen) and
     `TestAlias_elementStructGetsGenerated` (integ).
 
 72. **Round-12 integration fixes (the halves round 11 left open).** Round 11
@@ -1904,7 +1904,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
       `renderAliasContainerDecode`'s receiver reset is gated on
       `AliasField.ArrayLen == 0`, since a folded byte ARRAY has no nil state
       and cannot be resliced.
-    Pinned by `TestAlias_byteArrayIsBase64` (integ) and the round-11 cli tests,
+    Pinned by `TestAlias_byteArrayIsBase64` (integ) and the round-11 cmd/ggen tests,
     which now also cover the encode side.
 
 73. **Stream raw-span decode reuses the receiver's backing.**
@@ -1921,7 +1921,7 @@ len>4N`, band `[N,4N]`. The failure literal's `Got` reports the real count
 
 One missing lookup and one stale signature matcher made two whole type families
 second-class. Both were found auditing a real request-schema package against
-ggen; the fixes are pinned by `cli/namedkind_test.go`,
+ggen; the fixes are pinned by `cmd/ggen/namedkind_test.go`,
 `integrationtests/namedprim_test.go`, `crosspkg_test.go`, `ptrcontainer_test.go`.
 
 ### `namedKinds` + `effectiveKind` (was `generatedAliasKinds`)
@@ -2149,9 +2149,9 @@ any set change). A collision would redeclare a const, loud at compile time.
    for the bool form); fallible-mod errors propagate as parse errors (`ModError`
    for the bool form).
 
-## Test files (`cli/` module)
+## Test files (`cmd/ggen/` module)
 
-CLI tests live under `cli/`; per-package runtime tests next to implementation
+CLI tests live under `cmd/ggen/`; per-package runtime tests next to implementation
 (`encode/`, `scan/`); feature/roundtrip/compat/fuzz under `integrationtests/`;
 benchmarks under `bench/`.
 
@@ -2310,7 +2310,7 @@ benchmarks under `bench/`.
       promoted the field, which then decoded through the reflective
       `json.Unmarshal` fallback — pipe rules, required, unknown-key and
       duplicate-key checks silently dropped.
-    Pinned by `TestParseLoad/*` (cli) + `TestSamePkgCodec_MethodsHonoured`,
+    Pinned by `TestParseLoad/*` (cmd/ggen) + `TestSamePkgCodec_MethodsHonoured`,
     `TestAlias_StructIntrospect_CustomSteps` (integ).
 
 78. **Round-10 field/tag rejections (parse layer).** Beyond the `json:`,
@@ -2354,7 +2354,7 @@ benchmarks under `bench/`.
       by an own field with a DIFFERENT json name.
     Pinned by `TestCLI/InvalidRuleApplication/*`, `TestCLI/FieldCollisions/*`,
     `TestParseFile_round10/*`, `TestCheckOneValRule_ValueShape`,
-    `TestParsePipeTagErrors` (cli) + `TestR10WideBounds`,
+    `TestParsePipeTagErrors` (cmd/ggen) + `TestR10WideBounds`,
     `TestVariants_R10ConverterInputs` (integ).
 
 79. **Round-10 marshal + CLI output fixes.** All detailed in place: the
@@ -2481,7 +2481,7 @@ benchmarks under `bench/`.
     `TestParseLoad/*`, `TestParseFile_round10/shapeless_field_types_rejected`,
     `TestCheckRuleApplicability_NonDiveableReportsOnce`,
     `TestCheckOneValRule_ValueShape`, `TestParseHintTag_Ceiling` and
-    `TestNumericBoundLiteralsCarryFieldKind` (cli) +
+    `TestNumericBoundLiteralsCarryFieldKind` (cmd/ggen) +
     `TestR10BParenthesizedTypes`, `TestBigUint64Bounds_reportedExactly`
     (integ).
 
@@ -2508,7 +2508,7 @@ benchmarks under `bench/`.
     (`structWire`, peeling pointers/interfaces so a nil one still omits).
     That is a deliberate divergence from jsonv2, which drops a struct
     encoding `{}`. Pinned by `TestOmitEmptyOnStructField` +
-    `TestCheckRuleApplicability` rows (cli), `TestOmitEmpty_JSONEmptyKinds`
+    `TestCheckRuleApplicability` rows (cmd/ggen), `TestOmitEmpty_JSONEmptyKinds`
     (integ) and `TestAppendAny_OmitEmptyKeepsStruct` (root).
 88. **`any` values are sized at runtime.** `sizeContribKind`'s `KindAny` arm
     emits `size += ggen.AnySize(ref)` (`AnySizeHTML` under `htmlescape`, via

@@ -10,7 +10,7 @@ P3 −2.9%; P1 −22% NoAlloc / −8.8% Mega (plus a short-key scalar-window gat
 that flipped Tiny from +15% to flat); P4 landed length-gated (macro-flat,
 3.6–10× micro on ≥64 B strings — repo marshal benches carry no long strings).
 Headline scalar→avx512: NoAlloc −42%, Small −86%, Mega −8.4%, Tiny flat.
-Canonical numbers in bench/CLAUDE.md; design docs in cli/CLAUDE.md #46,
+Canonical numbers in bench/CLAUDE.md; design docs in cmd/ggen/CLAUDE.md #46,
 .claude/scan.md, .claude/encode.md. Deviations from the plan as written:
 P1 needed a bounded scalar tail for strings within one lane of payload end
 (near-end tier calls cost Tiny +26%), and the hoisted `_ggenQ/_ggenBS/_ggenSP`
@@ -78,7 +78,7 @@ before P4's marshal win.
 
 - **Win:** micro 2.0× on the exact replaced shape (8.4 → 4.18 ns/key, Account
   key mix); est. **6-12% NoAlloc wall**. Attacks the #1 profile item.
-- **Design** (`cli/generate.go`, simd tiers only; scalar tier + stream
+- **Design** (`cmd/ggen/generate.go`, simd tiers only; scalar tier + stream
   unchanged, ~70-100 LOC):
   1. `inlineScanStringVar`: replace the 24-byte scalar prelude with an inline
      vector site (~16 emitted lines): guard `KE+W <= len(data)`; full

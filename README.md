@@ -73,7 +73,7 @@ Install the CLI and pull in the runtime package your generated code will
 import:
 
 ```sh
-go install github.com/sirkostya009/ggen/cli@latest # CLI binary
+go install github.com/sirkostya009/ggen/cmd/ggen@latest # CLI binary
 go get github.com/sirkostya009/ggen                # runtime package
 ```
 

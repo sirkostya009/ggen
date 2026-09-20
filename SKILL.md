@@ -24,7 +24,7 @@ Skip ggen when:
 ## Install
 
 ```sh
-go install github.com/sirkostya009/ggen/cli@latest # CLI binary
+go install github.com/sirkostya009/ggen/cmd/ggen@latest # CLI binary
 go get github.com/sirkostya009/ggen                 # runtime package
 ```
 

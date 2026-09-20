@@ -285,7 +285,7 @@ avx512 by default, avx2 for skip-dominated workloads.
 
 ### Scalar-path optimizations (2026-07, interleaved n=6-8 core-24)
 
-- **Scalar string window (cli/CLAUDE.md opt #47).** Default (non-`-simd`) build:
+- **Scalar string window (cmd/ggen/CLAUDE.md opt #47).** Default (non-`-simd`) build:
   Small_Unmarshal/ggen −50.9%, ggen_copy −44.8%; NoAlloc_Unmarshal/ggen −19.0%,
   ggen_copy −9.5%; Tiny_Unmarshal, Mega_Unmarshal, MapHeavy, ValidationHeavy all
   flat (Mega ggen p=0.065, ggen_copy p=0.093 — not significant). Closes most of

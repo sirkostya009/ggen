@@ -235,7 +235,7 @@ surface pinned by `Decoder[T]`).
 - **Raw-span surrogate-escape validation (residual jsonv2 divergence).**
   Decode-side UTF-8 validation SHIPPED for every string-producing path AND
   captured raw spans (`ggen.CheckUTF8` at RawMessage/jsontext.Value sites —
-  cli/CLAUDE.md opt #50). Two DECIDED exceptions (2026-07): skipped spans
+  cmd/ggen/CLAUDE.md opt #50). Two DECIDED exceptions (2026-07): skipped spans
   (`ignoreunknown`/`SkipValue`) stay grammar-checked only — intentional, keeps
   the skip tiers on the plain non-accumulating kernels; and unpaired `\uXXXX`
   surrogate ESCAPES inside a raw span pass (they're ASCII text there; jsonv2
@@ -266,7 +266,7 @@ surface pinned by `Decoder[T]`).
   profile ever shows them); a 32/64-lane widening of validUTF8x16 (Grouped
   shuffles exist) if the 16-byte version ever bottlenecks. The `allowinvalidutf8` opt-out SHIPPED
   (2026-07, flag + per-struct annotation, htmlescape-style granularity —
-  see cli/CLAUDE.md opt #50): permissive structs emit pre-validation code
+  see cmd/ggen/CLAUDE.md opt #50): permissive structs emit pre-validation code
   shapes + `validate=false` scanner calls; raw bytes pass through.
 
 - **EscapeHeavy claw-back — SHIPPED, but NOT via the run hoist (2026-08).**
@@ -421,7 +421,7 @@ surface pinned by `Decoder[T]`).
   the stdlib. The catch-all-map row went the stdlib way — ggen spells it
   `json:",embed"` now (opt #75), which closed that gap. `,string` and quoted
   names are small, real breaking changes if followed. Whatever lands must propagate to
-  the three surface docs (README / SKILL.md / cli/CLAUDE.md).
+  the three surface docs (README / SKILL.md / cmd/ggen/CLAUDE.md).
 
 - **`ggen.NotEOF` leaks the drained-vs-transient mapping into generated code
   (2026-08).** Round-6 fix #60 needed the generated stream dispatch loop to map
@@ -669,7 +669,7 @@ surface pinned by `Decoder[T]`).
 
 - **A non-generated foreign struct still budgets a flat 128 in `JSONSize`**
   (`sizeContribKind`, and `len×128` for its slice elements), so a large one
-  breaks the no-grow contract the `any` sizing (cli opt #88) now keeps.
+  breaks the no-grow contract the `any` sizing (cmd/ggen opt #88) now keeps.
   `AnySize` is not a drop-in: those fields marshal through `encoding/json`,
   whose default HTML escaping expands `<>&` 6× where `AnySize`'s non-HTML
   factor is 2×. Needs a `json.Marshal`-shaped sizer, or `AnySizeHTML` as a
@@ -714,7 +714,7 @@ surface pinned by `Decoder[T]`).
   `[0][3]int` — the shape a `map[string][0][3]int` decode loop produced —
   makes the compiler abort with "can SSA LHS mv[idx0] but not RHS" instead of
   dead-storing it. Nothing in ggen is blocked (the `[0]T` readers have no
-  element loop at all, cli opt #85), but the toolchain bug stands.
+  element loop at all, cmd/ggen opt #85), but the toolchain bug stands.
   Minimal repro (two shapes, array-variable and call-result RHS) with a drafted upstream report at `~/audit-round10/ice/REPORT.md`.
 
 # Tried Rejected
@@ -769,7 +769,7 @@ surface pinned by `Decoder[T]`).
   (114), unsafe loads (112), a true-only shell + slow call (95–96), a 4-byte
   switch (108) — exceeds the 80 budget, and `Bool` IS inlined at all 12
   reported generated call sites in bench today. The position lives in the
-  cold exported `BoolEnd` called on the error branch only (cli/CLAUDE.md
+  cold exported `BoolEnd` called on the error branch only (cmd/ggen/CLAUDE.md
   opt #82). Do not re-propose folding it in without a house-rule bench
   showing the de-inlined call is free.
 
@@ -803,7 +803,7 @@ surface pinned by `Decoder[T]`).
   JSON names) needs an embedding path on `FieldInfo` and emitter changes so
   `result.<GoName>` / `seen<GoName>` / cap-const and temp names are spelled
   through the path (`result.E1.A`, `seenE1_A`). Rejected at generate time
-  instead (cli/CLAUDE.md opt #78); revisit only if a consumer has such a
+  instead (cmd/ggen/CLAUDE.md opt #78); revisit only if a consumer has such a
   layout — the shape is uncommon.
 
 - **Duplicate-key detection in skipped / `any` / raw / nested scopes.** ggen's
@@ -1155,7 +1155,7 @@ surface pinned by `Decoder[T]`).
   Shelved unless multi-GB request bodies show up; `bytes.NewReader(Marshal(v))` is
   a one-liner users can write.
 
-- **SIMD phase 3 (phases 1+2 SHIPPED — see cli/CLAUDE.md #46, .claude/scan.md,
+- **SIMD phase 3 (phases 1+2 SHIPPED — see cmd/ggen/CLAUDE.md #46, .claude/scan.md,
   .claude/encode.md, `.claude/simd-plan.md`, bench numbers in bench/CLAUDE.md).**
   Phase 2 (2026-07) landed: exact-short float fast path (scalar, −7.6%
   NoAlloc), scanner instruction shaves (Min/Equal unsigned-compare trick,

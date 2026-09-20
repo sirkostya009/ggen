@@ -67,7 +67,7 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   literal, or `len(data)` for a proper prefix — comes from the exported cold
   `BoolEnd(data, i)` (`litEnd` over `"true"`/`"false"`, chosen by `data[i]`);
   `skipValue` (+ the SIMD skip tiers), all four `Any*` families and the
-  generated bool sites (cli/CLAUDE.md opt #82) stamp it, as the null arm
+  generated bool sites (cmd/ggen/CLAUDE.md opt #82) stamp it, as the null arm
   already does via `litEnd`. `Stream.Bool` mirrors it: `Pos` = the
   mismatching byte, or the window end when the reader drained mid-literal,
   rebased to 0 after the compacting head refill; a transient reader error
@@ -81,7 +81,7 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   core; each container OPEN checks `depth > maxDepth` → `ErrMaxDepth` (one
   predictable compare per `[`/`{`, nothing on scalars). Without it a few MB of
   `[[[[…` is a FATAL goroutine stack overflow, not a recoverable error. Generated
-  decoders for self-referential structs thread the same counter (cli/CLAUDE.md
+  decoders for self-referential structs thread the same counter (cmd/ggen/CLAUDE.md
   opt #51). Pinned by `TestMaxDepth`.
 
 - **`Int64`/`Uint64` unchecked digit prefix.** First ≤18 (int) / ≤19 (uint) digits
@@ -111,7 +111,7 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   Pinned by `TestSkipNumber_AcceptSetMatchesJSONGrammar` (differential vs
   `encoding/json.Valid`) + `TestSkipNumber_StreamMatchesBytes`. Number-VALUE fields
   (`float64`, `json.Number`) use `Float64`/`Number`, which enforce the SAME
-  grammar (cli/CLAUDE.md opt #52) — `Float64` inlines it (routing through the
+  grammar (cmd/ggen/CLAUDE.md opt #52) — `Float64` inlines it (routing through the
   `skipNumber` CALL measured slower: "removing decode inliners" again),
   `Number` + the stream mirrors validate their assembled span via `skipNumber`.
   `Int64`/`Uint64` (and the inline codegen emitters) carry the leading-zero
@@ -160,7 +160,7 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   `3.4028235677973366e38` (below the overflow midpoint 2^128−2^103) into
   +Inf. The stream mirror assembles the span like `Stream.Float64` then runs
   the same tail. Generated code calls them at every float32 site
-  (cli/CLAUDE.md). Pinned by `TestFloat32_StdlibParity` (180k random
+  (cmd/ggen/CLAUDE.md). Pinned by `TestFloat32_StdlibParity` (180k random
   float32-midpoint neighbourhoods, bytes + stream, bit-exact vs
   `strconv.ParseFloat(s, 32)`).
 - **`ParseRFC3339(s)` (`rfc3339.go`)** — `time.Parse(time.RFC3339Nano, s)`
@@ -320,7 +320,7 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   whose capacity ends at the page edge — so a SIGSEGV surfaces as a normal
   test failure carrying the child's trace instead of killing the suite. NO
   runtime feature probing — generated code calls one tier directly (`ggen
-  -simd`, see `cli/CLAUDE.md` opt #46); wrong CPU faults. 4.2× vs `String` on
+  -simd`, see `cmd/ggen/CLAUDE.md` opt #46); wrong CPU faults. 4.2× vs `String` on
   a 4 KiB clean string, ~1.1× at 8 B.
 - **`stringSlow` rejects ctrl bytes in the pre-escape prefix.** The prefix
   `data[start:j]` (escape-free span before the first `\`) is `hasCtrlByte`-
@@ -553,7 +553,7 @@ otherwise, and every refill site now distinguishes the two:
   drained case to the sentinel. `NotEOF` is the exported wrapper — generated
   stream decoders' dispatch-loop refills need the same mapping (they returned
   the raw reader error, so a truncated object surfaced `io.ErrUnexpectedEOF`
-  where the bytes path reported a grammar sentinel; cli/CLAUDE.md #60).
+  where the bytes path reported a grammar sentinel; cmd/ggen/CLAUDE.md #60).
 
 Pinned by `TestStreamTransientErrorNeverSilentNorMislabeled` (every value
 primitive × every byte position, plus a drained-window and grammar-error

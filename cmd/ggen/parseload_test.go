@@ -19,7 +19,7 @@ import (
 // this checkout, so `go build` / `go test` work on the generated output.
 func writeGgenModule(t *testing.T, dir, module string) {
 	t.Helper()
-	root, err := filepath.Abs("..")
+	root, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
 	}

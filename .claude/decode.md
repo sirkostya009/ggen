@@ -39,7 +39,7 @@ reach it — but they are already a `*ParseError` from the inner decoder.
 The slice-prealloc ladder is `prealloc.Cap` (`internal/prealloc`), where the
 `Slice`/`Seq` methods can reach it; `UnmarshalSlice` calls it directly.
 Generated code does not call it at all — the emitter inlines the ladder as a
-CONSTANT EXPRESSION (see cli/CLAUDE.md).
+CONSTANT EXPRESSION (see cmd/ggen/CLAUDE.md).
 
 ## `mod_error.go`
 
@@ -66,7 +66,7 @@ func NewParseErr(field string, pos int, err error) error
 
 `ParseError` is what every generated `DecodeFrom` / `DecodeFromStream` returns for raw parse failures. `Field` = dotted JSON path through the document, `Pos` = the byte offset where scanning STOPPED, relative to the data slice passed to the top-level method (nested sites rebase via `NewParseErrShift`) — the same byte on the bytes and stream paths at any chunk size, since every stream primitive rebases onto its bytes twin's stop position (.claude/scan.md) — `Err` = the underlying `ggen.ErrX` sentinel. `errors.Is(err, ggen.ErrBadString)` works via `Unwrap()`.
 
-`NewParseErrShift(field, pos, shift, err)` is the nested-decode variant: it adds `shift` to every positional error the callee returned (`AddPos` on `*ParseError` / `Errors` / the typed validation errors) before wrapping, because the callee ran on a sub-slice. Bytes-path nested-decode sites use it (cli/CLAUDE.md opt #14); on the stream path only the cross-package `UnmarshalJSON` rung does, since its callee runs on a captured span rather than on the live buffer.
+`NewParseErrShift(field, pos, shift, err)` is the nested-decode variant: it adds `shift` to every positional error the callee returned (`AddPos` on `*ParseError` / `Errors` / the typed validation errors) before wrapping, because the callee ran on a sub-slice. Bytes-path nested-decode sites use it (cmd/ggen/CLAUDE.md opt #14); on the stream path only the cross-package `UnmarshalJSON` rung does, since its callee runs on a captured span rather than on the live buffer.
 
 `NewParseErr` is the call-site constructor at every error-return site in generated decoders. Codegen embeds `field` as a compile-time literal per branch (`"street"`, `"addr"`, …) or as a runtime expression for dynamic keys (`key` in the bytes path — aliased into the caller's data, safe on the error path; `strings.Clone(key)` for the stream path, since the underlying buffer may have compacted). Behaviour:
 

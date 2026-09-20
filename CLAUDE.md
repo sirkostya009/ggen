@@ -6,7 +6,7 @@ input via `unsafe.String` — no copy, no tokens, no AST.
 
 This file is the **project map + repo-wide conventions**. The CLI / codegen
 surface, the tag grammar the parser implements, and the _why_ behind
-generated-code shape live in `cli/CLAUDE.md`; the `gen` module (parser
+generated-code shape live in `cmd/ggen/CLAUDE.md`; the `gen` module (parser
 library + the cross-language export it exists for) in `gen/CLAUDE.md`;
 runtime internals live in the `.claude/{decode,encode,scan,validation}.md`
 area docs, benchmarks and integration-test conventions in those modules'
@@ -24,7 +24,7 @@ ggen/
 ├── gen/                → see gen/CLAUDE.md            ← library module (github.com/sirkostya009/ggen/gen)
 │   ├── SKILL.md        ← user-facing doc for the export library + its emitters
 │   └── model/          ← the parser: annotations, tags, go/types resolution
-├── cli/                → see cli/CLAUDE.md            ← the ggen binary (github.com/sirkostya009/ggen/cli, package main)
+├── cmd/ggen/           → see cmd/ggen/CLAUDE.md        ← the ggen binary (github.com/sirkostya009/ggen/cmd/ggen, package main)
 ├── integrationtests/   → see integrationtests/CLAUDE.md  (own Go module)
 ├── bench/              → see bench/CLAUDE.md             (own Go module)
 └── .claude/backlog.md  ← ideas worth pursuing, tried-and-rejected, maybe-someday
@@ -33,16 +33,17 @@ ggen/
 Four modules under one `go.work` plus the root: root (`github.com/sirkostya009/ggen`
 — the whole runtime as one package `ggen`, no external deps; decode/encode/scan/
 validation survive only as file-name and area-doc groupings), `gen/` (the
-parser as a library, depends on `golang.org/x/tools`), `cli/` (the Go emitter
-over `gen/model`), `bench/`, `integrationtests/`. Neither `gen` nor `cli`
-imports the runtime package — the emitter writes its import path as a string
-literal into generated code, qualifying every runtime call as `ggen.`.
-`cli/go.mod` requires `gen` by the pseudo-version of a pushed commit and has
-no `replace`, because `go install …/cli@latest` refuses a module that carries
-one. Inside the repo `go.work` overrides that requirement, so cli always builds
-against the live `gen` sources. The pin matters only to `go install`: when cli
-starts using `gen` API that is not in the pinned commit, push, then run
-`GOWORK=off go get github.com/sirkostya009/ggen/gen@<commit>` in `cli/`.
+parser as a library, depends on `golang.org/x/tools`), `cmd/ggen/` (the Go
+emitter over `gen/model`), `bench/`, `integrationtests/`. Neither `gen` nor
+`cmd/ggen` imports the runtime package — the emitter writes its import path as
+a string literal into generated code, qualifying every runtime call as `ggen.`.
+`cmd/ggen/go.mod` requires `gen` by the pseudo-version of a pushed commit and
+has no `replace`, because `go install …/cmd/ggen@latest` refuses a module that
+carries one. Inside the repo `go.work` overrides that requirement, so
+`cmd/ggen` always builds against the live `gen` sources. The pin matters only
+to `go install`: when `cmd/ggen` starts using `gen` API that is not in the
+pinned commit, push, then run
+`GOWORK=off go get github.com/sirkostya009/ggen/gen@<commit>` in `cmd/ggen/`.
 `integrationtests/` and `bench/` keep their `replace` lines; nothing installs
 them.
 
@@ -63,15 +64,15 @@ Build the binary into the project dir (`./ggen`), never `/tmp` — it stays
 discoverable, avoids cross-session collisions, and matches the test harness path.
 
 ```sh
-go build -o ggen ./cli
+go build -o ggen ./cmd/ggen
 ./ggen ./...
 easyjson bench/mega.go bench/small.go bench/simple.go
 go generate work
 ```
 
-The binary builds from the `cli/` module to project-root `./ggen` (so the
+The binary builds from the `cmd/ggen/` module to project-root `./ggen` (so the
 `../ggen` references in `bench/` and `integrationtests/` resolve). ggen is
-module-scoped — `./...` visits only the invoked module's packages; `cli/`,
+module-scoped — `./...` visits only the invoked module's packages; `cmd/ggen/`,
 `gen/`, `bench/`, `integrationtests/` each carry their own `go.mod` and must be
 regen'd from inside (one invocation per module). In `bench/` and `integrationtests/`,
 each annotated source carries `//go:generate ../ggen $GOFILE` and emits a
@@ -84,7 +85,7 @@ surface (CLI/annotation flags, codegen behaviour, wire format, generated method
 surface, field tag syntax, new Go kind/wire-shape, new runtime API, etc) must
 propagate to all three in the same commit:
 
-- `cli/CLAUDE.md` — implementation-detail doc (the _why_ behind CLI/codegen)
+- `cmd/ggen/CLAUDE.md` — implementation-detail doc (the _why_ behind CLI/codegen)
 - `README.md` — user-facing surface (_what_/_how_)
 - `SKILL.md` — user-facing surface (_what_/_how_)
 
@@ -113,7 +114,7 @@ metric, when a user would care, the bench table + interpretive paragraph, and
 caveats affecting the user's choice (e.g. "strings alias the input, don't mutate
 after decode"). If you write "internally", "implementation", "under the hood", or
 name a private function / runtime API in README — stop; it belongs in
-`cli/CLAUDE.md` or a code comment.
+`cmd/ggen/CLAUDE.md` or a code comment.
 
 ## Backlog
 

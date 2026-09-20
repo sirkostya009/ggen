@@ -8,7 +8,7 @@
 //
 // Same caller contract as the scalar pair: append escaped body + closing '"',
 // caller writes the opening '"'. Emitted by ggen when invoked under
-// GOEXPERIMENT=simd (see cli -simd); tier fixed at generate time, no runtime
+// GOEXPERIMENT=simd (see cmd/ggen -simd); tier fixed at generate time, no runtime
 // probing. The ≤ lane-1 byte tail is vectorized too, by reloading the LAST
 // full lane at s[len-lane:] — always in bounds behind the len(s) >= lane gate
 // — and shifting its mask right by lane-rem so the already-emitted overlap

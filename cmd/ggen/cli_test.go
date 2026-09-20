@@ -2500,7 +2500,7 @@ type Holder struct {
 // checkout, so a fixture's generated output can be compiled.
 func fixtureGoMod(t *testing.T, dir, module string) {
 	t.Helper()
-	root, err := filepath.Abs("..")
+	root, err := filepath.Abs("../..")
 	if err != nil {
 		t.Fatal(err)
 	}

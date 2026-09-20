@@ -24,7 +24,7 @@ linters:
     - gocyclo
     - godot
     - godox  # todos live in the backlog
-    - gomoddirectives  # cli/go.mod replace is intentional
+    - gomoddirectives  # cmd/ggen/go.mod replace is intentional
     - gosmopolitan
     - ireturn  # Decoder/Marshaler return interfaces
     - maintidx
@@ -88,12 +88,12 @@ linters:
         linters:
           - gosec
       # not hot paths
-      - path: ^(cli|gen)/|_test\.go
+      - path: ^(cmd/ggen|gen)/|_test\.go
         text: "rangeValCopy"
         linters:
           - gocritic
       # generator writes and reads user paths
-      - path: ^(cli|gen)/
+      - path: ^(cmd/ggen|gen)/
         text: "^G(104|115|301|302|304|306|602):"
         linters:
           - gosec
@@ -103,7 +103,7 @@ linters:
         linters:
           - gosec
       # generator state is package-level
-      - path: ^cli/
+      - path: ^cmd/ggen/
         linters:
           - paralleltest
           - tparallel
@@ -127,7 +127,7 @@ linters:
         linters:
           - recvcheck
       # golines can't wrap long strings: templates, help text and test fixtures
-      - path: ^cli/|_test\.go
+      - path: ^cmd/ggen/|_test\.go
         linters:
           - lll
       # golines wraps these long tags, tagalign can't agree

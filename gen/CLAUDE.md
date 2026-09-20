@@ -8,8 +8,8 @@ Holds the parts of ggen that other programs import: the parser (`model`) and
 the language-neutral export core (package `gen`, the module root) that scripts
 use to generate declarations or schemas in other languages, and the emitters
 for specific targets (`ts`, `zod`, `valibot`, `kotlin`, `swift`; plan:
-`.claude/schema-plan.md`). The `ggen` binary in `cli/` depends on this module;
-this module never depends on `cli`.
+`.claude/schema-plan.md`). The `ggen` binary in `cmd/ggen/` depends on this module;
+this module never depends on `cmd/ggen`.
 
 ## Layout
 
@@ -376,7 +376,7 @@ skips otherwise.
 The parser the ggen binary and the export share: `//ggen:generate`
 annotations, `json:` / `pipe:` / `hint:` tags, go/types resolution, the rule
 applicability matrix, `@Func` classification. The tag grammar and every parse
-decision are documented in `cli/CLAUDE.md`; this file only covers what the
+decision are documented in `cmd/ggen/CLAUDE.md`; this file only covers what the
 package adds for consumers other than the emitter.
 
 - `ParsePackage(dir) (Package, error)` — every generated type of one
@@ -438,7 +438,7 @@ Go counterpart runs in Node against it.
 `model/*_test.go` are the parser tests that moved with the code;
 `TestParsePackage_docsDirectivesConsts` pins the consumer-facing additions.
 Regenerating every module after a parser change must leave `_ggen.go` output
-byte-identical (`go build -o ggen ./cli`, then the regen recipe in the root
+byte-identical (`go build -o ggen ./cmd/ggen`, then the regen recipe in the root
 CLAUDE.md).
 
 `swift/swift_test.go` and `kotlin/kotlin_test.go` compile what they render:

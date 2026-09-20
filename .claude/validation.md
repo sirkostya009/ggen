@@ -106,7 +106,7 @@ literal defaulted to `int` and overflowed above `MaxInt64`; as a `float64` a
 bound past 2^53 was rounded and printed in exponent form
 (`9.223372036854776e+18` for `gte=9223372036854775809`), which the width-aware
 bound parsing made reachable. Read them with a type switch or `%v`. Pinned by
-`TestNumericBoundLiteralsCarryFieldKind` (cli) +
+`TestNumericBoundLiteralsCarryFieldKind` (cmd/ggen) +
 `TestBigUint64Bounds_reportedExactly` (integ).
 
 ## Inspecting failures
@@ -126,5 +126,5 @@ Use the typed pointer struct, or `err.(ggen.Error).Rule()` for the name.
 
 `OneOfError.Allowed` points to a deduped package-level frozen `[]string`
 (`var _oneof_N = []string{...}`) emitted once per unique allowed-set, so error
-construction never allocates the allowed slice (see cli/CLAUDE.md optimization
+construction never allocates the allowed slice (see cmd/ggen/CLAUDE.md optimization
 #13).

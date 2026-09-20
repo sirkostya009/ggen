@@ -53,7 +53,7 @@ func AppendAnyHTML(dst []byte, v any) ([]byte, error) // any-walker, HTML-safe e
 and `netip_addr.go` had only the NoHTML closer, so a `net/url.URL` or zoned
 `netip.Addr` field on an `htmlescape` struct silently ignored the mode (every
 other string-shaped field on the struct escaped `<`/`>`/`&`, these two
-didn't). Codegen (`appendURLFn`/`appendNetipAddrFn`, cli/CLAUDE.md) now
+didn't). Codegen (`appendURLFn`/`appendNetipAddrFn`, cmd/ggen/CLAUDE.md) now
 picks the pair by `f.HTMLEscape` like every other string emitter.
 
 ## `AppendFloat` — stdlib-parity format selection
@@ -154,7 +154,7 @@ escapes. Overlap correctness (a byte classified in BOTH the main loop and the
 reload must be emitted exactly once) is pinned exhaustively by
 `TestAppendStringSIMD_OverlapTailParity` — every escape byte at every position
 for every length in [lane, 3·lane], all six tiers. ggen emits the tier names when run
-under `-simd` (shared `simdSuffix`, see cli/CLAUDE.md opt #46); no runtime
+under `-simd` (shared `simdSuffix`, see cmd/ggen/CLAUDE.md opt #46); no runtime
 probing. Byte-parity pinned by `TestAppendStringSIMD_Parity` (lane-seam
 directed cases + 3000 randomized bodies, all six functions).
 

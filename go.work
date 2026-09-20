@@ -3,7 +3,7 @@ go 1.27
 use (
 	.
 	./bench
-	./cli
+	./cmd/ggen
 	./gen
 	./integrationtests
 )

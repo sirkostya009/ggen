@@ -1,4 +1,4 @@
-module github.com/sirkostya009/ggen/cli
+module github.com/sirkostya009/ggen/cmd/ggen
 
 go 1.27
 
