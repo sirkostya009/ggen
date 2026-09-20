@@ -737,7 +737,12 @@ import path per pass (see "Foreign type spelling" under Cross-package types).
 - Nested struct (generate-time probing of `DecodeFrom`/`UnmarshalJSON`/
   `UnmarshalText` and `AppendJSON`/`MarshalJSON`/`AppendText`/`MarshalText`; with
   default-stdlib fallback)
-- Embedded struct (unnamed field) — fields promoted to parent's JSON object
+- Embedded struct (unnamed field) — fields promoted to parent's JSON object.
+  A `json:"-"` embedding promotes nothing and is exempt from every type
+  check (pointer, cross-package), like any ignored field; `structRefs` skips
+  it too, so a struct reached only through it is not generated. Any other
+  `json` tag value on an embedding is a parse error (stdlib makes it a named
+  nested object — not implemented); non-`json` tag keys do not affect promotion
 - `time.Time` — `format:unix`/`unixmilli`/`unixmicro`/`unixnano`/`RFC3339`/
   `RFC3339Nano` + custom (jsonv2 supported) + other `time.X` constants. The
   default layout, `format:RFC3339` and `format:RFC3339Nano` are strict RFC

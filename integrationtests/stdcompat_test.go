@@ -434,6 +434,33 @@ func TestStdCompat_EmbedStruct(t *testing.T) {
 	})
 }
 
+type ignoredEmbedBase struct {
+	Secret string `json:"secret"`
+}
+
+type keptEmbedBase struct {
+	Kept string `json:"kept"`
+}
+
+//ggen:generate
+type IgnoredEmbedStruct struct {
+	ignoredEmbedBase `json:"-"`
+	keptEmbedBase    `db:"kept"`
+
+	Name string `json:"name"`
+}
+
+func TestStdCompat_IgnoredEmbedStruct(t *testing.T) {
+	t.Parallel()
+	in := IgnoredEmbedStruct{
+		Secret: "s",
+		Kept:   "k",
+		Name:   "alice",
+	}
+	crossCompat(t, in)
+	exactWire(t, "wire", in)
+}
+
 // richSubset mirrors RichTypes minus url.URL — ggen emits url.URL as a JSON
 // string but stdlib emits the 11-field struct (covered in TestRich_Roundtrip).
 //

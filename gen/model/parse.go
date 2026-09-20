@@ -672,7 +672,7 @@ func (s *structSet) structRefs(st *ast.StructType, seen map[string]struct{}, vis
 	for _, f := range st.Fields.List {
 		if len(f.Names) == 0 {
 			id, ok := f.Type.(*ast.Ident)
-			if !ok {
+			if !ok || jsonTag(f) == "-" {
 				continue
 			}
 			sub, ok := s.structs[id.Name]
@@ -1999,10 +1999,15 @@ func resolveFieldCollisions(parent string, fields []FieldInfo, errs *[]error) []
 
 // extractEmbedded resolves an embedded field and returns the promoted fields
 // that should be appended to the parent. Supports only same-package named
-// struct embeddings without a json tag (stdlib semantics).
+// struct embeddings (stdlib semantics). A `json:"-"` embedding promotes
+// nothing, whatever its type; any other json tag value is unsupported.
 func (s *structSet) extractEmbedded(parent string, field *ast.Field, seen map[string]struct{}) ([]FieldInfo, error) {
-	if field.Tag != nil {
-		return nil, fmt.Errorf("tagged embedded field in %s is not supported", parent)
+	switch jsonTag(field) {
+	case "":
+	case "-":
+		return nil, nil
+	default:
+		return nil, fmt.Errorf("json-tagged embedded field in %s is not supported (only json:\"-\")", parent)
 	}
 	var typeName string
 	switch t := field.Type.(type) {
@@ -2035,6 +2040,14 @@ func (s *structSet) extractEmbedded(parent string, field *ast.Field, seen map[st
 		sub.Fields[i].EmbedDepth++
 	}
 	return sub.Fields, nil
+}
+
+// jsonTag returns the value of the field's `json` tag key, "" when absent.
+func jsonTag(field *ast.Field) string {
+	if field.Tag == nil {
+		return ""
+	}
+	return reflect.StructTag(strings.Trim(field.Tag.Value, "`")).Get("json")
 }
 
 // checkTagReadable rejects a struct tag that NAMES one of ggen's keys but

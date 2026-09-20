@@ -449,6 +449,59 @@ type B struct{ A }
 		}
 	})
 
+	t.Run("ignored_embedding_promotes_nothing", func(t *testing.T) {
+		t.Parallel()
+		// An ignored embedding is exempt whatever its type, and a non-json
+		// tag does not stop promotion.
+		src := `package test
+import "sync"
+//ggen:generate
+type Top struct {
+	Skip ` + "`json:\"-\"`" + `
+	*sync.Mutex ` + "`json:\"-\"`" + `
+	Keep ` + "`db:\"keep\"`" + `
+	X int ` + "`json:\"x\"`" + `
+}
+type Skip struct{ S Dep ` + "`json:\"s\"`" + ` }
+type Dep struct{ D int ` + "`json:\"d\"`" + ` }
+type Keep struct{ K int ` + "`json:\"k\"`" + ` }
+`
+		file := writeGoFile(t, src)
+		res, err := ParseFile(file, []string{"Top"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, st := range res.Structs {
+			if st.Name == "Dep" || st.Name == "Skip" {
+				t.Fatalf("%s reached only through an ignored embedding was generated", st.Name)
+			}
+			if st.Name != "Top" {
+				continue
+			}
+			var names []string
+			for _, f := range st.Fields {
+				names = append(names, f.JSONName)
+			}
+			if got := strings.Join(names, ","); got != "k,x" {
+				t.Fatalf("want fields k,x, got %s", got)
+			}
+		}
+	})
+
+	t.Run("named_embedding_errors", func(t *testing.T) {
+		t.Parallel()
+		src := `package test
+//ggen:generate
+type Top struct{ Inner ` + "`json:\"inner\"`" + ` }
+type Inner struct{ N int ` + "`json:\"n\"`" + ` }
+`
+		file := writeGoFile(t, src)
+		_, err := ParseFile(file, []string{"Top"})
+		if err == nil || !strings.Contains(err.Error(), "json-tagged embedded field") {
+			t.Fatalf("want json-tagged embedding diagnostic, got %v", err)
+		}
+	})
+
 	t.Run("map_value_sibling_generated", func(t *testing.T) {
 		t.Parallel()
 		// A struct reached only through map[string]Inner used to miss
