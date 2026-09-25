@@ -163,6 +163,26 @@ there; check when a bench pass is next scheduled):
   caller-owned dst); (c) explicit `AppendAnySized(dst, v, hint)`. Pick when a
   real workload pins slice marshal as a hotspot — map wins dominate today.
 
+- **Larger prealloc span budget for pointer-free elements (UNMEASURED).** The
+  512 B tier of the width ladder (cmd/ggen opt #2) is
+  `gc.MinSizeForMallocHeader`, and it only binds POINTERFUL objects:
+  `roundupsize` / `mallocgcSmallScanHeader` add the 8-byte type header
+  before the size-class lookup only when `!noscan`. Verified on go1.27 with
+  a 64 B element at cap 9 (576 B): pointerful allocates 640, pointer-free
+  576. A noscan backing has no heap bitmap and no header at any size, so
+  for it 512 is a conservatism choice, not a runtime boundary. The next real
+  one is `maxSmallSize` (32 KB). Fitting caps to size classes instead buys
+  nothing: 80 and 512 are themselves classes, so `floor(budget/S)*S`
+  rounded up to its class never has room for another element (checked for
+  every S in 1..1024). Shape if pursued: the generator decides
+  pointerfulness from go/types (arch-independent) and emits a wider budget
+  for noscan elements only, while pointerful ones keep `spanBudgetExpr`.
+  Only reaches element types wider than 40 B made entirely of numbers and
+  bools, because narrower ones take the 80 B tier and most decoded structs
+  hold a string. Cost is up-front memory on short payloads (the DeepNested
+  +2× B/op trade). No target number yet. Wait for a workload with wide
+  all-scalar slice elements, then run a house-rule A/B with B/op.
+
 - **Single-copy `-copy` escape strings — SHIPPED (both tiers, via `ggen.Detach`).**
   Was: escaped retained strings under `-copy` double-allocated (`ggen.String`/
   `StringAVX*` escape arm → `stringSlow` owned scratch, then a redundant
