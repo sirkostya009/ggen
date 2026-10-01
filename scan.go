@@ -704,14 +704,15 @@ func Float64(data []byte, i int) (float64, int, error) {
 	if i >= n {
 		return 0, i, ErrBadNumber
 	}
-	if data[i] == '0' {
+	switch {
+	case data[i] == '0':
 		i++
-	} else if data[i] >= '1' && data[i] <= '9' {
+	case data[i] >= '1' && data[i] <= '9':
 		i++
 		for i < n && data[i] >= '0' && data[i] <= '9' {
 			i++
 		}
-	} else {
+	default:
 		return 0, i, ErrBadNumber
 	}
 	if i < n && data[i] == '.' {
@@ -772,14 +773,15 @@ func Float32(data []byte, i int) (float32, int, error) {
 	if i >= n {
 		return 0, i, ErrBadNumber
 	}
-	if data[i] == '0' {
+	switch {
+	case data[i] == '0':
 		i++
-	} else if data[i] >= '1' && data[i] <= '9' {
+	case data[i] >= '1' && data[i] <= '9':
 		i++
 		for i < n && data[i] >= '0' && data[i] <= '9' {
 			i++
 		}
-	} else {
+	default:
 		return 0, i, ErrBadNumber
 	}
 	if i < n && data[i] == '.' {
@@ -953,14 +955,15 @@ func skipNumber(data []byte, i int) (int, error) {
 	if i >= n {
 		return i, ErrBadNumber
 	}
-	if data[i] == '0' {
+	switch {
+	case data[i] == '0':
 		i++
-	} else if data[i] >= '1' && data[i] <= '9' {
+	case data[i] >= '1' && data[i] <= '9':
 		i++
 		for i < n && data[i] >= '0' && data[i] <= '9' {
 			i++
 		}
-	} else {
+	default:
 		return i, ErrBadNumber
 	}
 	if i < n && data[i] == '.' {
