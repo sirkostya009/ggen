@@ -11,18 +11,20 @@ import (
 	"strings"
 )
 
-// customFunc holds the resolution for a `@Func` / `@pkg.Func` reference,
-// stamped onto the Validation/ModRule so codegen emits a direct call.
+// customFunc is the resolved form of a `@Func` or `@pkg.Func` reference. It is
+// copied onto the ValidationRule, ModRule or Variant so codegen can emit a
+// direct call.
 type customFunc struct {
-	PkgImport string // import path; "" for same-package
-	PkgName   string // canonical name to qualify the call in generated code; "" for same-package
-	FuncName  string // bare function name (no "@", no "pkg.")
-	Fallible  bool   // mods only: true when signature is `func(T) (T, error)`
+	PkgImport string // import path, "" for the same package
+	PkgName   string // package name that qualifies the call in generated code, "" for the same package
+	FuncName  string // bare function name, without "@" or "pkg."
+	Fallible  bool   // mods and converters: the function returns a second error or bool result
 }
 
-// lookupFunc resolves a `@Func` / `@pkg.Func` reference (the part after the
-// `@`) to its *types.Func plus the import path / package name the generated
-// call must qualify with. Shared by classifyValueFunc and classifyConverter.
+// lookupFunc resolves a `@Func` or `@pkg.Func` reference, given without the
+// `@`. It returns the *types.Func and the import path and package name the
+// generated call must be qualified with. classifyValueFunc and
+// classifyConverter both use it.
 func lookupFunc(ref string, file *ast.File, pkg *types.Package) (fn *types.Func, pkgImp, pkgName string, err error) {
 	if ref == "" {
 		return nil, "", "", errors.New("empty @ reference")
@@ -61,9 +63,10 @@ func lookupFunc(ref string, file *ast.File, pkg *types.Package) (fn *types.Func,
 	return f, importPath, target.Name(), nil
 }
 
-// pipeRole classifies a value-stage `@Func`: validator, mod (pure or
-// fallible, in-type == out-type), or converter (in != out — only legal in the
-// decode stage, rejected here).
+// pipeRole is what a value-stage `@Func` turns out to be. A validator checks
+// the value. A mod returns a new value of the same type, and may also fail. A
+// converter returns a different type. Converters are only allowed in the
+// decode stage, so a value step rejects them.
 type pipeRole uint8
 
 const (
@@ -72,16 +75,16 @@ const (
 	roleConverter
 )
 
-// classifyValueFunc resolves a value-stage `@Func` against the working type wt
-// and classifies it from its signature (a single bool or error return is
-// always a validator):
+// classifyValueFunc resolves a value-stage `@Func` against wt, the type of
+// the value at that point, and classifies it by its signature. A single bool
+// or error result always means a validator:
 //
-//	func(T) error         → validator
-//	func(T) bool          → validator (message-capable)   [func(bool)bool banned]
-//	func(T) T             → mod (pure)
-//	func(T) (T, error)    → mod (fallible, error)
-//	func(T) (T, bool)     → mod (fallible, message-capable)
-//	func(T) U  (U != T)   → converter — illegal in a value stage
+//	func(T) error         validator
+//	func(T) bool          validator, can take an inline message. func(bool) bool is not allowed
+//	func(T) T             mod that cannot fail
+//	func(T) (T, error)    mod that can fail with an error
+//	func(T) (T, bool)     mod that can fail, can take an inline message
+//	func(T) U, U != T     converter, not allowed in a value stage
 func classifyValueFunc(ref string, wt types.Type, file *ast.File, pkg *types.Package) (role pipeRole, cf customFunc, boolForm bool, err error) {
 	fn, pkgImp, pkgName, err := lookupFunc(ref, file, pkg)
 	if err != nil {
@@ -134,7 +137,8 @@ func classifyValueFunc(ref string, wt types.Type, file *ast.File, pkg *types.Pac
 		case isErrorType(rt):
 			return roleValidator, cf, false, nil
 		case isBoolType(rt):
-			// func(bool)bool is banned (ambiguous; use func(bool) error).
+			// func(bool) bool is ambiguous, so it is not allowed. Use
+			// func(bool) error instead.
 			if wtIsBool {
 				return 0, customFunc{}, false, errors.New("func(bool) bool is banned — use func(bool) error to validate a bool field")
 			}
@@ -162,12 +166,13 @@ func classifyValueFunc(ref string, wt types.Type, file *ast.File, pkg *types.Pac
 	return 0, customFunc{}, false, fmt.Errorf("must return one of: error, bool, T, (T, error), (T, bool); got %d results", res.Len())
 }
 
-// classifyConverter resolves a decode-stage converter variant `@Conv`. Unlike
-// a value func it is OUTPUT-anchored: the first result must equal the field
-// type T; the single parameter W is the type ggen scans natively (its wire
-// shape decides the JSON shape this variant claims). Returns W. W must be
-// builtin or same-package, optionally pointer-wrapped (a `*W` input claims
-// W's shape plus null); foreign inputs are unsupported.
+// classifyConverter resolves a decode-stage converter variant `@Conv`. A
+// value func is checked against its input, but a converter is checked
+// against its output: the first result must be the field type T. The single
+// parameter W is the type ggen decodes from JSON, and its JSON shape decides
+// which input this variant handles. It returns W. W must be a builtin or
+// same-package type, optionally behind pointers. A `*W` input handles W's
+// shape plus null. Types from other packages are not supported.
 func classifyConverter(ref string, fieldType types.Type, file *ast.File, pkg *types.Package) (cf customFunc, w types.Type, boolForm bool, err error) {
 	fn, pkgImp, pkgName, err := lookupFunc(ref, file, pkg)
 	if err != nil {
@@ -188,8 +193,8 @@ func classifyConverter(ref string, fieldType types.Type, file *ast.File, pkg *ty
 		return customFunc{}, nil, false, errors.New("converter must take exactly one parameter (the scanned input)")
 	}
 	w = sig.Params().At(0).Type()
-	// Peel pointer levels first: `*[]int` or `*other.T` must not dodge the
-	// checks below (a pointer-wrapped container still emits broken code).
+	// Remove pointer levels first, so `*[]int` or `*other.T` cannot slip past
+	// the checks below. A container behind a pointer still emits broken code.
 	base := w
 	for {
 		p, isPtr := base.(*types.Pointer)
@@ -201,10 +206,10 @@ func classifyConverter(ref string, fieldType types.Type, file *ast.File, pkg *ty
 	if named, isNamed := base.(*types.Named); isNamed && named.Obj().Pkg() != nil && named.Obj().Pkg() != pkg {
 		return customFunc{}, nil, false, fmt.Errorf("converter input %s is from another package; only builtin or same-package input types are supported", w)
 	}
-	// The documented contract is "primitive or ggen-decodable struct" — a
-	// container input synthesizes a FieldInfo with no element shape and the
-	// emitted scan doesn't compile (or silently mis-scans); chan/func/
-	// interface inputs have no wire shape at all.
+	// The input must be a primitive or a struct ggen can decode. A container
+	// input would get a FieldInfo with no element shape, and the emitted code
+	// would not compile or would decode wrongly. Channel, func and interface
+	// inputs have no JSON shape at all.
 	switch base.Underlying().(type) {
 	case *types.Slice, *types.Array, *types.Map:
 		return customFunc{}, nil, false, fmt.Errorf("converter input %s must be a primitive or a ggen-decodable struct — container inputs are not supported", w)
@@ -242,8 +247,8 @@ func isBoolType(t types.Type) bool {
 	return ok && b.Kind() == types.Bool
 }
 
-// satisfiesConstraint reports whether t may instantiate the type parameter tp
-// (type-set membership check against tp's constraint interface).
+// satisfiesConstraint reports whether t can be used for the type parameter
+// tp, meaning t is in the type set of tp's constraint.
 func satisfiesConstraint(t types.Type, tp *types.TypeParam) bool {
 	constraint := tp.Constraint()
 	if iface, ok := constraint.Underlying().(*types.Interface); ok {
@@ -252,12 +257,13 @@ func satisfiesConstraint(t types.Type, tp *types.TypeParam) bool {
 	return false
 }
 
-// lookupCrossPkg resolves an alias or package name written before the `.`
-// in a `@pkg.Func` reference. Returns the target *types.Package plus its
-// import path so the generator can add it to the generated file.
+// lookupCrossPkg resolves the import alias or package name written before
+// the `.` in a `@pkg.Func` reference. It returns the package and its import
+// path, so the generator can import it in the generated file.
 func lookupCrossPkg(pkgPart string, file *ast.File, pkg *types.Package) (*types.Package, string, error) {
 	if file != nil {
-		// Pass 1: file-scoped aliases (`import alias "path"`).
+		// First pass: the imports of this file, including aliases such as
+		// `import alias "path"`.
 		for _, imp := range file.Imports {
 			path, err := strconv.Unquote(imp.Path.Value)
 			if err != nil {
@@ -279,15 +285,16 @@ func lookupCrossPkg(pkgPart string, file *ast.File, pkg *types.Package) (*types.
 					return target, path, nil
 				}
 			case "_":
-				// Blank import: no file-scoped name; match the declared name.
+				// A blank import gives no name in the file. Match the package's
+				// declared name.
 				if target.Name() == pkgPart {
 					return target, path, nil
 				}
 			}
 		}
 	}
-	// Pass 2: any transitive import whose declared name matches (catches an
-	// import living in a different file of the same package).
+	// Second pass: any import of the package whose declared name matches.
+	// This finds an import that lives in another file of the same package.
 	for _, imp := range pkg.Imports() {
 		if imp.Name() == pkgPart {
 			return imp, imp.Path(), nil
@@ -296,8 +303,8 @@ func lookupCrossPkg(pkgPart string, file *ast.File, pkg *types.Package) (*types.
 	return nil, "", fmt.Errorf("no import alias or package named %s in scope", pkgPart)
 }
 
-// findImportedPackage returns the *types.Package corresponding to the given
-// import path among pkg's transitive imports.
+// findImportedPackage returns the package with the given import path from
+// the imports of pkg.
 func findImportedPackage(pkg *types.Package, path string) *types.Package {
 	if pkg == nil {
 		return nil
@@ -310,7 +317,7 @@ func findImportedPackage(pkg *types.Package, path string) *types.Package {
 	return nil
 }
 
-// isErrorType reports whether t is the universe error interface.
+// isErrorType reports whether t is the predeclared error interface.
 func isErrorType(t types.Type) bool {
 	if named, ok := t.(*types.Named); ok {
 		return named.Obj().Name() == "error" && named.Obj().Pkg() == nil
@@ -318,9 +325,9 @@ func isErrorType(t types.Type) bool {
 	return false
 }
 
-// pipeHasCustom reports whether any unclassified `@`-step is present on fi's
-// pipe buckets (customs are parked as validator-shaped steps with Name "@…"
-// until classifyValueFunc runs).
+// pipeHasCustom reports whether fi's pipe has any `@` step left to classify.
+// Until classifyValueFunc runs, such a step is stored as a validator step
+// whose Name starts with "@".
 func pipeHasCustom(fi *FieldInfo) bool {
 	has := func(steps []Step) bool {
 		for _, s := range steps {
@@ -346,9 +353,10 @@ func pipeHasConverter(fi *FieldInfo) bool {
 	return false
 }
 
-// resolvePipeCustoms classifies and resolves every `@`-step on a pipe-tagged
-// field against the working type at its level, then re-derives the split
-// buckets. Mod vs validator is decided by signature here.
+// resolvePipeCustoms resolves and classifies every `@` step of a field
+// against the type of the value at that step's level. The signature decides
+// whether a step is a mod or a validator. It then rebuilds the separate rule
+// and mod lists from the pipe.
 func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldType types.Type) error {
 	if !pipeHasCustom(fi) && !pipeHasConverter(fi) {
 		deriveBuckets(fi)
@@ -362,12 +370,12 @@ func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldTy
 	qualifier := s.pkgQualifier()
 	var errs []error
 
-	// Decode-stage converter variants: resolve OUTPUT==T, capture input W.
-	// W is described the way a FIELD of that type would be — the pointer
-	// peeled off, Kind from the base spelling, and a named primitive
-	// registered in NamedPrims so the shape dispatch and the inline scan
-	// resolve it to its underlying kind — since the emitters scan it through
-	// the same field renderers.
+	// Decode-stage converters: check that the output is T and record the
+	// input W. The emitters decode W with the same code they use for fields,
+	// so W is described the way a field of that type would be. Pointers are
+	// removed, Kind comes from the base type, and a named primitive is added
+	// to NamedPrims so the shape dispatch and the inline decode see its
+	// underlying kind.
 	for i := range fi.Variants {
 		v := &fi.Variants[i]
 		if v.Kind != VariantConvert {
@@ -483,9 +491,9 @@ func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldTy
 	return errors.Join(errs...)
 }
 
-// PartitionCustomValidation splits a rule list into built-in vs `@Func` rules.
-// Pointer-field codegen runs built-in rules on the deref'd value but `@Func`
-// rules on the exact `*T` field type.
+// PartitionCustomValidation splits a rule list into built-in and `@Func`
+// rules. For a pointer field, codegen runs built-in rules on the value the
+// pointer points to, but `@Func` rules on the `*T` field itself.
 func PartitionCustomValidation(rules []ValidationRule) (builtin, custom []ValidationRule) {
 	for _, r := range rules {
 		if r.Custom {
@@ -497,7 +505,7 @@ func PartitionCustomValidation(rules []ValidationRule) (builtin, custom []Valida
 	return
 }
 
-// PartitionCustomMods is the mod-rule counterpart to PartitionCustomValidation.
+// PartitionCustomMods is PartitionCustomValidation for mods.
 func PartitionCustomMods(rules []ModRule) (builtin, custom []ModRule) {
 	for _, r := range rules {
 		if r.Custom {
@@ -509,9 +517,9 @@ func PartitionCustomMods(rules []ModRule) (builtin, custom []ModRule) {
 	return
 }
 
-// diveElemType peels one container layer off t. `inner:` rules apply to the
-// elements of slices/arrays/maps; this helper computes the type each level
-// will see at codegen time.
+// diveElemType removes one container layer from t. Nested pipe levels apply
+// to the elements of slices, arrays and maps. This returns the type each
+// level works on.
 func diveElemType(t types.Type) (types.Type, error) {
 	switch tt := t.Underlying().(type) {
 	case *types.Slice:
@@ -521,15 +529,16 @@ func diveElemType(t types.Type) (types.Type, error) {
 	case *types.Map:
 		return tt.Elem(), nil
 	case *types.Pointer:
-		// `*[]T`-style pointer-to-container: peel both the pointer and the
-		// container. Rare in practice, but supported.
+		// A pointer to a container, such as `*[]T`. Remove both the pointer and
+		// the container. Rare, but supported.
 		return diveElemType(tt.Elem())
 	}
 	return nil, fmt.Errorf("type %s has no element to dive into", t)
 }
 
-// FieldHasConverter reports whether f needs shape-dispatch decode. Native/
-// nullzero-only fields take the ordinary decode path + NullZero flag.
+// FieldHasConverter reports whether f needs a decode that picks a variant by
+// the JSON shape. Fields with only the native and nullzero variants use the
+// normal decode path plus the NullZero flag.
 func FieldHasConverter(f FieldInfo) bool {
 	for _, v := range f.Variants {
 		if v.Kind == VariantConvert {
@@ -539,9 +548,10 @@ func FieldHasConverter(f FieldInfo) bool {
 	return false
 }
 
-// kindShapeBytes returns the JSON first-byte case labels a kind's natural wire
-// shape claims, as Go rune literals. Empty => the kind has no single shape
-// (any / raw) and cannot participate in shape dispatch.
+// kindShapeBytes returns the first JSON bytes a kind's normal shape can start
+// with, as Go rune literals for case labels. An empty result means the kind
+// has no single shape, as with any or raw JSON, and cannot take part in
+// shape dispatch.
 func kindShapeBytes(k TypeKind, format string) []string {
 	//exhaustive:ignore not every kind applies here
 	switch k {
@@ -567,19 +577,19 @@ func kindShapeBytes(k TypeKind, format string) []string {
 	return nil
 }
 
-// KindResolver maps a named type spelling to its underlying primitive kind,
-// returning kind unchanged when goType is not a named primitive.
+// KindResolver maps a named type to the kind of its underlying primitive. It
+// returns kind unchanged when goType is not a named primitive.
 type KindResolver func(goType string, kind TypeKind) TypeKind
 
-// variantShapeKind resolves a type spelling to the kind whose JSON SHAPE it
-// actually has. A named primitive (`type Score int`) reports KindStruct at its
-// use sites, so an unresolved lookup claims the object shape `{` for a value
-// that really decodes as a number — the native variant became unreachable for
-// its own type, and a converter with a named-primitive input W likewise.
-// FieldInfo.NamedPrims is the parse-time source (resolvePipeCustoms registers
-// a converter's W there too); resolve, when non-nil, is the render-time
-// fallback for synthesized fields that carry no NamedPrims. Pointer spellings
-// resolve through the pointee.
+// variantShapeKind returns the kind whose JSON shape the type really has. A
+// named primitive such as `type Score int` reads as KindStruct where it is
+// used. Without this lookup it would claim the object shape `{` for a value
+// that decodes as a number. The native variant, or a converter whose input W
+// is a named primitive, could then never match. FieldInfo.NamedPrims is the
+// source at parse time, and resolvePipeCustoms adds a converter's W there
+// too. resolve, when not nil, is the fallback at render time for synthetic
+// fields that have no NamedPrims. A pointer type resolves through its
+// pointee.
 func variantShapeKind(f FieldInfo, goType string, kind TypeKind, resolve KindResolver) TypeKind {
 	goType = strings.TrimLeft(goType, "*")
 	if k, ok := f.NamedPrims[goType]; ok {
@@ -598,9 +608,9 @@ func VariantCaseBytes(f FieldInfo, v Variant, resolve KindResolver) []string {
 		return []string{"'n'"}
 	case VariantNative:
 		bs := kindShapeBytes(variantShapeKind(f, f.GoType, f.Kind, resolve), f.Format)
-		// Null-aware native kinds keep their null arm: without it a converter
-		// variant made {"p":null} a hard error where the plain field decodes
-		// null → nil. An explicit nullzero variant claims 'n' itself.
+		// Native kinds that accept null keep their null case. Without it, adding
+		// a converter would make {"p":null} an error, while the plain field
+		// decodes null to nil. An explicit nullzero variant claims 'n' itself.
 		if nativeAcceptsNull(f, resolve) && !hasNullZeroVariant(f) {
 			bs = append(bs, "'n'")
 		}
@@ -615,8 +625,8 @@ func VariantCaseBytes(f FieldInfo, v Variant, resolve KindResolver) []string {
 	return nil
 }
 
-// nativeAcceptsNull reports whether f's native decode path has a null branch
-// (the kind-gated null acceptance: pointer, slice, map, []byte, net.IP, raw).
+// nativeAcceptsNull reports whether f's native decode accepts null. That is
+// true for pointers, slices, maps, []byte, net.IP and raw JSON.
 func nativeAcceptsNull(f FieldInfo, resolve KindResolver) bool {
 	if f.Pointer {
 		return true
@@ -638,14 +648,14 @@ func hasNullZeroVariant(f FieldInfo) bool {
 	return false
 }
 
-// checkVariantShapes verifies the decode variants on f claim disjoint JSON
-// shapes (one variant per shape) and that each shape-dispatchable variant
-// resolves to a concrete first byte. Returns a *RichError on conflict.
+// checkVariantShapes checks that no two decode variants on f claim the same
+// JSON shape, and that every variant has at least one first byte to match
+// on. It returns a *RichError on a conflict.
 func checkVariantShapes(f FieldInfo) error {
 	if !FieldHasConverter(f) {
 		return nil
 	}
-	seen := map[string]string{} // case-byte → variant label
+	seen := map[string]string{} // case byte to variant label
 	label := func(v Variant) string {
 		switch v.Kind {
 		case VariantNullZero:

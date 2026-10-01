@@ -1,8 +1,8 @@
 package bench
 
-// BenchmarkSmall_* — small-value benchmarks on the ~2.9 KiB ValidPayload,
-// isolating parse / streaming overhead at a size where the decoded value
-// is too small to drown out per-call buffer management.
+// The BenchmarkSmall_* benchmarks decode the ValidPayload of about 2.9 KiB.
+// They measure parse and streaming overhead at a size where the decoded value
+// is too small to hide the cost of per-call buffer management.
 
 import (
 	"bytes"
@@ -15,9 +15,9 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// BenchmarkSmall_Unmarshal — bytes-path decode of ValidPayload into a
-// Validated value. Companion to BenchmarkSmall_Reader; isolates the
-// codegen+parse overhead from streaming buffer management.
+// BenchmarkSmall_Unmarshal decodes ValidPayload into a Validated value on the
+// bytes path. It is the companion of BenchmarkSmall_Reader and measures the
+// parse cost of the generated code without streaming buffer management.
 func BenchmarkSmall_Unmarshal(b *testing.B) {
 	codecs := []struct {
 		name string
@@ -27,8 +27,8 @@ func BenchmarkSmall_Unmarshal(b *testing.B) {
 		{"sonic", func(p []byte) error { var v Validated; return sonic.Unmarshal(p, &v) }},
 		{"sonic_fast", func(p []byte) error { var v Validated; return sonic.ConfigFastest.Unmarshal(p, &v) }},
 		{"ggen", func(p []byte) error { _, _, err := Validated{}.DecodeFrom(p); return err }},
-		// ggen_copy: -copy mode (CopyValidated) — copies strings out of the
-		// input; the 2800 B Bio dominates, isolating the copy-out cost.
+		// ggen_copy: -copy mode (CopyValidated) copies strings out of the
+		// input. The 2800-byte Bio dominates, so this measures the copy cost.
 		{"ggen_copy", func(p []byte) error { _, _, err := CopyValidated{}.DecodeFrom(p); return err }},
 	}
 	for _, c := range codecs {
@@ -45,9 +45,11 @@ func BenchmarkSmall_Unmarshal(b *testing.B) {
 	}
 }
 
-// BenchmarkSmall_Reader — Reader-path decode of ValidPayload. Two ggen-stream
-// rows: 512-byte initial buf (forces shifts + grows) vs payload-sized buf (no
-// growth). Reference rows from jsonv2 / sonic / ggen-readall.
+// BenchmarkSmall_Reader decodes ValidPayload from an io.Reader. There are two
+// ggen stream rows. One starts with a 512-byte buffer, which forces the
+// buffer to compact and grow. The other starts with a buffer the size of the
+// payload, so it never grows. jsonv2, sonic and ggen-readall rows are for
+// reference.
 func BenchmarkSmall_Reader(b *testing.B) {
 	type readerState struct {
 		r   bytes.Reader
@@ -56,7 +58,7 @@ func BenchmarkSmall_Reader(b *testing.B) {
 
 	codecs := []struct {
 		name   string
-		bufCap int // initial buf cap for ggen-stream variants; 0 elsewhere
+		bufCap int // initial buffer capacity for the ggen stream rows, 0 for the others
 		fn     func(*readerState) error
 	}{
 		{"jsonv2", 0, func(s *readerState) error {
@@ -116,8 +118,9 @@ func BenchmarkSmall_Reader(b *testing.B) {
 	}
 }
 
-// BenchmarkTiny_Unmarshal — overhead floor of the dispatch path at a
-// payload size where per-call setup costs dominate the actual scan work.
+// BenchmarkTiny_Unmarshal measures the minimum overhead of decoding, at a
+// payload size where the fixed setup cost of each call outweighs the scan
+// work.
 func BenchmarkTiny_Unmarshal(b *testing.B) {
 	codecs := []struct {
 		name string
@@ -128,8 +131,8 @@ func BenchmarkTiny_Unmarshal(b *testing.B) {
 		{"sonic_fast", func(p []byte) error { var v Claim; return sonic.ConfigFastest.Unmarshal(p, &v) }},
 		{"easyjson", func(p []byte) error { var v EasyClaim; return v.UnmarshalJSON(p) }},
 		{"ggen", func(p []byte) error { _, _, err := Claim{}.DecodeFrom(p); return err }},
-		// ggen_copy: -copy mode (CopyClaim) — per-string copy tax at the
-		// dispatch-overhead floor.
+		// ggen_copy: -copy mode (CopyClaim). It shows the cost of copying each
+		// string when little else is going on.
 		{"ggen_copy", func(p []byte) error { _, _, err := CopyClaim{}.DecodeFrom(p); return err }},
 	}
 	for _, c := range codecs {
@@ -146,9 +149,9 @@ func BenchmarkTiny_Unmarshal(b *testing.B) {
 	}
 }
 
-// BenchmarkTiny_Marshal — encode-side analogue. At ~150 B output, the
-// per-call buffer alloc is a larger fraction of total cost than at mega
-// scale.
+// BenchmarkTiny_Marshal is the encode version. With about 150 bytes of
+// output, allocating the buffer on each call is a much larger part of the
+// total cost than at Mega's size.
 func BenchmarkTiny_Marshal(b *testing.B) {
 	codecs := []struct {
 		name string
@@ -175,9 +178,9 @@ func BenchmarkTiny_Marshal(b *testing.B) {
 	}
 }
 
-// BenchmarkValidationHeavy_Unmarshal — decode + per-field rule check on
-// every field. ggen runs ~25 validation checks per payload (vs jsonv2/
-// sonic which do zero). The per-check cost is the headline number.
+// BenchmarkValidationHeavy_Unmarshal decodes and checks rules on every field.
+// ggen runs about 25 validation checks per payload, while jsonv2 and sonic
+// run none. The cost per check is the main number to read.
 func BenchmarkValidationHeavy_Unmarshal(b *testing.B) {
 	codecs := []struct {
 		name string
@@ -203,9 +206,9 @@ func BenchmarkValidationHeavy_Unmarshal(b *testing.B) {
 	}
 }
 
-// BenchmarkRuneGated_Unmarshal isolates rune-rule validation on long (~8 KB)
-// strings. Decode-only validation cost; no other codec validates, so a single
-// ggen row.
+// BenchmarkRuneGated_Unmarshal measures the rune rules alone on long strings
+// of about 8 KB. It measures validation cost during decode. No other library
+// validates, so there is only a ggen row.
 func BenchmarkRuneGated_Unmarshal(b *testing.B) {
 	runBench(b, int64(len(RuneGatedPayload)),
 		func() struct{} { return struct{}{} },
@@ -217,8 +220,9 @@ func BenchmarkRuneGated_Unmarshal(b *testing.B) {
 	)
 }
 
-// BenchmarkHTMLEscape_MarshalParity — htmlescape opt-in (\uXXXX expansion of
-// `<` / `>` / `&`) vs the default literal output, which matches jsonv2.
+// BenchmarkHTMLEscape_MarshalParity compares the htmlescape option, which
+// writes `<`, `>` and `&` as \uXXXX escapes, with the default output that
+// writes them as is and matches jsonv2.
 func BenchmarkHTMLEscape_MarshalParity(b *testing.B) {
 	codecs := []struct {
 		name string

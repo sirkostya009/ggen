@@ -1,14 +1,15 @@
-// NoAlloc bench family (simple_test.go): the wide, flat, scalar-only Account
-// record whose bytes-path decode makes zero allocations.
+// NoAlloc benchmark family (simple_test.go): the wide, flat Account record of
+// scalar fields, whose bytes-path decode makes zero allocations.
 
 //go:generate ../ggen $GOFILE
 package bench
 
-// Account is the zero-allocation parse target (BenchmarkNoAlloc_Unmarshal):
-// a wide denormalized record — profile, address, employer, settings —
-// flattened into one object. Free of every kind that forces a decode alloc
-// (no slices/maps/pointers/any/RawMessage), so a full decode makes ZERO
-// allocations: strings alias the input, nested structs decode in place.
+// Account is the zero-allocation decode type for BenchmarkNoAlloc_Unmarshal.
+// It is a wide record that flattens profile, address, employer and settings
+// into one object. It has no kind that forces the decoder to allocate (no
+// slices, maps, pointers, any or RawMessage), so a full decode makes zero
+// allocations. Strings alias the input (point into it, no copy), and nested
+// structs decode in place.
 //
 //ggen:generate
 type Account struct {
@@ -98,10 +99,11 @@ type Preferences struct {
 	BetaFeatures       bool   `json:"betaFeatures"`
 }
 
-// CopyAccount and the other Copy* types mirror the Account family under -copy (`//ggen:generate copy`), like
-// CopyNode mirrors Node: every retained string is copied out of the input
-// instead of aliased. Wire-identical to Account, so the `ggen_copy` NoAlloc
-// row decodes the same AccountPayload. Geo is reused as-is (no strings).
+// CopyAccount and the other Copy* types are the Account family under -copy
+// (`//ggen:generate copy`), as CopyNode is for Node. Every retained string is
+// copied out of the input instead of aliasing it. They have the same JSON
+// form as Account, so the `ggen_copy` NoAlloc row decodes the same
+// AccountPayload. Geo is used as is, because it has no strings.
 //
 //ggen:generate copy
 type CopyAccount struct {
@@ -183,9 +185,10 @@ type CopyPreferences struct {
 	BetaFeatures       bool   `json:"betaFeatures"`
 }
 
-// EasyAccount and the other Easy* types mirror the Account family for the easyjson rows, kept on separate
-// types so easyjson's methods don't leak into the jsonv2/sonic rows. Same
-// wire shape — see "easyjson method leakage" in bench/CLAUDE.md.
+// EasyAccount and the other Easy* types copy the Account family for the
+// easyjson rows. They are separate types so the jsonv2 and sonic rows cannot
+// call easyjson's methods. The JSON form is the same. See "easyjson method
+// leakage" in bench/CLAUDE.md.
 //
 //easyjson:json
 type EasyAccount struct {
@@ -275,8 +278,8 @@ type EasyPreferences struct {
 	BetaFeatures       bool   `json:"betaFeatures"`
 }
 
-// AccountValue is a representative populated record; AccountPayload is its
-// marshalled JSON, built once at init.
+// AccountValue is a typical record with every field set. AccountPayload is
+// its marshaled JSON, built once at init.
 var (
 	AccountValue   Account
 	AccountPayload []byte
@@ -308,8 +311,9 @@ func init() {
 		LoginCount:   4821,
 		FailedLogins: 3,
 
-		// Long multilingual non-ASCII bodies — exercise the UTF-8 string
-		// scan (multi-byte runes, no escapes) over large fields.
+		// Long non-ASCII text in several languages. It exercises the UTF-8
+		// check of the string scan over large fields: characters that take
+		// several bytes, and no escapes.
 		Bio: "Провідна інженерка розподілених систем. ‹分散システムの主任エンジニア›. " +
 			"Кохаю каву ☕, біг по стежках 🏃 та маю давню образу на необмежені черги. " +
 			"Mes opinions sont porteuses — μην εμπιστεύεσαι ουρές χωρίς όριο. " +

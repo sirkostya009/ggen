@@ -200,7 +200,7 @@ func render(t *testing.T, set *gen.Set, dir string) {
 		}
 		for _, i := range out.Report().Issues {
 			// A micro or nanosecond Unix time is the one thing JavaScript
-			// cannot hold; the lane's divergences cover what that costs.
+			// cannot hold. The lane's divergences cover what that costs.
 			if strings.Contains(i.Msg, "integers JavaScript holds exactly") {
 				continue
 			}
@@ -213,7 +213,8 @@ func render(t *testing.T, set *gen.Set, dir string) {
 // zod and valibot input schemas, requiring the same verdict. What both accept,
 // Go must read from the schema's parsed value as it read the probe, and
 // whatever Go accepts must marshal to JSON the output schemas accept. It needs
-// node on PATH and `npm ci` at the repo root.
+// node on PATH and a node_modules from `npm ci` at the repo root, or the one
+// GGEN_NODE_MODULES names.
 func TestDifferential(t *testing.T) {
 	t.Parallel()
 	node, err := exec.LookPath("node")
@@ -497,7 +498,7 @@ func TestDifferentialSwift(t *testing.T) {
 	e := swift.New("Fixture", swift.Runtime(out.File("JSON.swift", swift.NewRuntime("Fixture"))),
 		swift.External(fixturePkg+".Color", "String"))
 	f := out.File("Types.swift", e)
-	types := map[string]string{} // placed name → the Swift type to decode
+	types := map[string]string{} // placed name to the Swift type to decode
 	for _, d := range set.Types() {
 		if d.Pkg.Path == fixturePkg || d.Pkg.Path == otherPkg {
 			for _, p := range []struct {
@@ -797,8 +798,8 @@ func outsideEnum(t *gen.Type, probe string) bool {
 
 // TestDifferentialTS type-checks every value Go accepts against the emitted
 // TypeScript types: an accepted input must be assignable to the input type and
-// what Go emits to the output type. It needs GGEN_NODE_MODULES, a node_modules
-// with typescript.
+// what Go emits to the output type. It needs typescript from `npm ci` at the
+// repo root, or from the node_modules GGEN_NODE_MODULES names.
 func TestDifferentialTS(t *testing.T) {
 	t.Parallel()
 	modules := nodeModules()
@@ -846,7 +847,7 @@ func TestDifferentialTS(t *testing.T) {
 	}
 	var body strings.Builder
 	fmt.Fprintf(&body, "import type { %s } from \"./types.ts\";\n", strings.Join(names, ", "))
-	at := map[int]string{} // line number → what it asserts
+	at := map[int]string{} // line number to what it asserts
 	line := 2
 	add := func(what, typ, value string) {
 		fmt.Fprintf(&body, "const c%d: %s = %s;\n", line, typ, value)

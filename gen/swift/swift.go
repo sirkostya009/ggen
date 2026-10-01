@@ -19,7 +19,8 @@ type Option func(*Emitter)
 // Header writes line at the top of every file, e.g. a generated-code marker.
 func Header(line string) Option { return HeaderFor(func(*gen.File) string { return line }) }
 
-// HeaderFor decides the first line per output file; "" writes none.
+// HeaderFor decides the first line per output file. Returning "" writes no
+// header.
 func HeaderFor(fn func(f *gen.File) string) Option { return func(e *Emitter) { e.header = fn } }
 
 // Public declares every type, property and initializer public, for types
@@ -47,8 +48,9 @@ func External(goPath, swiftType string, modules ...string) Option {
 func Runtime(f *gen.File) Option { return func(e *Emitter) { e.runtime = f } }
 
 // Protocols sets what every struct and enum conforms to besides Codable.
-// Default Hashable, which Swift synthesizes along with Equatable. Every
-// mapped External type must conform too; Protocols() drops them all.
+// The default is Hashable, which Swift synthesizes along with Equatable.
+// Every mapped External type must conform too. Protocols() with no arguments
+// drops them all.
 func Protocols(names ...string) Option {
 	return ProtocolsFor(func(*gen.File, gen.Placed) []string { return names })
 }
@@ -63,7 +65,7 @@ func ProtocolsFor(fn func(f *gen.File, p gen.Placed) []string) Option {
 
 // Indirect names the property wrapper that boxes each field closing a
 // reference cycle, so recursive types stay structs. The default, Indirect,
-// comes from the NewRuntime file; a wrapper of your own must decode an
+// comes from the NewRuntime file. A wrapper of your own must decode an
 // absent key into a nil Optional. With "", a recursive type is a final class
 // conforming to Codable alone, left for you to extend.
 func Indirect(wrapper string) Option {
@@ -189,7 +191,7 @@ type property struct {
 	optional, boxed          bool
 }
 
-// conformances is the protocol list of a placed struct or enum.
+// conformances returns the protocol list of a placed struct or enum.
 func (e *Emitter) conformances(ctx *gen.Context, p gen.Placed, first ...string) string {
 	return strings.Join(slices.Concat(first, []string{"Codable"}, e.protocols(ctx.File, p)), ", ")
 }
@@ -339,8 +341,8 @@ func (e *Emitter) enum(ctx *gen.Context, pl gen.Placed) {
 	e.body.WriteString("}\n")
 }
 
-// typ renders t, optional when JSON null can occur. A typealias never is
-// optional itself: a reference to it is, when its type admits null.
+// typ renders t, optional when JSON null can occur. A typealias is never
+// optional itself. A reference to it is optional when its type admits null.
 func (e *Emitter) typ(ctx *gen.Context, s *gen.Shape, t *gen.Type, where string) string {
 	out := e.base(ctx, s, t, where)
 	nullable := t.Nullable
@@ -442,7 +444,7 @@ func (e *Emitter) fromRuntime(ctx *gen.Context, where, name string) string {
 	return name
 }
 
-// primitive is the Swift type of a scalar by its wire and Go kind.
+// primitive returns the Swift type of a scalar by its wire and Go kind.
 func primitive(t *gen.Type) string {
 	//exhaustive:ignore not every kind applies here
 	switch t.Wire {
@@ -484,8 +486,9 @@ func (e *Emitter) ref(ctx *gen.Context, d *gen.TypeDecl, mode gen.Mode, name str
 	return name
 }
 
-// caseName is an enum case: RoleAdmin in type Role → admin, or the value in
-// lowerCamel when the constant name does not extend the type name.
+// caseName returns an enum case name: RoleAdmin in type Role becomes admin.
+// It falls back to the value in lowerCamel when the constant name does not
+// extend the type name.
 func caseName(typeName string, v gen.EnumValue) string {
 	base, ok := strings.CutPrefix(v.Name, typeName)
 	if !ok || base == "" {
@@ -574,9 +577,10 @@ func doc(text, indent string) string {
 	return b.String()
 }
 
-// NewRuntime returns the emitter of a file declaring, in module, JSONValue, a
-// Codable JSON value of any shape, and Indirect, the property wrapper that
-// boxes recursive fields. Pass the file to swift.Runtime.
+// NewRuntime returns the emitter of a file that declares two types in
+// module: JSONValue, a Codable JSON value of any shape, and Indirect, the
+// property wrapper that boxes recursive fields. Pass the file to
+// swift.Runtime.
 func NewRuntime(module string, opts ...Option) gen.Emitter {
 	e := New(module, opts...)
 	return runtime{module, e.header, e.publicRuntime}

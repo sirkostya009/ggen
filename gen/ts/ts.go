@@ -22,10 +22,11 @@ func ImportExt(ext string) Option { return func(e *Emitter) { e.importExt = ext 
 // Header writes line at the top of every file, e.g. a generated-code marker.
 func Header(line string) Option { return HeaderFor(func(*gen.File) string { return line }) }
 
-// HeaderFor decides the first line per output file; "" writes none.
+// HeaderFor decides the first line per output file. Returning "" writes no
+// header.
 func HeaderFor(fn func(f *gen.File) string) Option { return func(e *Emitter) { e.header = fn } }
 
-// Indent sets one indentation level. Default two spaces.
+// Indent sets one indentation level. The default is two spaces.
 func Indent(s string) Option { return func(e *Emitter) { e.Printer.Indent = s } }
 
 // External renders the Go type goPath ("github.com/google/uuid.UUID") as
@@ -127,7 +128,7 @@ func (e *Emitter) End(ctx *gen.Context) error {
 // TypeScript-based targets use it for the types they have to spell out.
 type Printer struct {
 	Indent   string
-	External map[string]string // Go path → TypeScript type
+	External map[string]string // TypeScript type, keyed by Go path
 	// ExternalFor, when set, maps an external type before External.
 	ExternalFor func(ctx *gen.Context, t *gen.Type) (string, bool)
 	// Quiet suppresses the report of unmapped external types, for an emitter
@@ -155,9 +156,9 @@ func (p *Printer) Object(ctx *gen.Context, s *gen.Shape) string {
 	}
 	b.WriteByte('}')
 	if s.Unknown == gen.Collect && s.Rest != nil {
-		// Every declared field's type joins the index signature: without it no
-		// object literal can satisfy both, since TypeScript checks a declared
-		// property against the signature.
+		// Every declared field's type joins the index signature. TypeScript
+		// checks each declared property against the signature, so without
+		// them no object literal could satisfy both.
 		var parts []string
 		add := func(ts string) {
 			for _, one := range splitUnion(ts) {
@@ -230,7 +231,7 @@ func (p *Printer) Type(ctx *gen.Context, s *gen.Shape, t *gen.Type) string {
 	return out
 }
 
-// ZeroLiteral is the JSON literal of an enum type's Go zero value.
+// ZeroLiteral returns the JSON literal of an enum type's Go zero value.
 func ZeroLiteral(t *gen.Type) string {
 	if t.Wire == gen.WireString {
 		return `""`
@@ -291,12 +292,12 @@ func (p *Printer) base(ctx *gen.Context, s *gen.Shape, t *gen.Type) string {
 	return "unknown"
 }
 
-// DeclName is "pkg.Type", the prefix report entries use.
+// DeclName returns "pkg.Type", the prefix report entries use.
 func DeclName(s *gen.Shape) string { return s.Decl.Pkg.Name + "." + s.Decl.Name }
 
 // Imports plans the names a file imports from its sibling files.
 type Imports struct {
-	byFile map[*gen.File]map[string]imported // file → exported name → how it is imported
+	byFile map[*gen.File]map[string]imported // how each exported name is imported, per file
 	locals map[string]struct{}
 }
 
@@ -326,8 +327,8 @@ func (im *Imports) Name(ctx *gen.Context, d *gen.TypeDecl, mode gen.Mode, name s
 	return im.name(ctx, d, mode, name, false)
 }
 
-// TypeName is Name for a type declaration, which is imported with `type` so
-// the specifier survives type stripping and isolated modules.
+// TypeName is like Name, for a type declaration. It is imported with `type`
+// so the specifier survives type stripping and isolated modules.
 func (im *Imports) TypeName(ctx *gen.Context, d *gen.TypeDecl, mode gen.Mode, name string) string {
 	return im.name(ctx, d, mode, name, true)
 }

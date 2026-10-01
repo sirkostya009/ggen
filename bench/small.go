@@ -1,14 +1,15 @@
-// Small bench family (small_test.go): the ~2.9 KiB Validated payload plus the
-// Tiny, ValidationHeavy, RuneGated, and HTMLEscape fixtures that share its
-// benchmarks file.
+// Small benchmark family (small_test.go): the Validated payload of about
+// 2.9 KiB, plus the Tiny, ValidationHeavy, RuneGated and HTMLEscape fixtures
+// that share its benchmark file.
 
 //go:generate ../ggen $GOFILE
 package bench
 
 import "strings"
 
-// Validated exercises per-field validation rules for fail-fast streaming
-// benchmarks — Email is corrupted to force early rejection.
+// Validated has per-field validation rules for the streaming benchmarks that
+// stop at the first error. In the invalid payload, Email is broken so the
+// decode is rejected early.
 //
 //ggen:generate
 type Validated struct {
@@ -19,10 +20,10 @@ type Validated struct {
 	Bio   string   `json:"bio"   pipe:"maxlen=4096"`
 }
 
-// CopyValidated is Validated under -copy (`//ggen:generate copy`) — the
+// CopyValidated is Validated under -copy (`//ggen:generate copy`). The
 // ggen_copy row of BenchmarkSmall_Unmarshal decodes the same ValidPayload
-// through the copy-mode bytes path (the 2800 B Bio makes the per-string
-// copy tax maximally visible).
+// through the copy-mode bytes path. The 2800-byte Bio makes the cost of
+// copying strings as visible as possible.
 //
 //ggen:generate copy
 type CopyValidated struct {
@@ -33,10 +34,10 @@ type CopyValidated struct {
 	Bio   string   `json:"bio"   pipe:"maxlen=4096"`
 }
 
-// --- Tiny (JWT-claim sized ~150 B) payload --------------------------------
+// --- Tiny payload, the size of a JWT claim set (about 150 bytes) ----------
 
-// Claim is the JWT-claim-sized struct used by the tiny-payload benchmarks,
-// where per-call overhead is visible.
+// Claim is a struct the size of a JWT claim set, used by the tiny-payload
+// benchmarks, where the fixed cost of each call shows.
 //
 //ggen:generate
 type Claim struct {
@@ -63,8 +64,9 @@ type CopyClaim struct {
 	Jti string `json:"jti"`
 }
 
-// EasyClaim mirrors Claim with easyjson methods, kept on a separate type so
-// the reflection codecs don't pick them up via json.Marshaler/Unmarshaler.
+// EasyClaim is Claim with easyjson methods. It is a separate type so the
+// reflection-based libraries do not call those methods through
+// json.Marshaler and json.Unmarshaler.
 //
 //easyjson:json
 type EasyClaim struct {
@@ -79,9 +81,10 @@ type EasyClaim struct {
 
 // --- Validation-heavy payload ---------------------------------------------
 
-// ValidationHeavy carries enough rules that the per-field check cost shows
-// up against codecs that don't validate. Uses minrunes/maxrunes (full UTF-8
-// walk) so the per-string scan cost is meaningful.
+// ValidationHeavy has enough rules that the cost of the per-field checks
+// shows up against libraries that do not validate. It uses minrunes and
+// maxrunes, which walk the whole string to count characters (runes), so the
+// per-string scan cost is significant.
 //
 //ggen:generate
 type ValidationHeavy struct {
@@ -97,8 +100,8 @@ type ValidationHeavy struct {
 	Role     string  `json:"role"     pipe:"oneof=admin|user|guest"`
 }
 
-// NoValidationHeavy mirrors ValidationHeavy's wire shape but skips validation
-// (via novalidate), isolating pure decode cost from the per-rule check cost.
+// NoValidationHeavy has ValidationHeavy's JSON form but skips validation (via
+// novalidate). It measures the decode cost without the cost of the rules.
 //
 //ggen:generate novalidate
 type NoValidationHeavy struct {
@@ -114,8 +117,8 @@ type NoValidationHeavy struct {
 	Role     string  `json:"role"`
 }
 
-// EasyValidationHeavy mirrors ValidationHeavy with easyjson methods (same
-// isolation rationale as EasyClaim).
+// EasyValidationHeavy is ValidationHeavy with easyjson methods. It is a
+// separate type for the same reason as EasyClaim.
 //
 //easyjson:json
 type EasyValidationHeavy struct {
@@ -131,9 +134,10 @@ type EasyValidationHeavy struct {
 	Role     string  `json:"role"`
 }
 
-// RuneGated isolates rune-rule validation on long strings. LongRunes holds
-// genuine 4-byte runes (len == 4×runecount); AsciiRunes is ASCII and preceded
-// by alphanum.
+// RuneGated measures only the rune rules on long strings. A rune is one
+// Unicode character, which takes 1 to 4 bytes in UTF-8. LongRunes holds
+// 4-byte characters only, so its byte length is 4 times its rune count.
+// AsciiRunes is ASCII, and its alphanum rule runs before maxrunes.
 //
 //ggen:generate
 type RuneGated struct {
@@ -143,24 +147,24 @@ type RuneGated struct {
 
 // --- HTML-escape parity payload --------------------------------------------
 
-// HTMLEscape exercises the htmlescape opt-in encoder path; pairs with
-// HTMLPlain (default literal) for the parity benchmark.
+// HTMLEscape exercises the encoder with the htmlescape option. It pairs with
+// HTMLPlain, which writes <, > and & as is, for the parity benchmark.
 //
 //ggen:generate htmlescape
 type HTMLEscape struct {
 	Note string `json:"note"`
 }
 
-// HTMLPlain mirrors HTMLEscape without htmlescape — marshal output
-// matches jsonv2.
+// HTMLPlain is HTMLEscape without htmlescape. Its marshal output matches
+// jsonv2.
 //
 //ggen:generate
 type HTMLPlain struct {
 	Note string `json:"note"`
 }
 
-// EasyHTMLPlain mirrors HTMLPlain with easyjson-generated methods.
-// Same isolation rationale as EasyClaim.
+// EasyHTMLPlain is HTMLPlain with easyjson-generated methods. It is a
+// separate type for the same reason as EasyClaim.
 //
 //easyjson:json
 type EasyHTMLPlain struct {
@@ -168,9 +172,9 @@ type EasyHTMLPlain struct {
 }
 
 var (
-	// ValidPayload + InvalidPayload — same-size bodies for fail-fast
-	// streaming benchmarks; the invalid one fails on the first decoded
-	// field (email).
+	// ValidPayload and InvalidPayload have bodies of the same size, for the
+	// streaming benchmarks that stop at the first error. The invalid one
+	// fails at the email field.
 	ValidPayload   []byte
 	InvalidPayload []byte
 
@@ -188,7 +192,8 @@ var (
 )
 
 func init() {
-	// ~3 KiB body; Bio padded so a slow reader delivers it in chunks.
+	// A body of about 3 KiB. Bio is padded so a slow reader delivers it in
+	// several chunks.
 	bio := (&gen{n: 1 << 40}).str(2800)
 	tags := []string{"alpha", "beta", "gamma", "delta"}
 	ValidPayload = mustMarshal(Validated{
@@ -198,8 +203,9 @@ func init() {
 		Tags:  tags,
 		Bio:   bio,
 	})
-	// Same shape, but Email is malformed (no '@') — fails the contains rule
-	// on the first decoded field (sorted order: age, bio, then email trips).
+	// Same shape, but Email is malformed (no '@'), so it fails the contains
+	// rule. Fields are written in sorted order, so age and bio decode first
+	// and then email fails.
 	InvalidPayload = mustMarshal(Validated{
 		Email: "not-an-email",
 		Name:  "alice",
@@ -208,8 +214,8 @@ func init() {
 		Bio:   bio,
 	})
 
-	// Tiny / Claim. Fixed timestamps — a live clock would change the payload
-	// bytes every run.
+	// Tiny payload (Claim). The timestamps are fixed, because a live clock
+	// would change the payload bytes on every run.
 	const issuedAt = 1718668800 // 2024-06-18T00:00:00Z
 	TinyValue = Claim{
 		Sub: "user-12345",
@@ -232,8 +238,8 @@ func init() {
 		URL: "https://example.com", Country: "UA", Lang: "en", Role: "user",
 	})
 
-	// Rune-gated: long ~8 KB strings. LongRunes = 2048 four-byte runes (8192
-	// bytes); AsciiRunes stays ASCII.
+	// RuneGated: long strings of about 8 KB. LongRunes is 2048 four-byte
+	// characters (8192 bytes). AsciiRunes stays ASCII.
 	RuneGatedPayload = mustMarshal(RuneGated{
 		LongRunes:  strings.Repeat("🦊", 2048),
 		AsciiRunes: strings.Repeat("abc123", 1366),

@@ -2,9 +2,10 @@ package prealloc
 
 import "testing"
 
-// The runtime excludes objects below 16 bytes from span inline mark bits
-// (gcUsesSpanInlineMarkBits: heapBitsInSpan(size) && size >= 16). Check no
-// element width makes the ladder emit an allocation under that.
+// The Go runtime gives objects smaller than 16 bytes a slower GC marking
+// path. It keeps inline mark bits only for spans where size >= 16 (see
+// gcUsesSpanInlineMarkBits). Check that no element width makes Cap pick a
+// total allocation below 16 bytes.
 func TestPreallocCap_NeverBelow16Bytes(t *testing.T) {
 	t.Parallel()
 	smallest, minSize := 1<<30, uintptr(0)

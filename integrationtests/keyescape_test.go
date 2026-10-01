@@ -9,9 +9,9 @@ import (
 	"testing"
 )
 
-// Wire keys are escaped STATICALLY at generate time — a quote-bearing name
-// used to emit invalid JSON with a nil error, and a backslash-bearing name a
-// silently different key.
+// Wire keys are JSON-escaped once, at generate time. Without that, a name
+// with a quote would give invalid JSON with a nil error, and a name with a
+// backslash would give a different key.
 
 // KeyEscQuote's field is named q"x via the jsonv2 quoted-section grammar.
 //
@@ -20,18 +20,18 @@ type KeyEscQuote struct {
 	A int `json:"'q\"x'"`
 }
 
-// KeyEscBackslash's field is named a\b (backslash + b) under ggen's tag
-// unquoting. jsonv2 double-unescapes the section to a+backspace — a pinned
-// name-SPELLING divergence (see backlog); the output must still be valid
-// JSON and self-round-trip.
+// KeyEscBackslash's field is named a\b, a backslash then b, under ggen's tag
+// unquoting. jsonv2 unescapes the section twice and gets a plus a backspace.
+// That name-spelling divergence is pinned in .claude/backlog.md. The output
+// must still be valid JSON and round-trip through its own decoder.
 //
 //ggen:generate
 type KeyEscBackslash struct {
 	A int `json:"'a\\b'"`
 }
 
-// KeyEscHTML pins htmlescape parity for NAME constants: encoding/json v1
-// HTML-escapes keys, so `a&b` marshals as a&b.
+// KeyEscHTML pins htmlescape parity for name constants. encoding/json v1
+// HTML-escapes keys, so `a&b` marshals as `a\u0026b`.
 //
 //ggen:generate htmlescape
 type KeyEscHTML struct {

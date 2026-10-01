@@ -10,8 +10,8 @@ import (
 	"github.com/sirkostya009/ggen/gen/model"
 )
 
-// generate is a test-only convenience over generateTo that returns the
-// output as a []byte for in-memory assertions.
+// generate is a test helper around generateTo that returns the output as a
+// []byte, so tests can check it in memory.
 func generate(pkg string, structs []model.StructInfo) ([]byte, error) {
 	var buf bytes.Buffer
 	if err := generateTo(&buf, pkg, pkg, structs); err != nil {
@@ -91,9 +91,11 @@ func TestGenerate_newValidators(t *testing.T) {
 	}
 }
 
-// Rune rules avoid the utf8.RuneCountInString walk via byte-length gates, and
-// drop it entirely when an ASCII-implying rule already passed in the same run
-// (non-multierr).
+// A rune is one Unicode character. In UTF-8 it takes 1 to 4 bytes, so the
+// byte length of a string bounds its rune count. Rune rules use byte-length
+// checks to skip the utf8.RuneCountInString walk when the length alone
+// decides. Without multierr, they skip the walk entirely when an earlier rule
+// already proved the string is ASCII, where runes equal bytes.
 func TestGenerate_runeGates(t *testing.T) {
 	gen := func(multiErr bool, steps []model.Step) string {
 		t.Helper()
@@ -112,7 +114,8 @@ func TestGenerate_runeGates(t *testing.T) {
 	}
 
 	t.Run("minrunes_gated", func(t *testing.T) {
-		// minrunes=3: fail-free len<3, pass-free len>=9 (4*3-3), band [3,9) walks.
+		// minrunes=3: len<3 always fails and len>=9 (4*3-3) always passes.
+		// Only lengths in [3,9) count runes.
 		s := gen(false, []model.Step{{V: model.ValidationRule{Name: "minrunes", Value: "3"}}})
 		if !strings.Contains(s, "if len(result.S) < 3 {") {
 			t.Errorf("missing fail-free len gate:\n%s", s)
@@ -123,7 +126,8 @@ func TestGenerate_runeGates(t *testing.T) {
 	})
 
 	t.Run("maxrunes_gated", func(t *testing.T) {
-		// maxrunes=5: pass-free len<=5, fail-free len>20 (4*5), band (5,20] walks.
+		// maxrunes=5: len<=5 always passes and len>20 (4*5) always fails.
+		// Only lengths in (5,20] count runes.
 		s := gen(false, []model.Step{{V: model.ValidationRule{Name: "maxrunes", Value: "5"}}})
 		if !strings.Contains(s, "if len(result.S) > 20 {") {
 			t.Errorf("missing fail-free len gate (4n=20):\n%s", s)
@@ -134,19 +138,22 @@ func TestGenerate_runeGates(t *testing.T) {
 	})
 
 	t.Run("minrunes_1_collapses", func(t *testing.T) {
-		// minrunes=1: band [1,1) empty → only the len<1 (== empty) gate, no walk.
+		// minrunes=1: the range [1,1) is empty, so only the len<1 check
+		// (the empty string) is left, with no rune count.
 		s := gen(false, []model.Step{{V: model.ValidationRule{Name: "minrunes", Value: "1"}}})
 		if !strings.Contains(s, "if len(result.S) < 1 {") {
 			t.Errorf("minrunes=1 should be a bare len gate:\n%s", s)
 		}
-		// the only walk is the cold Got: in the fail branch — none in a band
+		// The only rune count is for Got: in the fail branch, never in a
+		// length range.
 		if strings.Contains(s, "else if") {
 			t.Errorf("minrunes=1 should have no ambiguous band:\n%s", s)
 		}
 	})
 
 	t.Run("ascii_precedes_drops_walk", func(t *testing.T) {
-		// tier (c): alphanum before maxrunes (non-multierr) → count is len, no walk.
+		// alphanum runs before maxrunes without multierr, so the string is
+		// ASCII and its rune count is its length. No walk.
 		s := gen(false, []model.Step{
 			{V: model.ValidationRule{Name: "alphanum"}},
 			{V: model.ValidationRule{Name: "maxrunes", Value: "16"}},
@@ -160,8 +167,8 @@ func TestGenerate_runeGates(t *testing.T) {
 	})
 
 	t.Run("ascii_after_does_not_drop", func(t *testing.T) {
-		// alphanum AFTER the rune rule can't license tier (c) — string isn't
-		// known ASCII yet, so the gated walk stays.
+		// alphanum after the rune rule proves nothing yet. The string is not
+		// known to be ASCII, so the length checks and the walk stay.
 		s := gen(false, []model.Step{
 			{V: model.ValidationRule{Name: "maxrunes", Value: "16"}},
 			{V: model.ValidationRule{Name: "alphanum"}},
@@ -172,8 +179,9 @@ func TestGenerate_runeGates(t *testing.T) {
 	})
 
 	t.Run("multierr_keeps_walk", func(t *testing.T) {
-		// under multierr a failed alphanum doesn't stop reaching maxrunes on
-		// non-ASCII input, so tier (c) is unsafe — gated walk stays.
+		// Under multierr, a failed alphanum does not stop maxrunes from
+		// running on non-ASCII input. The ASCII shortcut is unsafe, so the
+		// length checks and the walk stay.
 		s := gen(true, []model.Step{
 			{V: model.ValidationRule{Name: "alphanum"}},
 			{V: model.ValidationRule{Name: "maxrunes", Value: "16"}},
@@ -227,10 +235,9 @@ type Msg struct {
 	}
 }
 
-// Round-7: synthesized element/converter FieldInfos used to drop flags the
-// parent carried — hint: inner levels were parsed but never emitted, and
-// allowinvalidutf8/copy vanished one container level down (and on @Conv
-// inputs entirely).
+// The synthetic FieldInfos built for container elements and converter inputs
+// must keep the parent's flags. That covers the inner levels of hint:, and
+// allowinvalidutf8 and copy at every container level and on @Conv inputs.
 func TestGenerate_syntheticFieldFlagPropagation(t *testing.T) {
 	t.Run("hint_inner_levels", func(t *testing.T) {
 		code, err := generate("p", []model.StructInfo{{
@@ -271,11 +278,12 @@ func TestGenerate_syntheticFieldFlagPropagation(t *testing.T) {
 	})
 }
 
-// Round-8 pins: emit-shape assertions for the alias/variant/omit fixes.
+// Checks on the emitted code for aliases, variants and omit rules.
 func TestGenerate_round8Fixes(t *testing.T) {
 	t.Run("container_alias_flags", func(t *testing.T) {
-		// copy + htmlescape + allowinvalidutf8 on a slice alias used to be
-		// silently dropped (AliasField is built before flag propagation).
+		// copy, htmlescape and allowinvalidutf8 must reach a slice alias.
+		// AliasField is built before flags are applied, so they must be
+		// copied onto it.
 		code, err := generate("p", []model.StructInfo{{
 			Name: "Tags", IsAlias: true, AliasKind: model.KindSlice,
 			AliasUnderlying: "[]string", HTMLEscape: true, Copy: true, AllowInvalidUTF8: true,
@@ -309,8 +317,8 @@ func TestGenerate_round8Fixes(t *testing.T) {
 	})
 
 	t.Run("converter_variant_keeps_native_null", func(t *testing.T) {
-		// *int with a converter variant: the native case must still claim 'n'
-		// (null → nil) instead of hard-erroring.
+		// For *int with a converter variant, the native case must still
+		// claim 'n' and decode null to nil, not return an error.
 		code, err := generate("p", []model.StructInfo{{
 			Name: "V",
 			Fields: []model.FieldInfo{{
@@ -331,8 +339,9 @@ func TestGenerate_round8Fixes(t *testing.T) {
 	})
 
 	t.Run("named_prim_omit", func(t *testing.T) {
-		// Named primitives (KindStruct at use sites) used to emit an invalid
-		// composite literal for omitzero and drop omitempty entirely.
+		// A named primitive is KindStruct where it is used. omitzero must
+		// compare it to its underlying zero value, not to a composite
+		// literal, and omitempty must still apply.
 		old := namedKinds
 		namedKinds = map[string]model.TypeKind{"Score": model.KindInt, "Name": model.KindString}
 		defer func() { namedKinds = old }()

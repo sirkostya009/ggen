@@ -16,8 +16,8 @@ import (
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty2"
 )
 
-// FallbackStruct: thirdparty.External has no DecodeFrom/TextUnmarshaler, so
-// codegen emits an encoding/json.Unmarshal fallback.
+// FallbackStruct holds thirdparty.External, which has neither DecodeFrom nor
+// UnmarshalText. So codegen emits an encoding/json.Unmarshal fallback.
 //
 //ggen:generate
 type FallbackStruct struct {
@@ -25,8 +25,9 @@ type FallbackStruct struct {
 	Extra thirdparty.External `json:"extra"`
 }
 
-// FastFallbackStruct: thirdparty2.External2 is ggen-generated in its own
-// package, so codegen emits direct AppendJSON/DecodeFrom calls (no json path).
+// FastFallbackStruct holds thirdparty2.External2, which ggen generated in its
+// own package. So codegen emits direct AppendJSON and DecodeFrom calls, with
+// no encoding/json path.
 //
 //ggen:generate
 type FastFallbackStruct struct {
@@ -34,8 +35,9 @@ type FastFallbackStruct struct {
 	Extra thirdparty2.External2 `json:"extra"`
 }
 
-// TextFallbackStruct: thirdparty.Tagged implements TextMarshaler/Unmarshaler;
-// codegen routes through those. Wire form is "name#tag".
+// TextFallbackStruct holds thirdparty.Tagged, which implements TextMarshaler
+// and TextUnmarshaler. Codegen routes through those, and the wire form is
+// "name#tag".
 //
 //ggen:generate
 type TextFallbackStruct struct {
@@ -64,7 +66,7 @@ func TestFallback_roundtrip(t *testing.T) {
 	}
 }
 
-// Cross-pkg dispatch to External2's generated methods round-trips.
+// Cross-package dispatch to External2's generated methods round-trips.
 func TestFastFallback_roundtrip(t *testing.T) {
 	t.Parallel()
 	in := FastFallbackStruct{
@@ -81,8 +83,8 @@ func TestFastFallback_roundtrip(t *testing.T) {
 	}
 }
 
-// A validation error on the nested field proves the generated decoder ran
-// (the json fallback wouldn't validate).
+// A validation error on the nested field proves the generated decoder ran.
+// The json fallback would not validate.
 func TestFastFallback_validationFromGeneratedDecoder(t *testing.T) {
 	t.Parallel()
 	// Empty Key violates required.
@@ -96,8 +98,8 @@ func TestFastFallback_validationFromGeneratedDecoder(t *testing.T) {
 	}
 }
 
-// Tagged routes through TextMarshaler/Unmarshaler; the "name#tag" string
-// form (not a sub-object) confirms the text path ran.
+// Tagged routes through TextMarshaler and TextUnmarshaler. The "name#tag"
+// string form, not a sub-object, confirms the text path ran.
 func TestTextFallback_roundtrip(t *testing.T) {
 	t.Parallel()
 	in := TextFallbackStruct{ID: "x", Tag: thirdparty.Tagged{Name: "alice", Tag: "admin"}}
@@ -129,12 +131,11 @@ func TestTextFallback_unmarshalErrorPropagates(t *testing.T) {
 
 // ---- cross-package ggen types in every field position ----------------
 //
-// A VALUE field never spells the foreign type out, which is why the container
-// and pointer positions were the ones emitting a file that named a package it
-// never imported. The marshal side had its own trap: the AppendJSON signature
-// probe looked for `func([]byte) []byte` while the emitter writes
-// `([]byte, error)`, so every cross-package value fell through to
-// encoding/json.
+// A value field never spells out the foreign type, but container and pointer
+// positions do, so the generated file must import the foreign package for
+// them. On the marshal side, the AppendJSON signature probe must match the
+// emitted `func([]byte) ([]byte, error)`. Otherwise every cross-package value
+// falls through to encoding/json.
 
 //ggen:generate
 type CrossPkgShapes struct {
@@ -202,8 +203,9 @@ func TestCrossPkg_AllPositions(t *testing.T) {
 	}
 }
 
-// The foreign type's methods must be reached through a pointer too: `*T`'s
-// method set contains T's, so the probe has to look at the pointee.
+// The foreign type's methods must be reached through a pointer too. The
+// method set of `*T` contains the methods of T, so the probe must look at the
+// pointee.
 func TestCrossPkg_PointerUsesGeneratedMethods(t *testing.T) {
 	t.Parallel()
 	v, _, err := CrossPkgShapes{}.DecodeFrom([]byte(`{"ptr":{"key":"","value":1}}`))
@@ -212,9 +214,10 @@ func TestCrossPkg_PointerUsesGeneratedMethods(t *testing.T) {
 	}
 }
 
-// The cross-package TextAppender marshal arm used to drop AppendText output
-// raw between quotes — a text carrying `"`/`\` emitted invalid JSON with a
-// nil error. thirdparty.QuotedText's text is caller-controlled bytes.
+// TextAppenderStruct checks that the cross-package TextAppender marshal path
+// escapes AppendText output. Written raw between quotes, a text carrying `"`
+// or `\` would give invalid JSON with a nil error. thirdparty.QuotedText's
+// text is caller-controlled bytes.
 //
 //ggen:generate
 type TextAppenderStruct struct {
@@ -281,10 +284,10 @@ func TestCrossPkg_unmarshalJSONRungRebasesPos(t *testing.T) {
 	check("stream", serr)
 }
 
-// R10TextCodec / R10JSONCodec are same-package, unannotated structs with
-// exported fields AND their own text / JSON marshaler pair. They are never
-// generated as a dependency: the host calls their methods, exactly as it
-// would for the same type in another package (jsonv2 parity).
+// R10TextCodec and R10JSONCodec are same-package unannotated structs with
+// exported fields and their own text or JSON marshaler pair. They are never
+// generated as a dependency. The host calls their methods, exactly as it
+// would for the same type in another package. This matches jsonv2.
 type R10TextCodec struct{ V string }
 
 func (c R10TextCodec) MarshalText() ([]byte, error) { return []byte("T:" + c.V), nil }

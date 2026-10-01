@@ -20,11 +20,12 @@ type Money struct {
 
 //ggen:generate
 type LooseThing struct {
-	// number, or a string-encoded number (fallible converter)
+	// A number, or a number inside a string (converter that can fail).
 	Count int `json:"count" pipe:". / @AtoiStrict ~ gte=0"`
-	// number, or an {amount} object via a ggen-decoded struct converter
+	// A number, or an {amount} object decoded by ggen into a struct and then
+	// converted.
 	Price int `json:"price" pipe:". / @FromMoney"`
-	// null → 0, number, or string
+	// null (decodes to 0), a number, or a string.
 	Opt int `json:"opt" pipe:"nullzero / . / @AtoiStrict"`
 }
 
@@ -34,7 +35,7 @@ func DoubleInt(n int) int              { return n * 2 }
 
 //ggen:generate
 type ElemInterleave struct {
-	// per element: validate lte=10 on the raw value, then double it.
+	// Per element: check lte=10 on the decoded value, then double it.
 	Nums []int `json:"nums" pipe:"inner:(lte=10 @DoubleInt)"`
 }
 
@@ -102,17 +103,18 @@ func TestVariants_StreamPath(t *testing.T) {
 	}
 }
 
-// A converter on a NAMED-PRIMITIVE field: the stream path used to route the
-// field through an underlying-typed temp before the converter check and
-// assign the named-typed result into it (non-compiling), and the native
-// variant claimed the OBJECT shape because a named primitive reports
-// KindStruct — so `{"s":42}` hit the dispatch default.
+// Score is a named primitive used as a converter field. The generated code
+// must assign the converter's Score result to a Score value, not to a
+// variable of the underlying int type, or it does not compile. A named
+// primitive reports KindStruct, so the native variant must not claim the
+// object shape for it. Otherwise `{"s":42}` would match no variant.
 type Score int
 
 func ScoreFromString(s string) (Score, error) { return Score(len(s)), nil }
 
-// A pointer field in a converter dispatch: the nullzero arm emitted
-// `*int(0)` (zeroLit converted through the POINTER spelling).
+// PtrFromString feeds a pointer field in a converter dispatch. The nullzero
+// branch must produce a nil pointer. Converting a zero literal through the
+// pointer type would give `*int(0)`, which does not compile.
 func PtrFromString(s string) (*int, error) { n := len(s); return &n, nil }
 
 //ggen:generate
@@ -130,7 +132,7 @@ func TestVariants_NamedPrimAndPointer(t *testing.T) {
 	}{
 		{`{"s":42,"n":7}`, 42, 7},        // both native
 		{`{"s":"abc","n":"abcd"}`, 3, 4}, // both converted
-		{`{"s":1,"n":null}`, 1, nil},     // nullzero arm
+		{`{"s":1,"n":null}`, 1, nil},     // nullzero branch
 	}
 	for _, c := range cases {
 		for _, path := range []string{"bytes", "stream"} {
@@ -161,9 +163,10 @@ func TestVariants_NamedPrimAndPointer(t *testing.T) {
 	}
 }
 
-// An error-form converter's own error is foreign, so it gets wrapped with the
-// field path and payload offset like every other decode failure. It used to
-// propagate bare (a *strconv.NumError with no idea which field failed).
+// An error returned by a converter comes from user code, so it is wrapped
+// with the field path and payload offset like every other decode failure.
+// Without the wrapper, the caller would get a bare *strconv.NumError with no
+// hint of which field failed.
 func TestVariant_converterErrorCarriesPathAndPos(t *testing.T) {
 	t.Parallel()
 	_, _, err := LooseThing{}.DecodeFrom([]byte(`{"count":"xyz"}`))
@@ -193,12 +196,12 @@ func TestVariant_converterErrorCarriesPathAndPos(t *testing.T) {
 	}
 }
 
-// Converter INPUTS resolve like a field of that type would: a pointer input
-// takes the pointer scan (null → nil, so the variant claims 'n' too) and an
-// unannotated named primitive resolves through its underlying kind. Both
-// used to claim the object shape `{` and fall to the encoding/json
-// fallback, so the wire number every such converter exists for hit the
-// dispatch default.
+// R10Score checks that converter input types resolve the way a field of that
+// type would. A pointer input is scanned as a pointer, so null gives nil and
+// the variant also matches a value starting with 'n'. A named primitive with
+// no annotation resolves through its underlying kind. Neither may match the
+// object shape `{` and fall back to encoding/json, or the JSON number the
+// converter exists for would match no variant.
 type R10Score int
 
 //ggen:generate
@@ -269,9 +272,10 @@ func TestVariants_R10ConverterInputs(t *testing.T) {
 	}
 }
 
-// R10BConvPtr: a POINTER field whose decode stage dispatches on shape still
-// runs its value steps split by target — built-ins on the pointee (guarded, a
-// variant may leave the pointer nil), `@Func` steps on the pointer itself.
+// R10BConvPtr is a pointer field whose decode picks a variant by JSON shape.
+// Its value steps still run on the right target. Built-in steps run on the
+// pointee, behind a nil check because a variant may leave the pointer nil.
+// `@Func` steps run on the pointer itself.
 //
 //ggen:generate
 type R10BConvPtr struct {

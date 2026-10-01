@@ -10,8 +10,8 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// NullZeroTags pins per-field nullzero: null decodes to the zero value; strict
-// fields keep rejecting null.
+// NullZeroTags pins per-field nullzero. On a nullzero field, null decodes to
+// the zero value. Fields without it still reject null.
 //
 //ggen:generate
 type NullZeroTags struct {
@@ -22,8 +22,8 @@ type NullZeroTags struct {
 	Strict  string  `json:"strict"`
 }
 
-// NullZeroValidated pins nullzero composing with validation: rules run on the
-// zeroed value.
+// NullZeroValidated pins nullzero combined with validation. The rules run on
+// the zero value that null produced.
 //
 //ggen:generate
 type NullZeroValidated struct {
@@ -31,7 +31,8 @@ type NullZeroValidated struct {
 	Name  string `json:"name"  pipe:"nullzero minlen=1"`
 }
 
-// NullZeroWhole pins struct-level nullzero — every value field accepts null.
+// NullZeroWhole pins struct-level nullzero. Every field accepts null and
+// decodes it to the zero value.
 //
 //ggen:generate nullzero
 type NullZeroWhole struct {
@@ -80,7 +81,7 @@ func TestNullZero_validation_runs_on_zero(t *testing.T) {
 	} else if got.Count != 0 {
 		t.Errorf("count = %d, want 0", got.Count)
 	}
-	// null → "" fails minlen=1.
+	// null becomes "", which fails minlen=1.
 	_, _, err := NullZeroValidated{}.DecodeFrom([]byte(`{"name":null}`))
 	if err == nil {
 		t.Fatal("name null: expected minlen validation error, got nil")

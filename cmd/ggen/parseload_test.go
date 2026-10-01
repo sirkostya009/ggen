@@ -1,10 +1,11 @@
 package main
 
-// Loader / declaration-walk regressions: which package variants a directory
-// yields, what a file's NAME constrains, which declarations are rejected,
-// how a package's error batch is reported, and how foreign packages are
-// spelled. Fixtures are real modules (replace → repo root) so the generated
-// output is compiled where the assertion needs it.
+// Tests for package loading and the declaration walk. They cover which
+// package variants a directory yields, what a file name constrains, which
+// declarations are rejected, how a package's errors are reported, and how
+// types from other packages are spelled. Fixtures are real modules whose
+// go.mod replaces ggen with the repo root, so a test can compile the
+// generated output when it needs to.
 
 import (
 	"bytes"
@@ -15,8 +16,8 @@ import (
 	"testing"
 )
 
-// writeGgenModule drops a go.mod into dir that resolves the ggen runtime to
-// this checkout, so `go build` / `go test` work on the generated output.
+// writeGgenModule writes a go.mod into dir that points the ggen runtime at
+// this checkout, so `go build` and `go test` work on the generated output.
 func writeGgenModule(t *testing.T, dir, module string) {
 	t.Helper()
 	root, err := filepath.Abs("../..")
@@ -30,8 +31,8 @@ func writeGgenModule(t *testing.T, dir, module string) {
 	)
 }
 
-// runGo runs the go tool inside dir with the module fixture isolated from the
-// workspace, returning combined output.
+// runGo runs the go tool inside dir, with the fixture module kept out of the
+// workspace. It returns stdout and stderr combined.
 func runGo(t *testing.T, dir string, env []string, args ...string) (string, error) {
 	t.Helper()
 	cmd := exec.CommandContext(t.Context(), "go", args...)
@@ -90,8 +91,8 @@ func TestParseLoad(t *testing.T) {
 				t.Errorf("go vet ./pkg: %v\n%s", err, out)
 			}
 		}
-		// The external package has more files than the base one, then fewer;
-		// each variant keeps its own set either way.
+		// First the external package has more files than the base one, then
+		// fewer. Each variant keeps its own set of files either way.
 		check(t)
 		if err := os.Remove(filepath.Join(pkg, "y_test.go")); err != nil {
 			t.Fatal(err)
@@ -131,8 +132,8 @@ func TestParseLoad(t *testing.T) {
 			t.Fatalf("ggen ./pkg: %v\n%s", err, o)
 		}
 		first := mustReadOutput(t, out)
-		// One invocation writes both packages, so the base type's methods
-		// are already the truth for the external test package.
+		// One run writes both packages, so the external test package can
+		// already rely on the base type's generated methods.
 		for _, want := range []string{"result.A.DecodeFrom(", "result.A.DecodeFromStream(", "s.A.AppendJSON(", "s.A.JSONSize()"} {
 			if !strings.Contains(first, want) {
 				t.Errorf("first run missing %q:\n%s", want, first)
@@ -151,8 +152,8 @@ func TestParseLoad(t *testing.T) {
 			t.Errorf("go vet ./pkg: %v\n%s", err, o)
 		}
 
-		// A base type this run does NOT generate must not be called
-		// directly, whatever a previous run left in the base output.
+		// A base type that this run does not generate must not be called
+		// directly, whatever an earlier run left in the base output.
 		writeFixture(
 			t,
 			filepath.Join(pkg, "a.go"),
@@ -173,7 +174,7 @@ func TestParseLoad(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
 		writeGgenModule(t, dir, "parens")
-		// Go keeps these parentheses through gofmt, so the walk has to.
+		// gofmt keeps these parentheses, so the walk must handle them.
 		writeFixture(t, filepath.Join(dir, "msg.go"), "package parens\n\n//ggen:generate\ntype Msg struct {\n"+
 			"\tA []([]bool)        `json:\"a\"`\n"+
 			"\tB *(int)            `json:\"b\"`\n"+
@@ -203,10 +204,10 @@ func TestParseLoad(t *testing.T) {
 		dir := t.TempDir()
 		writeGgenModule(t, dir, "hatches")
 		writeFixture(t, filepath.Join(dir, "tp", "t.go"), "package tp\n\ntype T struct {\n\tX  int    `json:\"x\"`\n\tFn func() `json:\"-\"`\n}\n")
-		// json:"-" drops the field before its type is judged, on the AST
-		// path and the go/types one (Local's fields come from the latter).
-		// An interface keeps its shape: it is spelled, and it marshals and
-		// unmarshals exactly as encoding/json does.
+		// json:"-" drops the field before its type is checked. This holds on
+		// both the AST path and the go/types path, and Local's fields come
+		// from the go/types one. An interface field is kept. It is written
+		// out and it marshals and unmarshals exactly as with encoding/json.
 		writeFixture(t, filepath.Join(dir, "msg.go"), "package hatches\n\nimport (\n\t\"hatches/tp\"\n\t\"io\"\n)\n\n//ggen:generate\ntype Msg struct {\n"+
 			"\tX  int              `json:\"x\"`\n"+
 			"\tFn func()           `json:\"-\"`\n"+
@@ -221,8 +222,8 @@ func TestParseLoad(t *testing.T) {
 			t.Errorf("go vet: %v\n%s", err, out)
 		}
 
-		// On the wire a func has no shape, so it is a generate-time
-		// rejection carrying the way out.
+		// A func has no JSON form, so it is rejected at generate time with a
+		// hint on how to fix it.
 		writeFixture(t, filepath.Join(dir, "bad.go"), "package hatches\n\n//ggen:generate\ntype Bad struct {\n\tFn func() `json:\"fn\"`\n}\n")
 		out, err := runCLI(t, bin, dir, "bad.go")
 		if err == nil {
@@ -299,8 +300,9 @@ func TestParseLoad(t *testing.T) {
 			}
 		}
 
-		// Single-file mode: `_ggen` masks the suffix for Go's own rule, so
-		// the header has to carry it.
+		// Single-file mode. Go treats os_linux.go as linux-only by its name,
+		// but os_linux_ggen.go ends in `_ggen`, so Go no longer sees the
+		// suffix. The //go:build header must carry it instead.
 		if out, err := runCLI(t, bin, base, "pkg/os_linux.go"); err != nil {
 			t.Fatalf("ggen pkg/os_linux.go: %v\n%s", err, out)
 		}
@@ -334,7 +336,8 @@ func TestParseLoad(t *testing.T) {
 		}
 		mustNotHaveFile(t, filepath.Join(dir, "msg_ggen.go"))
 
-		// The hinted escape hatch: a defined type over an instantiation.
+		// The workaround the error suggests: a defined type over an
+		// instantiation.
 		if out, err := runCLI(t, bin, dir, "msg.go", "IntBox"); err != nil {
 			t.Fatalf("ggen msg.go IntBox: %v\n%s", err, out)
 		}
@@ -599,8 +602,9 @@ type Doc struct {
 			t.Fatalf("ggen ./doc: %v\n%s", err, out)
 		}
 		body := mustReadOutput(t, filepath.Join(pkg, "doc_ggen.go"))
-		// aleaf keeps its declared name; bleaf, the second `leaf`, is bound
-		// explicitly. Both named strings take the inline cast path.
+		// aleaf keeps its declared name. bleaf is the second package named
+		// `leaf`, so it gets an explicit import name. Both named strings are
+		// decoded inline with a conversion.
 		for _, want := range []string{
 			"\t\"example.com/imp/aleaf\"\n", "\tleaf2 \"example.com/imp/bleaf\"\n",
 			"[]leaf.Name{}", `leaf.Name("")`, `leaf2.Other("")`, "*leaf.Pt",

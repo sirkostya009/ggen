@@ -8,7 +8,8 @@ import (
 	"time"
 )
 
-// RFC 3339 cannot spell these; time.Time.AppendText and jsonv2 refuse them.
+// RFC 3339 cannot express these times. time.Time.AppendText and jsonv2
+// both refuse them, so AppendRFC3339 must too.
 var unrepresentableTimes = map[string]time.Time{
 	"year_10000": time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC),
 	"year_-1":    time.Date(-1, 1, 1, 0, 0, 0, 0, time.UTC),
@@ -49,7 +50,8 @@ func TestAppendRFC3339_MatchesAppendFormat(t *testing.T) {
 	}
 }
 
-// ParseRFC3339 accepts and rejects exactly what jsonv2 does for a time.Time.
+// ParseRFC3339 must accept and reject exactly the inputs jsonv2 does for a
+// time.Time.
 func TestParseRFC3339_JSONv2Parity(t *testing.T) {
 	t.Parallel()
 	for _, s := range []string{

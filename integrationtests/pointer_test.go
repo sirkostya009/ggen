@@ -14,8 +14,8 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// An inner pointee error chains its field path through the outer field
-// ("addr.street").
+// An error inside a pointee carries the full field path through the outer
+// field ("addr.street").
 func TestPointer_parseErrorChainsThroughPointee(t *testing.T) {
 	t.Parallel()
 	_, _, err := (PointerStruct{}).DecodeFrom([]byte(
@@ -35,9 +35,10 @@ func TestPointer_parseErrorChainsThroughPointee(t *testing.T) {
 	}
 }
 
-// Single-level *T fields, one struct per pointee kind so a regression surfaces
-// at the kind rather than buried in the composite. Tags match the composite so
-// the per-field JSONSize cap-guard (jsonsize_test.go) hits the exact emit.
+// Single-level *T fields, one struct per pointee kind, so a regression points
+// at the kind instead of hiding in the composite struct. Tags match the
+// composite, so the per-field JSONSize capacity check in jsonsize_test.go
+// tests exactly the code generated for each field.
 
 //ggen:generate
 type PtrNameStruct struct {
@@ -69,7 +70,8 @@ type PtrEnabledStruct struct {
 	Enabled *bool `json:"enabled"`
 }
 
-// PointerStruct is the composite mix of the single-level *T fields; nil ↔ null.
+// PointerStruct combines the single-level *T fields. A nil pointer encodes as
+// null and null decodes to nil.
 //
 //ggen:generate
 type PointerStruct struct {
@@ -106,13 +108,13 @@ func TestPointer_nilOmitted(t *testing.T) {
 	t.Parallel()
 	in := PointerStruct{Name: new("bob"), Enabled: new(false)}
 	out, _ := ggen.MarshalString(in)
-	// nil omitempty fields are absent.
+	// Nil omitempty fields are absent.
 	for _, absent := range []string{"count", "ratio", "addr", "when"} {
 		if strings.Contains(out, `"`+absent+`"`) {
 			t.Errorf("expected %q omitted, got %q", absent, out)
 		}
 	}
-	// Non-omit fields stay present.
+	// Fields without omitempty stay present.
 	if !strings.Contains(out, `"name":"bob"`) {
 		t.Errorf("name missing: %q", out)
 	}
@@ -136,11 +138,12 @@ func TestPointer_nullRoundtrip(t *testing.T) {
 	}
 }
 
-// Multi-level pointer fields (**T, ***T, …), one struct per depth/leaf so the
-// per-field JSONSize cap-guard (jsonsize_test.go) hits each nil-ladder depth in
-// isolation. Chain reuse + parse-failure semantics pinned by
-// TestMerge_multiLevel* in merge_test.go. Container variants live in
-// NPtrContainersStruct below.
+// Multi-level pointer fields (**T, ***T and deeper), one struct per depth and
+// leaf type. This way the per-field JSONSize capacity check in
+// jsonsize_test.go tests each depth of nil checks on its own. Reuse of a
+// pointer chain is tested by the TestMerge_multiLevel* tests in merge_test.go,
+// and parse failure by TestMerge_pointerParseFailureLeavesReceiverUntouched.
+// Container variants are in NPtrContainersStruct below.
 
 //ggen:generate
 type PtrPPStruct struct {
@@ -220,8 +223,8 @@ func TestNPtr_allNull(t *testing.T) {
 	}
 }
 
-// A non-nil outer with a nil inner marshals the field as null (encode
-// short-circuits at the first nil).
+// A non-nil outer pointer with a nil inner pointer marshals the field as null.
+// Encoding stops at the first nil level.
 func TestNPtr_intermediateNilMarshalsNull(t *testing.T) {
 	t.Parallel()
 	in := NPtrStruct{PP: new((*int)(nil))} // non-nil outer, nil inner
@@ -234,8 +237,10 @@ func TestNPtr_intermediateNilMarshalsNull(t *testing.T) {
 	}
 }
 
-// Slab-allocated []*T / [N]*T paths, one struct per container shape so a
-// regression surfaces at the shape. nil elements decode to nil pointers.
+// []*T and [N]*T fields, one struct per container shape so a regression points
+// at the shape. These decode their pointees into one shared backing slice
+// (a slab) instead of one allocation per element. null elements decode to nil
+// pointers.
 
 //ggen:generate
 type PtrSliceItemsStruct struct {
@@ -252,7 +257,7 @@ type PtrSliceNodesStruct struct {
 	Nodes []*Node `json:"nodes"`
 }
 
-// PtrSliceStruct is the composite mix of the slab []*T / [N]*T shapes.
+// PtrSliceStruct combines the []*T and [N]*T shapes above.
 //
 //ggen:generate
 type PtrSliceStruct struct {
@@ -261,9 +266,9 @@ type PtrSliceStruct struct {
 	PtrSliceNodesStruct
 }
 
-// NPtrContainersStruct pins multi-level pointers inside containers: slice /
-// array elements and map values run the per-element pointer cascade (no slab,
-// no encoding/json fallback).
+// NPtrContainersStruct pins multi-level pointers inside containers. Slice
+// elements, array elements and map values each decode their own pointer chain.
+// They use no slab and no encoding/json fallback.
 //
 //ggen:generate
 type NPtrContainersStruct struct {
@@ -306,7 +311,8 @@ func TestNPtr_containersRoundtrip(t *testing.T) {
 		t.Errorf("MPA = %v", got.MPA)
 	}
 
-	// Marshal → decode fixed point, within the JSONSize budget.
+	// Marshal then decode must give back the same value, and the output must
+	// fit in the JSONSize budget.
 	size := got.JSONSize()
 	out, err := got.AppendJSON(make([]byte, 0, size))
 	if err != nil {
@@ -319,7 +325,7 @@ func TestNPtr_containersRoundtrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("re-decode: %v\n%s", err, out)
 	}
-	// Value equality, not byte — map fields marshal in random order.
+	// Compare values, not bytes, because map fields marshal in random order.
 	if !reflect.DeepEqual(got, again) {
 		t.Errorf("roundtrip not a fixed point:\n%#v\n%#v", got, again)
 	}
@@ -350,9 +356,10 @@ func TestNPtr_containersStream(t *testing.T) {
 
 // ---- pointers to containers, any depth -------------------------------
 //
-// The receiver reset has to reach THROUGH the stars: decode only allocates a
-// pointee when the pointer itself is nil, so a reused receiver used to APPEND
-// into the carried-in container where the plain `[]T` field replaced it.
+// The receiver reset has to reach through every pointer level. Decode only
+// allocates a pointee when the pointer itself is nil. Without the reset, a
+// reused receiver would append into the carried container, while a plain
+// `[]T` field replaces its content.
 
 //ggen:generate
 type PtrContainers struct {
@@ -429,9 +436,10 @@ func TestPtrContainer_OmittedKeyClears(t *testing.T) {
 	}
 }
 
-// Multi-level pointers to containers also have to DECODE — the parse layer
-// peeled one star, so at depth ≥ 2 the element kind fell back to its zero
-// value (KindString) and a `**[]T` emitted a string scan into a T slot.
+// Multi-level pointers to containers must decode too. The parser has to strip
+// every pointer level to find the element kind. If it strips only one, the
+// element kind at depth 2 and deeper is left as its zero value (KindString),
+// and a `**[]T` would scan a string into a T slot.
 func TestPtrContainer_DeepDecodes(t *testing.T) {
 	t.Parallel()
 	v, _, err := PtrContainers{}.DecodeFrom([]byte(`{"deep":[4,5],"m3":{"k":7},"melem":{"q":{"k":"q"}}}`))
@@ -460,10 +468,10 @@ func TestPtrContainer_DeepDecodes(t *testing.T) {
 	}
 }
 
-// PtrMapHeavy covers a pointer-to-map whose VALUES own allocations: the bytes
-// decode swaps the map instead of clearing it, so the reset has to come from
-// the swap. PtrContainers' own element type is scalar-only and takes the
-// clear() path, so it cannot cover this.
+// PtrMapHeavy covers a pointer to a map whose values own allocations. The
+// bytes decode replaces such a map with a new one instead of clearing it, so
+// the reset has to come from that replacement. PtrContainers only has scalar
+// element types, which take the clear() path, so it cannot cover this.
 //
 //ggen:generate
 type PtrMapHeavy struct {

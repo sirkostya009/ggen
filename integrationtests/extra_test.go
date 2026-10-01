@@ -17,7 +17,7 @@ import (
 	"github.com/sirkostya009/ggen/internal/prealloc"
 )
 
-// ExtraStruct exercises keys:/hint:/clamp/nested-dive.
+// ExtraStruct exercises keys:, hint:, clamp and nested inner: validation.
 //
 //ggen:generate
 type ExtraStruct struct {
@@ -28,8 +28,8 @@ type ExtraStruct struct {
 	Triple       [][][]string   `         json:"triple"       pipe:"inner:(minlen=1 inner:(minlen=1 inner:minlen=1))"`
 }
 
-// tupleLen pins the named-const array-length path: the AST reads `[tupleLen]`
-// as 0, so the length must resolve through go/types.
+// tupleLen pins the named-const array-length path. The AST alone reads
+// `[tupleLen]` as 0, so the length must resolve through go/types.
 const tupleLen = 2
 
 // TupleStruct exercises fixed-length arrays [N]T as strict-count JSON tuples.
@@ -104,7 +104,7 @@ func TestKeys_ValidationOnMapKey(t *testing.T) {
 	}
 }
 
-// trim+lower mods run on the key before insertion.
+// The trim and tolower mods run on the key before insertion.
 func TestKeys_ModOnMapKey(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"keyedMap":{"  FOO  ":7}}`)
@@ -117,7 +117,7 @@ func TestKeys_ModOnMapKey(t *testing.T) {
 	}
 }
 
-// [][]int decodes; per-level validation passes.
+// [][]int decodes and per-level validation passes.
 func TestNestedDive_TwoLevels_OK(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"nestedInts":[[1,2,3],[10,20]]}`)
@@ -143,7 +143,7 @@ func TestNestedDive_OuterViolation(t *testing.T) {
 
 func TestNestedDive_InnerViolation(t *testing.T) {
 	t.Parallel()
-	// Element > 100 violates lte=100 at the deepest level.
+	// An element above 100 violates lte=100 at the deepest level.
 	in := []byte(`{"nestedInts":[[1,2,999]]}`)
 	_, _, err := ExtraStruct{}.DecodeFrom(in)
 	if err == nil {
@@ -246,9 +246,10 @@ func TestTuple_StrictTooMany(t *testing.T) {
 	}
 }
 
-// A named-const length ([tupleLen]int) used to parse as ArrayLen 0, emitting a
-// strict length-0 tuple that rejected every non-empty payload and silently
-// accepted [] — marshal output couldn't round-trip its own decoder.
+// A named-const length ([tupleLen]int) must resolve to its real value. Read
+// as 0, it would give a strict length-0 tuple that rejects every non-empty
+// payload and accepts [], so marshal output could not round-trip through its
+// own decoder.
 func TestTuple_NamedConstLen(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"named":[7,8],"nested":[[1,2],[3,4]]}`)
@@ -262,7 +263,7 @@ func TestTuple_NamedConstLen(t *testing.T) {
 	if !reflect.DeepEqual(got.Nested, [][tupleLen]int{{1, 2}, {3, 4}}) {
 		t.Errorf("Nested = %v", got.Nested)
 	}
-	// Strict count enforced with the RESOLVED length.
+	// The strict count uses the resolved length.
 	var ve *ggen.LenError
 	_, _, errNamed := TupleStruct{}.DecodeFrom([]byte(`{"named":[7]}`))
 	if !errors.As(errNamed, &ve) {
@@ -359,11 +360,11 @@ func TestNestedMarshalRoundtrip(t *testing.T) {
 
 // TestJSONSize_TupleStruct lives in jsonsize_test.go.
 
-// PreallocWidths pins the WIDTH-DRIVEN default capacity: with no hint the
-// generated make() uses a constant derived from the element size, and that
-// constant must agree with prealloc.Cap (the runtime spec of the ladder,
-// which the emitted expression only mirrors — it cannot call it, because gc
-// declines to inline into a generated DecodeFrom).
+// PreallocWidths pins the default slice capacity that depends on element
+// width. With no hint, the generated make() uses a constant derived from the
+// element size. That constant must agree with prealloc.Cap, the runtime spec
+// of the capacity rules. The emitted expression only mirrors prealloc.Cap and
+// cannot call it, because gc does not inline into a generated DecodeFrom.
 //
 //ggen:generate
 type PreallocWidths struct {
@@ -380,9 +381,9 @@ type PreallocWidths struct {
 	// still fit a 512-byte span, ignored when they do not.
 	MaxFits   []PreallocRow  `json:"maxFits"   pipe:"maxlen=8"`
 	MaxTooBig []PreallocWide `json:"maxTooBig" pipe:"maxlen=8"`
-	// A bound past the span budget must not reach the emitted cap const:
-	// multiplied by the element size there it overflowed int and broke the
-	// build. Compiling is the test; the cap is the width default.
+	// A bound past the span budget must not reach the emitted cap const.
+	// Multiplied by the element size, it would overflow int and break the
+	// build. Compiling is the test, and the cap is the width default.
 	MaxHuge []PreallocWide `json:"maxHuge" pipe:"maxlen=9223372036854775807"`
 }
 
@@ -430,9 +431,9 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 			t.Errorf("%s: cap %d, want at least 1", c.name, c.got)
 		}
 	}
-	// PreallocRow is 48 B: 8 × 48 = 384 <= 512, so the bound wins over the
-	// width default (10). PreallocWide is 328 B: 8 × 328 blows the span, so the
-	// width default (1) stands.
+	// PreallocRow is 48 bytes. 8 × 48 = 384 fits in 512, so the bound wins
+	// over the width default of 10. PreallocWide is 336 bytes. 8 × 336 does
+	// not fit, so the width default of 1 stands.
 	if got, want := cap(got.MaxFits), 8; got != want {
 		t.Errorf("maxlen=8 that fits a span: cap = %d, want %d", got, want)
 	}
@@ -442,13 +443,15 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 	if got, want := cap(got.MaxHuge), prealloc.Cap(unsafe.Sizeof(PreallocWide{})); got != want {
 		t.Errorf("maxlen=MaxInt64: cap = %d, want the width default %d", got, want)
 	}
-	// A numeric slice beats the width guess outright: scalar elements carry no
-	// `,`, so the comma pre-count (opt #42) sizes it exactly.
+	// A numeric slice beats the width guess outright. Scalar elements carry no
+	// `,`, so counting commas ahead of the decode sizes it exactly (see opt
+	// #42 in cmd/ggen/CLAUDE.md).
 	if cap(got.Ints) != len(got.Ints) {
 		t.Errorf("[]int should be exact-counted: cap %d, len %d", cap(got.Ints), len(got.Ints))
 	}
-	// Every explicit sizing rule outranks the width guess: hint > len > minlen.
-	// PreallocWide is 328 bytes, so the width ladder would say 1 for all three.
+	// Every explicit sizing rule outranks the width guess, in the order hint,
+	// len, minlen. PreallocWide is 336 bytes, so the width rule alone would
+	// say 1 for all three.
 	for _, c := range []struct {
 		name string
 		got  int
@@ -468,11 +471,9 @@ func TestPrealloc_WidthDrivenCaps(t *testing.T) {
 	}
 }
 
-// ElemKinds pins dedicated-kind slice ELEMENTS (time/duration/raw/[]byte/
-// map/any): these were accepted at parse time but the element emitters fell
-// through their kind switches — []any/[]time.Duration didn't compile, and
-// the rest pre-grew a zero slot without scanning (ErrBadArray on any
-// non-empty array) with a marshal loop that emitted nothing.
+// ElemKinds pins slice elements of the dedicated kinds: time, duration, raw,
+// []byte, map and any. The element emitters must scan and marshal each of
+// these kinds, both on decode and on encode.
 //
 //ggen:generate
 type ElemKinds struct {
@@ -493,8 +494,9 @@ func TestElemKinds_DedicatedKindElements(t *testing.T) {
 	if err != nil {
 		t.Fatalf("bytes decode: %v", err)
 	}
-	// Durations use ggen's units default (stdlib int64-nanos diverges) —
-	// check them directly, diff the rest against jsonv2.
+	// Durations use ggen's units default, where encoding/json uses int64
+	// nanoseconds. So check them directly and diff the rest against
+	// encoding/json.
 	if got.Durs[0] != 90*time.Second || got.Durs[1] != time.Hour {
 		t.Errorf("Durs = %v", got.Durs)
 	}
@@ -526,7 +528,8 @@ func TestElemKinds_DedicatedKindElements(t *testing.T) {
 	if !reflect.DeepEqual(sgot, got) {
 		t.Errorf("stream mismatch:\n bytes:  %+v\n stream: %+v", got, sgot)
 	}
-	// Marshal: valid JSON, within JSONSize, roundtrips through own decoder.
+	// Marshal must give valid JSON, stay within JSONSize and round-trip
+	// through its own decoder.
 	size := got.JSONSize()
 	out, err := got.AppendJSON(make([]byte, 0, size))
 	if err != nil {
@@ -547,9 +550,9 @@ func TestElemKinds_DedicatedKindElements(t *testing.T) {
 	}
 }
 
-// MapVals pins dedicated-kind map VALUES: the decode value switch's default
-// arm skipped the span leaving `mk` unused, and the marshal loop emitted
-// `"k":` with no value — neither compiled (map[string]any included).
+// MapVals pins map values of the dedicated kinds, map[string]any included.
+// The decode value switch must handle each kind, and the marshal loop must
+// emit a value after each `"k":`.
 //
 //ggen:generate
 type MapVals struct {
@@ -620,9 +623,8 @@ func TestMapVals_DedicatedKindValues(t *testing.T) {
 	}
 }
 
-// A fail-fast validation error from a NESTED decode used to pass through
-// NewParseErr with its outer segments missing — "zipCode" instead of
-// "addr.zipCode".
+// A fail-fast validation error from a nested decode must carry its full path,
+// "addr.zipCode", not just "zipCode".
 func TestNestedValidationPath_Complete(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"addr":{"street":"s","city":"c","zipCode":"123"}}`)
@@ -634,9 +636,9 @@ func TestNestedValidationPath_Complete(t *testing.T) {
 	if len(le.Path) != 2 || le.Path[0] != "addr" || le.Path[1] != "zipCode" {
 		t.Errorf("Path = %v, want [addr zipCode]", le.Path)
 	}
-	// Pos is a FULL-payload offset (cursor just past the offending value) on
-	// the bytes path too: the nested decoder ran on data[i:], and the call
-	// site rebases its sub-slice-relative positions (NewParseErrShift).
+	// Pos is a full-payload offset on the bytes path too, the cursor just past
+	// the offending value. The nested decoder ran on data[i:], so the call
+	// site shifts its positions by i (NewParseErrShift).
 	if want := bytes.Index(in, []byte(`"123"`)) + len(`"123"`); le.Pos != want {
 		t.Errorf("bytes Pos = %d, want %d (full-payload offset)", le.Pos, want)
 	}
@@ -651,9 +653,9 @@ func TestNestedValidationPath_Complete(t *testing.T) {
 		t.Errorf("stream Pos = %d, bytes Pos = %d — paths must agree", sle.Pos, le.Pos)
 	}
 
-	// Nested PARSE errors rebase the same way: Pos = the offending token's
-	// full-payload start, and the chained ParseError keeps the deeper (now
-	// rebased) position.
+	// Nested parse errors shift the same way. Pos is the full-payload start of
+	// the offending token, and the chained ParseError keeps the deeper
+	// position, also shifted.
 	bad := []byte(`{"addr":{"street":"s","city":"c","zipCode":42}}`)
 	_, _, perr := PtrAddrStruct{}.DecodeFrom(bad)
 	var pe *ggen.ParseError
@@ -665,8 +667,8 @@ func TestNestedValidationPath_Complete(t *testing.T) {
 	}
 }
 
-// jsonv2 quoted names: '-' is a literal "-" key (only a bare - ignores the
-// field) and quotes protect commas in names.
+// QuotedNames uses jsonv2 quoted names. '-' is a literal "-" key, since only
+// a bare - ignores the field. Quotes also protect commas in names.
 //
 //ggen:generate
 type QuotedNames struct {
@@ -695,9 +697,8 @@ func TestQuotedNames_roundtrip(t *testing.T) {
 	}
 }
 
-// R10ZeroTuple pins the degenerate `[0]T` tuple: it marshals as `[]` (the
-// unrolled first-element emit indexed a zero-length array) and, being a
-// strict tuple, decodes only `[]`.
+// R10ZeroTuple pins the degenerate `[0]T` tuple. It marshals as `[]` without
+// indexing a first element, and as a strict tuple it decodes only `[]`.
 //
 //ggen:generate
 type R10ZeroTuple struct {
@@ -726,8 +727,8 @@ func TestTuple_ZeroLength(t *testing.T) {
 
 // R10BZeroTupleContainers puts the degenerate `[0]T` in every container
 // position. Each value marshals as the constant `[]`, so the map emit must
-// bind keys only, and the decode has no slot to write — a nested `[0][N]T`
-// element store does not even compile.
+// bind keys only. The decode has no slot to write, and a store into a nested
+// `[0][N]T` element does not even compile.
 //
 //ggen:generate
 type R10BZeroTupleContainers struct {
@@ -771,9 +772,10 @@ func TestTuple_ZeroLengthContainers(t *testing.T) {
 	}
 }
 
-// Integral bounds parse at the field's width and sign, so a uint64 may carry
-// any bound up to 2^64-1 and an int64 oneof may list distinct integers above
-// 2^53 (an Atoi gate and a float64 dedupe key used to refuse both).
+// R10WideBounds checks that integer bounds parse at the field's width and
+// sign. A uint64 may carry any bound up to 2^64-1, and an int64 oneof may
+// list distinct integers above 2^53. Parsing through int or float64 would
+// refuse both.
 //
 //ggen:generate
 type R10WideBounds struct {
@@ -808,8 +810,9 @@ func TestR10WideBounds(t *testing.T) {
 	}
 }
 
-// R10BParenTypes: Go keeps redundant parentheses in a type expression through
-// gofmt, so every field here has the shape its unparenthesized type asks for.
+// R10BParenTypes covers redundant parentheses in type expressions. gofmt
+// keeps them, so every field here must get the shape its unparenthesized
+// type asks for.
 //
 //ggen:generate
 type R10BParenTypes struct {

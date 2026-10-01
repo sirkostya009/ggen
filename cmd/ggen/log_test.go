@@ -14,7 +14,7 @@ import (
 	"github.com/sirkostya009/ggen/gen/model"
 )
 
-// clearDetectionEnv unsets every env var shouldUseConcise inspects
+// clearDetectionEnv clears every env var that shouldUseConcise checks.
 func clearDetectionEnv(t *testing.T) {
 	t.Helper()
 	for _, k := range ciEnvVars {
@@ -28,15 +28,15 @@ func clearDetectionEnv(t *testing.T) {
 func TestShouldUseConcise_EnvDetection(t *testing.T) {
 	cases := []struct {
 		name        string
-		setVar      string // var to set (empty = no env var set)
-		setVal      string // value (used when setVar != "")
+		setVar      string // var to set, empty for none
+		setVal      string // its value, used when setVar is not empty
 		stderrIsTTY bool
 		want        bool
 	}{
 		// Universal CI marker.
 		{"CI_true", "CI", "true", true, true},
 		{"CI_1", "CI", "1", true, true},
-		// Vendor-specific CI vars that some runners set without CI=1.
+		// Vendor CI vars that some runners set without CI=1.
 		{"GITHUB_ACTIONS", "GITHUB_ACTIONS", "true", true, true},
 		{"GITLAB_CI", "GITLAB_CI", "true", true, true},
 		{"CIRCLECI", "CIRCLECI", "true", true, true},
@@ -54,13 +54,13 @@ func TestShouldUseConcise_EnvDetection(t *testing.T) {
 		{"CURSOR_TRACE_ID", "CURSOR_TRACE_ID", "abc", true, true},
 		{"AIDER", "AIDER_AUTO_COMMITS", "true", true, true},
 
-		// Non-TTY stderr alone (no env signal) → concise.
+		// stderr is not a terminal and no env var is set: concise.
 		{"non_tty_stderr_no_env", "", "", false, true},
 
-		// Interactive human: no env signals, TTY stderr → pretty.
+		// A human at a terminal, with no env var set: pretty.
 		{"human_interactive", "", "", true, false},
 
-		// Empty env value is treated as unset.
+		// An empty env value counts as unset.
 		{"CI_empty_string", "CI", "", true, false},
 	}
 	clearDetectionEnv(t)
@@ -78,9 +78,9 @@ func TestShouldUseConcise_EnvDetection(t *testing.T) {
 	}
 }
 
-// captured drives a logger against a bytes.Buffer. The returned Logger
-// auto-flushes after each Error so byte-asserts see output immediately;
-// queue-specific tests construct the raw impls directly.
+// captured returns a logger that writes to a bytes.Buffer. The returned
+// Logger flushes after each Error, so tests see the output at once. Tests of
+// the queue build the plain loggers directly.
 func captured(level Level, pretty, color bool) (Logger, *bytes.Buffer) {
 	var buf bytes.Buffer
 	var inner Logger
@@ -115,7 +115,7 @@ func TestLogger_LevelFiltering(t *testing.T) {
 			{"info", false},
 			{"debug", false},
 			{"trace", false},
-			{"error", true}, // errors always surface
+			{"error", true}, // errors always print
 		}},
 		{"info", LevelInfo, []emit{
 			{"info", true},
@@ -200,7 +200,7 @@ func TestPrettyLogger_ColorAndFormat(t *testing.T) {
 	log.Debugf("parsing pkg/")
 	log.Tracef("field N")
 	out := buf.String()
-	// Color codes must be present in pretty + color mode.
+	// The pretty logger with color on must print color codes.
 	if !strings.Contains(out, ansiGreen) {
 		t.Errorf("pretty Info missing green color: %q", out)
 	}
@@ -230,8 +230,9 @@ func TestPrettyLogger_NoColorWhenDisabled(t *testing.T) {
 
 func TestPrettyLogger_RichError_FullLayout(t *testing.T) {
 	t.Parallel()
-	// Pretty RichError is a golangci-lint-style three-line diagnostic:
-	//   file:line:col: <Msg> (<UserHint>)
+	// The pretty logger prints a RichError as three lines, like
+	// golangci-lint:
+	//   file:line:col: <Msg> <UserHint>
 	//   \t<source line with CodeSpan highlighted>
 	//   \t<indent>^
 	dir := t.TempDir()
@@ -255,16 +256,16 @@ func TestPrettyLogger_RichError_FullLayout(t *testing.T) {
 	if len(lines) != 3 {
 		t.Fatalf("expected exactly 3 lines (header + code + caret), got %d:\n%s", len(lines), out)
 	}
-	// Line 1: no `Error:` prefix. Single-error blocks resolve col to the
-	// CodeSpan's column (24 here), not the field-decl column.
+	// Line 1 has no `Error:` prefix. A block with one error uses the
+	// CodeSpan's column (24 here), not the column of the field declaration.
 	if strings.Contains(lines[0], "Error:") {
 		t.Errorf("line 1 should NOT have an Error: header, got: %q", lines[0])
 	}
 	if !strings.Contains(lines[0], path+":4:24:") {
 		t.Errorf("line 1 should carry position with CodeSpan column (24), got: %q", lines[0])
 	}
-	// color=false: quote markers stripped (`"ascii"` → `ascii`), trailing
-	// period dropped, no parens around the hint.
+	// With color off, quotes are removed (`"ascii"` prints as `ascii`), the
+	// trailing period is dropped and the hint has no parentheses.
 	if !strings.Contains(lines[0], `rule ascii cannot be applied to int`) {
 		t.Errorf("line 1 should carry the message, got: %q", lines[0])
 	}
@@ -274,14 +275,15 @@ func TestPrettyLogger_RichError_FullLayout(t *testing.T) {
 	if strings.Contains(lines[0], "(") {
 		t.Errorf("line 1 should NOT wrap the hint in parens any more, got: %q", lines[0])
 	}
-	// Line 2: tab-indented source line embedding the field decl.
+	// Line 2 is the source line with the field declaration, indented by a
+	// tab.
 	if !strings.HasPrefix(lines[1], "\t") {
 		t.Errorf("line 2 should be tab-indented, got: %q", lines[1])
 	}
 	if !strings.Contains(lines[1], "N int") {
 		t.Errorf("line 2 should embed the source line, got: %q", lines[1])
 	}
-	// Line 3: tab-indented caret line.
+	// Line 3 is the caret line, indented by a tab.
 	if !strings.HasPrefix(lines[2], "\t") {
 		t.Errorf("line 3 should be tab-indented, got: %q", lines[2])
 	}
@@ -292,7 +294,8 @@ func TestPrettyLogger_RichError_FullLayout(t *testing.T) {
 
 func TestPrettyLogger_RichError_HighlightedCodeSpan(t *testing.T) {
 	t.Parallel()
-	// Color on + CodeSpan found in source → span wrapped in ANSI red+bold.
+	// With color on and the CodeSpan found in the source line, the span is
+	// printed in red and bold.
 	dir := t.TempDir()
 	src := "package x\n\ntype Foo struct {\n\tN int `json:\"n\" ggen:\"ascii\"`\n}\n"
 	path := filepath.Join(dir, "foo.go")
@@ -315,7 +318,8 @@ func TestPrettyLogger_RichError_HighlightedCodeSpan(t *testing.T) {
 
 func TestPrettyLogger_RichError_NoSourceFile_PositionAlone(t *testing.T) {
 	t.Parallel()
-	// Missing source file: render position + message, no caret row, no crash.
+	// With the source file missing, print the position and message, no caret
+	// line, and do not crash.
 	err := &model.RichError{
 		Pos: token.Position{Filename: "/nope/no/such.go", Line: 1, Column: 1},
 		Msg: "boom",
@@ -329,11 +333,11 @@ func TestPrettyLogger_RichError_NoSourceFile_PositionAlone(t *testing.T) {
 	if !strings.Contains(out, "boom") {
 		t.Errorf("expected message body, got: %q", out)
 	}
-	// No `Error:` header in golangci-lint style.
+	// No `Error:` header, like golangci-lint.
 	if strings.Contains(out, "Error:") {
 		t.Errorf("should NOT emit Error: header, got: %q", out)
 	}
-	// No caret row when source is unreadable.
+	// No caret line when the source cannot be read.
 	if strings.Contains(out, "^") {
 		t.Errorf("should NOT emit caret when source missing, got: %q", out)
 	}
@@ -341,8 +345,8 @@ func TestPrettyLogger_RichError_NoSourceFile_PositionAlone(t *testing.T) {
 
 func TestConciseLogger_RichError_SingleLineWithBotHint(t *testing.T) {
 	t.Parallel()
-	// Concise: one line, position + msg + parenthesized bot hint. The user
-	// hint is omitted.
+	// The concise logger prints one line: position, message, and BotHint in
+	// parentheses. The UserHint is left out.
 	pos := token.Position{Filename: "x.go", Line: 5, Column: 2}
 	err := &model.RichError{
 		Pos:      pos,
@@ -353,12 +357,12 @@ func TestConciseLogger_RichError_SingleLineWithBotHint(t *testing.T) {
 	log, buf := captured(LevelQuiet, false, false)
 	log.Error(err)
 	out := strings.TrimRight(buf.String(), "\n")
-	// Bare filename gets a `./` prefix from RelPath (stays clickable).
+	// RelPath adds `./` to a bare file name so it stays clickable.
 	want := "err: ./x.go:5:2: bad rule (expected string)"
 	if out != want {
 		t.Errorf("got %q, want %q", out, want)
 	}
-	// User hint must not leak into concise output.
+	// The UserHint must not appear in concise output.
 	if strings.Contains(out, "change the field type") {
 		t.Errorf("UserHint leaked into concise output: %q", out)
 	}
@@ -366,7 +370,7 @@ func TestConciseLogger_RichError_SingleLineWithBotHint(t *testing.T) {
 
 func TestConciseLogger_RichError_NoBotHint(t *testing.T) {
 	t.Parallel()
-	// Without a BotHint, no empty `()` should appear.
+	// Without a BotHint, there must be no empty `()`.
 	pos := token.Position{Filename: "x.go", Line: 5, Column: 2}
 	err := &model.RichError{Pos: pos, Msg: "bad thing"}
 	log, buf := captured(LevelQuiet, false, false)
@@ -464,19 +468,20 @@ func TestReadSourceLine_Basics(t *testing.T) {
 	}
 }
 
-// ----- caretIndent: direct unit -----
+// ----- caretIndent -----
 
 func TestCaretIndent_AnchorsToCodeSpan(t *testing.T) {
 	t.Parallel()
-	// The caret must land under CodeSpan (the offending token), not under
-	// Pos.Column (the field declaration). Pins the exact column.
+	// The caret must sit under the CodeSpan, which is the bad token, not
+	// under Pos.Column, which is the field declaration. This checks the exact
+	// column.
 	cases := []struct {
 		name      string
 		line      string
-		prefix    string // simulated `./file.go:line:col: ` width
-		posCol    int    // 1-indexed Pos.Column
+		prefix    string // stands in for the `./file.go:line:col: ` header
+		posCol    int    // Pos.Column, counted from 1
 		span      string // CodeSpan
-		wantSlash string // visual marker: the indent + ^ should equal this prefix-stripped expected line
+		wantSlash string // how the indent and caret should look, without the prefix
 	}{
 		{
 			name:      "tag_with_ascii_rule",
@@ -532,8 +537,8 @@ func TestCaretIndent_AnchorsToCodeSpan(t *testing.T) {
 					t.Fatalf("byte %d of indent should be space, got %q in %q", i, got[i], got)
 				}
 			}
-			// Source whitespace preserved verbatim (tabs stay tabs) so the
-			// caret aligns under the visual character.
+			// Tabs in the source stay tabs, so the caret lines up under the
+			// character on screen.
 			body := got[len(c.prefix):]
 			for i, b := range []byte(body) {
 				if i >= len(c.line) {
@@ -546,7 +551,7 @@ func TestCaretIndent_AnchorsToCodeSpan(t *testing.T) {
 					t.Errorf("source col %d is non-tab %q but indent byte is %q (expected space)", i, c.line[i], b)
 				}
 			}
-			// Indent length must clamp to ≤ prefix + line length.
+			// The indent must not be longer than the prefix plus the line.
 			if len(got) > len(c.prefix)+len(c.line)+1 {
 				t.Errorf("indent overruns line: len=%d, max=%d", len(got), len(c.prefix)+len(c.line))
 			}
@@ -556,8 +561,8 @@ func TestCaretIndent_AnchorsToCodeSpan(t *testing.T) {
 
 func TestCaretIndent_PicksSpanOverPosCol(t *testing.T) {
 	t.Parallel()
-	// The span lookup wins over Pos.Column: span "bar" (byte 4) shifts the
-	// caret past Pos.Column 1, so indent length == 4.
+	// The span lookup takes priority over Pos.Column. Span "bar" starts at
+	// byte 4, so the caret moves past Pos.Column 1 and the indent is 4 long.
 	line := "foo bar baz"
 	indent := caretIndent(line, "", 1, "bar", "")
 	if len(indent) != 4 {
@@ -565,7 +570,7 @@ func TestCaretIndent_PicksSpanOverPosCol(t *testing.T) {
 	}
 }
 
-// ----- highlightSpan: direct unit -----
+// ----- highlightSpan -----
 
 func TestHighlightSpan(t *testing.T) {
 	t.Parallel()
@@ -575,15 +580,15 @@ func TestHighlightSpan(t *testing.T) {
 	if got != want {
 		t.Errorf("highlight: got %q, want %q", got, want)
 	}
-	// Empty span → no change.
+	// An empty span changes nothing.
 	if got := pl.highlightSpan("line", ""); got != "line" {
 		t.Errorf("empty span should pass through, got %q", got)
 	}
-	// Span absent → no change.
+	// A span that is not in the line changes nothing.
 	if got := pl.highlightSpan("line", "missing"); got != "line" {
 		t.Errorf("missing span should pass through, got %q", got)
 	}
-	// Color disabled → no ANSI, even with matching span.
+	// With color off there are no color codes, even when the span matches.
 	plNoColor := &prettyLogger{color: false}
 	if got := plNoColor.highlightSpan(`foo ascii bar`, "ascii"); got != "foo ascii bar" {
 		t.Errorf("color=false should pass through, got %q", got)
@@ -597,17 +602,18 @@ func TestRelPath_Variants(t *testing.T) {
 	if got := model.RelPath(""); got != "" {
 		t.Errorf("empty input should return empty, got %q", got)
 	}
-	// Cwd-relative siblings get a ./ prefix.
+	// A path relative to the working directory gets a ./ prefix.
 	if got := model.RelPath("x.go"); got != "./x.go" {
 		t.Errorf("sibling: got %q, want ./x.go", got)
 	}
-	// Absolute path under cwd: rendered as ./relative.
+	// An absolute path under the working directory prints as ./relative.
 	cwd, _ := os.Getwd()
 	abs := filepath.Join(cwd, "subdir", "file.go")
 	if got := model.RelPath(abs); got != "./subdir/file.go" {
 		t.Errorf("nested abs: got %q, want ./subdir/file.go", got)
 	}
-	// A wildly different root falls back to absolute (rather than ../../...).
+	// A path far from the working directory stays absolute instead of
+	// becoming ../../...
 	out := model.RelPath("/etc/hosts")
 	if !strings.HasPrefix(out, "/") {
 		t.Errorf("far-away path should fall back to absolute, got %q", out)
@@ -627,8 +633,9 @@ func TestFormatPos(t *testing.T) {
 
 // ----- RichError without Pos: file-level errors -----
 
-// File-level error path (no Pos, no source excerpt, no caret): the UserHint
-// folds into the message line so the diagnostic fits on one line.
+// A file-level error has no position, so there is no source excerpt and no
+// caret. The UserHint goes on the message line, so the error fits on one
+// line.
 func TestPrettyLogger_RichError_NoPos_FoldsHintInline(t *testing.T) {
 	t.Parallel()
 	err := &model.RichError{
@@ -649,7 +656,8 @@ func TestPrettyLogger_RichError_NoPos_FoldsHintInline(t *testing.T) {
 	if !strings.Contains(lines[0], "no annotation found") {
 		t.Errorf("line 1 should carry the message, got: %q", lines[0])
 	}
-	// Color off: backticks stripped, no parens, trailing period gone.
+	// With color off, backticks are removed, there are no parentheses and the
+	// trailing period is dropped.
 	if !strings.Contains(lines[0], "Add //ggen:generate above your struct") {
 		t.Errorf("line 1 should carry UserHint inline (no parens, no quotes), got: %q", lines[0])
 	}
@@ -658,7 +666,8 @@ func TestPrettyLogger_RichError_NoPos_FoldsHintInline(t *testing.T) {
 	}
 }
 
-// File-level errors render the BotHint in parens but skip the position prefix.
+// A file-level error prints the BotHint in parentheses, with no position
+// prefix.
 func TestConciseLogger_RichError_NoPos_NoLeadingPosition(t *testing.T) {
 	t.Parallel()
 	err := &model.RichError{
@@ -674,12 +683,12 @@ func TestConciseLogger_RichError_NoPos_NoLeadingPosition(t *testing.T) {
 	}
 }
 
-// ----- bare (non-RichError) error rendering -----
+// ----- plain errors that are not a RichError -----
 
 func TestPrettyLogger_BareError_RendersMessageOnly(t *testing.T) {
 	t.Parallel()
-	// Bare (non-RichError) errors print just the raw message — no header,
-	// excerpt, or caret.
+	// An error that is not a RichError prints only its message, with no
+	// header, excerpt or caret.
 	log, buf := captured(LevelQuiet, true, false)
 	log.Error(errors.New("plain failure"))
 	out := strings.TrimRight(buf.String(), "\n")
@@ -699,14 +708,15 @@ func TestConciseLogger_BareError_RendersWithErrPrefix(t *testing.T) {
 	}
 }
 
-// ----- caret column = CodeSpan column, not Pos.Column -----
+// ----- caret column is the CodeSpan column, not Pos.Column -----
 
-// The caret must shift from Pos.Column to where the CodeSpan lives inside the
-// line (usually inside the struct tag). Pins the exact column.
+// The caret must move from Pos.Column to where the CodeSpan is in the line,
+// which is usually inside the struct tag. This checks the exact column.
 func TestPrettyLogger_CaretLandsOnCodeSpan(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
-	// Pos.Column 2 (`N` after a tab); CodeSpan "ascii" at byte 22.
+	// Pos.Column is 2, the `N` after a tab. CodeSpan "ascii" starts at byte
+	// 23, which is column 24.
 	src := "package x\n\ntype Foo struct {\n\tN int `json:\"n\" ggen:\"ascii\"`\n}\n"
 	path := filepath.Join(dir, "foo.go")
 	if err := os.WriteFile(path, []byte(src), 0o644); err != nil {
@@ -723,7 +733,7 @@ func TestPrettyLogger_CaretLandsOnCodeSpan(t *testing.T) {
 	if len(lines) < 3 {
 		t.Fatalf("expected ≥3 lines, got: %q", buf.String())
 	}
-	// The caret-line bytes preceding the `^` define the column.
+	// The bytes before the `^` in the caret line give its column.
 	caretLine := lines[2]
 	idx := strings.IndexByte(caretLine, '^')
 	if idx < 0 {
@@ -744,8 +754,8 @@ func TestPrettyLogger_CaretLandsOnCodeSpan(t *testing.T) {
 
 // ----- queue / Flush / HasErrors -----
 
-// Error queues and prints nothing until Flush, so a long walk surfaces all
-// package errors in one batch at exit.
+// Error queues and prints nothing until Flush, so a long walk reports all
+// package errors in one batch at the end.
 func TestConciseLogger_Error_QueuesUntilFlush(t *testing.T) {
 	t.Parallel()
 	var buf bytes.Buffer
@@ -765,18 +775,18 @@ func TestConciseLogger_Error_QueuesUntilFlush(t *testing.T) {
 	if !strings.Contains(out, "first") || !strings.Contains(out, "second") {
 		t.Errorf("Flush should emit all queued errors, got: %q", out)
 	}
-	// Flush ordering must match Error call order.
+	// Flush must print in the order Error was called.
 	if strings.Index(out, "first") > strings.Index(out, "second") {
 		t.Errorf("Flush must preserve insertion order, got: %q", out)
 	}
 
-	// HasErrors stays sticky after Flush so main can still exit non-zero.
+	// HasErrors stays true after Flush, so main can still exit non-zero.
 	if !log.HasErrors() {
 		t.Errorf("HasErrors must remain true after Flush")
 	}
 
-	// Flush should be idempotent / safe to re-call: the queue is now
-	// drained, no new bytes should appear.
+	// Calling Flush again is safe. The queue is empty, so nothing new is
+	// written.
 	priorLen := buf.Len()
 	log.Flush()
 	if buf.Len() != priorLen {
@@ -800,7 +810,7 @@ func TestPrettyLogger_Error_QueuesUntilFlush(t *testing.T) {
 	}
 }
 
-// HasErrors flips only on Error, never on Info/Debug/Trace.
+// Only Error sets HasErrors. Infof, Debugf and Tracef never do.
 func TestLogger_HasErrors_FalseUntilError(t *testing.T) {
 	t.Parallel()
 	for _, mode := range []struct {
@@ -830,7 +840,7 @@ func TestLogger_HasErrors_FalseUntilError(t *testing.T) {
 	}
 }
 
-// Info messages print immediately during a walk while errors stay queued for
+// Info messages print at once during a walk, while errors stay queued for
 // the final batch.
 func TestLogger_InterleavedInfoAndErrors(t *testing.T) {
 	t.Parallel()
@@ -842,7 +852,7 @@ func TestLogger_InterleavedInfoAndErrors(t *testing.T) {
 	log.Error(errors.New("bad ./d"))
 
 	mid := buf.String()
-	// At this point only the info lines should have surfaced.
+	// So far only the info lines should be printed.
 	if !strings.Contains(mid, "wrote ./a") || !strings.Contains(mid, "wrote ./c") {
 		t.Errorf("info lines must print immediately, got: %q", mid)
 	}
@@ -852,7 +862,7 @@ func TestLogger_InterleavedInfoAndErrors(t *testing.T) {
 
 	log.Flush()
 	full := buf.String()
-	// After Flush, errors appear AFTER all info lines (batched at the end).
+	// After Flush, the errors come after all info lines, in one batch.
 	infoEnd := strings.LastIndex(full, "wrote ./c")
 	errStart := strings.Index(full, "bad ./b")
 	if errStart <= infoEnd {
@@ -860,16 +870,16 @@ func TestLogger_InterleavedInfoAndErrors(t *testing.T) {
 	}
 }
 
-// A Fatal call drains previously queued errors before emitting the fatal one.
+// Fatal prints the queued errors before the fatal one.
 func TestLogger_Fatal_FlushesQueuedFirst(t *testing.T) {
 	t.Parallel()
-	// Fatal can't run directly (os.Exit); drive the same path manually.
+	// Fatal calls os.Exit, so the test runs the same steps by hand.
 	var buf bytes.Buffer
 	log := &conciseLogger{level: LevelQuiet, w: &buf}
 	log.Error(errors.New("first"))
 	log.Error(errors.New("second"))
 	log.Flush()
-	// Simulate the Fatal tail: render one more, no queue.
+	// The last step of Fatal: print one more error, without the queue.
 	log.renderError(errors.New("fatal"))
 	out := buf.String()
 	idxFirst := strings.Index(out, "first")
@@ -882,14 +892,15 @@ func TestLogger_Fatal_FlushesQueuedFirst(t *testing.T) {
 
 // ----- pretty mode: line-level error grouping -----
 
-// Layout when multiple errors share a (file, line):
+// Layout when several errors share a file and line:
 //
-//	./<path>:<line>:<firstCol>: <msg1> (<hint1>)
-//	                            <msg2> (<hint2>)
+//	./<path>:<line>: <msg1> <hint1>
+//	                 <msg2> <hint2>
 //	\t<source line, all spans highlighted>
 //	\t^<spaces>^...
 //
-// Different lines/files don't group; bare errors render alone.
+// Errors on different lines or files are not grouped. Errors without a
+// position print alone.
 func TestPrettyLogger_GroupsErrorsBySourceLine(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -899,7 +910,7 @@ func TestPrettyLogger_GroupsErrorsBySourceLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	pos := token.Position{Filename: path, Line: 4, Column: 2}
-	// Two errors on the same source line — different CodeSpans.
+	// Two errors on the same source line, with different CodeSpans.
 	err1 := &model.RichError{
 		Pos: pos, Msg: `rule "ascii" cannot be applied to int`,
 		CodeSpan: "ascii", UserHint: "drop the rule",
@@ -908,8 +919,8 @@ func TestPrettyLogger_GroupsErrorsBySourceLine(t *testing.T) {
 		Pos: pos, Msg: `mod "trim" cannot be applied to int`,
 		CodeSpan: "trim", UserHint: "drop the mod",
 	}
-	// Raw prettyLogger: captured()'s autoFlushLogger would flush per Error
-	// and defeat grouping.
+	// Use a plain prettyLogger. The autoFlushLogger from captured() would
+	// flush after each Error and prevent grouping.
 	var buf bytes.Buffer
 	log := &prettyLogger{level: LevelQuiet, w: &buf, color: false}
 	log.Error(err1)
@@ -920,23 +931,24 @@ func TestPrettyLogger_GroupsErrorsBySourceLine(t *testing.T) {
 	if len(lines) != 4 {
 		t.Fatalf("expected 4 lines (header + continuation + src + carets), got %d:\n%s", len(lines), out)
 	}
-	// Line 1: position header + first msg. Multi-error groups omit the
-	// column — the carets disambiguate which span each error points at.
+	// Line 1 is the position header and the first message. A group with
+	// several errors leaves out the column, because the carets show which
+	// span each error points at.
 	if !strings.Contains(lines[0], path+":4: ") {
 		t.Errorf("line 1 should carry `file:4:` (no col, grouped), got: %q", lines[0])
 	}
 	if strings.Contains(lines[0], path+":4:2:") || strings.Contains(lines[0], path+":4:24:") {
 		t.Errorf("line 1 must NOT include a column for multi-error groups, got: %q", lines[0])
 	}
-	// Color off: quote markers stripped from msg, no parens on hint,
-	// trailing period stripped.
+	// With color off, quotes are removed from the message, the hint has no
+	// parentheses and the trailing period is dropped.
 	if !strings.Contains(lines[0], "rule ascii cannot be applied to int") {
 		t.Errorf("line 1 should carry first msg, got: %q", lines[0])
 	}
 	if !strings.Contains(lines[0], "drop the rule") {
 		t.Errorf("line 1 should carry first hint inline, got: %q", lines[0])
 	}
-	// Line 2: continuation — second msg, no position prefix.
+	// Line 2 is the second message, with no position prefix.
 	if strings.Contains(lines[1], path+":") {
 		t.Errorf("line 2 should NOT carry its own position (grouped), got: %q", lines[1])
 	}
@@ -946,18 +958,18 @@ func TestPrettyLogger_GroupsErrorsBySourceLine(t *testing.T) {
 	if !strings.Contains(lines[1], "drop the mod") {
 		t.Errorf("line 2 should carry second hint inline, got: %q", lines[1])
 	}
-	// Continuation must be indented to align under the first msg —
-	// i.e. its prefix is spaces of width(len(`./foo.go:4: `)).
+	// The second message must line up under the first. Its indent is as
+	// many spaces as the length of `./foo.go:4: `.
 	expectIndent := len(path) + len(":4: ")
 	if len(lines[1])-len(strings.TrimLeft(lines[1], " ")) != expectIndent {
 		t.Errorf("line 2 indent width %d, want %d: %q",
 			len(lines[1])-len(strings.TrimLeft(lines[1], " ")), expectIndent, lines[1])
 	}
-	// Line 3: source excerpt, tab-indented.
+	// Line 3 is the source line, indented by a tab.
 	if !strings.HasPrefix(lines[2], "\t") || !strings.Contains(lines[2], "N int") {
 		t.Errorf("line 3 should be tab + source line, got: %q", lines[2])
 	}
-	// Line 4: caret row — exactly 2 carets (one per error span).
+	// Line 4 is the caret line, with exactly 2 carets, one per error span.
 	if !strings.HasPrefix(lines[3], "\t") {
 		t.Errorf("line 4 should be tab-indented, got: %q", lines[3])
 	}
@@ -966,7 +978,7 @@ func TestPrettyLogger_GroupsErrorsBySourceLine(t *testing.T) {
 	}
 }
 
-// Only errors on the exact same (file, line) share a block.
+// Only errors on the same file and line share a block.
 func TestPrettyLogger_DifferentLines_DoNotGroup(t *testing.T) {
 	t.Parallel()
 	dir := t.TempDir()
@@ -989,8 +1001,8 @@ func TestPrettyLogger_DifferentLines_DoNotGroup(t *testing.T) {
 	log.Error(b)
 	log.Flush()
 	out := buf.String()
-	// Each error gets its own 3-line block (header + src + caret),
-	// so we expect 6 total lines.
+	// Each error gets its own 3-line block of header, source and caret, so
+	// there are 6 lines in total.
 	if got := strings.Count(out, "\n"); got != 6 {
 		t.Errorf("expected 6 newlines (two separate 3-line blocks), got %d:\n%s", got, out)
 	}
@@ -1000,7 +1012,7 @@ func TestPrettyLogger_DifferentLines_DoNotGroup(t *testing.T) {
 	}
 }
 
-// errors.Join'd batches must be unwrapped into individual sub-errors before
+// Errors made by errors.Join must be split into their parts before
 // grouping.
 func TestFlattenErrors_UnwrapsJoinedBatches(t *testing.T) {
 	t.Parallel()
@@ -1020,8 +1032,8 @@ func TestFlattenErrors_UnwrapsJoinedBatches(t *testing.T) {
 	}
 }
 
-// The grouping key is (filename, line) — column doesn't split, different
-// files don't collapse.
+// Errors are grouped by file name and line. A different column does not
+// split a group, and different files are never merged.
 func TestGroupByLine_KeysOnFilenameAndLine(t *testing.T) {
 	t.Parallel()
 	mk := func(file string, line, col int) *model.RichError {
@@ -1029,28 +1041,28 @@ func TestGroupByLine_KeysOnFilenameAndLine(t *testing.T) {
 	}
 	errs := []error{
 		mk("a.go", 4, 2),
-		mk("a.go", 4, 7), // same file+line, different col → SAME group
-		mk("a.go", 5, 2), // different line → new group
-		mk("b.go", 4, 2), // different file → new group
+		mk("a.go", 4, 7), // same file and line, other column: same group
+		mk("a.go", 5, 2), // other line: new group
+		mk("b.go", 4, 2), // other file: new group
 		errors.New("bare"),
 	}
 	groups := groupByLine(errs)
 	if len(groups) != 4 {
 		t.Fatalf("expected 4 groups, got %d", len(groups))
 	}
-	// First group: 2 rich errors at a.go:4
+	// First group: 2 rich errors at a.go:4.
 	if len(groups[0].riches) != 2 {
 		t.Errorf("group 0 should have 2 errs (a.go:4 col 2 + col 7), got %d", len(groups[0].riches))
 	}
-	// Second: 1 rich at a.go:5
+	// Second: 1 rich error at a.go:5.
 	if len(groups[1].riches) != 1 || groups[1].pos.Line != 5 {
 		t.Errorf("group 1 should be a.go:5, got %+v", groups[1])
 	}
-	// Third: 1 rich at b.go:4
+	// Third: 1 rich error at b.go:4.
 	if len(groups[2].riches) != 1 || groups[2].pos.Filename != "b.go" {
 		t.Errorf("group 2 should be b.go:4, got %+v", groups[2])
 	}
-	// Fourth: bare
+	// Fourth: the error without a position.
 	if groups[3].pos.IsValid() {
 		t.Errorf("group 3 should be bare (pos invalid), got %+v", groups[3])
 	}

@@ -2,15 +2,14 @@ package js
 
 import "strings"
 
-// isTimeHelper validates like time.Parse, a port of its layout walk without
-// building the time.
 const timeEncoder = "const ggenTimeEncoder = new TextEncoder();"
 
-// isDateOnlyHelper, isTimeOnlyHelper and isDateTimeHelperLocal are the fixed
-// layouts common enough to be worth a regex: ggenIsTime walks the layout on
-// every call, which costs ~50x more. Each accepts exactly what time.Parse
-// does for its layout, including the fractional seconds time.Parse takes even
-// when the layout has none, and the space run its skip() folds.
+// isDateOnlyHelper, isTimeOnlyHelper and isDateTimeHelperLocal cover the fixed
+// layouts common enough to be worth a regex. ggenIsTime walks the layout on
+// every call, which is much slower. Each accepts exactly what time.Parse
+// accepts for its layout. That includes fractional seconds, which time.Parse
+// takes even when the layout has none, and a run of spaces where the layout
+// has one space.
 const isDateOnlyHelper = `function ggenIsDateOnly(s: string): boolean {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
   if (m === null) return false;
@@ -40,6 +39,8 @@ const isDateTimeHelperLocal = `function ggenIsDateTimeLocal(s: string): boolean 
   );
 }`
 
+// isTimeHelper validates like time.Parse. It ports time.Parse's layout walk
+// but does not build the time value.
 const isTimeHelper = `function ggenIsTime(layout: string, value: string): boolean {
   const l = ggenTimeEncoder.encode(layout);
   const v = ggenTimeEncoder.encode(value);
@@ -323,7 +324,7 @@ const daysInHelper = `function ggenDaysIn(year: number, month: number): number {
   return year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0) ? 29 : 28;
 }`
 
-// isDateTimeHelper is ggen's strict RFC 3339.
+// isDateTimeHelper validates ggen's strict RFC 3339 date-time.
 const isDateTimeHelper = `function ggenIsDateTime(s: string): boolean {
   const m = /^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.exec(s);
   return m !== null && Number(m[3]) <= ggenDaysIn(Number(m[1]), Number(m[2]));

@@ -21,7 +21,8 @@ func ImportExt(ext string) Option { return func(e *Emitter) { e.importExt = ext 
 // Header writes line at the top of every file, e.g. a generated-code marker.
 func Header(line string) Option { return HeaderFor(func(*gen.File) string { return line }) }
 
-// HeaderFor decides the first line per output file; "" writes none.
+// HeaderFor decides the first line per output file. Returning "" writes no
+// header.
 func HeaderFor(fn func(f *gen.File) string) Option { return func(e *Emitter) { e.header = fn } }
 
 // Func adds action to the pipe of every value checked or transformed by the
@@ -62,8 +63,9 @@ func ExternalFor(fn func(f *gen.File, p gen.Placed, t *gen.Type) (schema string,
 // inlining them into every file.
 func Runtime(f *gen.File) Option { return func(e *Emitter) { e.runtime = f } }
 
-// SchemaName derives the schema constant's name of placed type p, whose name
-// stays the type's name, in file f. Default: the placed name.
+// SchemaName derives the name of the schema constant for placed type p in
+// file f. The placed name stays the type's name. The default schema name is
+// the placed name.
 func SchemaName(fn func(f *gen.File, p gen.Placed) string) Option {
 	return func(e *Emitter) { e.schemaName = fn }
 }
@@ -96,7 +98,7 @@ type Emitter struct {
 }
 
 // objectGuard rejects arrays, which valibot's object and record schemas
-// accept, keeping the wrapped schema's input type.
+// accept. It keeps the wrapped schema's input type.
 const objectGuard = `function ggenObject<T extends v.GenericSchema<object>>(schema: T) {
   const isObject = (x: unknown) => typeof x === "object" && x !== null && !Array.isArray(x);
   return v.pipe(v.custom<v.InferInput<T>>(isObject, "Invalid type: Expected Object"), schema);
@@ -187,10 +189,10 @@ func (e *Emitter) End(ctx *gen.Context) error {
 func (e *Emitter) object(ctx *gen.Context, s *gen.Shape) string {
 	var b strings.Builder
 	rest := s.Unknown == gen.Collect && s.Rest != nil
-	// valibot's object schemas accept an array whose own keys satisfy them,
-	// which only an object with no required field (or one with a rest
-	// schema) can. Guarding just those keeps the rest plain object schemas,
-	// with v.pick, v.omit and .entries intact.
+	// valibot's object schemas accept an array whose own keys satisfy them.
+	// Only an object with no required field, or one with a rest schema, can
+	// be satisfied that way. Guarding just those keeps every other object
+	// schema plain, with v.pick, v.omit and .entries intact.
 	guard := rest
 	if !guard {
 		guard = true
@@ -483,7 +485,7 @@ func (e *Emitter) str(t *gen.Type) schema {
 		)
 	}
 	if t.Format == gen.FormatIntString || t.Format == gen.FormatUintString {
-		// Go parses the quoted text at the field's own width, 64 bits too.
+		// Go parses the quoted text at the field's own width, 64 bits included.
 		lo, hi := intBounds(t.Go, t.Format == gen.FormatUintString)
 		sc.actions = append(sc.actions, check(fmt.Sprintf("%s(x, %sn, %sn)", e.helpers.Use("ggenFits"), lo, hi), "out of range"))
 	}
@@ -501,7 +503,7 @@ func formatWord(format string) string {
 	return format
 }
 
-// intBounds is the exact range of a Go integer kind, as decimal literals.
+// intBounds returns the exact range of a Go integer kind, as decimal literals.
 func intBounds(k gen.GoKind, forceUnsigned bool) (lo, hi string) {
 	bits, unsigned := widthOf(k)
 	unsigned = unsigned || forceUnsigned
@@ -591,7 +593,7 @@ func (e *Emitter) rules(ctx *gen.Context, t *gen.Type, sc *schema, where string)
 					vals[i] = js.Quote(a)
 				}
 			}
-			// picklist narrows the type; values only checks it.
+			// picklist narrows the type. v.values would only check it.
 			add("v.picklist([" + strings.Join(vals, ", ") + "])")
 		case gen.URLRule:
 			add("v.check(" + e.helpers.Use("ggenIsURL") + `, "must be a URL")`)
@@ -625,7 +627,7 @@ func (e *Emitter) rules(ctx *gen.Context, t *gen.Type, sc *schema, where string)
 }
 
 // escapeDollar protects a replacement string from String.replaceAll, which
-// reads $&, $1 and $$ in it; Go's strings.Replacer is literal.
+// reads $&, $1 and $$ in it. Go's strings.Replacer treats them literally.
 func escapeDollar(s string) string { return strings.ReplaceAll(s, "$", "$$$$") }
 
 // wrap adds what every type carries regardless of how its base rendered.
@@ -666,10 +668,8 @@ func lenOp(op gen.Op) (cmp, word string) {
 	return "===", "must be exactly"
 }
 
-// count spells "1 byte" / "2 bytes".
-
-// funcAction is the twin of an @Func rule: FuncFor, then Func by the reference
-// as written, then by import path and name.
+// funcAction returns the valibot action for an @Func rule. It tries FuncFor,
+// then Func by the reference as written, then Func by import path and name.
 func (e *Emitter) funcAction(ctx *gen.Context, r gen.Rule) (string, bool) {
 	if e.funcFor != nil {
 		if action, ok := e.funcFor(ctx.File, e.placed, r); ok {

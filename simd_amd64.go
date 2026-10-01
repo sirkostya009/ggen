@@ -1,20 +1,28 @@
 //go:build goexperiment.simd
 
-// Fused single-pass string scanners over AVX / AVX2 / AVX-512. One vector
-// pass per iteration classifies the closing '"', '\\', and control bytes
-// (< 0x20) simultaneously — replacing String's three passes (two
-// bytes.IndexByte + the SWAR ctrl pass).
+// Vector string scanners. SIMD (vector) code processes 16, 32 or 64 bytes
+// with one CPU instruction. AVX, AVX2 and AVX-512 are the x86 vector
+// instruction sets for 16-, 32- and 64-byte vectors. A lane is one byte slot
+// inside a vector. A mask is one bit per lane, set where a test matched.
 //
-// Emitted by ggen when invoked under GOEXPERIMENT=simd; the tier is fixed at
-// generate time (-simd flag). No runtime feature probing — calling a tier the
-// CPU lacks faults. Building this file requires GOEXPERIMENT=simd.
+// Each loop step tests a whole vector for the closing '"', a '\\' and a
+// control byte (< 0x20) at once. The scalar String needs separate passes for
+// these: bytes.IndexByte for the quote, again for the backslash, and a
+// control-byte check over the body.
 //
-// The 16/32-lane tails load via Load*Part (zero-filled, composed from
-// scalar loads); padding zeroes register as control bytes, filtered by the
-// k < len(rest) position check. LoadUint8x64Part is NOT used: archsimd lowers
-// it to an unmasked full-width load that reads up to 63 bytes past the slice
-// and faults when the payload ends at a page edge (mmap'd files, foreign
-// buffers). StringAVX512 builds its own tail lane instead.
+// Generated code calls these when ggen runs with the -simd flag. The flag
+// fixes the tier at generate time. Nothing probes the CPU at run time, so
+// calling a tier the CPU does not support crashes with an illegal
+// instruction. Building this file requires GOEXPERIMENT=simd.
+//
+// The 16- and 32-byte tiers load the last partial vector with Load*Part.
+// It zero-fills the missing lanes and is built from scalar loads, so it never
+// reads past the slice. The zero padding looks like control bytes, so every
+// hit is checked with k < len(rest). LoadUint8x64Part is not used: archsimd
+// turns it into a full 64-byte load that can read up to 63 bytes past the
+// slice. That faults when the input ends at a page edge, for example in an
+// mmap'd file or a buffer from foreign code. StringAVX512 builds its own last
+// vector instead.
 
 package ggen
 
@@ -26,15 +34,20 @@ import (
 	"simd/archsimd"
 )
 
-// classifyStructural finishes a fused scan: rest[k] is the first structural
-// byte in the string body. Mirrors String's semantics exactly — alias
-// return on '"' (validating UTF-8 when the accumulated lane OR saw a high
-// byte; hasHigh may over-report bytes past k in the hit lane — utf8.Valid on
-// the exact span settles it), stringSlow handoff on '\\' (scratch sized off
-// the real unescaped closing quote via stringSpanEnd, as String does;
-// validates its own output) or stringUnterminated when no quote follows, and
-// ErrBadString at the control byte itself,
-// which the structural locate already landed on (where String reports it).
+// classifyStructural finishes a vector scan. rest[k] is the first quote,
+// backslash or control byte in the string body. Results match String
+// exactly:
+//   - On '"' it returns a string that aliases data, meaning it points into
+//     the caller's bytes with no copy. If hasHigh is set it first checks that
+//     the body is valid UTF-8. hasHigh can be a false positive, because it
+//     also covers bytes past k in the last vector. Validating the exact body
+//     settles it.
+//   - On '\\' it hands off to stringSlow, which decodes escapes and validates
+//     its own output. The scratch buffer is sized from the real closing
+//     quote, found with stringSpanEnd, as String does. If no quote follows,
+//     stringUnterminated reports the error.
+//   - On a control byte it returns ErrBadString at that byte, the same
+//     position String reports.
 func classifyStructural(data, rest []byte, start, k int, hasHigh, validate bool) (string, int, error) {
 	switch rest[k] {
 	case '"':
@@ -47,28 +60,28 @@ func classifyStructural(data, rest []byte, start, k int, hasHigh, validate bool)
 		if closeIdx < 0 {
 			return stringUnterminated(data, start, start+k, validate)
 		}
-		// closeIdx is the FIRST '"', possibly an escaped `\"`; size off the real
-		// unescaped closing quote so an early escaped quote doesn't under-allocate
-		// the scratch into the growth chain (matches String).
+		// closeIdx is the first '"', which may be an escaped `\"`. Size the
+		// scratch from the real closing quote instead, so an early escaped
+		// quote does not make it too small and force it to grow. String does
+		// the same.
 		return stringSlow(data, start, start+k, stringSpanEnd(data, start)-start, validate)
 	default:
 		return "", start + k, ErrBadString
 	}
 }
 
-// classifyStructural64 is classifyStructural for the avx512 tier only, routing
-// UTF-8 validation to the 64-lane validator (3× the 16-lane one from ~1 KB,
-// −35% at 128 B; it falls back to validUTF8x16 below its own gate). It exists
-// as a COPY because classifyStructural is shared by all three tiers and links
-// into avx/avx2-tier binaries, which must contain no 512-bit code on a path
-// they execute. Keep the two bodies in sync — the only difference is the
-// validator call.
+// classifyStructural64 is classifyStructural for the avx512 tier. It sends
+// long bodies to the 64-byte UTF-8 validator, which is several times faster
+// than the 16-byte one on long input. It is a copy because classifyStructural
+// is shared by all three tiers and is linked into avx and avx2 binaries.
+// Those must never execute 512-bit code. Keep the two bodies in sync. The
+// only difference is the validator call.
 func classifyStructural64(data, rest []byte, start, k int, hasHigh, validate bool) (string, int, error) {
 	switch rest[k] {
 	case '"':
-		// Pick the width HERE rather than letting validUTF8x64 delegate: a
-		// short span would otherwise pay an extra (non-inlinable) frame just
-		// to bounce to validUTF8x16, which measured +12% at a 16 B span.
+		// Pick the width here instead of letting validUTF8x64 delegate.
+		// Otherwise a short span pays for an extra call frame that cannot
+		// be inlined just to reach validUTF8x16, which measured slower.
 		if hasHigh {
 			span := rest[:k]
 			var ok bool
@@ -93,7 +106,7 @@ func classifyStructural64(data, rest []byte, start, k int, hasHigh, validate boo
 	}
 }
 
-// StringAVX is String scanning 16 bytes/iteration (128-bit vectors).
+// StringAVX is String scanning 16 bytes per step with 128-bit vectors.
 func StringAVX(data []byte, i int, validate bool) (string, int, error) {
 	if i >= len(data) || data[i] != '"' {
 		return "", i, ErrExpectString
@@ -102,12 +115,14 @@ func StringAVX(data []byte, i int, validate bool) (string, int, error) {
 	rest := data[start:]
 	quote := archsimd.BroadcastUint8x16('"')
 	bslash := archsimd.BroadcastUint8x16('\\')
-	// v <= 0x1F ⇔ min(v, 0x1F) == v — VPMINUB+VPCMPEQB. Unsigned Less is
-	// emulated below 512-bit (xor-0x80 re-broadcast every iteration).
+	// v <= 0x1F is the same as min(v, 0x1F) == v, which is two instructions.
+	// Below 512 bits the CPU has no unsigned byte compare, so Less would be
+	// emulated with extra work on every step.
 	ctrl := archsimd.BroadcastUint8x16(0x1F)
 	ascii := archsimd.BroadcastUint8x16(0x7F)
-	// acc ORs every scanned lane; min(acc,0x7F)==acc iff no byte ≥ 0x80 —
-	// one VPOR per lane so pure-ASCII spans skip the utf8.Valid walk.
+	// acc ORs together every vector scanned. min(acc, 0x7F) == acc only when
+	// no byte was >= 0x80. That costs one OR per step and lets pure ASCII
+	// bodies skip UTF-8 validation.
 	acc := archsimd.BroadcastUint8x16(0)
 	j := 0
 	for ; j+16 <= len(rest); j += 16 {
@@ -133,7 +148,7 @@ func StringAVX(data []byte, i int, validate bool) (string, int, error) {
 	return "", len(data), ErrUnterminated
 }
 
-// StringAVX2 is String scanning 32 bytes/iteration (256-bit vectors).
+// StringAVX2 is String scanning 32 bytes per step with 256-bit vectors.
 func StringAVX2(data []byte, i int, validate bool) (string, int, error) {
 	if i >= len(data) || data[i] != '"' {
 		return "", i, ErrExpectString
@@ -142,10 +157,10 @@ func StringAVX2(data []byte, i int, validate bool) (string, int, error) {
 	rest := data[start:]
 	quote := archsimd.BroadcastUint8x32('"')
 	bslash := archsimd.BroadcastUint8x32('\\')
-	// Min/Equal in place of emulated unsigned Less — see StringAVX.
+	// Min and Equal instead of an emulated unsigned Less. See StringAVX.
 	ctrl := archsimd.BroadcastUint8x32(0x1F)
 	ascii := archsimd.BroadcastUint8x32(0x7F)
-	acc := archsimd.BroadcastUint8x32(0) // lane OR — see StringAVX
+	acc := archsimd.BroadcastUint8x32(0) // OR of all bytes, see StringAVX
 	j := 0
 	for ; j+32 <= len(rest); j += 32 {
 		v := archsimd.LoadUint8x32(rest[j:])
@@ -170,7 +185,7 @@ func StringAVX2(data []byte, i int, validate bool) (string, int, error) {
 	return "", len(data), ErrUnterminated
 }
 
-// StringAVX512 is String scanning 64 bytes/iteration (512-bit vectors).
+// StringAVX512 is String scanning 64 bytes per step with 512-bit vectors.
 func StringAVX512(data []byte, i int, validate bool) (string, int, error) {
 	if i >= len(data) || data[i] != '"' {
 		return "", i, ErrExpectString
@@ -181,10 +196,11 @@ func StringAVX512(data []byte, i int, validate bool) (string, int, error) {
 	bslash := archsimd.BroadcastUint8x64('\\')
 	space := archsimd.BroadcastUint8x64(0x20)
 	high := archsimd.BroadcastUint8x64(0x80)
-	acc := archsimd.BroadcastUint8x64(0) // lane OR — see StringAVX
+	acc := archsimd.BroadcastUint8x64(0) // OR of all bytes, see StringAVX
 	j := 0
-	// Mask.Or on 512-bit round-trips the vector domain (VPMOVM2B+VPORD+
-	// VPMOVB2M); ToBits each mask (KMOVQ) and OR in scalar registers instead.
+	// At 512 bits, Mask.Or moves the masks back into vector registers and out
+	// again, which takes three instructions. Converting each mask to a uint64
+	// with ToBits and ORing those is cheaper.
 	for ; j+64 <= len(rest); j += 64 {
 		v := archsimd.LoadUint8x64(rest[j:])
 		acc = acc.Or(v)
@@ -195,11 +211,12 @@ func StringAVX512(data []byte, i int, validate bool) (string, int, error) {
 		}
 	}
 	if j < len(rest) {
-		// Final partial lane, read without crossing len(rest): a body that
-		// spans a lane reloads the last 64 bytes (the overlap was already
-		// classified clean, so its mask bits are zero); a shorter one is
-		// copied into a zeroed stack lane, whose padding registers as ctrl
-		// bytes filtered by the k < len(rest) check.
+		// Load the last partial vector without reading past len(rest). If
+		// rest has at least 64 bytes, reload its last 64 bytes. The overlap
+		// with the previous step was already found clean, so it adds no mask
+		// bits. A shorter rest is copied into a zeroed array on the stack.
+		// Its zero padding looks like control bytes, so the k < len(rest)
+		// check filters it out.
 		var v archsimd.Uint8x64
 		if len(rest) >= 64 {
 			j = len(rest) - 64

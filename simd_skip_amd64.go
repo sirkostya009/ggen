@@ -1,17 +1,27 @@
 //go:build goexperiment.simd
 
-// Fused SIMD skip tree. The scalar tree steps byte-at-a-time through
-// whitespace and calls the three-pass skipString; on whitespace-rich
-// (pretty-printed) payloads both dominate skip cost. Per tier:
-// SkipSpace* (vector run skip after a scalar first-byte exit),
-// skipString* (fused structural locate, escape switch identical to
-// scalar skipString), and SkipValue*/skipArray*/skipObject* copies whose
-// only change is the tier callees. Semantics + error identity mirror the
-// scalar tree; generated code calls one tier directly (ggen -simd).
+// Vector versions of the skip functions, which step over a JSON value
+// without decoding it. SIMD (vector) code processes 16, 32 or 64 bytes with
+// one CPU instruction. AVX, AVX2 and AVX-512 are the x86 vector instruction
+// sets for those widths. A lane is one byte slot inside a vector. A mask is
+// one bit per lane, set where a test matched.
 //
-// Whitespace classify: eq ' ' | eq '\t' | eq '\n' | eq '\r' per lane; the
-// first zero bit in the mask is the first non-WS byte. 512-bit ORs mask
-// bits in scalar registers (Mask.Or round-trips the vector domain).
+// The scalar skip functions walk whitespace one byte at a time and search
+// strings with several passes. On pretty-printed input with lots of
+// whitespace, those two costs dominate. Each tier here has:
+//   - SkipSpace*, which checks the first byte without vectors and then skips
+//     a whitespace run with vectors,
+//   - skipString*, which finds the end of a string with one vector pass and
+//     checks escapes with the same switch as the scalar skipString,
+//   - SkipValue*, skipArray* and skipObject*, copies of the scalar functions
+//     that differ only in which tier functions they call.
+// Behaviour and errors match the scalar functions exactly. Generated code
+// calls one tier directly when ggen runs with -simd.
+//
+// Whitespace test: each lane is compared to ' ', '\t', '\n' and '\r', and the
+// results are ORed. The first zero bit in the mask is the first byte that is
+// not whitespace. At 512 bits the masks are ORed as uint64 values, because
+// Mask.Or moves them back into vector registers and out again.
 
 package ggen
 
@@ -21,16 +31,16 @@ import (
 	"simd/archsimd"
 )
 
-// The SkipSpace* tiers are an inlinable shell over a cold vector body. The
-// shell exits on the common non-whitespace byte without a call; only an
-// actual whitespace run enters the vector body. The tier skip tree calls
-// SkipSpace* at 8 sites per tier, so on compact (whitespace-free) JSON the
-// inlined early-out replaces a call + prologue + ret at every site — that
-// overhead was 22% flat of SkipHeavy/compact before the split (the whole
-// vector body was unreachable there yet still blocked inlining). Same
-// no-temp early-out shape as the scalar/stream SkipSpace shells.
+// Each SkipSpace* is a small wrapper that the compiler can inline, around a
+// rarely used vector body. The wrapper returns without a call when the next
+// byte is not whitespace, which is the common case. Only a real whitespace
+// run enters the vector body. The skip functions call SkipSpace* at 8 places
+// per tier. On compact JSON with no whitespace, the inlined check saves a
+// function call at each of them, and those calls were a large share of skip
+// time. A single function with the vector body inside would be too big to
+// inline. The scalar and stream SkipSpace use the same early-return shape.
 
-// SkipSpaceAVX is SkipSpace with a 16-byte vector run skip.
+// SkipSpaceAVX is SkipSpace that skips whitespace runs 16 bytes at a time.
 func SkipSpaceAVX(data []byte, i int) int {
 	if i >= len(data) || data[i] > ' ' {
 		return i
@@ -56,7 +66,7 @@ func skipSpaceAVXSlow(data []byte, i int) int {
 	return i
 }
 
-// SkipSpaceAVX2 is SkipSpace with a 32-byte vector run skip.
+// SkipSpaceAVX2 is SkipSpace that skips whitespace runs 32 bytes at a time.
 func SkipSpaceAVX2(data []byte, i int) int {
 	if i >= len(data) || data[i] > ' ' {
 		return i
@@ -82,7 +92,8 @@ func skipSpaceAVX2Slow(data []byte, i int) int {
 	return i
 }
 
-// SkipSpaceAVX512 is SkipSpace with a 64-byte vector run skip.
+// SkipSpaceAVX512 is SkipSpace that skips whitespace runs 64 bytes at a
+// time.
 func SkipSpaceAVX512(data []byte, i int) int {
 	if i >= len(data) || data[i] > ' ' {
 		return i
@@ -108,9 +119,9 @@ func skipSpaceAVX512Slow(data []byte, i int) int {
 	return i
 }
 
-// skipStringTail validates the escape at data[bs] and returns the resume
-// index — the shared cold arm of every skipString tier (same switch as
-// scalar skipString).
+// skipStringTail validates the escape at data[bs] and returns the index to
+// continue from. Every skipString tier shares it for the rare escape case.
+// It uses the same switch as the scalar skipString.
 func skipStringTail(data []byte, bs int) (int, error) {
 	if bs+1 >= len(data) {
 		return len(data), ErrBadString
@@ -131,7 +142,7 @@ func skipStringTail(data []byte, bs int) (int, error) {
 	}
 }
 
-// skipStringAVX advances past a JSON string via the fused AVX locate.
+// skipStringAVX steps past a JSON string using the AVX scan.
 func skipStringAVX(data []byte, i int) (int, error) {
 	j := i + 1
 	for {
@@ -149,14 +160,14 @@ func skipStringAVX(data []byte, i int) (int, error) {
 			}
 			j = nj
 		default:
-			// The structural locate landed on the ctrl byte itself, which is
-			// the position scalar skipString reports.
+			// The scan stopped on the control byte itself, which is the
+			// position the scalar skipString reports.
 			return j + k, ErrBadString
 		}
 	}
 }
 
-// skipStringAVX2 — see skipStringAVX.
+// skipStringAVX2 is skipStringAVX using the AVX2 scan.
 func skipStringAVX2(data []byte, i int) (int, error) {
 	j := i + 1
 	for {
@@ -174,14 +185,14 @@ func skipStringAVX2(data []byte, i int) (int, error) {
 			}
 			j = nj
 		default:
-			// The structural locate landed on the ctrl byte itself, which is
-			// the position scalar skipString reports.
+			// The scan stopped on the control byte itself, which is the
+			// position the scalar skipString reports.
 			return j + k, ErrBadString
 		}
 	}
 }
 
-// skipStringAVX512 — see skipStringAVX.
+// skipStringAVX512 is skipStringAVX using the AVX-512 scan.
 func skipStringAVX512(data []byte, i int) (int, error) {
 	j := i + 1
 	for {
@@ -199,14 +210,14 @@ func skipStringAVX512(data []byte, i int) (int, error) {
 			}
 			j = nj
 		default:
-			// The structural locate landed on the ctrl byte itself, which is
-			// the position scalar skipString reports.
+			// The scan stopped on the control byte itself, which is the
+			// position the scalar skipString reports.
 			return j + k, ErrBadString
 		}
 	}
 }
 
-// SkipValueAVX is SkipValue over the fused AVX skip tree.
+// SkipValueAVX is SkipValue using the AVX skip functions.
 func SkipValueAVX(data []byte, i int) (int, error) {
 	return skipValueAVX(data, i, 0)
 }
@@ -308,7 +319,7 @@ func skipObjectAVX(data []byte, i, depth int) (int, error) {
 	}
 }
 
-// SkipValueAVX2 is SkipValue over the fused AVX2 skip tree.
+// SkipValueAVX2 is SkipValue using the AVX2 skip functions.
 func SkipValueAVX2(data []byte, i int) (int, error) {
 	return skipValueAVX2(data, i, 0)
 }
@@ -410,7 +421,7 @@ func skipObjectAVX2(data []byte, i, depth int) (int, error) {
 	}
 }
 
-// SkipValueAVX512 is SkipValue over the fused AVX-512 skip tree.
+// SkipValueAVX512 is SkipValue using the AVX-512 skip functions.
 func SkipValueAVX512(data []byte, i int) (int, error) {
 	return skipValueAVX512(data, i, 0)
 }

@@ -1,30 +1,29 @@
-// The url-encoding mode bits, urlTable, and the bodies of AppendURL /
-// appendUserinfo / appendURLEscape are ported from Go's net/url (BSD-style
-// license) to provide an append-style, allocation-free URL.String.
+// The URL encoding mode bits, urlTable, and the bodies of appendURLRaw,
+// appendUserinfo and appendURLEscape are ported from Go's net/url (BSD-style
+// license). They give an append-style url.URL.String that does not allocate.
 
 package ggen
 
 import "net/url"
 
-// AppendURL appends u's wire form plus the closing `"` — the CALLER writes
-// the opening `"` (AppendString convention). The body is byte-for-byte
-// url.URL.String, JSON-escaped when it needs it: RawQuery and Opaque pass
-// through String verbatim and Host's char class admits `"`, so a URL ggen
-// itself decoded can carry bytes that would otherwise break the output.
+// AppendURL appends the text form of u and the closing '"'. The caller writes
+// the opening '"', as with AppendString. The text is byte for byte what
+// url.URL.String returns, JSON-escaped when needed. String copies RawQuery and
+// Opaque unchanged, and Host may contain '"'. So even a URL that ggen itself
+// decoded can hold bytes that would break the JSON output without escaping.
 func AppendURL(dst []byte, u url.URL) []byte {
 	from := len(dst)
 	return closeJSONString(appendURLRaw(dst, u), from)
 }
 
-// AppendURLHTML is AppendURL closing through the HTML-safe escape set
-// (htmlescape mode).
+// AppendURLHTML is AppendURL with HTML-safe escaping, for htmlescape mode.
 func AppendURLHTML(dst []byte, u url.URL) []byte {
 	from := len(dst)
 	return CloseJSONStringHTML(appendURLRaw(dst, u), from)
 }
 
-// appendURLRaw appends u's wire form, byte-for-byte equal to url.URL.String,
-// with zero allocation.
+// appendURLRaw appends the text form of u, byte for byte equal to
+// url.URL.String, without allocating.
 func appendURLRaw(dst []byte, u url.URL) []byte {
 	entry := len(dst)
 	if u.Scheme != "" {
@@ -48,12 +47,14 @@ func appendURLRaw(dst []byte, u url.URL) []byte {
 				dst = appendURLEscape(dst, u.Host, urlEncodeHost)
 			}
 		}
-		// Mirror stdlib EscapedPath: RawPath wins only when validly encoded
-		// AND it percent-decodes back to Path (a stale RawPath must not win);
-		// else "*"; else escape(Path). The '/'-insertion and RFC 3986 §4.2
-		// "./" checks probe the escaped path's first byte/segment without
-		// materializing it — escaping preserves a leading '/' and never
-		// creates a ':' or '/', so the raw bytes answer both questions.
+		// Same rules as url.URL.EscapedPath. RawPath is used only when it is
+		// validly encoded and percent-decodes back to Path, so an out-of-date
+		// RawPath is ignored. Otherwise a "*" path is written as is, and any
+		// other path is escaped. Two checks below need the first byte and the
+		// first segment of the escaped path: adding a '/' before the path, and
+		// the RFC 3986 section 4.2 "./" prefix. They read the unescaped bytes
+		// instead of building the escaped path. That gives the same answer,
+		// because escaping keeps a leading '/' and never adds a ':' or '/'.
 		raw := u.RawPath != "" && validURLEncoded(u.RawPath, urlEncodePath) &&
 			urlUnescapesTo(u.RawPath, u.Path)
 		hasPath := raw || u.Path != ""
@@ -70,8 +71,9 @@ func appendURLRaw(dst []byte, u url.URL) []byte {
 		if hasPath && p0 != '/' && u.Host != "" {
 			dst = append(dst, '/')
 		}
-		// §4.2 applies only when NOTHING of this URL precedes the path
-		// (entry-relative — an outer JSON prefix must not mask it).
+		// The section 4.2 rule applies only when no part of this URL comes
+		// before the path. Compare against entry, not 0, so bytes already in
+		// dst before the URL do not hide it.
 		if len(dst) == entry && containsColon(seg) {
 			dst = append(dst, '.', '/')
 		}
@@ -90,8 +92,9 @@ func appendURLRaw(dst []byte, u url.URL) []byte {
 	}
 	if u.Fragment != "" {
 		dst = append(dst, '#')
-		// Mirror stdlib EscapedFragment: RawFragment wins only when it
-		// percent-decodes back to Fragment (stale RawFragment must not win).
+		// Same rules as url.URL.EscapedFragment. RawFragment is used only
+		// when it is valid and percent-decodes back to Fragment, so an
+		// out-of-date RawFragment is ignored.
 		if u.RawFragment != "" && validURLEncodedFragment(u.RawFragment) &&
 			urlUnescapesTo(u.RawFragment, u.Fragment) {
 			dst = append(dst, u.RawFragment...)
@@ -102,7 +105,8 @@ func appendURLRaw(dst []byte, u url.URL) []byte {
 	return dst
 }
 
-// appendUserinfo emits username[:password] with per-mode escaping.
+// appendUserinfo appends username or username:password, escaped for the
+// userinfo part of a URL.
 func appendUserinfo(dst []byte, u *url.Userinfo) []byte {
 	if u == nil {
 		return dst
@@ -115,8 +119,8 @@ func appendUserinfo(dst []byte, u *url.Userinfo) []byte {
 	return dst
 }
 
-// appendURLEscape writes s into dst, percent-escaping each byte that needs
-// escaping under mode. Space in encodeQueryComponent becomes '+'.
+// appendURLEscape appends s to dst and percent-escapes each byte that mode
+// does not allow. In urlEncodeQueryComponent mode a space becomes '+'.
 func appendURLEscape(dst []byte, s string, mode urlEncoding) []byte {
 	const upperhex = "0123456789ABCDEF"
 	for i := range len(s) {
@@ -133,18 +137,18 @@ func appendURLEscape(dst []byte, s string, mode urlEncoding) []byte {
 	return dst
 }
 
-// validURLEncoded reports whether s is already a valid encoded form for the
-// given mode (every char is an unreserved/sub-delim, an `@`/`:`, or part of
-// a %XX escape).
+// validURLEncoded reports whether s is already validly encoded for mode.
+// Every byte must be a sub-delimiter, '@', ':', '[', ']', '%', or a byte that
+// mode allows unescaped.
 func validURLEncoded(s string, mode urlEncoding) bool {
 	for i := range len(s) {
 		switch s[i] {
 		case '!', '$', '&', '\'', '(', ')', '*', '+', ',', ';', '=', ':', '@':
-			// sub-delims + ":" + "@" — always allowed
+			// sub-delimiters, ':' and '@' are always allowed
 		case '[', ']':
-			// not strictly RFC 3986 but accepted by browsers/Go
+			// not strict RFC 3986, but browsers and Go accept them
 		case '%':
-			// percent-encoded byte — assumed well-formed
+			// start of a %XX escape, assumed well-formed
 		default:
 			if urlTable[s[i]]&mode == 0 {
 				return false
@@ -159,9 +163,10 @@ func validURLEncodedFragment(s string) bool {
 	return validURLEncoded(s, urlEncodeFragment)
 }
 
-// urlUnescapesTo reports whether escaped percent-decodes exactly to want —
-// stdlib EscapedPath's unescape(RawPath)==Path consistency check, alloc-free.
-// Malformed %XX returns false (stdlib's unescape errors → escape(Path) wins).
+// urlUnescapesTo reports whether escaped percent-decodes exactly to want. It
+// is the unescape(RawPath) == Path check from url.URL.EscapedPath, without
+// allocating. A malformed %XX returns false. In net/url the unescape fails
+// there too, and Path is escaped instead.
 func urlUnescapesTo(escaped, want string) bool {
 	j := 0
 	for i := 0; i < len(escaped); {
@@ -218,7 +223,8 @@ func containsColon(s string) bool {
 	return false
 }
 
-// URL-encoding mode bits + lookup table, ported from net/url.
+// urlEncoding is a set of URL parts, one bit each. urlTable maps a byte to the
+// parts where it may appear unescaped. Both are ported from net/url.
 type urlEncoding uint8
 
 const (

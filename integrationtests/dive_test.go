@@ -9,8 +9,9 @@ import (
 	"testing"
 )
 
-// DiveStruct exercises inner: per-element validation, rune-count length
-// checks, and a custom @Func validator.
+// DiveStruct exercises inner: per-element validation, length checks that
+// count runes (Unicode characters) rather than bytes, and a custom @Func
+// validator.
 //
 //ggen:generate
 type DiveStruct struct {
@@ -48,7 +49,7 @@ func TestDive_valid(t *testing.T) {
 
 func TestDive_tagTooShort(t *testing.T) {
 	t.Parallel()
-	// "x" is 1 rune, below minrunes=2 → per-element error
+	// "x" is 1 rune, below minrunes=2, so the element fails.
 	input := `{"tags":["ok","x"],"title":"hi","scores":[]}`
 	_, _, err := (DiveStruct{}).DecodeFrom([]byte(input))
 	if err == nil {
@@ -89,7 +90,7 @@ func TestRuneCount_byteVsRune(t *testing.T) {
 
 func TestTags_sliceLengthVsElement(t *testing.T) {
 	t.Parallel()
-	// 4 tags > maxlen=3 → slice-level error
+	// 4 tags exceed maxlen=3, so the slice itself fails.
 	input := `{"tags":["aa","bb","cc","dd"],"title":"hi","scores":[]}`
 	_, _, err := (DiveStruct{}).DecodeFrom([]byte(input))
 	if err == nil {
@@ -202,7 +203,8 @@ func TestCustomDive_keysMod(t *testing.T) {
 	}
 }
 
-// @PointerCheck is func(*int) error — resolver respects the exact *T type.
+// @PointerCheck is func(*int) error. The resolver must match the exact *T
+// type.
 func TestCustomDive_pointerField(t *testing.T) {
 	t.Parallel()
 	// Negative value rejected.

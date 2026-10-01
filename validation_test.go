@@ -5,9 +5,8 @@ import (
 	"testing"
 )
 
-// A fail-fast leaf nested under a multierr parent gets the outer segment —
-// Append used to prepend only for nested Errors aggregates, contradicting
-// its own doc comment.
+// Append must prepend the outer path segment to a single leaf error, not
+// only to a nested Errors aggregate. This is what its doc comment promises.
 func TestErrorsAppend_PrependsLeafPath(t *testing.T) {
 	t.Parallel()
 	var es Errors
@@ -16,7 +15,7 @@ func TestErrorsAppend_PrependsLeafPath(t *testing.T) {
 	if !ok || len(le.Path) != 2 || le.Path[0] != "outer" || le.Path[1] != "inner" {
 		t.Errorf("leaf path = %v, want [outer inner]", le)
 	}
-	// Nested aggregates keep flattening + prepending.
+	// A nested aggregate is flattened and each leaf gets the prefix.
 	var parent Errors
 	parent.Append("p", Errors{&NotEmptyError{Path: []string{"q"}}})
 	ne := parent[0].(*NotEmptyError)
@@ -25,9 +24,9 @@ func TestErrorsAppend_PrependsLeafPath(t *testing.T) {
 	}
 }
 
-// A single leaf rendering "" used to panic on &buf[0].
-// The documented class is "contains no uppercase" — caseless characters
-// (digits, spaces, punctuation, uncased scripts) pass.
+// IsLower means "contains no uppercase" and IsUpper means "contains no
+// lowercase". Characters without case pass both: digits, spaces,
+// punctuation, and scripts like Japanese.
 func TestIsLowerIsUpper_CaselessPass(t *testing.T) {
 	t.Parallel()
 	for _, s := range []string{"abc123", "hello world", "п'ять-5", "日本語"} {
@@ -48,6 +47,7 @@ func TestIsLowerIsUpper_CaselessPass(t *testing.T) {
 	}
 }
 
+// Error must not panic when the only leaf renders an empty message.
 func TestErrorsError_EmptyMessageLeaf(t *testing.T) {
 	t.Parallel()
 	es := Errors{Errors{}}
@@ -56,8 +56,9 @@ func TestErrorsError_EmptyMessageLeaf(t *testing.T) {
 	}
 }
 
-// A nested fallible mod's ModError is born pre-wrapped in a *ParseError, so
-// the outer rebase has to cascade into the cause.
+// A ModError from a nested mod arrives already wrapped in a *ParseError.
+// When the outer decoder shifts the position to the full payload offset, the
+// shift must also reach the ModError inside.
 func TestParseErrAddPosCascadesToModError(t *testing.T) {
 	t.Parallel()
 	inner := NewParseErr("f", 5, &ModError{Name: "clamp", Pos: 5})
@@ -76,7 +77,8 @@ func TestParseErrAddPosCascadesToModError(t *testing.T) {
 	}
 }
 
-// A lower-bound length says so; an exact one does not.
+// A minimum-length error says "at least" in its message. An exact-length
+// error does not.
 func TestLenError_Message(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {

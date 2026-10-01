@@ -13,12 +13,12 @@ func init() {
 	}
 }
 
-// closeJSONString treats dst[from:] as the raw body of an in-progress JSON
-// string and appends the closing quote, re-escaping the body first when it
-// carries bytes a JSON string must escape. Raw-text emitters (URL
-// query/opaque, netip zones, TextAppender output) drop caller-controlled
-// bytes between quotes; the overwhelmingly common clean body costs one
-// table walk.
+// closeJSONString treats dst[from:] as the unescaped body of a JSON string
+// that is being written, and appends the closing quote. If the body holds
+// bytes that JSON requires to be escaped, it rewrites the body escaped first.
+// Some writers copy text the caller controls straight between the quotes: URL
+// query and opaque parts, netip zones, TextAppender output. Most bodies need
+// no escaping, and then this costs one pass over a lookup table.
 func closeJSONString(dst []byte, from int) []byte {
 	for _, c := range dst[from:] {
 		if needEscapeNoHTML[c] {
@@ -28,9 +28,9 @@ func closeJSONString(dst []byte, from int) []byte {
 	return append(dst, '"')
 }
 
-// CloseJSONString / CloseJSONStringHTML are the exported pair generated code
-// closes TextAppender output through (the CALLER wrote the opening `"` and
-// recorded from = len(dst) before AppendText).
+// CloseJSONString is the exported closeJSONString. Generated code uses it and
+// CloseJSONStringHTML to close TextAppender output. The caller has written the
+// opening '"' and set from = len(dst) before calling AppendText.
 func CloseJSONString(dst []byte, from int) []byte {
 	return closeJSONString(dst, from)
 }
@@ -44,9 +44,9 @@ func CloseJSONStringHTML(dst []byte, from int) []byte {
 	return append(dst, '"')
 }
 
-// AppendString appends the escaped body of s plus a closing `"`. The
-// CALLER writes the opening `"`. HTML-safe: <, >, & → \uXXXX. Use
-// AppendStringNoHTML for raw output.
+// AppendString appends s escaped as a JSON string body, then the closing
+// '"'. The caller writes the opening '"'. The output is HTML-safe: <, > and &
+// are written as \uXXXX escapes. Use AppendStringNoHTML to keep them as is.
 func AppendString(dst []byte, s string) []byte {
 	start := 0
 	for i := range len(s) {
@@ -84,8 +84,9 @@ func AppendString(dst []byte, s string) []byte {
 	return append(dst, '"')
 }
 
-// AppendStringNoHTML is AppendString without HTML escaping: <, >, &
-// emitted literally, standard JSON escapes only. Same caller contract.
+// AppendStringNoHTML is AppendString without HTML escaping. It writes <, >
+// and & as is and applies only the standard JSON escapes. The caller writes
+// the opening '"', as with AppendString.
 func AppendStringNoHTML(dst []byte, s string) []byte {
 	start := 0
 	for i := range len(s) {

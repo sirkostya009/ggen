@@ -1,7 +1,8 @@
 package bench
 
-// -cpu=1 runs serially, -cpu=N with N parallel goroutines. Under RunParallel
-// b.SetBytes reports aggregate MB/s; use -cpu=1 for single-thread numbers.
+// -cpu=1 runs each benchmark on one goroutine, -cpu=N on N parallel
+// goroutines. Under RunParallel, b.SetBytes reports the total MB/s of all
+// goroutines. Use -cpu=1 for single-thread numbers.
 
 import (
 	"bytes"
@@ -49,8 +50,9 @@ func BenchmarkMega_Unmarshal(b *testing.B) {
 		{"sonic_fast", func(p []byte) error { var v NodePlain; return sonic.ConfigFastest.Unmarshal(p, &v) }},
 		{"easyjson", func(p []byte) error { var v Node; return v.UnmarshalJSON(p) }},
 		{"ggen", func(p []byte) error { _, _, err := Node{}.DecodeFrom(p); return err }},
-		// ggen_copy: -copy mode (CopyNode) — bytes path copies strings/raw/any
-		// out of the input instead of aliasing. The delta vs ggen is copy cost.
+		// ggen_copy: -copy mode (CopyNode). The bytes path copies strings, raw
+		// values and any values out of the input instead of aliasing it. The
+		// difference from the ggen row is the cost of copying.
 		{"ggen_copy", func(p []byte) error { _, _, err := CopyNode{}.DecodeFrom(p); return err }},
 	}
 
@@ -82,7 +84,8 @@ func BenchmarkMega_Marshal(b *testing.B) {
 
 	for _, c := range marshalCodecs {
 		b.Run(c.name, func(b *testing.B) {
-			// bytesPerOp from first marshal so MB/s reflects output size.
+			// Take the byte count from a first marshal, so MB/s reflects the
+			// output size.
 			out, err := c.fn()
 			if err != nil {
 				b.Fatal(err)
@@ -98,8 +101,9 @@ func BenchmarkMega_Marshal(b *testing.B) {
 		})
 	}
 
-	// ggen_presized: ggen marshal reusing a caller-owned pre-grown buffer
-	// across calls. No other codec row has caller-owned buffer reuse.
+	// ggen_presized: ggen marshal that reuses a buffer the caller owns and
+	// sized in advance, across calls. No other library row reuses a
+	// caller-owned buffer.
 	b.Run("ggen_presized", func(b *testing.B) {
 		buf := make([]byte, 0, MegaValue.JSONSize())
 		runBench(b, int64(len(MegaPayload)),
@@ -143,7 +147,7 @@ func BenchmarkMega_Reader(b *testing.B) {
 		{"easyjson", func(s *readerState) error {
 			s.r.Reset(MegaPayload)
 			var v Node
-			// easyjson just does io.ReadAll here
+			// easyjson reads the whole input with io.ReadAll here.
 			return easyjson.UnmarshalFromReader(&s.r, &v)
 		}},
 		{"ggen stream", func(s *readerState) error {
@@ -180,18 +184,20 @@ func BenchmarkMega_Reader(b *testing.B) {
 	}
 }
 
-// BenchmarkDeepNested_Unmarshal — single 50-level chain, isolating per-codec
-// recursion cost from mega's fanout work. As the maximally depth-sensitive
-// bench it's also the one that shows the recursion depth-cap cost (cmd/ggen
-// CLAUDE.md opt #51): +5.4% scalar, +0.4% (flat) avx512 vs uncapped, from the
-// per-level depth thread + `> the runtime maxDepth cap (10000)` compare in Node's
-// decodeFromDepth core. Mega (realistic shallow nesting) is flat — the compare
-// hides under memory latency there.
+// BenchmarkDeepNested_Unmarshal decodes a single chain of 50 nested Nodes. It
+// measures each library's recursion cost without Mega's wide fan-out. Because
+// it depends on depth the most, it is also the benchmark that shows the cost
+// of the recursion depth cap (see opt #51 in cmd/ggen/CLAUDE.md). That cost
+// comes from passing the depth down each level and comparing it against the
+// runtime maxDepth cap (10000) in Node's decodeFromDepth. On Mega, which
+// nests only a few levels, the cost does not show, because memory latency
+// hides the compare.
 //
-// THIS ROW IS THE NOISE CANARY: tiny (µs), cache-resident, and it swung
-// 16.8→24.6µs on an UNCHANGED binary when the box ran a capped power profile.
-// Always warm up first and check the jsonv2 row as an in-run control before
-// believing any delta here (see bench/CLAUDE.md "Running benchmarks").
+// This row is the noise canary. It is tiny (microseconds) and fits in CPU
+// cache, so it reacts strongly to machine state such as a capped power
+// profile, even on an unchanged binary. Always warm up first and check the
+// jsonv2 row in the same run as a control before trusting any change here
+// (see "Running benchmarks" in bench/CLAUDE.md).
 func BenchmarkDeepNested_Unmarshal(b *testing.B) {
 	codecs := []struct {
 		name string
@@ -216,8 +222,8 @@ func BenchmarkDeepNested_Unmarshal(b *testing.B) {
 	}
 }
 
-// BenchmarkMapHeavy_Unmarshal — 1024-entry string→string map. Measures
-// per-entry hash + alloc + insert cost.
+// BenchmarkMapHeavy_Unmarshal decodes a map of 1024 string keys to string
+// values. It measures the per-entry cost of hashing, allocation and insertion.
 func BenchmarkMapHeavy_Unmarshal(b *testing.B) {
 	codecs := []struct {
 		name string
@@ -241,10 +247,11 @@ func BenchmarkMapHeavy_Unmarshal(b *testing.B) {
 	}
 }
 
-// BenchmarkMapValues_Unmarshal — maps whose VALUES own allocations (a struct
-// carrying a slice, and a slice). The ggen_reuse row decodes into a carried
-// receiver, where each entry's previous value becomes the decode target; the
-// plain ggen row starts from a zero value, where that machinery can only cost.
+// BenchmarkMapValues_Unmarshal decodes maps whose values own allocations: a
+// struct with a slice, and a slice. The ggen_reuse row decodes into a receiver
+// that already holds data, and each entry's previous value becomes the target
+// of the new decode. The plain ggen row starts from a zero value, where the
+// reuse code can only add cost.
 func BenchmarkMapValues_Unmarshal(b *testing.B) {
 	codecs := []struct {
 		name string
@@ -286,8 +293,8 @@ func BenchmarkMapValues_Unmarshal(b *testing.B) {
 	})
 }
 
-// BenchmarkMapValuesHeavy_Unmarshal — same shape as MapValues but with much
-// more memory per value, where recycling has the most to win.
+// BenchmarkMapValuesHeavy_Unmarshal has the same shape as MapValues but much
+// more memory per value, where reuse has the most to gain.
 func BenchmarkMapValuesHeavy_Unmarshal(b *testing.B) {
 	b.Run("jsonv2", func(b *testing.B) {
 		runBench(b, int64(len(MapValuesHeavyPayload)),

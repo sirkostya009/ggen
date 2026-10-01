@@ -10,9 +10,11 @@ import (
 	"sync"
 )
 
-// RelPath returns p relative to cwd when that's shorter, with a "./" prefix on
-// siblings so they read as paths (not package paths) and stay editor-clickable.
-// Falls back to absolute when the relative form is longer (heavy "../" climb).
+// RelPath returns p relative to the working directory. A path below the
+// working directory gets a "./" prefix, so it reads as a file path and not a
+// package path, and editors can still open it on click. When the relative
+// form is longer than the absolute one, for example after many "../" steps,
+// RelPath returns the absolute path.
 func RelPath(p string) string {
 	if p == "" {
 		return p
@@ -38,8 +40,8 @@ func RelPath(p string) string {
 	return rel
 }
 
-// FormatPos renders a token.Position with the filename relative to cwd
-// (token.Position.String always emits the absolute filename).
+// FormatPos renders a token.Position with the filename relative to the
+// working directory. token.Position.String always prints the absolute name.
 func FormatPos(pos token.Position) string {
 	if !pos.IsValid() {
 		return ""
@@ -47,9 +49,10 @@ func FormatPos(pos token.Position) string {
 	return fmt.Sprintf("%s:%d:%d", RelPath(pos.Filename), pos.Line, pos.Column)
 }
 
-// ResolveSpanCol finds codeSpan's 1-indexed column. An optional anchor (a
-// disambiguating prefix known to precede codeSpan) is consumed first, so a
-// short codeSpan that collides earlier on the line still resolves correctly.
+// ResolveSpanCol returns the 1-based column of codeSpan in line, searching
+// from posCol. The optional anchor is a text known to come before codeSpan.
+// It is searched for first, so a short codeSpan that also appears earlier on
+// the line still resolves to the right place.
 func ResolveSpanCol(line string, posCol int, codeSpan, anchor string) int {
 	col := max(posCol-1, 0)
 	if anchor != "" && col < len(line) {
@@ -65,15 +68,16 @@ func ResolveSpanCol(line string, posCol int, codeSpan, anchor string) int {
 	return col + 1
 }
 
-// sourceLineCache memoises file reads so multiple errors from one file don't
-// re-open it.
+// sourceLineCache keeps the lines of each file read, so several errors in one
+// file read it only once.
 var sourceLineCache struct {
 	mu    sync.Mutex
 	files map[string][]string
 }
 
-// ReadSourceLine returns the 1-indexed line N from filename, or (empty, false)
-// on any read / range error (non-fatal — the renderer drops the excerpt).
+// ReadSourceLine returns the 1-based line from filename. It returns
+// ("", false) when the file cannot be read or the line is out of range. This
+// is not fatal: the renderer then prints the error without the source excerpt.
 func ReadSourceLine(filename string, line int) (string, bool) {
 	if filename == "" || line < 1 {
 		return "", false
@@ -105,19 +109,20 @@ func ReadSourceLine(filename string, line int) (string, bool) {
 	return lines[line-1], true
 }
 
-// RichError is the structured error type both log impls render. It separates
-// the what (Msg + Pos), the technical context (BotHint, inline for agents/CI),
-// and the human remedy (UserHint, a Note: line in pretty mode). See Logger.
+// RichError is the structured error that both log implementations render. It
+// keeps three things apart. Msg and Pos say what failed and where. BotHint is
+// technical context, printed inline for agents and CI. UserHint is a fix for
+// a human, printed as a "Note:" line in pretty mode. See Logger.
 type RichError struct {
-	Pos      token.Position // file:line:col; zero value when unknown
-	Msg      string         // main error message — what failed
-	CodeSpan string         // substring within the source line to highlight + point caret at
-	// disambiguating prefix searched before CodeSpan (positioning only, not highlighted) when CodeSpan
-	// is short enough to collide earlier on the line
+	Pos      token.Position // file:line:col, zero value when unknown
+	Msg      string         // what failed
+	CodeSpan string         // text in the source line to highlight and point the caret at
+	// text searched for before CodeSpan when CodeSpan is short enough to also
+	// appear earlier on the line. Used for positioning only, not highlighted.
 	Anchor   string
-	BotHint  string // technical context for concise/agent output
-	UserHint string // remedy suggestion for human output (Note:)
-	Err      error  // optional underlying error for errors.Unwrap
+	BotHint  string // technical context for short or agent output
+	UserHint string // suggested fix for human output, the "Note:" line
+	Err      error  // optional underlying error, returned by Unwrap
 }
 
 func (e *RichError) Error() string {

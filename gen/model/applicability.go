@@ -9,38 +9,42 @@ import (
 	"strings"
 )
 
-// checkRuleApplicability rejects validation/mod tags that don't fit the
-// field's Go kind (e.g. `ascii` on an int) — otherwise the generator emits
-// broken Go the user only hits at compile time. Each reject is a *RichError
-// (see log.go). Called after kind resolution; named primitives are judged by
-// their underlying kind. `resolved` marks the go/types re-run (NamedPrims
-// populated): a still-KindStruct kind there is a genuine struct/opaque type
-// and kinded rules reject — no rule emit path compiles against it. Before
-// resolution (and in AST-only mode) KindStruct positions defer.
+// checkRuleApplicability rejects validation rules and mods that do not fit
+// the field's Go kind, such as `alphanum` on an int. Without this check the
+// generator would emit broken Go that the user only sees at compile time.
+// Each rejection is a *RichError, rendered by cmd/ggen/log.go. It runs after
+// kinds are resolved, and judges a named primitive by its underlying kind.
+// resolved is true on the go/types run, where NamedPrims is filled. There a
+// kind that is still KindStruct is a real struct or opaque type, and rules
+// that need a specific kind are rejected, because none of their code would
+// compile against it. Before that run, and in AST-only mode, KindStruct
+// positions are skipped for later.
 func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 	desc := fi.GoName
 	if fi.StructName != "" {
 		desc = fi.StructName + "." + fi.GoName
 	}
-	// Judge `[N]byte` by the shape it decodes as (one base64 string), whether
-	// or not the caller has folded it yet — the go/types re-run precedes the
-	// fold, and an unfolded `[3]byte` reads as a diveable array of uint8.
+	// Judge `[N]byte` by how it decodes, as one base64 string, whether or
+	// not the caller has folded it to KindBytes yet. The go/types run happens
+	// before the fold, and an unfolded `[3]byte` reads as an array of uint8
+	// with elements to check.
 	foldByteArray(&fi)
 
-	// Gather across every phase rather than short-circuiting — two bugs on one
-	// field should both surface in a single run.
+	// Collect errors from every check instead of stopping at the first. Two
+	// problems on one field should both show up in a single run.
 	var errs []error
 	collect := func(err error) { errs = append(errs, err) }
 
-	// A named primitive reports KindStruct here, but generate resolves it via
-	// namedKinds and emits REAL primitive rule code — judge it by the
-	// underlying kind (parse-time twin of effectiveKind). Unresolved types
-	// stay KindStruct; checkVal/checkMod below decide defer-vs-reject.
+	// A named primitive reads as KindStruct here, but the generator resolves
+	// it through namedKinds and emits real primitive rule code. So judge it by
+	// its underlying kind, like effectiveKind does at render time. Unresolved
+	// types stay KindStruct, and checkVal and checkMod below decide whether to
+	// skip or reject them.
 	eff := func(typ string, kind TypeKind) TypeKind {
 		if kind == KindStruct {
-			// Pointer fields spell GoType "*Priority" while NamedPrims keys
-			// the pointee — strip the stars or every rule on a
-			// pointer-to-named-primitive bypasses the matrix.
+			// A pointer field has GoType "*Priority", but NamedPrims is
+			// keyed by the pointee. Strip the stars, or every rule on a
+			// pointer to a named primitive would skip these checks.
 			if k, ok := fi.NamedPrims[strings.TrimLeft(typ, "*")]; ok {
 				return k
 			}
@@ -48,12 +52,13 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 		return kind
 	}
 
-	// json:",string" is numerics-only (jsonv2 defaults; bool is tolerated as
-	// a documented no-op since v2 dropped bool quoting). A string field is a
-	// loud reject rather than a silent no-op that matches neither v1 nor v2;
-	// so are named primitives — the string-tag emit does not cast.
+	// json:",string" is only for numbers, as in jsonv2. bool is accepted as a
+	// documented no-op, because jsonv2 does not quote bools. A string field is
+	// rejected with an error instead of a silent no-op that would match
+	// neither encoding/json nor jsonv2. Named primitives are rejected too,
+	// because the code emitted for the string option does not convert types.
 	if fi.String {
-		switch fi.Kind { // for pointers fi.Kind is already the pointee kind
+		switch fi.Kind { // for a pointer, fi.Kind is already the pointee kind
 		case KindBool,
 			KindInt, KindInt8, KindInt16, KindInt32, KindInt64,
 			KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
@@ -68,11 +73,11 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 		}
 	}
 
-	// `omitempty` omits a value encoding as null, "", [] or {}, and a struct's
-	// `{}` is the one of those ggen does not act on: a struct field is always
-	// emitted. Reject rather than accept a silent no-op. Pointers are untouched
-	// — nil still omits — and the kinds with a wire shape of their own
-	// (time.Time, url.URL, sql.Null*, big.*, …) never reach KindStruct.
+	// `omitempty` skips a value that encodes as null, "", [] or {}. ggen does
+	// not act on a struct's `{}`, so a struct field is always emitted. Reject
+	// the option instead of accepting a silent no-op. Pointers are not
+	// affected, since nil still omits. Kinds with their own JSON shape, such as
+	// time.Time, url.URL, sql.Null* and big.*, never reach KindStruct.
 	if fi.OmitEmpty && fi.UnderlyingStruct && eff(fi.GoType, fi.Kind) == KindStruct {
 		collect(&RichError{
 			Msg:      desc + ": `omitempty` is not applicable to a struct field (got " + fi.GoType + ")",
@@ -82,8 +87,9 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 		})
 	}
 
-	// checkVal/checkMod defer opaque (KindStruct) positions until the
-	// go/types re-run resolves named primitives; resolved => reject there.
+	// checkVal and checkMod skip opaque KindStruct positions until the
+	// go/types run resolves named primitives. When resolved is true they
+	// reject them.
 	checkVal := func(rules []ValidationRule, source string, kind TypeKind, typeName, fieldDesc string) {
 		if kind == KindStruct && !resolved {
 			return
@@ -97,12 +103,12 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 		collect(checkModRules(mods, source, kind, typeName, fieldDesc))
 	}
 
-	// Outer rules apply to the field itself. For pointers fi.Kind is the
-	// pointee kind, the right anchor.
+	// Outer rules apply to the field itself. For a pointer, fi.Kind is the
+	// pointee kind, which is the right one to check against.
 	checkVal(fi.Validation, "pipe", eff(fi.GoType, fi.Kind), fi.GoType, desc)
 	checkMod(fi.Mods, "pipe", eff(fi.GoType, fi.Kind), fi.GoType, desc)
 
-	// keys: only valid on maps. Keyed kind itself is always string.
+	// keys: is only valid on maps. The key kind is always string.
 	if len(fi.KeyValidation) > 0 || len(fi.KeyMods) > 0 {
 		if fi.Kind != KindMap {
 			collect(&RichError{
@@ -116,9 +122,10 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 	checkVal(fi.KeyValidation, "pipe keys:", KindString, "string", desc+" key")
 	checkMod(fi.KeyMods, "pipe keys:", KindString, "string", desc+" key")
 
-	// inner: only valid on slice/array/map. `[]byte`/`[N]byte` decode as one
-	// base64 string with no element loop, so an element step there never
-	// runs; only `[N]byte json:",format:array"` keeps real elements.
+	// inner: is only valid on slices, arrays and maps. `[]byte` and `[N]byte`
+	// decode as one base64 string with no element loop, so an element step
+	// there would never run. Only `[N]byte json:",format:array"` keeps real
+	// elements.
 	hasDive := len(fi.ElemValidation) > 0 || len(fi.ElemMods) > 0 ||
 		len(fi.InnerValidation) > 0 || len(fi.InnerMods) > 0
 	if hasDive && !canDive(fi.Kind) {
@@ -133,14 +140,14 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 			UserHint: userHint,
 		})
 	} else {
-		// Element rules are judged only where the field HAS an element type
-		// to name them against; above, the one diagnostic is the whole story.
+		// Element rules are judged only when the field has an element type to
+		// judge them against. Otherwise the single error above says it all.
 		checkVal(fi.ElemValidation, "pipe inner:", eff(fi.ElemType, fi.ElemKind), fi.ElemType, desc+" element")
 		checkMod(fi.ElemMods, "pipe inner:", eff(fi.ElemType, fi.ElemKind), fi.ElemType, desc+" element")
 
-		// Levels >= 2 (`inner:(inner:(...))`) peel the element type per
-		// level, so a rule mismatched deep in the nest is judged on the same
-		// terms as one at level 1.
+		// Levels 2 and deeper, as in `inner:(inner:(...))`, remove one element
+		// type per level. A wrong rule deep in the nesting is judged the same
+		// way as one at level 1.
 		levelType := fi.ElemType
 		for li := range max(len(fi.InnerValidation), len(fi.InnerMods)) {
 			var levelKind TypeKind
@@ -168,7 +175,7 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 
 	collect(checkFormat(fi, desc))
 
-	// hint only meaningful on growable containers (slice/map).
+	// hint only makes sense on containers that grow: slices and maps.
 	if fi.HintLen >= 0 && fi.Kind != KindSlice && fi.Kind != KindMap {
 		collect(&RichError{
 			Msg:      desc + ": `hint` is only valid on slice/map fields (got " + fi.GoType + ")",
@@ -177,8 +184,8 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 			UserHint: "`hint` is a prealloc capacity hint; only slice/map have capacity to size",
 		})
 	}
-	// hint: inner levels must land on a growable level too — a level with no
-	// capacity to size has nothing for a hint to do.
+	// hint: inner levels must also be slices or maps. A level with no
+	// capacity to size gives a hint nothing to do.
 	hintLevelType := fi.ElemType
 	hintLevelKind := fi.ElemKind
 	for li, h := range fi.HintLevels {
@@ -206,20 +213,19 @@ func checkRuleApplicability(fi FieldInfo, resolved bool) error {
 	return errors.Join(errs...)
 }
 
-// checkFormat rejects a `format:` the emitters don't recognize. Every emit
-// switch has a silent default arm, so without this a typo (`format:base64ur`)
-// would reach the wire as the default encoding with no diagnostic anywhere.
-// time.Time is deliberately open-ended: an unrecognized value there is a
-// custom Go layout (see the custom-layout support), so only the closed sets
-// are policed.
+// checkFormat rejects a `format:` value the emitters do not know. Every emit
+// switch has a silent default case, so without this a typo such as
+// `format:base64ur` would quietly use the default encoding. time.Time
+// accepts any value on purpose, because an unknown value there is a custom
+// Go time layout. So only the closed sets are checked.
 func checkFormat(fi FieldInfo, desc string) error {
 	if fi.Format == "" {
 		return nil
 	}
 	kind := fi.Kind
 	if kind == KindSlice || kind == KindArray {
-		// A container carries format: down to its elements. `[N]byte` is
-		// already KindBytes (ArrayLen > 0), so it needs no peel.
+		// A container passes format: down to its elements. `[N]byte` is
+		// already KindBytes with ArrayLen > 0, so it needs no unwrapping.
 		if k, ok := formatElemKind(fi); ok {
 			kind = k
 		}
@@ -231,7 +237,7 @@ func checkFormat(fi FieldInfo, desc string) error {
 	case KindDuration:
 		valid = []string{"sec", "milli", "micro", "nano", "units"}
 	case KindTime:
-		return nil // any other value is a custom layout
+		return nil // any other value is a custom time layout
 	default:
 		return &RichError{
 			Msg:      fmt.Sprintf("%s: `format:%s` is not applicable to %s", desc, fi.Format, fi.GoType),
@@ -251,12 +257,12 @@ func checkFormat(fi FieldInfo, desc string) error {
 	}
 }
 
-// formatElemKind resolves the element kind a container's format: applies to.
-// A fixed byte array (`[N]byte`) is a []byte-shaped value, not a container of
-// formatted elements — it takes the same encodings.
+// formatElemKind returns the element kind that a container's format:
+// applies to. A fixed byte array `[N]byte` is treated like []byte, not as a
+// container of formatted elements, and takes the same encodings.
 func formatElemKind(fi FieldInfo) (TypeKind, bool) {
 	// `format:array` keeps a byte array at KindArray, and a pointer to one
-	// spells its levels in GoType — peel both to reach the byte array.
+	// shows its levels in GoType. Remove both to reach the byte array.
 	if _, leaf := PointerDepth(fi.GoType); isByteArrayType(leaf) {
 		return KindBytes, true
 	}
@@ -266,7 +272,7 @@ func formatElemKind(fi FieldInfo) (TypeKind, bool) {
 	return 0, false
 }
 
-// isByteArrayType reports whether typ spells a fixed byte array.
+// isByteArrayType reports whether typ is a fixed byte array type.
 func isByteArrayType(typ string) bool {
 	inner, ok := strings.CutPrefix(typ, "[")
 	if !ok {
@@ -282,9 +288,9 @@ func isByteArrayType(typ string) bool {
 	return elem == "byte" || elem == "uint8"
 }
 
-// peelTypeOnce strips one container level off a type string (mirroring the
-// StripOneContainer + map-value + pointer peels the emitters apply), for the
-// per-level applicability walk.
+// peelTypeOnce removes one container level from a type string, for the
+// per-level checks. It does what the emitters do: StripOneContainer, then
+// map values, then one pointer.
 func peelTypeOnce(typ string) (string, TypeKind, bool) {
 	switch {
 	case strings.HasPrefix(typ, "map[string]"):
@@ -300,27 +306,28 @@ func peelTypeOnce(typ string) (string, TypeKind, bool) {
 	return typ, ResolveKind(typ), true
 }
 
-// canDive reports whether inner: can peel one level off this kind.
+// canDive reports whether inner: can step into the elements of this kind.
 func canDive(k TypeKind) bool {
 	return k == KindSlice || k == KindArray || k == KindMap
 }
 
-// maxPrealloc caps every value the emitters paste into a make() capacity
-// (`hint:`, and `len`/`minlen` on a slice or map): the largest int a 32-bit
-// target can hold. Past it the value either overflows the constant at compile
-// time or panics with `makeslice: cap out of range` on the first payload
-// carrying the key — a generate-time diagnostic instead.
+// maxPrealloc limits every value the emitters write into a make() capacity:
+// `hint:`, and `len` or `minlen` on a slice or map. It is the largest int a
+// 32-bit target can hold. A larger value either overflows the constant at
+// compile time or panics with `makeslice: cap out of range` on the first
+// input that has the key. Checking it gives an error at generate time
+// instead.
 const maxPrealloc = math.MaxInt32
 
-// isLenKind reports whether len() is meaningful on this kind, so
-// `len`/`minlen`/`maxlen`/`notempty` make sense.
+// isLenKind reports whether len() works on this kind, so `len`, `minlen`,
+// `maxlen` and `notempty` make sense.
 func isLenKind(k TypeKind) bool {
 	return k == KindString || k == KindSlice || k == KindArray ||
 		k == KindMap || k == KindBytes
 }
 
-// isIntegralNumeric reports whether modulo (`%`) is legal on the kind —
-// `multiple=N` emits `x % N`, which the Go compiler rejects on floats.
+// isIntegralNumeric reports whether the kind is an integer. `multiple=N`
+// emits `x % N`, which the Go compiler rejects on floats.
 func isIntegralNumeric(k TypeKind) bool {
 	//exhaustive:ignore not every kind applies here
 	switch k {
@@ -331,8 +338,8 @@ func isIntegralNumeric(k TypeKind) bool {
 	return false
 }
 
-// valRuleNames is every recognized validation rule; checkOneValRule's switch
-// handles exactly these.
+// valRuleNames lists every known validation rule. The switch in
+// checkOneValRule handles exactly these.
 var valRuleNames = []string{
 	"required", "optional",
 	"notempty",
@@ -346,34 +353,35 @@ var valRuleNames = []string{
 	"starts", "ends", "contains",
 }
 
-// modRuleNames is every recognized mod rule.
+// modRuleNames lists every known mod rule.
 var modRuleNames = []string{
 	"trim", "tolower", "toupper",
 	"trimleft", "trimright",
 	"replace", "clamp",
 }
 
-// ValidationRuleNames lists every validation rule the tag grammar accepts, so
-// a consumer can check its own mapping is complete.
+// ValidationRuleNames lists every validation rule the tag grammar accepts,
+// so a consumer can check that its own mapping is complete.
 func ValidationRuleNames() []string { return slices.Clone(valRuleNames) }
 
 // ModRuleNames lists every mod rule the tag grammar accepts.
 func ModRuleNames() []string { return slices.Clone(modRuleNames) }
 
-// isUnknownValRule reports whether name is NOT a recognized validation rule.
+// isUnknownValRule reports whether name is not a known validation rule.
 func isUnknownValRule(name string) bool {
 	return name != "" && !slices.Contains(valRuleNames, name)
 }
 
-// isUnknownMod reports whether the mod name is NOT in the recognized
-// mod-rule set. Mirror of isUnknownValRule for mods.
+// isUnknownMod reports whether name is not a known mod rule. It is the
+// mod version of isUnknownValRule.
 func isUnknownMod(name string) bool {
 	return name != "" && !slices.Contains(modRuleNames, name)
 }
 
-// tagAnchor derives the struct-tag opening (`pipe:"`) from a source string
-// like "pipe inner:" — used as a RichError Anchor when the CodeSpan is too
-// short to locate alone (single-char rule names collide with json values).
+// tagAnchor turns a source string such as "pipe inner:" into the start of
+// its struct tag, `pipe:"`. It is used as a RichError Anchor when the
+// CodeSpan is too short to find alone, since short rule names can also
+// appear in the json tag.
 func tagAnchor(source string) string {
 	if i := strings.IndexByte(source, ' '); i >= 0 {
 		source = source[:i]
@@ -384,13 +392,15 @@ func tagAnchor(source string) string {
 	return source + `:"`
 }
 
-// KindStruct is NOT skipped: the caller already resolved named primitives via
-// eff(), so a struct/opaque kind here has no compilable rule emit — every
-// kind-checked rule rejects (required/optional/@Func still pass).
+// checkValRules checks validation rules against kind. KindStruct is not
+// skipped. The caller already resolved named primitives with eff(), so a
+// struct or opaque kind here has no rule code that would compile. Every rule
+// that needs a specific kind is rejected. required, optional and @Func still
+// pass.
 func checkValRules(rules []ValidationRule, source string, kind TypeKind, typeName, fieldDesc string) error {
-	// First pass: collect unknown-rule errors. An unknown name means a typo;
-	// kind-mismatch diagnostics on the other rules would just be noise, so
-	// surface the typo alone. Anchor disambiguates short rule names.
+	// First pass: collect errors for unknown rules. An unknown name means a
+	// typo, and kind errors on the other rules would only add noise, so
+	// report the typo alone. Anchor helps locate short rule names.
 	anchor := tagAnchor(source)
 	var unknown []error
 	for _, r := range rules {
@@ -448,7 +458,7 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 		if err := needNonNegInt(r, fieldDesc); err != nil {
 			return err
 		}
-		// `len`/`minlen` on a growable container double as its prealloc hint.
+		// `len` and `minlen` on a slice or map also set its prealloc size.
 		if r.Name != "maxlen" && (kind == KindSlice || kind == KindMap) {
 			if n, _ := strconv.Atoi(strings.TrimSpace(r.Value)); n > maxPrealloc {
 				return &RichError{
@@ -509,8 +519,8 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 		if err != nil {
 			return notIntErr(r, fieldDesc)
 		}
-		// The emit is `ref % N != 0` — a zero divisor is a compile error in
-		// the generated file, and a negative one is meaningless.
+		// The emitted check is `ref % N != 0`. A zero divisor is a compile
+		// error in the generated file, and a negative one has no meaning.
 		if _, unsigned := kindIntBits(kind); n == 0 || (!unsigned && int64(n) < 0) {
 			return &RichError{
 				Msg:      fmt.Sprintf("%s: `multiple=%s` requires a positive integer", fieldDesc, r.Value),
@@ -542,7 +552,7 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 				"use a custom validator instead")
 		}
 		if r.Value == "" {
-			// Example matching the field's kind.
+			// An example that matches the field's kind.
 			example := "oneof=admin|user|guest"
 			if IsNumeric(kind) {
 				example = "oneof=1|2|3"
@@ -554,10 +564,10 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 				UserHint: fmt.Sprintf("provide values like `%s`", example),
 			}
 		}
-		// Duplicates emit duplicate switch cases — a compile error in the
-		// generated file. Numeric parts compare by VALUE (1 vs 1.0 vs +1); an
-		// integral kind keys on the integer itself, since a float64 key
-		// merges distinct integers above 2^53.
+		// Duplicates would emit duplicate switch cases, which is a compile
+		// error in the generated file. Numeric parts compare by value, so 1,
+		// 1.0 and +1 are equal. An integer kind compares the integer itself,
+		// because a float64 key would merge different integers above 2^53.
 		dupErr := func(p string) error {
 			return &RichError{
 				Msg:      fmt.Sprintf("%s: `oneof=%s` part %q is a duplicate", fieldDesc, r.Value, p),
@@ -625,20 +635,20 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 		}
 		return nil
 	}
-	// `@FuncName` references resolve later; pass through.
+	// `@FuncName` references are resolved later, so let them pass.
 	if strings.HasPrefix(r.Name, "@") {
 		return nil
 	}
-	// Unknown rule — reject; hints omitted (the message is the full diagnostic).
+	// Unknown rule. Reject it. The message says everything, so no hints.
 	return &RichError{
 		Msg:      fmt.Sprintf("%s: `%s` is not a known validation rule%s", fieldDesc, r.Name, renamedCaseHint(r.Name)),
 		CodeSpan: r.Name,
 	}
 }
 
-// renamedCaseHint points old bare `lower`/`upper` steps at their split
-// replacements (2026-08: `tolower`/`toupper` mods, `islower`/`isupper`
-// validators).
+// renamedCaseHint returns a hint for the bare steps `lower` and `upper`. It
+// points at the `tolower` and `toupper` mods and the `islower` and
+// `isupper` validators.
 func renamedCaseHint(name string) string {
 	switch name {
 	case "lower", "upper":
@@ -647,9 +657,10 @@ func renamedCaseHint(name string) string {
 	return ""
 }
 
-// KindStruct is NOT skipped — same reasoning as checkValRules.
+// checkModRules checks mods against kind. KindStruct is not skipped, for the
+// same reason as in checkValRules.
 func checkModRules(mods []ModRule, source string, kind TypeKind, typeName, fieldDesc string) error {
-	// Same unknown-name short-circuit as checkValRules.
+	// Report unknown names alone, as checkValRules does.
 	anchor := tagAnchor(source)
 	var unknown []error
 	for _, m := range mods {
@@ -760,9 +771,9 @@ func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDes
 					UserHint: "both bounds must be numeric, e.g. `clamp=0|100`",
 				}
 			}
-			// Bounds are pasted verbatim into Go comparisons — NaN/Inf have
-			// no constant spelling, and a fractional bound truncates against
-			// an integer kind; both fail the generated build.
+			// Bounds are written as is into Go comparisons. NaN and Inf
+			// have no Go constant form, and a fractional bound does not fit an
+			// integer kind. Both break the build of the generated file.
 			if math.IsNaN(f) || math.IsInf(f, 0) {
 				return &RichError{
 					Msg:      fmt.Sprintf("%s: `clamp` %s %q — NaN/Inf are not valid bounds", fieldDesc, name, v),
@@ -798,18 +809,18 @@ func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDes
 		}
 		return nil
 	}
-	// `@FuncName` mods resolve later; pass through.
+	// `@FuncName` mods are resolved later, so let them pass.
 	if strings.HasPrefix(m.Name, "@") {
 		return nil
 	}
-	// Unknown mod — reject; hint omitted (the message is the full diagnostic).
+	// Unknown mod. Reject it. The message says everything, so no hint.
 	return &RichError{
 		Msg:      fmt.Sprintf("%s: `%s` is not a known mod", fieldDesc, m.Name),
 		CodeSpan: m.Name,
 	}
 }
 
-// mismatch builds the kind-mismatch *RichError for validation rules:
+// mismatch builds the *RichError for a validation rule on the wrong kind:
 // "<Struct>.<Field>: <rule> is inapplicable to <type>".
 func mismatch(r ValidationRule, source, fieldDesc, typeName, requiredKind, botHint, userTail string) *RichError {
 	_ = source
@@ -831,8 +842,8 @@ func mismatchMod(m ModRule, source, fieldDesc, typeName, requiredKind, botHint, 
 	}
 }
 
-// kindIntBits returns (bits, unsigned) for integral kinds, (0, false)
-// otherwise.
+// kindIntBits returns the bit width and signedness of an integer kind, and
+// (0, false) for any other kind.
 func kindIntBits(kind TypeKind) (int, bool) {
 	//exhaustive:ignore not every kind applies here
 	switch kind {
@@ -856,15 +867,16 @@ func kindIntBits(kind TypeKind) (int, bool) {
 	return 0, false
 }
 
-// parseIntBound parses v as an integer constant of the kind's width and sign,
-// returning its 64-bit two's-complement pattern (signed kinds sign-extend).
-// The error is strconv's: ErrSyntax for a non-integer spelling, ErrRange when
-// the value does not fit. Not Atoi: that caps at MaxInt64 and would call every
-// uint64 bound from 2^63 up fractional.
+// parseIntBound parses v as an integer constant of the kind's width and
+// sign. It returns the value as a 64-bit two's-complement bit pattern, with
+// signed kinds sign-extended. The error comes from strconv: ErrSyntax when v
+// is not an integer, ErrRange when it does not fit. It does not use Atoi,
+// because Atoi stops at MaxInt64 and would report every uint64 bound from
+// 2^63 up as not an integer.
 func parseIntBound(v string, kind TypeKind) (uint64, error) {
 	bits, unsigned := kindIntBits(kind)
 	if unsigned {
-		// A negative integer is a sign problem, not a spelling one.
+		// A negative integer is out of range, not a syntax error.
 		if rest, neg := strings.CutPrefix(v, "-"); neg {
 			if _, err := strconv.ParseUint(rest, 10, 64); err == nil || errors.Is(err, strconv.ErrRange) {
 				return 0, strconv.ErrRange
@@ -876,9 +888,10 @@ func parseIntBound(v string, kind TypeKind) (uint64, error) {
 	return uint64(n), err
 }
 
-// numericPartKey is the dedupe key of one numeric `oneof` part: the integer
-// itself on an integral kind (an integer-valued float spelling such as `1.0`
-// folds onto it), the float64 value otherwise (−0 folded onto 0).
+// numericPartKey returns the key used to find duplicate numeric `oneof`
+// parts. For an integer kind it is the integer itself, and a float spelling
+// of a whole number such as `1.0` maps to the same key. For other kinds it
+// is the float64 value, with -0 mapped to 0.
 func numericPartKey(p string, kind TypeKind) (uint64, error) {
 	if isIntegralNumeric(kind) {
 		if n, err := parseIntBound(p, kind); err == nil {
@@ -902,9 +915,9 @@ func numericPartKey(p string, kind TypeKind) (uint64, error) {
 }
 
 // boundFits reports whether the numeric literal v fits the kind's range and
-// sign — bounds are pasted verbatim into Go comparisons against the field, so
-// `uint8 >= -1` or `int8 <= 300` is a constant-overflow compile error in the
-// generated file.
+// sign. Bounds are written as is into Go comparisons with the field, so
+// `uint8 >= -1` or `int8 <= 300` would be a constant overflow compile error
+// in the generated file.
 func boundFits(v string, kind TypeKind) bool {
 	if isIntegralNumeric(kind) {
 		_, err := parseIntBound(v, kind)
@@ -926,9 +939,9 @@ func boundRangeErr(fieldDesc, ruleSpelling, v string) *RichError {
 	}
 }
 
-// needNonNegInt is needInt for the length/count rules, where a negative bound
-// is nonsense: `maxlen=-1` compiles to a comparison no value can satisfy, so
-// the field rejects everything with no diagnostic anywhere.
+// needNonNegInt is needInt for the length and count rules, where a negative
+// bound makes no sense. `maxlen=-1` compiles to a check no value can pass, so
+// the field would reject every input with no error at generate time.
 func needNonNegInt(r ValidationRule, fieldDesc string) error {
 	if err := needInt(r, fieldDesc); err != nil {
 		return err
@@ -944,8 +957,8 @@ func needNonNegInt(r ValidationRule, fieldDesc string) error {
 	return nil
 }
 
-// needInt checks a count parameter (lengths, rune counts) — a plain int, no
-// kind involved.
+// needInt checks a count parameter, such as a length or rune count. It is a
+// plain int and does not depend on the field kind.
 func needInt(r ValidationRule, fieldDesc string) error {
 	v := strings.TrimSpace(r.Value)
 	if v == "" {
@@ -994,9 +1007,9 @@ func needFloat(r ValidationRule, fieldDesc string, kind TypeKind) error {
 			UserHint: fmt.Sprintf("use a numeric value like `%s=5` or `%s=1.5`", r.Name, r.Name),
 		}
 	}
-	// The value is pasted verbatim into a Go comparison: NaN/Inf spellings
-	// are not Go constants, and a fractional bound against an integer kind
-	// is an untyped-float truncation error — both fail the generated build.
+	// The value is written as is into a Go comparison. NaN and Inf are not
+	// Go constants, and a fractional bound against an integer kind is a
+	// constant truncation error. Both break the build of the generated file.
 	if math.IsNaN(f) || math.IsInf(f, 0) {
 		return &RichError{
 			Msg:      fmt.Sprintf("%s: `%s=%s` — NaN/Inf are not valid bounds", fieldDesc, r.Name, r.Value),

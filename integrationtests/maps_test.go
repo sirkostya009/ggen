@@ -12,7 +12,8 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// MapStruct exercises map[string]V: primitive/struct values, inner mods.
+// MapStruct exercises map[string]V with primitive and struct values, and
+// inner mods.
 //
 //ggen:generate
 type MapStruct struct {
@@ -21,7 +22,7 @@ type MapStruct struct {
 	Addresses map[string]Address `json:"addresses"`
 }
 
-// MapDiveStruct exercises inner: validation + mods on map values.
+// MapDiveStruct exercises inner: validation and mods on map values.
 //
 //ggen:generate
 type MapDiveStruct struct {
@@ -36,7 +37,7 @@ type Base struct {
 	Meta string `json:"meta,omitempty"`
 }
 
-// Derived embeds Base — ID and Meta promote to the JSON object level.
+// Derived embeds Base, so ID and Meta are promoted to the JSON object level.
 //
 //ggen:generate
 type Derived struct {
@@ -93,7 +94,7 @@ func TestMap_diveMod(t *testing.T) {
 
 func TestMap_maxlenViolation(t *testing.T) {
 	t.Parallel()
-	// Counts maxlen=10; 11 entries must fail.
+	// Counts has maxlen=10, so 11 entries must fail.
 	const alphabet = "abcdefghijk" // 11 letters
 	b := strings.Builder{}
 	b.WriteString(`{"counts":{`)
@@ -184,7 +185,7 @@ func TestEmbedded_promotedFields(t *testing.T) {
 
 func TestEmbedded_promotedRequired(t *testing.T) {
 	t.Parallel()
-	// Base.ID is required; missing must fail.
+	// Base.ID is required, so a payload without it must fail.
 	in := []byte(`{"name":"bob"}`)
 	_, _, err := Derived{}.DecodeFrom(in)
 	if err == nil {
@@ -192,8 +193,9 @@ func TestEmbedded_promotedRequired(t *testing.T) {
 	}
 }
 
-// Named-primitive map VALUES: renderAppendMap used to hardcode `v` instead of
-// the primCast'd vref in the bool/int64/uint64/float64 arms — uncompilable.
+// Named primitives as map values. The bool, int64, uint64 and float64 marshal
+// arms must convert the value to its underlying type, or the generated code
+// does not compile.
 type (
 	NVBool    bool
 	NVInt64   int64
@@ -230,9 +232,9 @@ func TestMap_NamedPrimitiveValuesRoundTrip(t *testing.T) {
 	}
 }
 
-// NestedMaps pins map-of-map decode: each nesting level names its own key and
-// value locals, which the inner level used to shadow — its store resolved to
-// the inner value indexing itself and the file did not compile.
+// NestedMaps pins map-of-map decode. Each nesting level must name its own key
+// and value locals. If the inner level shadowed the outer ones, its store
+// would index the inner value with itself and the file would not compile.
 //
 //ggen:generate
 type NestedMaps struct {
@@ -273,9 +275,10 @@ func TestNestedMaps_roundtripAndReset(t *testing.T) {
 	}
 }
 
-// A carried nested map of allocation-owning values recycles the inner values
-// on the bytes path: the inner level swaps against the outer seed's live
-// entries, so a key present in both payloads keeps its slice backing, and a
+// A carried nested map, kept from a previous decode into the same receiver,
+// recycles its inner values on the bytes path when those values own
+// allocations. The inner level swaps against the live entries of the carried
+// outer map. So a key present in both payloads keeps its slice backing, and a
 // key the second payload omits does not survive.
 func TestNestedMaps_innerValuesRecycled(t *testing.T) {
 	t.Parallel()

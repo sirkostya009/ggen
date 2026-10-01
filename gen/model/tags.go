@@ -5,27 +5,33 @@ import (
 	"strings"
 )
 
-// JSONOptions captures the encoding hints from the `json` tag beyond the name.
-// Decode/transform/validate config lives in the `pipe:` tag; prealloc in
-// `hint:`. The json tag stays stdlib/jsonv2-compatible.
+// JSONOptions holds the options of a `json` tag other than the name. Decode,
+// transform and validation settings live in the `pipe:` tag, and prealloc
+// sizes in `hint:`. That keeps the json tag compatible with encoding/json and
+// jsonv2.
 type JSONOptions struct {
-	OmitEmpty bool   // omit during marshal if JSON-empty (null, "", [], {})
-	OmitZero  bool   // omit during marshal if Go zero value
-	String    bool   // wrap primitive as a JSON string on marshal, unwrap on unmarshal
-	Format    string // jsonv2 format flag (e.g., RFC3339, unix, hex, base64)
-	Embed     bool   // embedded fallback: map absorbs unknown keys, entries splice into parent object
+	OmitEmpty bool   // skip on marshal when JSON-empty: null, "", [] or {}
+	OmitZero  bool   // skip on marshal when the Go zero value
+	String    bool   // marshal a primitive as a JSON string, unwrap it on unmarshal
+	Format    string // jsonv2 format option, for example RFC3339, unix, hex, base64
+	Embed     bool   // catch-all map: takes unknown keys, its entries splice into the parent object
 }
 
-// parseJSONTag follows jsonv2's tag grammar: the name is taken verbatim
-// (whitespace included — v1 and v2 both keep it), options split on commas
-// OUTSIDE single-quoted regions (`format:'Jan 2, 2006'`, name `'a,b'`), `\'`
-// is a literal quote, an empty or whitespace-padded option is malformed, and a
-// bare `-` name with options is rejected — quote it (`'-'`) for a field
-// literally named "-". Unknown option words pass silently (jsonv2 parity)
-// with three exceptions, each a would-be silent no-op: `inline` (the older
-// catch-all spelling), `case:` (case-insensitive key matching, which ggen
-// does not implement), and a near-miss spelling of a known option
-// (`omitEmpty`, `omit_empty`), which jsonv2 itself rejects.
+// parseJSONTag follows jsonv2's tag grammar:
+//   - The name is taken as written, whitespace included. encoding/json and
+//     jsonv2 both keep it.
+//   - Options split on commas outside single-quoted parts, as in
+//     `format:'Jan 2, 2006'` or the name `'a,b'`. `\'` is a literal quote.
+//   - An empty option or one padded with whitespace is an error.
+//   - A bare `-` name with options is an error. A field named "-" must be
+//     quoted as `'-'`.
+//
+// Unknown option words are ignored, like jsonv2 does. There are three
+// exceptions, because ignoring them would silently do nothing: `inline`,
+// which is not how the catch-all map is spelled, `case:`, which asks for
+// case-insensitive key matching that ggen does not implement, and a near-miss
+// spelling of a known option such as `omitEmpty` or `omit_empty`, which
+// jsonv2 also rejects.
 func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool, err error) {
 	if tag == "" {
 		return "", JSONOptions{}, false, nil
@@ -68,8 +74,8 @@ func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool, err 
 			}
 		}
 	}
-	// jsonv2: an embedded fallback carries no name and no other option, since
-	// its entries splice into the parent rather than sitting under a key.
+	// As in jsonv2, a catch-all map has no name and no other option. Its
+	// entries splice into the parent object instead of sitting under a key.
 	if opts.Embed {
 		switch {
 		case name != "":
@@ -81,10 +87,10 @@ func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool, err 
 	return name, opts, false, nil
 }
 
-// checkTagOptionWord judges an option word parseJSONTag has no arm for. The
-// word before a `:` is what jsonv2 keys on, normalised the way it does
-// (lower-case, underscores dropped) so `omitEmpty`/`omit_empty`/`Format:hex`
-// land on the option they were meant to be.
+// checkTagOptionWord checks an option word that parseJSONTag does not know.
+// Like jsonv2, it looks at the word before any `:` and normalises it to lower
+// case with underscores removed. That way `omitEmpty`, `omit_empty` and
+// `Format:hex` match the option they were meant to be.
 func checkTagOptionWord(tag, opt string) error {
 	head, _, _ := strings.Cut(opt, ":")
 	switch norm := strings.ReplaceAll(strings.ToLower(head), "_", ""); norm {
@@ -98,10 +104,10 @@ func checkTagOptionWord(tag, opt string) error {
 	return nil
 }
 
-// splitTagOpts splits a json tag on commas outside single-quoted regions.
-// The second result reports an unterminated quoted section (odd quote count),
-// which would otherwise swallow the option separators and leave the quote
-// character sitting in the wire key.
+// splitTagOpts splits a json tag on commas outside single-quoted parts.
+// The second result reports an unterminated quoted part, meaning an odd
+// number of quotes. Without this check such a quote would hide the commas
+// after it and end up as part of the JSON key.
 func splitTagOpts(tag string) ([]string, bool) {
 	var parts []string
 	start, quoted := 0, false

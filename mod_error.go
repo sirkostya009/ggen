@@ -2,10 +2,10 @@ package ggen
 
 import "fmt"
 
-// ModError is the failure of a fallible bool-form mod/converter
-// (`func(W) (T, bool)`) whose bool was false. It is a parse error, wrapped by
-// [NewParseErr]. Msg is the optional inline tag message (empty renders a
-// default).
+// ModError reports that a fallible mod or converter of the form
+// func(W) (T, bool) returned false. It is a parse error, wrapped by
+// [NewParseErr]. Msg is the optional message from the tag. When Msg is empty,
+// Error prints a default message.
 type ModError struct {
 	Pos   int
 	Name  string
@@ -13,10 +13,11 @@ type ModError struct {
 	Value any
 }
 
-// AddPos rebases the byte offset — the nested bytes-path decode rebase (see
-// NewParseErrShift). ModError carries a Pos like the validation errors, so
-// it needs the same hook or a nested fallible-mod failure keeps a
-// sub-slice-relative position while every sibling error is payload-global.
+// AddPos shifts the byte offset by d. Nested decodes on the bytes path use it
+// to turn an offset into a sub-slice into an offset into the whole payload
+// (see NewParseErrShift). ModError carries a Pos like the validation errors,
+// so it needs the same hook. Without it a nested ModError would keep a
+// sub-slice offset while its sibling errors use whole-payload offsets.
 func (e *ModError) AddPos(d int) { e.Pos += d }
 
 func (e *ModError) Error() string {

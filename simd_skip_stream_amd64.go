@@ -1,13 +1,21 @@
 //go:build goexperiment.simd
 
-// Fused SIMD skip tree for the Stream path. Same window discipline as the
-// stream string tiers: refill/compaction bookkeeping is copied from the
-// scalar tree bit-identically, only the per-window scans change —
-// skipString* locates the next structural byte with structuralIndex*, and
-// SkipSpace*'s slow path classifies whole lanes of whitespace instead of
-// byte-stepping (pretty-printed streams). Per-tier copies with direct
-// callees; no func-pointer dispatch. Generated stream decoders swap
-// `= s.SkipValue()` / `= s.SkipSpace()` to a tier at generate time.
+// Vector skip functions for the Stream path. They step over a JSON value
+// without decoding it. SIMD (vector) code processes 16, 32 or 64 bytes with
+// one CPU instruction. AVX, AVX2 and AVX-512 are the x86 vector instruction
+// sets for those widths. A lane is one byte slot inside a vector. A mask is
+// one bit per lane, set where a test matched.
+//
+// A Stream holds a window, the part of the reader currently in its buffer,
+// and a refill reads more into it. These functions follow the same rules as
+// the stream string tiers. The refill and compaction bookkeeping is copied
+// exactly from the scalar functions. Only the search inside each window
+// changes. skipString* finds the next quote, backslash or control byte with
+// structuralIndex*. The slow path of SkipSpace* tests whole vectors of
+// whitespace instead of one byte at a time, which helps pretty-printed
+// input. Each tier is a separate copy that calls its tier functions
+// directly, with no function values. Generated stream decoders replace
+// `= s.SkipValue()` and `= s.SkipSpace()` with a tier at generate time.
 
 package ggen
 
@@ -18,7 +26,8 @@ import (
 	"simd/archsimd"
 )
 
-// SkipSpaceAVX is Stream.SkipSpace with a vector whitespace-run skip.
+// SkipSpaceAVX is Stream.SkipSpace that skips whitespace runs 16 bytes at a
+// time.
 func (s *Stream) SkipSpaceAVX() error {
 	if s.Pos < len(s.buf) && s.buf[s.Pos] > ' ' {
 		return nil
@@ -62,7 +71,8 @@ func (s *Stream) skipSpaceSlowAVX() error {
 	}
 }
 
-// SkipSpaceAVX2 is Stream.SkipSpace with a 32-byte vector run skip.
+// SkipSpaceAVX2 is Stream.SkipSpace that skips whitespace runs 32 bytes at a
+// time.
 func (s *Stream) SkipSpaceAVX2() error {
 	if s.Pos < len(s.buf) && s.buf[s.Pos] > ' ' {
 		return nil
@@ -106,7 +116,8 @@ func (s *Stream) skipSpaceSlowAVX2() error {
 	}
 }
 
-// SkipSpaceAVX512 is Stream.SkipSpace with a 64-byte vector run skip.
+// SkipSpaceAVX512 is Stream.SkipSpace that skips whitespace runs 64 bytes at
+// a time.
 func (s *Stream) SkipSpaceAVX512() error {
 	if s.Pos < len(s.buf) && s.buf[s.Pos] > ' ' {
 		return nil
@@ -150,15 +161,16 @@ func (s *Stream) skipSpaceSlowAVX512() error {
 	}
 }
 
-// skipStringStreamTail validates the escape at s.buf[bs] mid-skip, refilling
-// as needed — the shared cold arm of the stream skipString tiers (same
-// semantics as the scalar escape branch, incl. cursor rebase). Returns
-// the updated (j, start) scan cursors.
+// skipStringStreamTail validates the escape at s.buf[bs] while skipping a
+// string, refilling as needed. Every stream skipString tier shares it for the
+// rare escape case. It behaves like the scalar escape branch, including
+// moving the cursors when a refill shifts the buffer. It returns the updated
+// j and start cursors.
 func (s *Stream) skipStringStreamTail(start, bs int) (int, int, error) {
 	if bs+1 >= len(s.buf) {
 		if err := s.ReadMore(bs); err != nil {
-			// ReadMore compacted from bs: a truncated escape reports the end
-			// of what arrived, like the bytes path's len(data).
+			// ReadMore moved the buffer so it starts at bs. A cut-short escape
+			// reports the end of what arrived, like len(data) on the bytes path.
 			s.Pos = len(s.buf)
 			return 0, 0, NotEOF(err, ErrBadString)
 		}
@@ -169,7 +181,8 @@ func (s *Stream) skipStringStreamTail(start, bs int) (int, int, error) {
 	case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
 		return bs + 2, start, nil
 	case 'u':
-		// Refill only while the tail can still become \uXXXX — see scalar.
+		// Refill only while the tail can still become \uXXXX. See the
+		// scalar version.
 		for bs+6 > len(s.buf) {
 			if !uEscapePrefix(s.buf[bs:]) {
 				s.Pos = bs
@@ -193,7 +206,7 @@ func (s *Stream) skipStringStreamTail(start, bs int) (int, int, error) {
 	}
 }
 
-// skipStringAVX is Stream.skipString with the fused AVX window locate.
+// skipStringAVX is Stream.skipString with the AVX window scan.
 func (s *Stream) skipStringAVX() error {
 	i := s.Pos
 	if i >= len(s.buf) {
@@ -213,7 +226,8 @@ func (s *Stream) skipStringAVX() error {
 	for {
 		k := structuralIndexAVX(s.buf[j:])
 		if k < 0 {
-			// Skipped bytes are discardable — full compaction (see scalar).
+			// Skipped bytes are not needed again, so drop the whole window
+			// on refill. See the scalar version.
 			j = len(s.buf)
 			err := s.ReadMore(j)
 			j = 0
@@ -235,14 +249,15 @@ func (s *Stream) skipStringAVX() error {
 			}
 			j, start = nj, nstart
 		default:
-			// The ctrl byte's own index — see skipStringAVX.
+			// The scan stopped on the control byte itself, the position the
+			// scalar skipString reports.
 			s.Pos = j + k
 			return ErrBadString
 		}
 	}
 }
 
-// skipStringAVX2 — see skipStringAVX.
+// skipStringAVX2 is skipStringAVX with the AVX2 window scan.
 func (s *Stream) skipStringAVX2() error {
 	i := s.Pos
 	if i >= len(s.buf) {
@@ -262,7 +277,8 @@ func (s *Stream) skipStringAVX2() error {
 	for {
 		k := structuralIndexAVX2(s.buf[j:])
 		if k < 0 {
-			// Skipped bytes are discardable — full compaction (see scalar).
+			// Skipped bytes are not needed again, so drop the whole window
+			// on refill. See the scalar version.
 			j = len(s.buf)
 			err := s.ReadMore(j)
 			j = 0
@@ -284,14 +300,15 @@ func (s *Stream) skipStringAVX2() error {
 			}
 			j, start = nj, nstart
 		default:
-			// The ctrl byte's own index — see skipStringAVX.
+			// The scan stopped on the control byte itself, the position the
+			// scalar skipString reports.
 			s.Pos = j + k
 			return ErrBadString
 		}
 	}
 }
 
-// skipStringAVX512 — see skipStringAVX.
+// skipStringAVX512 is skipStringAVX with the AVX-512 window scan.
 func (s *Stream) skipStringAVX512() error {
 	i := s.Pos
 	if i >= len(s.buf) {
@@ -311,7 +328,8 @@ func (s *Stream) skipStringAVX512() error {
 	for {
 		k := structuralIndexAVX512(s.buf[j:])
 		if k < 0 {
-			// Skipped bytes are discardable — full compaction (see scalar).
+			// Skipped bytes are not needed again, so drop the whole window
+			// on refill. See the scalar version.
 			j = len(s.buf)
 			err := s.ReadMore(j)
 			j = 0
@@ -333,14 +351,15 @@ func (s *Stream) skipStringAVX512() error {
 			}
 			j, start = nj, nstart
 		default:
-			// The ctrl byte's own index — see skipStringAVX.
+			// The scan stopped on the control byte itself, the position the
+			// scalar skipString reports.
 			s.Pos = j + k
 			return ErrBadString
 		}
 	}
 }
 
-// SkipValueAVX is Stream.SkipValue over the fused AVX skip tree.
+// SkipValueAVX is Stream.SkipValue using the AVX skip functions.
 func (s *Stream) SkipValueAVX() error {
 	return s.skipValueAVX(0)
 }
@@ -384,8 +403,9 @@ func (s *Stream) skipArrayAVX(depth int) error {
 		return err
 	}
 	if s.Pos >= len(s.buf) {
-		// Drained right after '[' matches bytes skipArray, whose element
-		// skipValue reports ErrUnexpectedEnd — not ErrBadArray.
+		// Input that ends right after '[' reports ErrUnexpectedEnd, not
+		// ErrBadArray. That matches the bytes skipArray, where the element
+		// skipValue reports it.
 		if err := s.ReadMore(s.Pos); err != nil {
 			return NotEOF(err, ErrUnexpectedEnd)
 		}
@@ -438,8 +458,9 @@ func (s *Stream) skipObjectAVX(depth int) error {
 	}
 	for {
 		if err := s.skipStringAVX(); err != nil {
-			// skipString reports ErrExpectString only at the key head; the
-			// bytes loop reports ErrBadObject there — see Stream.skipObject.
+			// skipString reports ErrExpectString only when the key does not
+			// start with '"'. The bytes loop reports ErrBadObject there. See
+			// Stream.skipObject.
 			if err == ErrExpectString {
 				return ErrBadObject
 			}
@@ -470,7 +491,8 @@ func (s *Stream) skipObjectAVX(depth int) error {
 		}
 		if s.buf[s.Pos] == ',' {
 			s.Pos++
-			// Separator WS before the next key — mirrors the scalar fix.
+			// Skip whitespace between ',' and the next key, as the scalar
+			// skipObject does.
 			if err := s.SkipSpaceAVX(); err != nil {
 				return err
 			}
@@ -484,7 +506,7 @@ func (s *Stream) skipObjectAVX(depth int) error {
 	}
 }
 
-// SkipValueAVX2 is Stream.SkipValue over the fused AVX2 skip tree.
+// SkipValueAVX2 is Stream.SkipValue using the AVX2 skip functions.
 func (s *Stream) SkipValueAVX2() error {
 	return s.skipValueAVX2(0)
 }
@@ -528,8 +550,9 @@ func (s *Stream) skipArrayAVX2(depth int) error {
 		return err
 	}
 	if s.Pos >= len(s.buf) {
-		// Drained right after '[' matches bytes skipArray, whose element
-		// skipValue reports ErrUnexpectedEnd — not ErrBadArray.
+		// Input that ends right after '[' reports ErrUnexpectedEnd, not
+		// ErrBadArray. That matches the bytes skipArray, where the element
+		// skipValue reports it.
 		if err := s.ReadMore(s.Pos); err != nil {
 			return NotEOF(err, ErrUnexpectedEnd)
 		}
@@ -582,8 +605,9 @@ func (s *Stream) skipObjectAVX2(depth int) error {
 	}
 	for {
 		if err := s.skipStringAVX2(); err != nil {
-			// skipString reports ErrExpectString only at the key head; the
-			// bytes loop reports ErrBadObject there — see Stream.skipObject.
+			// skipString reports ErrExpectString only when the key does not
+			// start with '"'. The bytes loop reports ErrBadObject there. See
+			// Stream.skipObject.
 			if err == ErrExpectString {
 				return ErrBadObject
 			}
@@ -614,7 +638,8 @@ func (s *Stream) skipObjectAVX2(depth int) error {
 		}
 		if s.buf[s.Pos] == ',' {
 			s.Pos++
-			// Separator WS before the next key — mirrors the scalar fix.
+			// Skip whitespace between ',' and the next key, as the scalar
+			// skipObject does.
 			if err := s.SkipSpaceAVX2(); err != nil {
 				return err
 			}
@@ -628,7 +653,7 @@ func (s *Stream) skipObjectAVX2(depth int) error {
 	}
 }
 
-// SkipValueAVX512 is Stream.SkipValue over the fused AVX-512 skip tree.
+// SkipValueAVX512 is Stream.SkipValue using the AVX-512 skip functions.
 func (s *Stream) SkipValueAVX512() error {
 	return s.skipValueAVX512(0)
 }
@@ -664,9 +689,10 @@ func (s *Stream) skipValueAVX512(depth int) error {
 	return ErrBadValue
 }
 
-// CaptureValueAVX / AVX2 / AVX512 are Stream.CaptureValue over the fused
-// bytes-path skip tiers — the value is located by the vector skip, capture is
-// still just grow-and-slice. See Stream.CaptureValue.
+// CaptureValueAVX is Stream.CaptureValue using the bytes-path AVX skip.
+// CaptureValueAVX2 and CaptureValueAVX512 do the same for their tiers. The
+// vector skip finds where the value ends. Capturing is still just growing
+// the buffer until the value fits and slicing it. See Stream.CaptureValue.
 func (s *Stream) CaptureValueAVX() ([]byte, error) {
 	start := s.Pos
 	eof := false
@@ -686,11 +712,12 @@ func (s *Stream) CaptureValueAVX() ([]byte, error) {
 			s.Pos = start
 			return nil, err
 		}
-		// A failure at a byte strictly inside the window is final — see
-		// Stream.CaptureValue; without this a live reader that delivered a
-		// complete malformed value blocks in Read forever. The tier skip
-		// preserves its give-up position (scalar-identical by parity test).
-		// ErrMaxDepth is final wherever it lands.
+		// A failure at a byte inside the window, not at its end, is final.
+		// See Stream.CaptureValue. Without this, a live reader that sent a
+		// complete but malformed value would block in Read forever. The
+		// tier skip reports the same failure position as the scalar skip,
+		// which a parity test checks. ErrMaxDepth is final wherever it
+		// happens.
 		if err != nil && (end < len(s.buf) || err == ErrMaxDepth) {
 			s.Pos = start
 			return nil, err
@@ -725,11 +752,12 @@ func (s *Stream) CaptureValueAVX2() ([]byte, error) {
 			s.Pos = start
 			return nil, err
 		}
-		// A failure at a byte strictly inside the window is final — see
-		// Stream.CaptureValue; without this a live reader that delivered a
-		// complete malformed value blocks in Read forever. The tier skip
-		// preserves its give-up position (scalar-identical by parity test).
-		// ErrMaxDepth is final wherever it lands.
+		// A failure at a byte inside the window, not at its end, is final.
+		// See Stream.CaptureValue. Without this, a live reader that sent a
+		// complete but malformed value would block in Read forever. The
+		// tier skip reports the same failure position as the scalar skip,
+		// which a parity test checks. ErrMaxDepth is final wherever it
+		// happens.
 		if err != nil && (end < len(s.buf) || err == ErrMaxDepth) {
 			s.Pos = start
 			return nil, err
@@ -764,11 +792,12 @@ func (s *Stream) CaptureValueAVX512() ([]byte, error) {
 			s.Pos = start
 			return nil, err
 		}
-		// A failure at a byte strictly inside the window is final — see
-		// Stream.CaptureValue; without this a live reader that delivered a
-		// complete malformed value blocks in Read forever. The tier skip
-		// preserves its give-up position (scalar-identical by parity test).
-		// ErrMaxDepth is final wherever it lands.
+		// A failure at a byte inside the window, not at its end, is final.
+		// See Stream.CaptureValue. Without this, a live reader that sent a
+		// complete but malformed value would block in Read forever. The
+		// tier skip reports the same failure position as the scalar skip,
+		// which a parity test checks. ErrMaxDepth is final wherever it
+		// happens.
 		if err != nil && (end < len(s.buf) || err == ErrMaxDepth) {
 			s.Pos = start
 			return nil, err
@@ -792,8 +821,9 @@ func (s *Stream) skipArrayAVX512(depth int) error {
 		return err
 	}
 	if s.Pos >= len(s.buf) {
-		// Drained right after '[' matches bytes skipArray, whose element
-		// skipValue reports ErrUnexpectedEnd — not ErrBadArray.
+		// Input that ends right after '[' reports ErrUnexpectedEnd, not
+		// ErrBadArray. That matches the bytes skipArray, where the element
+		// skipValue reports it.
 		if err := s.ReadMore(s.Pos); err != nil {
 			return NotEOF(err, ErrUnexpectedEnd)
 		}
@@ -846,8 +876,9 @@ func (s *Stream) skipObjectAVX512(depth int) error {
 	}
 	for {
 		if err := s.skipStringAVX512(); err != nil {
-			// skipString reports ErrExpectString only at the key head; the
-			// bytes loop reports ErrBadObject there — see Stream.skipObject.
+			// skipString reports ErrExpectString only when the key does not
+			// start with '"'. The bytes loop reports ErrBadObject there. See
+			// Stream.skipObject.
 			if err == ErrExpectString {
 				return ErrBadObject
 			}
@@ -878,7 +909,8 @@ func (s *Stream) skipObjectAVX512(depth int) error {
 		}
 		if s.buf[s.Pos] == ',' {
 			s.Pos++
-			// Separator WS before the next key — mirrors the scalar fix.
+			// Skip whitespace between ',' and the next key, as the scalar
+			// skipObject does.
 			if err := s.SkipSpaceAVX512(); err != nil {
 				return err
 			}

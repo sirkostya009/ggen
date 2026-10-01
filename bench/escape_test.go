@@ -10,27 +10,29 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// BenchmarkEscapeHeavy_Unmarshal decodes EscapeDoc from escape-dense strings
-// (~12% of bytes are escapes: \n \" \\ \uXXXX + surrogate pairs), exercising the
-// unescape path — scan.stringSlow, \uXXXX + surrogate assembly, scratch alloc —
-// that the escape-free Mega/Small/Account payloads never touch. Without
-// this row an escape-path regression (or a broken single-copy escape change)
-// ships silently.
+// BenchmarkEscapeHeavy_Unmarshal decodes EscapeDoc from strings full of
+// escapes. About 12% of the bytes are escapes: \n, \", \\, \uXXXX and
+// surrogate pairs. This runs the unescape path (scan.stringSlow, \uXXXX and
+// surrogate pair handling, the scratch buffer allocation), which the
+// escape-free Mega, Small and Account payloads never reach. Without this
+// row, a slowdown in the unescape path, or a broken copy-once change for
+// escaped strings, would go unnoticed.
 //
-// Reading the rows: this is primarily a ggen escape-path GUARD, not a race. The
-// correctness block below pins ggen's own output (bytes + stream) against the
-// jsonv2 reference, so the escape path is verified, not just timed. The sonic
-// rows are context only — sonic's escape handling differs (ConfigFastest is lax
-// on validation), so a fast sonic number here does NOT mean it did equivalent
-// work (same caveat as the skip tier). jsonv2 is the honest baseline: it, like
-// ggen, must fully unescape to fill the fields.
+// Reading the rows: this benchmark mainly guards ggen's unescape path. It is
+// not a race between libraries. The checks below compare ggen's output on
+// the bytes and stream paths against jsonv2, so the unescape path is verified,
+// not just timed. The sonic rows are only context. sonic handles escapes
+// differently and ConfigFastest skips some validation, so a fast sonic number
+// here does not mean it did the same work. The same caveat applies to the
+// skip benchmarks. jsonv2 is the fair baseline, because like ggen it must
+// fully unescape every string to fill the fields.
 func BenchmarkEscapeHeavy_Unmarshal(b *testing.B) {
 	var want EscapeDoc
 	if err := jsonv2.Unmarshal(EscapeHeavyPayload, &want); err != nil {
 		b.Fatalf("jsonv2 reference decode: %v", err)
 	}
-	// ggen must unescape identically to the stdlib reference — a broken escape
-	// arm would fail here rather than post a misleadingly-fast number.
+	// ggen must unescape exactly like the jsonv2 reference. Broken escape
+	// handling fails here instead of reporting a misleadingly fast number.
 	if g, _, err := (EscapeDoc{}).DecodeFrom(EscapeHeavyPayload); err != nil || g != want {
 		b.Fatalf("ggen bytes escape decode wrong: err=%v equal=%v", err, g == want)
 	}
@@ -39,8 +41,9 @@ func BenchmarkEscapeHeavy_Unmarshal(b *testing.B) {
 	if g, err := (EscapeDoc{}).DecodeFromStream(&vs); err != nil || g != want {
 		b.Fatalf("ggen stream escape decode wrong: err=%v equal=%v", err, g == want)
 	}
-	// ggen_copy: same unescaped values AND decoupled from the source — scribble
-	// the input after decode, the retained escape-path strings must survive.
+	// ggen_copy: same unescaped values, and no link to the input. After the
+	// decode the input is overwritten, and the decoded strings must not
+	// change.
 	cpSrc := append([]byte(nil), EscapeHeavyPayload...)
 	cg, _, err := CopyEscapeDoc{}.DecodeFrom(cpSrc)
 	if err != nil || EscapeDoc(cg) != want {
@@ -83,11 +86,11 @@ func BenchmarkEscapeHeavy_Unmarshal(b *testing.B) {
 	}
 }
 
-// BenchmarkEscapeSparse_Unmarshal is EscapeHeavy's counterpart at prose escape
-// density — long escape-free runs between escapes (~90 B) instead of ~7 B. The
-// unescape loop picks its per-byte vs bulk-copy arm by run length, so the two
-// rows bracket the tradeoff; a change that helps one can cost the other, and
-// neither row alone is the verdict.
+// BenchmarkEscapeSparse_Unmarshal is the EscapeHeavy benchmark at the escape
+// density of prose. Plain runs between escapes are about 90 bytes long
+// instead of about 7. The unescape loop's cost depends on run length, so the
+// two benchmarks cover both ends. A change that helps one can slow the other,
+// so judge a change on both.
 func BenchmarkEscapeSparse_Unmarshal(b *testing.B) {
 	var want EscapeDoc
 	if err := jsonv2.Unmarshal(EscapeSparsePayload, &want); err != nil {

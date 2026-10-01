@@ -2,7 +2,7 @@ package integrationtests
 
 //go:generate ../ggen $GOFILE
 
-// Top-level type aliases — each gets the full struct method surface.
+// Top-level named types. Each one gets the same method set a struct gets.
 
 import (
 	"bytes"
@@ -108,8 +108,9 @@ func TestAlias_Int_Roundtrip(t *testing.T) {
 	}
 }
 
-// Narrow-int aliases guard the cast (opt #48): 300 into int8 used to decode
-// as 44 with a nil error. Bytes + stream, both signednesses.
+// Narrow int aliases reject a value that does not fit instead of truncating
+// it, so 300 into int8 is ErrNumberOverflow, not 44 (see opt #48 in
+// cmd/ggen/CLAUDE.md). Covers the bytes and stream paths, signed and unsigned.
 func TestAlias_NarrowInt_Overflow(t *testing.T) {
 	t.Parallel()
 	if got, _, err := AliasInt8(0).DecodeFrom([]byte("-128")); err != nil || got != -128 {
@@ -186,7 +187,8 @@ func TestAlias_String_RejectsNonString(t *testing.T) {
 	}
 }
 
-// Mutating the input buffer after decode shows through the aliased value.
+// The decoded string aliases the input: it points into the caller's bytes
+// with no copy. So mutating the input after decode changes the value.
 func TestAlias_String_ZeroCopy(t *testing.T) {
 	t.Parallel()
 	in := []byte(`"alpha"`)
@@ -261,13 +263,14 @@ func (i *SamePkgInner) UnmarshalJSON(b []byte) error {
 //ggen:generate
 type SamePkgAlias SamePkgInner
 
-// CrossPkgTaggedAlias's underlying (thirdparty.Tagged) has Text methods AND
-// exported fields; ggen prefers introspection over text delegation.
+// CrossPkgTaggedAlias's underlying type, thirdparty.Tagged, has Text methods
+// and exported fields. ggen prefers field introspection over the Text methods.
 //
 //ggen:generate
 type CrossPkgTaggedAlias thirdparty.Tagged
 
-// Introspection wins over Text methods — field object, not "name#tag".
+// Introspection wins over the Text methods. The wire is a field object, not
+// "name#tag".
 func TestAlias_StructIntrospect_CrossPkg(t *testing.T) {
 	t.Parallel()
 	in := CrossPkgTaggedAlias(thirdparty.Tagged{Name: "alice", Tag: "admin"})
@@ -287,7 +290,8 @@ func TestAlias_StructIntrospect_CrossPkg(t *testing.T) {
 	}
 }
 
-// Introspection wins over the JSON methods — uppercase keys (no json tags).
+// Introspection wins over the JSON methods. The keys are the Go field names
+// because the fields have no json tags.
 func TestAlias_StructIntrospect_SamePkg(t *testing.T) {
 	t.Parallel()
 	in := SamePkgAlias(SamePkgInner{X: 42, Y: "hello"})
@@ -328,7 +332,7 @@ func (o *OpaqueWithMethods) UnmarshalJSON(b []byte) error {
 //ggen:generate
 type OpaqueAlias OpaqueWithMethods
 
-// No exported fields → JSON/Text method delegation.
+// With no exported fields, the alias delegates to the JSON or Text methods.
 func TestAlias_StructDelegation_OpaqueFallback(t *testing.T) {
 	t.Parallel()
 	in := OpaqueAlias(OpaqueWithMethods{hidden: "secret"})
@@ -354,8 +358,9 @@ type OpaqueParent struct {
 	O    OpaqueAlias `json:"o"`
 }
 
-// A delegating alias as a FIELD must append to the parent's buffer, not
-// return MarshalJSON's slice bare (that discarded everything before it).
+// A delegating alias used as a field must append MarshalJSON's output to the
+// parent's buffer. Returning that slice on its own would drop everything
+// written before it.
 func TestAlias_StructDelegation_AsField(t *testing.T) {
 	t.Parallel()
 	in := OpaqueParent{Name: "bob", O: OpaqueAlias(OpaqueWithMethods{hidden: "secret"})}
@@ -384,7 +389,7 @@ type AliasLookup map[string]int
 //ggen:generate
 type AliasTuple [3]int
 
-// Slice alias — JSON-array wire shape.
+// A slice alias marshals as a JSON array.
 func TestAlias_Slice_Roundtrip(t *testing.T) {
 	t.Parallel()
 	in := AliasTags{"go", "rust", "zig"}
@@ -430,7 +435,7 @@ func TestAlias_OmittedContainerFieldIsNil(t *testing.T) {
 	}
 }
 
-// Map alias — JSON object wire shape.
+// A map alias marshals as a JSON object.
 func TestAlias_Map_Roundtrip(t *testing.T) {
 	t.Parallel()
 	in := AliasLookup{"alpha": 1, "beta": 2}
@@ -447,7 +452,7 @@ func TestAlias_Map_Roundtrip(t *testing.T) {
 	}
 }
 
-// Array alias — JSON tuple with strict element count.
+// An array alias marshals as a JSON array with an exact element count.
 func TestAlias_Array_Roundtrip(t *testing.T) {
 	t.Parallel()
 	in := AliasTuple{10, 20, 30}
@@ -506,8 +511,8 @@ type AliasFieldExample struct {
 
 func TestAlias_Field_ValidationAndMods(t *testing.T) {
 	t.Parallel()
-	// trim + lower run before validation; the value the validator sees
-	// is the post-mod one.
+	// trim and tolower run before validation, so the validator sees the
+	// modified value.
 	got, _, err := AliasFieldExample{}.DecodeFrom([]byte(`{"body":"  HI  ","count":5}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -516,7 +521,8 @@ func TestAlias_Field_ValidationAndMods(t *testing.T) {
 		t.Errorf("trim+lower on AliasString: got %q, want %q", got.Body, "hi")
 	}
 
-	// clamp pulls 500 back into [1,100]; gte/lte then pass on the clamped value.
+	// clamp pulls 500 back into [1,100]. gte and lte then pass on the clamped
+	// value.
 	got, _, err = AliasFieldExample{}.DecodeFrom([]byte(`{"body":"hello","count":500}`))
 	if err != nil {
 		t.Fatalf("clamp+validate: %v", err)
@@ -525,13 +531,14 @@ func TestAlias_Field_ValidationAndMods(t *testing.T) {
 		t.Errorf("clamp on AliasInt: got %d, want 100", got.Count)
 	}
 
-	// minlen fires post-trim — `" a "` → `"a"` → length 1, below the limit.
+	// minlen checks the trimmed value. `" a "` trims to `"a"`, length 1,
+	// which is below the limit.
 	_, _, err = AliasFieldExample{}.DecodeFrom([]byte(`{"body":" a ","count":5}`))
 	if _, ok := errors.AsType[*ggen.MinLenError](err); !ok {
 		t.Errorf("expected MinLenError post-trim, got %v", err)
 	}
 
-	// roundtrip — alias values marshal as their underlying primitives.
+	// Alias values marshal as their underlying primitives.
 	out, err := ggen.Marshal(AliasFieldExample{Body: "hi", Count: 5})
 	if err != nil {
 		t.Fatal(err)
@@ -543,15 +550,16 @@ func TestAlias_Field_ValidationAndMods(t *testing.T) {
 
 // ---- named primitives (annotated and not) ----------------------------
 //
-// Every rule has to resolve the underlying kind: `oneof` used to emit its
-// allowed values as bare identifiers, the string-shape rules passed the named
-// value uncast into string-typed APIs, and `eq`/`neq` emitted nothing at all.
+// Every rule must resolve the underlying kind of a named primitive. `oneof`
+// must emit its allowed values as values of that kind, not bare identifiers.
+// The string rules must cast the value before passing it to string APIs. And
+// `eq` and `neq` must emit a check.
 
 //ggen:generate
 type NPPriority string
 
-// NPTag carries no annotation — ggen still has to resolve `string` under it for
-// the rules, and cast at every stdlib call site.
+// NPTag carries no annotation. ggen must still resolve `string` under it for
+// the rules and cast it at every stdlib call site.
 type NPTag string
 
 //ggen:generate
@@ -607,7 +615,8 @@ func TestNamedPrim_Rejects(t *testing.T) {
 // maxrunes counts runes, not bytes, through the named type too.
 func TestNamedPrim_RunesNotBytes(t *testing.T) {
 	t.Parallel()
-	// 8 runes, 16 bytes — inside maxrunes=8.
+	// A rune is one Unicode character. Each 'ы' takes 2 bytes in UTF-8, so
+	// this tag is 8 runes in 15 bytes, within maxrunes=8.
 	body := `{"pri":"low","tag":"ыыыыыыы-","eq":"low","neq":"high","zero":null}`
 	_, _, err := NamedPrims{}.DecodeFrom([]byte(body))
 	if err != nil {
@@ -615,9 +624,10 @@ func TestNamedPrim_RunesNotBytes(t *testing.T) {
 	}
 }
 
-// A named primitive is decoded/encoded inline (underlying scan + conversion) at
-// every position, and an alias that carries flags of its own keeps its methods
-// so its behaviour survives — `htmlescape` on one type is documented surface.
+// A named primitive is decoded and encoded inline at every position, as the
+// underlying scan plus a type conversion. An alias that carries flags of its
+// own keeps its methods, so its behaviour survives. `htmlescape` on one type
+// is documented surface.
 
 //ggen:generate htmlescape
 type NPEscaped string
@@ -664,7 +674,7 @@ func TestNamedPrim_EveryPosition(t *testing.T) {
 	if n := got.JSONSize(); n < len(out) {
 		t.Errorf("JSONSize %d < %d", n, len(out))
 	}
-	// The htmlescape alias keeps its own encoder, so only IT escapes.
+	// The htmlescape alias keeps its own encoder, so only it escapes.
 	if !strings.Contains(string(out), `\u003ci\u003e`) {
 		t.Errorf("htmlescape alias lost its escaping: %s", out)
 	}
@@ -687,15 +697,15 @@ func TestNamedPrim_EveryPosition(t *testing.T) {
 	}
 }
 
-// A named primitive from ANOTHER package keeps its own generated methods: this
-// pass cannot see the flags it was generated with, so inlining it would apply
-// the parent's (dropping, say, an htmlescape the other package chose). One with
-// no methods at all is inlined like a local one.
+// A named primitive from another package keeps its own generated methods.
+// This pass cannot see the flags it was generated with, so inlining it would
+// apply the parent's flags and could drop, say, an htmlescape the other
+// package chose. One with no methods at all is inlined like a local one.
 func TestNamedPrim_CrossPackagePrefersMethods(t *testing.T) {
 	t.Parallel()
-	// thirdparty2.External2 is generated in its own pass; a foreign named
-	// primitive without methods reaches the inline path via fallback_test.go's
-	// CrossPkgShapes coverage. Here we pin the DECODE result either way.
+	// thirdparty2.External2 is generated in its own pass. A foreign named
+	// primitive without methods reaches the inline path through CrossPkgShapes
+	// in fallback_test.go. This test pins the decode result either way.
 	v, _, err := NPPositions{}.DecodeFrom([]byte(`{"v":"x","cnt":3}`))
 	if err != nil {
 		t.Fatal(err)
@@ -705,8 +715,8 @@ func TestNamedPrim_CrossPackagePrefersMethods(t *testing.T) {
 	}
 }
 
-// json.Number is a named string whose wire shape is a NUMBER — it must not be
-// swept into the named-primitive inline path.
+// NPJSONNumber holds a json.Number, a named string whose wire shape is a JSON
+// number. It must not take the named-primitive inline path.
 //
 //ggen:generate
 type NPJSONNumber struct {
@@ -731,9 +741,9 @@ func TestNamedPrim_JSONNumberStaysNumeric(t *testing.T) {
 	}
 }
 
-// A container alias whose ELEMENT delegates (nested ggen struct) emits
-// `dst, err = …` in AppendJSON; the alias encode body never declared err, so
-// the whole package failed to compile.
+// InnerBit is the element of the container aliases below. A nested ggen
+// struct element makes the alias's AppendJSON emit `dst, err = …`, so the
+// alias encode body must declare err or the package does not compile.
 //
 //ggen:generate
 type InnerBit struct {
@@ -763,9 +773,9 @@ func TestAlias_DelegatingElementCompilesAndRoundtrips(t *testing.T) {
 	}
 }
 
-// `rune` and `[]rune` are numbers in BOTH stdlib versions; the slice element
-// used to fall to KindStruct and emit `append(dst, rune{})`, which did not
-// compile. (`[N]byte` is base64 — see TestByteArray_Base64StrictLen.)
+// RuneCarrier holds `rune` and `[]rune`, which are JSON numbers in both
+// stdlib versions. The slice element must resolve as a number, not a struct.
+// `[N]byte` is base64, see TestByteArray_Base64StrictLen.
 //
 //ggen:generate
 type RuneCarrier struct {
@@ -783,7 +793,7 @@ func TestAlias_RuneElements(t *testing.T) {
 	if string(out) != `{"c":9731,"r":[104,233,108,108,111]}` {
 		t.Fatalf("wire: %s", out)
 	}
-	// Same VALUES as jsonv2 (ggen sorts keys, jsonv2 keeps declaration order).
+	// Same values as jsonv2. ggen sorts keys, jsonv2 keeps declaration order.
 	want, err := jsonv2.Marshal(in)
 	if err != nil {
 		t.Fatal(err)
@@ -798,9 +808,8 @@ func TestAlias_RuneElements(t *testing.T) {
 	}
 }
 
-// Leading whitespace is legal before any top-level JSON value. Container and
-// struct aliases always accepted it (ArrayOpen/ObjectOpen skip space); the
-// primitive alias decoders scanned at the cursor and rejected it.
+// Leading whitespace is legal before any top-level JSON value. Primitive
+// alias decoders must skip it, just like container and struct aliases do.
 func TestAlias_leadingWhitespace(t *testing.T) {
 	t.Parallel()
 	sv, _, err := AliasString("").DecodeFrom([]byte(" \t\n\"x\""))
@@ -828,8 +837,9 @@ func TestAlias_leadingWhitespace(t *testing.T) {
 	}
 }
 
-// An opaque struct (no exported fields) with Text methods takes the alias
-// ladder's Text rung, which scans the string itself.
+// An opaque struct with no exported fields but with Text methods takes the
+// Text rung of the alias ladder, the ordered list of encodings ggen tries.
+// That rung scans the JSON string itself.
 type textOnly struct{ v string }
 
 func (t textOnly) MarshalText() ([]byte, error)  { return []byte(t.v), nil }
@@ -870,9 +880,8 @@ func TestAlias_leadingWhitespaceBytesAndText(t *testing.T) {
 //ggen:generate
 type AliasDigest [4]byte
 
-// A [N]byte ALIAS folds onto the base64 path exactly as [N]byte does at field
-// position — it used to emit a JSON array of numbers, so the same Go type had
-// two wire shapes depending on where it appeared. An alias carries no struct
+// A [N]byte alias takes the base64 path, exactly like a [N]byte field, so one
+// Go type has one wire shape wherever it appears. An alias carries no struct
 // tag, so there is no format:array opt-out.
 func TestAlias_byteArrayIsBase64(t *testing.T) {
 	t.Parallel()
@@ -911,8 +920,8 @@ func TestAlias_byteArrayIsBase64(t *testing.T) {
 	}
 }
 
-// ggen.Marshal presizes from JSONSize exactly, so an undersized float budget
-// costs a second alloc on the widest 'f'-form value.
+// ggen.Marshal sizes its buffer from JSONSize exactly. An undersized float
+// budget would cost a second allocation on the widest 'f'-form value.
 func TestAlias_floatSizeIsSingleAlloc(t *testing.T) { //nolint:paralleltest // measures allocations
 	v := AliasFloat64(-1.2345678901234567e-06)
 	out, err := ggen.Marshal(v)
@@ -927,9 +936,9 @@ func TestAlias_floatSizeIsSingleAlloc(t *testing.T) { //nolint:paralleltest // m
 	}
 }
 
-// A struct reached ONLY through a container alias must be generated too: the
-// alias BFS used to stop at the alias, so the element decoded through the
-// reflective encoding/json fallback, which silently accepts unknown keys.
+// A struct reached only through a container alias must be generated too.
+// Otherwise the element decodes through the reflective encoding/json
+// fallback, which silently accepts unknown keys.
 
 //ggen:generate
 type SoloList []SoloInner
@@ -956,11 +965,10 @@ func TestAlias_elementStructGetsGenerated(t *testing.T) {
 	}
 }
 
-// R10IntroSrc is unannotated with no ggen methods, so R10IntroAlias takes the
-// field-introspection rung. Its `@Func` steps — a mod, a validator and a
-// converter variant — resolve against the alias's package like a struct's own
-// fields do; they used to vanish (the converter emitted `var conv0 ` and
-// killed the run).
+// R10IntroSrc is unannotated and has no ggen methods, so R10IntroAlias takes
+// the field-introspection rung. Its `@Func` steps resolve against the alias's
+// package, like a struct's own fields do. They are a mod, a validator and a
+// converter variant.
 type R10IntroSrc struct {
 	A string `json:"a" pipe:"@R10Upper"`
 	B string `json:"b" pipe:"required @R10NonEmpty"`

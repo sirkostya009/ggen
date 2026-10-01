@@ -7,31 +7,32 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-// FieldInterfaces tracks which method-set / interface flavors a field's type
-// implements, computed at parse time so the generator emits hardcoded calls
-// instead of runtime probes.
+// FieldInterfaces records which methods and interfaces a field's type
+// implements. It is computed at parse time, so the generator can emit direct
+// calls instead of checking at runtime.
 type FieldInterfaces struct {
-	// Resolved is true when static analysis ran. False (AST-only path) means
-	// the generator must fall back to its runtime probe cascade, not trust the
-	// zero flags below as "doesn't implement".
+	// Resolved is true when type checking ran. When it is false, on the
+	// AST-only path, the generator must fall back to its runtime checks. It
+	// must not read the zero flags below as "does not implement".
 	Resolved bool
 
 	TextUnmarshaler bool // *T has UnmarshalText([]byte) error
 	TextMarshaler   bool // T or *T has MarshalText() ([]byte, error)
-	TextAppender    bool // T or *T has AppendText(dst []byte) ([]byte, error) — Go 1.24+ encoding.TextAppender
+	TextAppender    bool // T or *T has AppendText(dst []byte) ([]byte, error), encoding.TextAppender
 	JSONUnmarshaler bool // *T has UnmarshalJSON([]byte) error
 	JSONMarshaler   bool // T or *T has MarshalJSON() ([]byte, error)
 	ByteDecoder     bool // T has DecodeFrom(data []byte) (T, int, error)
 	StreamDecoder   bool // T has DecodeFromStream(s *ggen.Stream) (T, error)
 	AppendJSON      bool // T has AppendJSON(dst []byte) ([]byte, error)
-	JSONSize        bool // T has JSONSize() int — call the real upper bound vs a flat guess for foreign types
+	JSONSize        bool // T has JSONSize() int, a real size bound instead of a flat guess for foreign types
 }
 
-// stdInterfaces caches the well-known interface types (encoding, encoding/json)
-// the generator drives types.Implements against, built once per parse pass;
-// nil entries mean the package wasn't reachable. inspectCache memoizes
-// inspectType by type identity (named types are unique per pass), deduping the
-// per-field probe work when fields share a type (uuid.UUID, time.Time, …).
+// stdInterfaces holds the standard interface types from encoding and
+// encoding/json that types.Implements is checked against. It is built once
+// per parse pass. A nil entry means the package could not be loaded.
+// inspectCache stores inspectType results by type identity, since named
+// types are unique within a pass. This saves repeated work when many fields
+// share a type such as uuid.UUID or time.Time.
 type stdInterfaces struct {
 	textMarshaler   *types.Interface
 	textUnmarshaler *types.Interface
@@ -41,10 +42,11 @@ type stdInterfaces struct {
 	inspectCache    map[types.Type]FieldInterfaces
 }
 
-// findStdInterfaces resolves the encoding / encoding/json interface types,
-// first from the loaded packages' transitive imports, then via a targeted
-// packages.Load for any not reachable that way (common when only plain Go
-// types are in play) — otherwise cross-package text types miss the fast path.
+// findStdInterfaces finds the encoding and encoding/json interface types. It
+// first searches the imports of the loaded packages, recursively. Any it does
+// not find there are loaded directly with packages.Load. That case is common
+// when the code uses only plain Go types. Without it, text types from other
+// packages would miss the direct-call path.
 func findStdInterfaces(pkgs []*packages.Package) stdInterfaces {
 	out := stdInterfaces{inspectCache: map[types.Type]FieldInterfaces{}}
 	visited := map[string]struct{}{}
@@ -73,8 +75,8 @@ func findStdInterfaces(pkgs []*packages.Package) stdInterfaces {
 	for _, p := range pkgs {
 		visit(p)
 	}
-	// Force-load the stdlib interface packages the import graph didn't reach.
-	// Errors are non-fatal — a nil interface just skips that probe.
+	// Load the packages the import graph did not reach. Errors are not fatal.
+	// A nil interface only skips that check.
 	var missing []string
 	if out.textMarshaler == nil || out.textUnmarshaler == nil || out.textAppender == nil {
 		missing = append(missing, "encoding")
@@ -126,9 +128,10 @@ func lookupIface(p *types.Package, name string) *types.Interface {
 	return iface
 }
 
-// inspectType derives FieldInterfaces for t — types.Implements against the
-// well-known interfaces, plus a method-set walk for the ggen-shaped methods
-// (DecodeFrom, AppendJSON, …) whose signatures name the receiver type itself.
+// inspectType computes FieldInterfaces for t. It checks the standard
+// interfaces with types.Implements. It also walks the method set for the
+// ggen methods such as DecodeFrom and AppendJSON, whose signatures name the
+// receiver type itself.
 func inspectType(t types.Type, std stdInterfaces) FieldInterfaces {
 	if t == nil {
 		return FieldInterfaces{}
@@ -136,12 +139,12 @@ func inspectType(t types.Type, std stdInterfaces) FieldInterfaces {
 	if hit, ok := std.inspectCache[t]; ok {
 		return hit
 	}
-	// Probe the pointee, not the pointer. `*T`'s method set contains T's, so
-	// everything callable on a `*T` value is what inspectType(T) reports — and
-	// the ggen shapes are receiver-typed (`DecodeFrom` returns T, not *T), so
-	// matching them against `*T` fails outright. Peeling also gets the text /
-	// json UNmarshalers right: those live on `*T`, which this function already
-	// synthesizes below.
+	// Check the pointee, not the pointer. The method set of `*T` contains the
+	// methods of T, so everything callable on a `*T` is what inspectType(T)
+	// reports. The ggen methods also name the receiver type, for example
+	// `DecodeFrom` returns T and not *T, so matching them against `*T` would
+	// always fail. Removing the pointer also handles the text and json
+	// unmarshalers correctly: they live on `*T`, which is built below.
 	key := t
 	for {
 		p, ok := t.Underlying().(*types.Pointer)
@@ -172,8 +175,8 @@ func inspectType(t types.Type, std stdInterfaces) FieldInterfaces {
 		iface.JSONUnmarshaler = types.Implements(ptr, std.jsonUnmarshaler)
 	}
 
-	// ggen-shaped methods return T (the receiver), so there's no clean
-	// interface to test against — shape-match the signatures instead.
+	// The ggen methods return T, the receiver type, so no single interface
+	// can describe them. Match the signatures by shape instead.
 	ms := types.NewMethodSet(t)
 	for sel := range ms.Methods() {
 		fn, ok := sel.Obj().(*types.Func)
@@ -239,8 +242,8 @@ func matchByteDecoder(sig *types.Signature, recv types.Type) bool {
 }
 
 // matchStreamDecoder reports whether sig is `func(s *ggen.Stream) (T, error)`.
-// We have no handle on ggen.Stream's type, so match only the shape (one
-// pointer param + (T, error)).
+// The parser has no handle on the ggen.Stream type, so it matches only the
+// shape: one pointer parameter and the results (T, error).
 func matchStreamDecoder(sig *types.Signature, recv types.Type) bool {
 	params := sig.Params()
 	results := sig.Results()
@@ -256,9 +259,10 @@ func matchStreamDecoder(sig *types.Signature, recv types.Type) bool {
 	return isError(results.At(1).Type())
 }
 
-// matchAppendJSON reports whether sig is `func(dst []byte) ([]byte, error)` —
-// the shape renderAppendJSON emits. A one-result `func([]byte) []byte` is NOT
-// accepted: the emitter at the cross-package call site assigns two results.
+// matchAppendJSON reports whether sig is `func(dst []byte) ([]byte, error)`,
+// the shape renderAppendJSON emits. A one-result `func([]byte) []byte` is not
+// accepted, because the code emitted at a call from another package assigns
+// two results.
 func matchAppendJSON(sig *types.Signature) bool {
 	if sig.Params().Len() != 1 || sig.Results().Len() != 2 {
 		return false
@@ -289,4 +293,4 @@ func isError(t types.Type) bool {
 	return false
 }
 
-var _ = token.NoPos // keeps the go/token import
+var _ = token.NoPos // keeps the go/token import used

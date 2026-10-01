@@ -32,10 +32,10 @@ func IsNumeric(s string) bool {
 	return true
 }
 
-// IsLower reports whether s contains no uppercase unicode characters
-// (`islower`). Caseless characters (digits, punctuation, spaces, uncased
-// scripts) pass — the class is "no uppercase", not "every rune lowercase"
-// (the paired LowerError renders "contains uppercase letters").
+// IsLower reports whether s contains no uppercase Unicode letters. It backs
+// the islower rule. The test is "no uppercase", not "every character is
+// lowercase". So digits, punctuation, spaces and scripts without case pass.
+// The paired LowerError says "contains uppercase letters".
 func IsLower(s string) bool {
 	for _, r := range s {
 		if unicode.IsUpper(r) {
@@ -45,8 +45,8 @@ func IsLower(s string) bool {
 	return true
 }
 
-// IsUpper reports whether s contains no lowercase unicode characters
-// (`isupper`) — mirror of [IsLower].
+// IsUpper reports whether s contains no lowercase Unicode letters. It backs
+// the isupper rule and mirrors [IsLower].
 func IsUpper(s string) bool {
 	for _, r := range s {
 		if unicode.IsLower(r) {
@@ -56,7 +56,7 @@ func IsUpper(s string) bool {
 	return true
 }
 
-// IsHex reports whether every byte is a valid hex digit.
+// IsHex reports whether every byte in s is an ASCII hex digit.
 func IsHex(s string) bool {
 	if len(s) == 0 {
 		return false
@@ -70,7 +70,8 @@ func IsHex(s string) bool {
 	return true
 }
 
-// IsURL reports whether s starts with "scheme://...". Does not allocate a *url.URL.
+// IsURL reports whether s has the form "scheme://rest" with a non-empty
+// scheme and rest. It does not parse s into a *url.URL.
 func IsURL(s string) bool {
 	schema, rest, ok := strings.Cut(s, "://")
 	return ok && len(schema) > 0 && len(rest) > 0

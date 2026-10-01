@@ -10,10 +10,12 @@ import (
 	"testing"
 )
 
-// TestAppendStringSIMD_Parity pins byte-parity of every tier against the
-// scalar escapers: fixed cases at every vector-phase alignment (escape at
-// each lane position, at lane seams, in the tail) plus randomized bodies
-// mixing clean ASCII, escapes, ctrl bytes, HTML chars, and UTF-8.
+// TestAppendStringSIMD_Parity checks that every SIMD escaper writes the same
+// bytes as the plain scalar one. SIMD means testing 16, 32 or 64 bytes with
+// one CPU instruction. A lane is one byte slot inside such a vector. The
+// fixed cases put one escape at many positions: inside a lane, at the edge
+// between two lanes, and in the leftover tail. Random strings then mix plain
+// ASCII, escapes, control bytes, HTML characters and multi-byte UTF-8.
 func TestAppendStringSIMD_Parity(t *testing.T) {
 	t.Parallel()
 	type pair struct {
@@ -30,7 +32,7 @@ func TestAppendStringSIMD_Parity(t *testing.T) {
 	}
 	var cases []string
 	cases = append(cases, "", `plain`, "\x00", "\x1f", `"`, `\`, "<>&", "héllo wörld")
-	// One special byte at every position of bodies sized around lane seams.
+	// One special byte at many positions, in strings sized near lane edges.
 	for _, n := range []int{1, 15, 16, 17, 31, 32, 33, 63, 64, 65, 100, 130} {
 		for _, c := range []byte{'"', '\\', '\n', 0x01, '<', '&'} {
 			for pos := 0; pos < n; pos += max(1, n/7) {
@@ -81,10 +83,10 @@ func BenchmarkEscapeScan(b *testing.B) {
 	}
 }
 
-// BenchmarkEscapeTailRem sweeps the sub-lane remainder — the bytes left after
-// the last full vector iteration. That leftover is what the tail handles, so
-// its cost scales with rem and is invisible at the lane-multiple sizes
-// BenchmarkEscapeScan uses (64/256 are rem=0 at every tier).
+// BenchmarkEscapeTailRem varies rem, the number of bytes left after the last
+// full 64-byte vector step. The tail code handles those bytes, so its cost
+// depends on rem. BenchmarkEscapeScan cannot show this, because its sizes 64
+// and 256 leave rem=0 at every vector width.
 func BenchmarkEscapeTailRem(b *testing.B) {
 	const lane = 64
 	for _, rem := range []int{0, 1, 16, 32, 48, 63} {
@@ -100,13 +102,15 @@ func BenchmarkEscapeTailRem(b *testing.B) {
 	}
 }
 
-// TestAppendStringSIMD_OverlapTailParity exhaustively pins the overlapping
-// tail reload. The tail reclassifies the LAST full lane, which re-covers bytes
-// the main loop already emitted; only a correct shift (lane-rem) drops those
-// bits. A stale bit would double-escape a byte, a lost one would drop an
-// escape — so every (length, escape position) pair around the seam is checked,
-// which walks every possible rem 0..lane-1 with an escape on both sides of the
-// overlap boundary.
+// TestAppendStringSIMD_OverlapTailParity checks the tail step in full. For
+// the leftover bytes, the escaper reloads the last full vector of the string.
+// That vector overlaps bytes the main loop already wrote. The result is a
+// mask, one bit per byte that needs escaping. The escaper shifts it by
+// lane-rem to drop the bits for bytes already written. A bit kept by mistake
+// would escape a byte twice. A bit lost by mistake would skip an escape. So
+// the test tries every length and every escape position near the overlap.
+// This covers every rem from 0 to lane-1, with escapes on both sides of the
+// overlap edge.
 func TestAppendStringSIMD_OverlapTailParity(t *testing.T) {
 	t.Parallel()
 	tiers := []struct {
@@ -125,12 +129,12 @@ func TestAppendStringSIMD_OverlapTailParity(t *testing.T) {
 	for _, tr := range tiers {
 		t.Run(tr.name, func(t *testing.T) {
 			t.Parallel()
-			// Every length from one lane to two lanes past it: rem cycles
-			// through 0..lane-1 twice, with and without a second full lane.
+			// Every length from one lane up to three lanes. rem goes through
+			// 0..lane-1 twice, with and without a second full lane.
 			for n := tr.lane; n <= tr.lane*3; n++ {
 				clean := []byte(strings.Repeat("abcdefgh", n/8+1))[:n]
 				for _, e := range escapes {
-					// Single escape at EVERY position, incl. the whole
+					// One escape at every position, including the whole
 					// overlap region [n-lane, n).
 					for pos := range n {
 						b := append([]byte(nil), clean...)
@@ -142,8 +146,8 @@ func TestAppendStringSIMD_OverlapTailParity(t *testing.T) {
 							t.Fatalf("n=%d pos=%d esc=%q:\n got %q\nwant %q", n, pos, e, got, want)
 						}
 					}
-					// Two escapes straddling the overlap boundary: one in the
-					// last full lane the main loop handled, one in the tail.
+					// Two escapes on both sides of the overlap edge. One is in
+					// the last lane the main loop handled, one is in the tail.
 					if n > tr.lane {
 						b := append([]byte(nil), clean...)
 						b[n-tr.lane] = e

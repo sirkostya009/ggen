@@ -1,5 +1,5 @@
-// Two-way ggen ↔ jsonv2 compat: each annotated struct must round-trip through
-// both, and both re-parsed results must agree.
+// Two-way compatibility between ggen and jsonv2. Each annotated struct must
+// round-trip through both libraries, and the two decoded results must agree.
 
 package integrationtests
 
@@ -27,18 +27,19 @@ import (
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty2"
 )
 
-// ggenCompat is the generated method subset this file needs.
+// ggenCompat is the subset of generated methods this file needs.
 type ggenCompat[T any] interface {
 	ggen.Marshaler
 	ggen.Decoder[T]
 }
 
-// crossCompat drives the two-way compat check. Equality is semantic: each
-// side re-marshals through jsonv2 and parses into `any`, so map ordering and
-// nil-vs-empty differences don't register but wire divergence does.
+// crossCompat runs the two-way compatibility check. It compares values, not
+// bytes. Each side is marshaled again through jsonv2 and parsed into `any`.
+// So map order and nil versus empty differences are ignored, but a real
+// difference in the encoded data is caught.
 func crossCompat[T ggenCompat[T]](t *testing.T, in T) {
 	t.Helper()
-	// ggen marshal → jsonv2 unmarshal.
+	// ggen marshal, then jsonv2 unmarshal.
 	ggenBytes, mErr := ggen.Marshal(in)
 	if mErr != nil {
 		t.Fatalf("ggen Marshal for %T: %v", in, mErr)
@@ -48,7 +49,7 @@ func crossCompat[T ggenCompat[T]](t *testing.T, in T) {
 		t.Fatalf("jsonv2.Unmarshal of ggen output failed for %T: %v\n%s", in, err, ggenBytes)
 	}
 
-	// jsonv2 marshal → ggen unmarshal.
+	// jsonv2 marshal, then ggen unmarshal.
 	stdBytes, err := jsonv2.Marshal(in)
 	if err != nil {
 		t.Fatalf("jsonv2.Marshal for %T: %v", in, err)
@@ -65,8 +66,9 @@ func crossCompat[T ggenCompat[T]](t *testing.T, in T) {
 	}
 }
 
-// sameWire reports whether a and b produce the same canonical JSON, both via
-// jsonv2 then parsed into `any` (ignores map ordering, nil/empty differences).
+// sameWire reports whether a and b give the same JSON. Both are marshaled with
+// jsonv2 and parsed into `any`, so map order and nil versus empty differences
+// are ignored.
 func sameWire(tb testing.TB, a, b any) bool {
 	tb.Helper()
 	ba, err := jsonv2.Marshal(a)
@@ -87,11 +89,11 @@ func sameWire(tb testing.TB, a, b any) bool {
 	return reflect.DeepEqual(va, vb)
 }
 
-// exactWire asserts ggen's marshal output is BYTE-IDENTICAL to jsonv2's —
-// stronger than crossCompat, which normalizes away wire divergences that
-// decode to the same value (float formatting, HTML escaping). Only valid for
-// values whose field/element order already matches jsonv2's: single-field
-// structs, slices, scalars, single-key maps.
+// exactWire asserts that ggen's marshal output is byte-identical to jsonv2's.
+// This is stronger than crossCompat, which ignores encoding differences that
+// decode to the same value, such as float formatting or HTML escaping. Use it
+// only for values whose field and element order already matches jsonv2's:
+// single-field structs, slices, scalars and single-key maps.
 func exactWire[T ggenCompat[T]](t *testing.T, name string, in T) {
 	t.Helper()
 	t.Run(name, func(t *testing.T) {
@@ -130,7 +132,8 @@ func TestStdCompat_Node(t *testing.T) {
 
 func TestStdCompat_Node_mega(t *testing.T) {
 	t.Parallel()
-	// Full 1MB payload — catches ordering/float drift that only shows at scale.
+	// The full 1 MB payload catches order and float differences that only
+	// show up at scale.
 	crossCompat(t, megaValue)
 }
 
@@ -159,7 +162,7 @@ func TestStdCompat_PointerStruct(t *testing.T) {
 		When:    &when,
 		Enabled: &enabled,
 	})
-	// All nils — the null path.
+	// All fields nil, to test the null path.
 	crossCompat(t, PointerStruct{})
 }
 
@@ -182,22 +185,24 @@ func TestStdCompat_NativeTypes(t *testing.T) {
 	})
 }
 
-// --- Per-format time structs: jsonv2-compatible subset. Each is a single
-// field so TimeFormatsStdCompat / TimeFormatsStruct can embed them via
-// anonymous-field promotion. jsonv2-rejected variants live in wire_test.go.
+// --- Per-format time structs, the subset jsonv2 accepts. Each has a single
+// field, so TimeFormatsStdCompat and TimeFormatsStruct can embed them and get
+// the field promoted. The variants jsonv2 rejects are in wire_test.go.
 
-// A comma inside a quoted custom layout: jsonv2 accepts it (year+month+day
-// round-trips), and ggen's tag parser must split options quote-aware — a
-// naive comma split truncated this to "Jan 2".
+// TimeCustomComma has a comma inside a quoted custom layout. jsonv2 accepts
+// it, and year, month and day round-trip. ggen's tag parser must respect the
+// quotes when it splits options on commas. A plain comma split would cut the
+// layout to "Jan 2".
 //
 //ggen:generate
 type TimeCustomComma struct {
 	CustomComma time.Time `json:"customComma,format:'Jan 2, 2006'"` //nolint:govet // layout carries spaces
 }
 
-// Verbose custom layout with literals: jsonv2-accepted and value-exact on
-// round-trip (year+nanos+zone all present). Also exercises timeFormatSize's
-// `len(format)+6` fallback at the long end.
+// TimeCustomLong has a long custom layout with literal text. jsonv2 accepts
+// it, and the value round-trips exactly because year, nanoseconds and zone
+// are all present. It also exercises timeFormatSize's `len(format)+6`
+// fallback for a long layout.
 //
 //ggen:generate
 type TimeCustomLong struct {
@@ -206,7 +211,7 @@ type TimeCustomLong struct {
 
 //ggen:generate
 type TimeDefault struct {
-	Default time.Time `json:"default"` // empty format → RFC3339Nano
+	Default time.Time `json:"default"` // no format, so RFC3339Nano
 }
 
 //ggen:generate
@@ -236,7 +241,7 @@ type TimeANSIC struct {
 
 //ggen:generate
 type TimeUnixDate struct {
-	UnixDate time.Time `json:"unixDate,format:UnixDate"` // MST → up to 5-char offset
+	UnixDate time.Time `json:"unixDate,format:UnixDate"` // MST can become an offset of up to 5 chars
 }
 
 //ggen:generate
@@ -353,9 +358,10 @@ func timeFormatsStdCompat(when time.Time) TimeFormatsStdCompat {
 	}
 }
 
-// Round-trips the jsonv2-accepted time formats. UTC is required so
-// RFC1123/RFC850/UnixDate emit the literal `UTC` token jsonv2 expects;
-// non-zero nanos exercises the `format:unix` fractional decimal path.
+// Round-trips the time formats jsonv2 accepts. The time must be in UTC so
+// that RFC1123, RFC850 and UnixDate emit the literal `UTC` that jsonv2
+// expects. Non-zero nanoseconds exercise the fractional part of
+// `format:unix`.
 func TestStdCompat_TimeFormatsStdCompat(t *testing.T) {
 	t.Parallel()
 	when := time.Date(2026, 5, 14, 12, 34, 56, 789000000, time.UTC)
@@ -364,9 +370,9 @@ func TestStdCompat_TimeFormatsStdCompat(t *testing.T) {
 
 func TestStdCompat_OmitStruct(t *testing.T) {
 	t.Parallel()
-	// Zero values on omitempty/omitzero fields.
+	// Zero values on omitempty and omitzero fields.
 	crossCompat(t, OmitStruct{Name: "alice", StrCount: 1})
-	// Populated.
+	// All fields set.
 	crossCompat(t, OmitStruct{Name: "alice", Bio: "dev", Score: 9.5, StrCount: 42, Tags: []string{"go"}})
 }
 
@@ -377,7 +383,8 @@ func TestStdCompat_FallbackStruct(t *testing.T) {
 
 func TestStdCompat_ModStruct(t *testing.T) {
 	t.Parallel()
-	// Start from a value mods won't change, else ggen-decoded diverges by design.
+	// Use a value the mods do not change. Otherwise the ggen-decoded value
+	// differs on purpose.
 	crossCompat(t, ModStruct{Email: "a@b.com", Tags: []string{"go", "rust"}, SKU: "A1"})
 }
 
@@ -461,8 +468,9 @@ func TestStdCompat_IgnoredEmbedStruct(t *testing.T) {
 	exactWire(t, "wire", in)
 }
 
-// richSubset mirrors RichTypes minus url.URL — ggen emits url.URL as a JSON
-// string but stdlib emits the 11-field struct (covered in TestRich_Roundtrip).
+// richSubset is RichTypes without url.URL. ggen encodes url.URL as a JSON
+// string, but jsonv2 encodes its 11-field struct. url.URL is covered
+// in TestRich_Roundtrip.
 //
 //ggen:generate
 type richSubset struct {
@@ -497,7 +505,8 @@ func TestStdCompat_PtrSliceStruct(t *testing.T) {
 	t.Parallel()
 	a := Address{Street: "S1", City: "C1", ZipCode: "11111"}
 	b := Address{Street: "S2", City: "C2", ZipCode: "22222"}
-	// Mix of present + nil elements exercises the slab path's null branch.
+	// A mix of set and nil elements exercises the null branch of the slab
+	// path (pointees decoded into one shared backing slice).
 	crossCompat(t, PtrSliceStruct{
 		Items: []*Address{&a, &b},
 		Tuple: [3]*Address{&a, nil, &b},
@@ -505,9 +514,10 @@ func TestStdCompat_PtrSliceStruct(t *testing.T) {
 	})
 }
 
-// SQLNullStruct is intentionally absent from cross-compat: ggen emits sql.Null*
-// as inner-value-or-null, but stdlib emits `{"Field":val,"Valid":true}` plain
-// structs. Deliberate divergence; round-trip in TestSQLNull_Roundtrip.
+// SQLNullStruct is left out of the compatibility checks on purpose. ggen
+// encodes sql.Null* as the inner value or null, but the standard library
+// encodes the plain struct `{"Field":val,"Valid":true}`. Its round-trip is
+// tested in TestSQLNull_PerType and TestSQLNull_Composite.
 
 func TestStdCompat_AnyStruct(t *testing.T) {
 	t.Parallel()
@@ -525,9 +535,9 @@ func TestStdCompat_AnyStruct(t *testing.T) {
 	crossCompat(t, AnyStruct{Name: "z", Body: nil})
 }
 
-// Single-field carriers for exactWire: with one field, ggen's field sort and
-// jsonv2's declaration order can't disagree, so the byte compare only sees the
-// value's own wire form.
+// Single-field structs for exactWire. With one field, ggen's field order and
+// jsonv2's declaration order cannot disagree, so the byte compare only checks
+// how the value itself is encoded.
 
 //ggen:generate
 type F64Wire struct {
@@ -544,9 +554,9 @@ type AnyWire struct {
 	V any `json:"v"`
 }
 
-// ggen float output is byte-for-byte identical to jsonv2 across magnitude
-// boundaries — crossCompat masks formatting differences (`1e+06` vs `1000000`
-// decode equal).
+// ggen's float output is byte-identical to jsonv2's across magnitude
+// boundaries. crossCompat would hide formatting differences, because `1e+06`
+// and `1000000` decode to the same value.
 func TestStdCompat_FloatWire(t *testing.T) {
 	t.Parallel()
 	for _, v := range []float64{
@@ -562,10 +572,10 @@ func TestStdCompat_FloatWire(t *testing.T) {
 	}
 }
 
-// The ggen.AppendAny wire shape matches jsonv2: HTML-special bytes in
-// any-held strings/slices/maps emit literally, and floats through the any path
-// use the same AppendFloat. Single-key maps keep iteration order deterministic
-// for the byte compare.
+// ggen.AppendAny encodes the same bytes as jsonv2. HTML-special characters in
+// strings, slices and maps held in an `any` are written as is, and floats in
+// an `any` use the same AppendFloat. Maps have a single key so their order is
+// fixed for the byte compare.
 func TestStdCompat_AnyWire(t *testing.T) {
 	t.Parallel()
 	cases := []any{
@@ -599,13 +609,14 @@ func TestStdCompat_FastFallbackStruct(t *testing.T) {
 
 func TestStdCompat_HTMLEscapeStruct(t *testing.T) {
 	t.Parallel()
-	// htmlescape opt-in emits \uXXXX for <>&; jsonv2 still decodes back equal.
+	// With htmlescape, <, > and & are written as \uXXXX. jsonv2 still decodes
+	// them to an equal value.
 	crossCompat(t, HTMLEscapeStruct{Note: `<a href="x">tom & jerry</a>`})
 }
 
 func TestStdCompat_HTMLRawStruct(t *testing.T) {
 	t.Parallel()
-	// Default literal <>& is the jsonv2 wire shape.
+	// By default <, > and & are written as is, like jsonv2 does.
 	crossCompat(t, HTMLRawStruct{Note: `<a href="x">tom & jerry</a>`})
 }
 
@@ -618,11 +629,11 @@ func TestStdCompat_StringTagStruct(t *testing.T) {
 	})
 }
 
-// crossCompatMerge is the decode-into-receiver counterpart of crossCompat:
-// the payload is merged into a pre-populated receiver on both sides and the
-// results must agree on the wire. `mk` builds a fresh receiver per side so
-// neither observes the other's mutations. Use only where ggen's merge matches
-// stdlib; divergences are in TestStdCompatMerge_IntentionalDivergences.
+// crossCompatMerge is the decode-into-receiver version of crossCompat. Both
+// sides decode the payload into a receiver that already holds data, and the
+// results must give the same JSON. `mk` builds a fresh receiver for each side
+// so neither sees the other's changes. Use it only where ggen's merge matches
+// jsonv2. The differences are in TestStdCompatMerge_IntentionalDivergences.
 func crossCompatMerge[T ggenCompat[T]](t *testing.T, name string, mk func() T, payload string) {
 	t.Helper()
 	t.Run(name, func(t *testing.T) {
@@ -644,23 +655,24 @@ func crossCompatMerge[T ggenCompat[T]](t *testing.T, name string, mk func() T, p
 }
 
 // ggen's decode-into-receiver merge agrees with jsonv2 everywhere they should
-// match: slice replace, null → nil, nested-struct merge, `*T`/`**T` reuse for
-// a PRESENT key, exact-length array overwrite, empty `[]` on a non-nil
-// receiver. Divergences live in TestStdCompatMerge_IntentionalDivergences.
+// match: slice replace, null to nil, nested struct merge, `*T` and `**T`
+// reuse for a present key, array overwrite with an exact-length payload, and
+// empty `[]` on a non-nil receiver. The differences are in
+// TestStdCompatMerge_IntentionalDivergences.
 func TestStdCompatMerge_Parity(t *testing.T) {
 	t.Parallel()
 
-	// Non-nil slice is replaced (reset+refill), not appended.
+	// A non-nil slice is replaced (reset and refilled), not appended to.
 	crossCompatMerge(t, "slice_replace",
 		func() Node { return Node{Tags: []string{"a", "b", "c"}} },
 		`{"tags":["x"]}`)
 
-	// Empty array into a non-nil slice → empty slice on both sides.
+	// An empty array into a non-nil slice gives an empty slice on both sides.
 	crossCompatMerge(t, "slice_empty_on_nonnil",
 		func() Node { return Node{Tags: []string{"a", "b"}} },
 		`{"tags":[]}`)
 
-	// JSON null nils a carried-in slice / map.
+	// JSON null sets a carried slice or map to nil.
 	crossCompatMerge(t, "slice_null_to_nil",
 		func() Node { return Node{Tags: []string{"a"}} },
 		`{"tags":null}`)
@@ -668,12 +680,13 @@ func TestStdCompatMerge_Parity(t *testing.T) {
 		func() Node { return Node{Props: map[string]string{"old": "1"}} },
 		`{"props":null}`)
 
-	// Nested struct merges field-by-field.
+	// A nested struct merges field by field.
 	crossCompatMerge(t, "nested_struct_merge",
 		func() Node { return Node{Children: []Node{{ID: 7, Name: "cached"}}} },
 		`{"children":[{"score":1.5}]}`)
 
-	// Pointer `*T`: a present key decodes into the carried pointee, null drops.
+	// Pointer `*T`: a present key decodes into the carried pointee, and null
+	// drops it.
 	crossCompatMerge(t, "ptr_scalar_present",
 		func() PointerStruct {
 			return PointerStruct{Name: new("keep"), Count: new(1)}
@@ -685,24 +698,27 @@ func TestStdCompatMerge_Parity(t *testing.T) {
 		},
 		`{"name":null,"enabled":null}`)
 
-	// Multi-level pointer `**int`: present key resolves the chain.
+	// Multi-level pointer `**int`: a present key decodes through the chain.
 	crossCompatMerge(t, "multilevel_ptr",
 		func() NPtrStruct { return NPtrStruct{PP: new(new(3))} },
 		`{"pp":9}`)
 
-	// Exact-length array payload: every slot overwritten (short-payload diverges).
+	// An exact-length array payload overwrites every slot. A shorter payload
+	// behaves differently in the two libraries.
 	crossCompatMerge(t, "array_exact_len_overwrite",
 		func() TupleStruct { return TupleStruct{RGB: [3]int{9, 9, 9}} },
 		`{"rgb":[1,2,3]}`)
 }
 
-// Where ggen deliberately differs from jsonv2 merge — consequences of ggen's
-// container reset-at-entry and strict scalar parsing. Inverse of
+// The places where ggen's merge differs from jsonv2 on purpose. They follow
+// from two ggen rules: containers are reset when decoding starts, and
+// scalars are parsed strictly. This is the opposite of
 // TestStdCompatMerge_Parity.
 func TestStdCompatMerge_IntentionalDivergences(t *testing.T) {
 	t.Parallel()
 
-	// 1. Present map key: stdlib merges entries; ggen clear()s then refills.
+	// 1. Present map key: jsonv2 merges entries. ggen clears the map, then
+	//    fills it.
 	t.Run("map_present_key_replace_vs_merge", func(t *testing.T) {
 		t.Parallel()
 		const payload = `{"props":{"new":"3"}}`
@@ -725,8 +741,9 @@ func TestStdCompatMerge_IntentionalDivergences(t *testing.T) {
 		}
 	})
 
-	// 2. Omitted container key: ggen resets every container at entry, so an
-	//    absent slice/map key is emptied — stdlib leaves it untouched.
+	// 2. Omitted container key: ggen resets every container when decoding
+	//    starts, so a slice or map whose key is absent is emptied. jsonv2
+	//    leaves it untouched.
 	t.Run("omitted_container_reset_vs_retain", func(t *testing.T) {
 		t.Parallel()
 		const payload = `{"id":5}`
@@ -746,9 +763,10 @@ func TestStdCompatMerge_IntentionalDivergences(t *testing.T) {
 		}
 	})
 
-	// 3. Omitted key on a value/pointer field: stdlib leaves the receiver's
-	//    value in place; ggen zeroes it, so a decode-into-receiver result is
-	//    what a fresh decode would give (only allocations are recycled).
+	// 3. Omitted key on a value or pointer field: jsonv2 leaves the
+	//    receiver's value in place. ggen zeroes it, so decoding into a
+	//    receiver gives what a fresh decode would give. Only allocations are
+	//    reused.
 	t.Run("omitted_scalar_zero_vs_retain", func(t *testing.T) {
 		t.Parallel()
 		const payload = `{"id":99}`
@@ -770,8 +788,8 @@ func TestStdCompatMerge_IntentionalDivergences(t *testing.T) {
 		const ptrPayload = `{"count":9}`
 		pstd := PointerStruct{Name: new("keep"), Count: new(1)}
 		if err := jsonv2.Unmarshal([]byte(ptrPayload), &pstd); err != nil {
-			// jsonv2 rejects PointerStruct's `format` tag since Go 1.27; the
-			// pointer half of the contract is pinned in merge_test.go.
+			// jsonv2 in Go 1.27 rejects PointerStruct's `format` tag. The
+			// pointer part of this rule is tested in merge_test.go.
 			t.Skipf("jsonv2 cannot merge PointerStruct: %v", err)
 		}
 		if pstd.Name == nil {
@@ -786,8 +804,9 @@ func TestStdCompatMerge_IntentionalDivergences(t *testing.T) {
 		}
 	})
 
-	// 4. Explicit null on a non-pointer scalar: stdlib zeroes it; ggen hard-
-	//    errors (only pointer/slice/map/[]byte accept null — use a pointer).
+	// 4. Explicit null on a non-pointer scalar: jsonv2 zeroes it. ggen
+	//    returns an error, because only pointers, slices, maps and []byte
+	//    accept null. Use a pointer to accept null.
 	t.Run("scalar_null_error_vs_zero", func(t *testing.T) {
 		t.Parallel()
 		const payload = `{"id":null}`

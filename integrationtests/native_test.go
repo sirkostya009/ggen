@@ -107,11 +107,11 @@ func TestNativeTypes_format(t *testing.T) {
 	}
 	bs, _ := ggen.Marshal(in)
 	out := string(bs)
-	// unix → number
+	// unix format encodes a number.
 	if !strings.Contains(out, `"unixAt":1700000000`) {
 		t.Errorf("unix format missing from: %s", out)
 	}
-	// sec duration → number of seconds
+	// sec format encodes the duration as a number of seconds.
 	if !strings.Contains(out, `"secDur":2`) {
 		t.Errorf("sec duration missing from: %s", out)
 	}
@@ -125,17 +125,18 @@ func TestNativeTypes_format(t *testing.T) {
 	}
 }
 
-// BareDuration lives outside NativeTypes: ggen's bare-duration default is the
-// units string (documented), while jsonv2's is int64 nanos — it would fail the
-// crossCompat fixture.
+// BareDuration is kept out of NativeTypes because it would fail the
+// crossCompat fixture. Without a format tag, ggen encodes a duration as a
+// units string such as "1h30m0s" (documented). jsonv2 encodes int64
+// nanoseconds.
 //
 //ggen:generate
 type BareDuration struct {
-	D time.Duration `json:"d"` // no format: → units is the default
+	D time.Duration `json:"d"` // no format tag, so the units string is used
 }
 
-// Bare duration marshals as a QUOTED units string — the opening quote used to
-// be dropped (`{"d":1h30m0s"}`, invalid JSON with a nil error).
+// A duration without a format tag marshals as a quoted units string. Both
+// quotes must be present, or the output is invalid JSON with a nil error.
 func TestDuration_BareIsQuotedUnits(t *testing.T) {
 	t.Parallel()
 	in := BareDuration{D: time.Hour + 30*time.Minute}
@@ -158,9 +159,9 @@ func TestDuration_BareIsQuotedUnits(t *testing.T) {
 	}
 }
 
-// A netip zone is arbitrary bytes — ParseAddr accepts `%q"z` — and used to
-// drop raw between the JSON quotes: a value ggen itself decoded re-marshaled
-// to invalid JSON with a nil error.
+// A netip zone can hold any bytes. ParseAddr accepts `%q"z`. The zone must be
+// JSON-escaped on marshal. Written raw between the quotes, a value ggen
+// itself decoded would marshal to invalid JSON with a nil error.
 func TestNetipAddr_ZoneEscaped(t *testing.T) {
 	t.Parallel()
 	got, _, err := NativeTypes{}.DecodeFrom([]byte(`{"addr":"fe80::1%q\"z"}`))
@@ -180,7 +181,8 @@ func TestNetipAddr_ZoneEscaped(t *testing.T) {
 	if !strings.Contains(string(out), `"addr":"fe80::1%q\"z"`) {
 		t.Errorf("zone not escaped: %s", out)
 	}
-	// Zone-free addrs keep the raw fast path byte-identical.
+	// An address without a zone takes the fast path that writes it raw. The
+	// output must stay byte-identical.
 	got2, _, _ := NativeTypes{}.DecodeFrom([]byte(`{"addr":"2001:db8::1"}`))
 	out2, _ := ggen.Marshal(got2)
 	if !strings.Contains(string(out2), `"addr":"2001:db8::1"`) {
@@ -188,10 +190,11 @@ func TestNetipAddr_ZoneEscaped(t *testing.T) {
 	}
 }
 
-// An EMPTY (not null) wire value decodes to an empty non-nil slice, like
-// every other container — the decoders naturally produce nil there
-// (AppendDecode(nil, "") is nil, an immediate `]` appends nothing), which
-// would re-marshal as null and break the round-trip fixed point.
+// An empty wire value (not null) decodes to an empty non-nil slice, like every
+// other container. Left alone, the decoders would produce nil here:
+// AppendDecode(nil, "") returns nil, and an immediate `]` appends nothing. A
+// nil slice marshals as null, so decode then marshal would not give back the
+// input.
 func TestBytes_emptyDecodesNonNil(t *testing.T) {
 	t.Parallel()
 	payload := []byte(`{"blob":"","hexBlob":"","byteArray":[]}`)
@@ -232,8 +235,8 @@ func TestBytes_emptyDecodesNonNil(t *testing.T) {
 	}
 }
 
-// null []byte decodes to nil and a nil []byte marshals as null; empty
-// non-nil keeps the empty-string / empty-array form.
+// A null []byte decodes to nil, and a nil []byte marshals as null. An empty
+// non-nil one keeps its empty form: "" or [].
 func TestBytes_nullRoundtrip(t *testing.T) {
 	t.Parallel()
 	got, _, err := NativeTypes{}.DecodeFrom([]byte(`{"blob":null,"hexBlob":null,"byteArray":null}`))
@@ -265,10 +268,10 @@ func TestBytes_nullRoundtrip(t *testing.T) {
 	}
 }
 
-// [N]byte is a base64 STRING with a strict decoded length — jsonv2 parity
-// (encoding/json v1 emits a number array and rejects the string form, so
-// ggen's old array shape was unreadable by v2). format:array opts back into
-// the v1 shape; every other []byte format applies too.
+// ByteArrays checks that [N]byte encodes as a base64 string with a strict
+// decoded length, as jsonv2 does. encoding/json v1 emits a number array
+// instead and rejects the string form. format:array selects the v1 number
+// array. Every other []byte format applies to [N]byte too.
 //
 //ggen:generate
 type ByteArrays struct {
@@ -309,7 +312,8 @@ func TestByteArray_Base64StrictLen(t *testing.T) {
 		t.Fatalf("stream roundtrip: %+v %v", sb, err)
 	}
 
-	// Strict length, both directions, both paths.
+	// The length is strict on decode and encode, on both the bytes and the
+	// stream path.
 	for _, bad := range []string{`{"b":"AQID"}`, `{"b":"AQIDBAU="}`} {
 		var le *ggen.LenError
 		if _, _, err := (ByteArrays{}).DecodeFrom([]byte(bad)); !errors.As(err, &le) {
@@ -323,10 +327,10 @@ func TestByteArray_Base64StrictLen(t *testing.T) {
 	}
 }
 
-// R10ByteSliceTuple: a fixed-length tuple of variable-length byte slices.
-// The element used to inherit the tuple length and fold onto the `[N]byte`
-// base64 path, rejecting every element that was not exactly N bytes —
-// ggen's own marshal output included.
+// R10ByteSliceTuple is a fixed-length array of variable-length byte slices.
+// Each element is a []byte, not a [N]byte. It must not inherit the array
+// length, or every element that is not exactly N bytes would be rejected,
+// including ggen's own marshal output.
 //
 //ggen:generate
 type R10ByteSliceTuple struct {
@@ -360,10 +364,11 @@ func TestByteArray_TupleOfByteSlices(t *testing.T) {
 	}
 }
 
-// R10BPtrByteArray: a POINTER to a fixed byte array is base64 (or the tagged
-// encoding) behind a nullable rung, at any depth — the `[N]byte` fold lives in
-// the field's kind, which the pointer leaf must keep instead of re-reading the
-// type string as a tuple of numbers.
+// R10BPtrByteArray checks pointers to fixed byte arrays, at any pointer depth.
+// The pointer adds null handling, and the value is still base64 or the tagged
+// encoding. The `[N]byte` treatment is recorded in the field's kind. The
+// pointer's leaf must keep that kind and not treat the type as an array of
+// numbers.
 //
 //ggen:generate
 type R10BPtrByteArray struct {
@@ -403,7 +408,8 @@ func TestByteArray_Pointer(t *testing.T) {
 	if sout, err := ggen.Marshal(sgot); err != nil || string(sout) != in {
 		t.Fatalf("stream marshal: %s, %v", sout, err)
 	}
-	// null nils the pointer; a payload of the wrong decoded length is refused.
+	// null sets the pointer to nil. A payload with the wrong decoded length is
+	// rejected.
 	nulled, _, err := got.DecodeFrom([]byte(`{"p":null,"q":null}`))
 	if err != nil || nulled.P != nil || nulled.Q != nil {
 		t.Errorf("null: %v %v %v", nulled.P, nulled.Q, err)
@@ -412,16 +418,17 @@ func TestByteArray_Pointer(t *testing.T) {
 	if _, _, err := (R10BPtrByteArray{}).DecodeFrom([]byte(`{"p":"AQID"}`)); !errors.As(err, &le) {
 		t.Errorf("short base64 into *[8]byte: want LenError, got %v", err)
 	}
-	// omitempty on a nil pointer, and the pointee's base64 when set.
+	// omitempty drops a nil pointer.
 	if out, err := ggen.Marshal(R10BPtrByteArray{}); err != nil || strings.Contains(string(out), `"o"`) {
 		t.Errorf("omitempty: %s, %v", out, err)
 	}
 }
 
-// R10NetZero: the zero netip.Addr / netip.Prefix and a nil net.IP marshal
-// as "" (jsonv2's shape), and "" decodes back to the zero value the way the
-// types' own UnmarshalText do — ggen used to reject its own output for a
-// never-set address. net.IP is a byte slice, so null nils it like []byte.
+// R10NetZero checks that a zero netip.Addr, a zero netip.Prefix and a nil
+// net.IP marshal as "", as jsonv2 does. "" decodes back to the zero value, the
+// same way the types' own UnmarshalText methods do, so ggen accepts its own
+// output for an address that was never set. net.IP is a byte slice, so null
+// sets it to nil like a []byte.
 //
 //ggen:generate
 type R10NetZero struct {
@@ -449,7 +456,8 @@ func TestNetTypes_emptyIsZero(t *testing.T) {
 		if err := jsonv2.Unmarshal([]byte(p), &want); err != nil {
 			t.Fatalf("jsonv2 rejects %s: %v", p, err)
 		}
-		// A carried receiver takes the zero too — "" must overwrite, not skip.
+		// A receiver with a value set also takes the zero. "" must
+		// overwrite the old value, not skip it.
 		got, _, err := carried.DecodeFrom([]byte(p))
 		if err != nil || !same(got, want) {
 			t.Errorf("bytes %s: %+v (%v), want %+v", p, got, err, want)
@@ -461,7 +469,8 @@ func TestNetTypes_emptyIsZero(t *testing.T) {
 			t.Errorf("stream %s: %+v (%v), want %+v", p, sgot, err, want)
 		}
 	}
-	// Malformed text and null on the value types still reject, both paths.
+	// Malformed text, and null on the non-pointer types, are still rejected
+	// on both paths.
 	for _, p := range []string{`{"addr":"x"}`, `{"ip":"x"}`, `{"pfx":"x"}`, `{"pfx":"10.0.0.1"}`, `{"addr":null}`, `{"pfx":null}`} {
 		if _, _, err := (R10NetZero{}).DecodeFrom([]byte(p)); err == nil {
 			t.Errorf("bytes %s: accepted", p)
@@ -474,9 +483,10 @@ func TestNetTypes_emptyIsZero(t *testing.T) {
 	}
 }
 
-// A netip parse failure keeps the offending input in its message; the stream
-// scan aliases the buffer, so the retained text must be detached before the
-// buffer is recycled for the next payload.
+// A netip parse failure keeps the bad input in its error message. The stream
+// scan returns a string that aliases the Stream's buffer (points into it, no
+// copy). So the error must copy that text before the buffer is reused for
+// the next payload.
 func TestNetip_ErrorDetachedFromBuffer(t *testing.T) {
 	t.Parallel()
 	buf := make([]byte, 0, 64)
@@ -499,10 +509,11 @@ func TestNetip_ErrorDetachedFromBuffer(t *testing.T) {
 	}
 }
 
-// R10Time pins the RFC 3339 checks jsonv2 applies and time.Parse does not, on
-// both RFC 3339 layouts: encode refuses a year outside [0,9999] and a zone
-// hour of 24 or more (a string no RFC 3339 parser reads back); decode refuses
-// a one-digit hour, a `,` fraction separator and out-of-range zone digits.
+// R10Time pins the RFC 3339 checks that jsonv2 applies and time.Parse does
+// not, on both RFC 3339 layouts. Encode refuses a year outside [0,9999] and a
+// zone hour of 24 or more, because no RFC 3339 parser could read the result
+// back. Decode refuses a one-digit hour, a `,` fraction separator and
+// out-of-range zone digits.
 //
 //ggen:generate
 type R10Time struct {

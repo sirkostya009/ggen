@@ -22,11 +22,12 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-// fileBuildConstraint returns the canonical build expression for the source
-// file f (or ""): its //go:build line (old-style `// +build` honored; only
-// comments before the package clause count — Go's own rule) ANDed with the
-// constraint its NAME implies. Normalized via constraint.Parse so equivalent
-// forms collapse to one bucket key.
+// fileBuildConstraint returns the normalised build expression of the source
+// file f, or "" when it has none. It combines the file's //go:build line with
+// the constraint its file name implies. Old `// +build` lines are honoured
+// too. As in Go itself, only comments before the package clause count. The
+// result goes through constraint.Parse, so equal expressions written
+// differently give the same output bucket key.
 func fileBuildConstraint(f *ast.File, filename string) string {
 	if f == nil {
 		return ""
@@ -51,7 +52,8 @@ func fileBuildConstraint(f *ast.File, filename string) string {
 			}
 		}
 	}
-	// `// +build` lines AND together (intra-line OR already encoded by Parse).
+	// Separate `// +build` lines combine with AND. Parse already handles the
+	// OR within one line.
 	for _, e := range plus {
 		expr = andExpr(expr, e)
 	}
@@ -72,12 +74,13 @@ func andExpr(x, y constraint.Expr) constraint.Expr {
 	return &constraint.AndExpr{X: x, Y: y}
 }
 
-// filenameConstraint is the constraint a Go file carries without any
-// comment: the `_GOOS`, `_GOARCH` or `_GOOS_GOARCH` suffix of its name
-// (go/build's rule — the part before the first `_` never counts, a trailing
-// `_test` is stripped first) and `cgo` when it imports "C". Without it a
-// struct declared in `os_linux.go` landed in the unconstrained output and
-// every other GOOS failed to compile the generated methods.
+// filenameConstraint returns the constraint a Go file has without any
+// comment. That is the `_GOOS`, `_GOARCH` or `_GOOS_GOARCH` suffix of its
+// name, plus `cgo` when it imports "C". It follows the go/build rule: the
+// part before the first `_` never counts, and a trailing `_test` is removed
+// first. Without this, a struct declared in `os_linux.go` would land in the
+// unconstrained output, and the generated methods would fail to compile on
+// every other GOOS.
 func filenameConstraint(filename string, f *ast.File) constraint.Expr {
 	var expr constraint.Expr
 	name, _, _ := strings.Cut(filepath.Base(filename), ".")
@@ -103,8 +106,8 @@ func filenameConstraint(filename string, f *ast.File) constraint.Expr {
 	return expr
 }
 
-// knownOS / knownArch mirror internal/syslist (the lists go/build uses for
-// filename-implied constraints).
+// knownOS and knownArch copy internal/syslist, the lists go/build uses for
+// constraints implied by file names.
 func knownOS(s string) bool {
 	switch s {
 	case "aix", "android", "darwin", "dragonfly", "freebsd", "hurd", "illumos",
@@ -132,68 +135,70 @@ type Flags struct {
 	MultiErr         bool
 	AllowDups        bool
 	NoValidate       bool
-	IgnoreUnknown    bool // opt in: silently skip unknown JSON keys (default: error)
-	NullZero         bool // opt in: accept explicit JSON null on every non-pointer value field (null → Go zero)
-	NoSortKeys       bool // opt out: emit fields in declaration order instead of JSON-name sorted
-	UseNumber        bool // opt in: decode JSON numbers into `any` fields as json.Number instead of float64
-	HTMLEscape       bool // opt in: HTML-safe escape <, >, & in emitted strings (default: literal, matches jsonv2)
-	Copy             bool // opt in: bytes-path DecodeFrom copies strings/RawMessage/any instead of aliasing data
-	AllowInvalidUTF8 bool // opt out: skip decode UTF-8 validation for this struct
+	IgnoreUnknown    bool // skip unknown JSON keys. Off by default, they are an error
+	NullZero         bool // accept JSON null on every non-pointer field and set the Go zero value
+	NoSortKeys       bool // emit fields in declared order instead of sorted by JSON name
+	UseNumber        bool // decode JSON numbers in `any` fields as json.Number instead of float64
+	HTMLEscape       bool // escape <, > and & in emitted strings. Off by default, as in jsonv2
+	Copy             bool // the bytes-path DecodeFrom copies strings, RawMessage and any values instead of pointing into the input bytes
+	AllowInvalidUTF8 bool // skip UTF-8 validation on decode for this struct
 }
 
 type structSet struct {
 	structs     map[string]*ast.StructType
-	aliases     map[string]*ast.TypeSpec // top-level non-struct annotated types (alias of a primitive)
+	aliases     map[string]*ast.TypeSpec // top-level named types that are not structs
 	order       []string
 	annotations map[string]Flags
-	// declErr holds the diagnostic for a type the walk registered by name
-	// only — a generic or `=` alias declaration, or a struct whose
-	// annotation carries an unknown token. Surfaced when the type is asked
-	// for, so a typo never silently drops a hook or a struct.
+	// declErr holds the error for a type the walk registered by name only:
+	// a generic type, an `=` alias, or a struct whose annotation has an
+	// unknown word. It is reported when the type is requested, so a typo
+	// never silently drops a method or a struct.
 	declErr map[string]error
-	// fromTest is the set of struct names from *_test.go files — routes their
-	// methods into *_ggen_test.go. Absence means non-test.
+	// fromTest is the set of type names from *_test.go files. Their methods
+	// go into *_ggen_test.go.
 	fromTest map[string]struct{}
-	// docs and directives come from a type's doc comment: Text() with the
-	// `//word:...` directive lines removed, and those lines by themselves.
+	// docs and directives come from a type's doc comment. docs is the text
+	// without the `//word:...` directive lines, and directives is those lines.
 	docs       map[string]string
 	directives map[string][]string
 	pkgName    string
 	pkgPath    string
-	// xtest marks the external test package (`package foo_test`) of a
-	// directory: its output carries that package clause and its own file.
+	// xtest marks the external test package `package foo_test` of a
+	// directory. Its output has that package clause and its own file.
 	xtest bool
-	// files is every source file the set was walked from (as the FileSet
-	// spells them), so single-file mode can tell which set declares a file.
+	// files holds every source file the set was built from, named as in the
+	// FileSet, so single-file mode can tell which set declares a file.
 	files map[string]struct{}
 
-	// fileSet / typesInfo / typesPkg are populated by the packages-aware
-	// loader; the generator uses them to detect interface impls on field types.
+	// fileSet, typesInfo and typesPkg are filled by the loader that uses
+	// go/packages. The generator uses them to find which interfaces field
+	// types implement.
 	fileSet   *token.FileSet
 	typesInfo *types.Info
 	typesPkg  *types.Package
 	stdIfaces stdInterfaces
-	// fieldExpr maps "<StructName>.<FieldName>" → its AST type expression, for
-	// resolving the field's go/types.Type.
+	// fieldExpr maps "<StructName>.<FieldName>" to the field's AST type
+	// expression, used to look up its go/types type.
 	fieldExpr map[string]ast.Expr
-	// structFile maps struct name → its declaring *ast.File, for resolving
-	// @pkg.Func references against the file's (file-scoped) imports.
+	// structFile maps a type name to the *ast.File that declares it, used to
+	// resolve @pkg.Func references against that file's imports.
 	structFile map[string]*ast.File
-	// structBuildTag maps struct name → its file's canonical //go:build
-	// expression ("" for unconstrained), used for output bucketing.
+	// structBuildTag maps a type name to its file's normalised //go:build
+	// expression, "" when there is none. Output files are grouped by it.
 	structBuildTag map[string]string
-	// pkgQual / qualPath assign every foreign package the pass spells one
-	// identifier (import path ↔ qualifier), see qualifierFor.
+	// pkgQual and qualPath give every foreign package in the pass one
+	// qualifier. pkgQual maps import path to qualifier, qualPath the reverse.
+	// See qualifierFor.
 	pkgQual  map[string]string
 	qualPath map[string]string
 	// libPkg is the directory's base package when this set is its external
-	// test package. One invocation generates both, so a reference into it is
-	// judged by what that pass emits (see inspect).
+	// test package. One run generates both, so a reference into the base
+	// package is judged by what that pass emits. See inspect.
 	libPkg *structSet
-	// perFile marks single-file mode: each source file is its own pass, so
+	// perFile marks single-file mode. Each source file is its own pass, so
 	// passTypes is the union of what every file's pass emits.
 	perFile bool
-	// passGen memoizes passTypes.
+	// passGen caches the result of passTypes.
 	passGen map[string]struct{}
 }
 
@@ -236,15 +241,16 @@ func (s *structSet) declaresFile(filename string) bool {
 	return false
 }
 
-// loadStructs is the AST-only loader (temp files with no module context). No
-// type info — FieldInterfaces flags stay zero, so the generator uses its
-// runtime-probe cascade in cross-package paths. Files of the directory's
-// external test package (`package foo_test`) form the second set.
+// loadStructs is the AST-only loader, used for files outside any Go module.
+// It has no type information, so FieldInterfaces flags stay zero and the
+// generator uses runtime checks for types from other packages. Files of the
+// directory's external test package `package foo_test` form the second set.
 func loadStructs(filenames []string) (base, xtest *structSet, err error) {
 	fset := token.NewFileSet()
 	files := make([]*ast.File, 0, len(filenames))
-	// The base package name comes from a library file when there is one,
-	// else from a test file that is not itself the external package.
+	// The base package name comes from a non-test file when there is one.
+	// Otherwise it comes from a test file that is not in the external test
+	// package.
 	pkgName, pkgRank := "", 3
 	for _, filename := range filenames {
 		af, err := parser.ParseFile(fset, filename, nil, parser.ParseComments)
@@ -285,16 +291,17 @@ func loadStructs(filenames []string) (base, xtest *structSet, err error) {
 	return base, xtest, nil
 }
 
-// loadDirWithTypes loads a package via packages.Load with full type info and
-// walks its syntax for annotated structs. The structSet carries TypesInfo +
-// std-interface refs so extractField can resolve interface flags at parse time.
+// loadDirWithTypes loads a package with packages.Load and full type
+// information, then walks its syntax for annotated types. The structSet
+// holds TypesInfo and the standard interfaces, so extractField can work out
+// interface flags at parse time.
 //
-// With Tests=true, Load returns up to four variants of the directory: the
-// plain package, its recompilation with internal test files (ForTest ==
-// PkgPath), the external `<pkg>_test` package, and the synthetic test main.
-// The base set is the test recompilation (a superset of the plain one); the
-// external test package is a distinct type-checked package and gets its own
-// set.
+// With Tests=true, Load returns up to four versions of the directory: the
+// plain package, the package compiled again with its internal test files
+// (ForTest == PkgPath), the external `<pkg>_test` package, and the generated
+// test main. The base set is the version with test files, which contains
+// everything the plain one does. The external test package is a separate
+// type-checked package and gets its own set.
 func loadDirWithTypes(dir string) (base, xtest *structSet, err error) {
 	cfg := &packages.Config{
 		Dir: dir,
@@ -317,7 +324,7 @@ func loadDirWithTypes(dir string) (base, xtest *structSet, err error) {
 		}
 		switch {
 		case p.ForTest == "":
-			// The synthetic test main sits at `<plain>.test`.
+			// The generated test main has the path `<plain>.test`.
 			if plain == nil || p.PkgPath+".test" == plain.PkgPath {
 				plain = p
 			}
@@ -353,7 +360,7 @@ func newTypedStructSet(p *packages.Package, std stdInterfaces) *structSet {
 	set.stdIfaces = std
 	for _, af := range p.Syntax {
 		filename := p.Fset.Position(af.Pos()).Filename
-		// Skip our own generated output.
+		// Skip files ggen generated.
 		if isGenFile(filename) {
 			continue
 		}
@@ -362,13 +369,14 @@ func newTypedStructSet(p *packages.Package, std stdInterfaces) *structSet {
 	return set
 }
 
-// isGenFile reports whether filename is ggen output (library or test flavour).
+// isGenFile reports whether filename is ggen output, for a library or a
+// test file.
 func isGenFile(filename string) bool {
 	return strings.HasSuffix(filename, GenSuffix) || strings.HasSuffix(filename, GenTestSuffix)
 }
 
-// walkStructDecls registers every top-level type in af. Shared by both
-// loaders so behavior is identical regardless of how the AST was produced.
+// walkStructDecls registers every top-level type in af. Both loaders use
+// it, so the result is the same however the AST was produced.
 func walkStructDecls(af *ast.File, filename string, set *structSet) {
 	set.files[filename] = struct{}{}
 	tag := fileBuildConstraint(af, filename)
@@ -406,11 +414,11 @@ func walkStructDecls(af *ast.File, filename string, set *structSet) {
 			if annotated {
 				set.annotations[name] = flags
 			}
-			// A parameterized type or an `=` alias can never carry the
-			// generated method set: the first needs an instantiation, the
-			// second denotes a type that is not this declaration's own.
-			// Registered by name only, so a reference to it takes the
-			// cross-package ladder and asking for it reports why.
+			// A generic type or an `=` alias can never get the generated
+			// methods. The first needs type arguments, and the second
+			// names a type that this declaration does not own. Register
+			// it by name only. A reference to it is then handled like a
+			// type from another package, and asking for it reports why.
 			if rejectErr := rejectedTypeDecl(set.fileSet, ts); rejectErr != nil {
 				set.declErr[name] = rejectErr
 				continue
@@ -420,7 +428,7 @@ func walkStructDecls(af *ast.File, filename string, set *structSet) {
 			}
 			if st, ok := ts.Type.(*ast.StructType); ok {
 				set.structs[name] = st
-				// Stash field type expressions for later type-info lookup.
+				// Keep field type expressions for the type lookup later.
 				for _, field := range st.Fields.List {
 					for _, ident := range field.Names {
 						set.fieldExpr[name+"."+ident.Name] = field.Type
@@ -428,19 +436,20 @@ func walkStructDecls(af *ast.File, filename string, set *structSet) {
 				}
 				continue
 			}
-			// Non-struct top-level type. Register every alias (even
-			// unannotated) so an explicit name filter can target it; the
-			// annotation gate only decides auto-generation without a filter.
-			// Unsupported underlyings error lazily in extractAlias.
+			// A top-level type that is not a struct. Register every one,
+			// annotated or not, so an explicit name filter can select it.
+			// The annotation only decides what is generated when there is
+			// no filter. An unsupported underlying type is reported later,
+			// in extractAlias.
 			set.aliases[name] = ts
 		}
 	}
 }
 
-// unparenType drops the parentheses Go allows inside a type expression
-// (`[]([]bool)`, `*(int)`), so every switch over the type AST meets the
-// composite node directly. It rewires children in place rather than building
-// new nodes, keeping the go/types lookups that are keyed on them valid.
+// unparenType removes the parentheses Go allows inside a type expression,
+// as in `[]([]bool)` or `*(int)`, so every switch over the type AST sees the
+// real node directly. It changes the children in place instead of building
+// new nodes, so go/types lookups keyed on those nodes keep working.
 func unparenType(expr ast.Expr) ast.Expr {
 	expr = ast.Unparen(expr)
 	switch e := expr.(type) {
@@ -494,15 +503,12 @@ func rejectedTypeDecl(fset *token.FileSet, ts *ast.TypeSpec) error {
 	return nil
 }
 
-// annotationTokens is every word a //ggen:generate directive accepts.
+// annotationTokens lists every word a //ggen:generate directive accepts.
 const annotationTokens = "marshal, unmarshal, multierr, allowdups, novalidate, ignoreunknown, nullzero, nosortkeys, " +
 	"usenumber, htmlescape, copy, allowinvalidutf8"
 
-// parseAnnotation looks for a "//ggen:generate" directive (optionally followed
-// by whitespace-separated flags) and returns the flags + whether it was
-// present. A word outside annotationTokens is an error, not a no-op.
-// splitDoc returns a comment group's text and its directive lines
-// (`//schema:in` → "schema:in"), which ast.CommentGroup.Text drops.
+// splitDoc returns a comment group's text and its directive lines, which
+// ast.CommentGroup.Text drops. `//schema:in` becomes "schema:in".
 func splitDoc(cg *ast.CommentGroup) (text string, directives []string) {
 	if cg == nil {
 		return "", nil
@@ -516,7 +522,7 @@ func splitDoc(cg *ast.CommentGroup) (text string, directives []string) {
 	return strings.TrimSpace(cg.Text()), directives
 }
 
-// isDirective mirrors go/ast's rule for `//word:` comment lines.
+// isDirective applies go/ast's rule for `//word:` directive lines.
 func isDirective(c string) bool {
 	if strings.HasPrefix(c, "line ") {
 		return true
@@ -537,6 +543,10 @@ func isDirective(c string) bool {
 	return true
 }
 
+// parseAnnotation looks for a "//ggen:generate" directive, optionally
+// followed by flags separated by whitespace. It returns the flags and
+// whether the directive was there. A word not in annotationTokens is an
+// error, not ignored.
 func parseAnnotation(fset *token.FileSet, groups ...*ast.CommentGroup) (Flags, bool, error) {
 	for _, cg := range groups {
 		if cg == nil {
@@ -546,8 +556,9 @@ func parseAnnotation(fset *token.FileSet, groups ...*ast.CommentGroup) (Flags, b
 			text := strings.TrimPrefix(c.Text, "//")
 			text = strings.TrimRight(text, " \t")
 			rest, ok := strings.CutPrefix(text, "ggen:generate")
-			// Any whitespace separates tokens (go:generate accepts tabs
-			// too); a longer identifier ("ggen:generatex") does not match.
+			// Any whitespace separates words, since go:generate accepts
+			// tabs too. A longer word such as "ggen:generatex" does not
+			// match.
 			if !ok || (rest != "" && rest[0] != ' ' && rest[0] != '\t') {
 				continue
 			}
@@ -599,15 +610,16 @@ func parseAnnotation(fset *token.FileSet, groups ...*ast.CommentGroup) (Flags, b
 	return Flags{}, false, nil
 }
 
-// resolve builds StructInfo for the requested structs plus any referenced
-// struct types reachable from them (BFS).
+// resolve builds a StructInfo for each requested type and for every struct
+// type reachable from them, found breadth-first.
 func (s *structSet) resolve(wanted []string) ([]StructInfo, error) {
 	return s.resolveFiltered(wanted, nil)
 }
 
-// reachable walks wanted + transitive struct references and returns the
-// names to generate in discovery order, expanding only deps whose names pass
-// allowExpand (nil = expand everything). Errors are per unresolvable name.
+// reachable walks wanted and every struct they reference, directly or not.
+// It returns the names to generate in the order found. It only follows
+// dependencies whose names pass allowExpand. A nil allowExpand follows all.
+// There is one error per name that cannot be resolved.
 func (s *structSet) reachable(wanted []string, allowExpand func(string) bool) ([]string, []error) {
 	gen := make(map[string]struct{}, len(wanted))
 	queue := slices.Clone(wanted)
@@ -620,9 +632,10 @@ func (s *structSet) reachable(wanted []string, allowExpand func(string) bool) ([
 		if allowExpand != nil && !allowExpand(ref) {
 			return
 		}
-		// An unannotated struct that already owns a wire shape is never
-		// generated as a dependency — the field ladder calls its methods,
-		// exactly as it does for the same type in another package.
+		// A struct without an annotation that already has its own JSON
+		// methods is never generated as a dependency. The field code
+		// calls its methods, just as it does for a type in another
+		// package.
 		if _, annotated := s.annotations[ref]; !annotated && s.ownsCodec(ref) {
 			return
 		}
@@ -643,10 +656,11 @@ func (s *structSet) reachable(wanted []string, allowExpand func(string) bool) ([
 		if ts, ok := s.aliases[name]; ok {
 			gen[name] = struct{}{}
 			generated = append(generated, name)
-			// A container/pointer alias reaches structs too — without this an
-			// element type referenced ONLY through `type L []Inner` never got
-			// generated methods and fell to the reflective json.Unmarshal
-			// fallback (silently lenient semantics).
+			// A container or pointer alias also reaches structs. Without
+			// this, an element type used only through `type L []Inner`
+			// would get no generated methods. It would fall back to the
+			// reflection-based json.Unmarshal, which is silently more
+			// lenient.
 			switch ts.Type.(type) {
 			case *ast.ArrayType, *ast.MapType, *ast.StarExpr:
 				if ref := referencedStructName(ts.Type, s.structs); ref != "" {
@@ -664,10 +678,10 @@ func (s *structSet) reachable(wanted []string, allowExpand func(string) bool) ([
 	return generated, errs
 }
 
-// structRefs calls visit for every struct type st's fields name, descending
-// into embedded same-package structs: their fields are promoted into the
-// parent, so a struct reached only through them is decoded by the parent
-// and needs its methods just the same.
+// structRefs calls visit for every struct type named by st's fields. It
+// also walks into embedded structs of the same package. Their fields are
+// promoted into the parent, so a struct reached only through them is decoded
+// by the parent and needs its methods all the same.
 func (s *structSet) structRefs(st *ast.StructType, seen map[string]struct{}, visit func(string)) {
 	for _, f := range st.Fields.List {
 		if len(f.Names) == 0 {
@@ -692,18 +706,19 @@ func (s *structSet) structRefs(st *ast.StructType, seen map[string]struct{}, vis
 	}
 }
 
-// codecMethods are the method names that give a type a wire shape of its
-// own: ggen's generated set and the JSON / text (un)marshalers.
+// codecMethods are the method names that give a type its own JSON shape:
+// the methods ggen generates, and the JSON and text marshalers and
+// unmarshalers.
 var codecMethods = map[string]struct{}{
 	"DecodeFrom": {}, "DecodeFromStream": {}, "AppendJSON": {}, "JSONSize": {},
 	"MarshalJSON": {}, "UnmarshalJSON": {},
 	"MarshalText": {}, "UnmarshalText": {}, "AppendText": {},
 }
 
-// ownsCodec reports whether the same-package type `name` declares a codec
-// method outside generated output. Methods from a previous run's `_ggen.go`
-// do not count — every generated type would otherwise vanish on the second
-// run.
+// ownsCodec reports whether the same-package type name declares one of
+// codecMethods outside generated files. Methods in a `_ggen.go` file from an
+// earlier run do not count. Otherwise every generated type would drop out
+// on the second run.
 func (s *structSet) ownsCodec(name string) bool {
 	if s.typesPkg == nil {
 		return false
@@ -724,12 +739,12 @@ func (s *structSet) ownsCodec(name string) bool {
 	return false
 }
 
-// passTypes is every type the package's generation produces methods for.
-// Package mode: the annotated roots plus everything reachable from them.
-// Single-file mode: the union of what each file's own pass emits — its roots
-// plus the reachable types declared in that same file. This is the truth a
-// same-package reference is judged by; the on-disk method set is not (see
-// inspect).
+// passTypes returns every type that generation for this package produces
+// methods for. In package mode that is the annotated roots plus everything
+// reachable from them. In single-file mode it is the union of what each
+// file's pass emits: its roots plus the reachable types declared in that
+// same file. A same-package reference is judged by this set, not by the
+// methods currently on disk. See inspect.
 func (s *structSet) passTypes() map[string]struct{} {
 	if s.passGen != nil {
 		return s.passGen
@@ -761,10 +776,10 @@ func (s *structSet) passTypes() map[string]struct{} {
 	return s.passGen
 }
 
-// resolveFiltered walks wanted + transitive struct references, expanding only
-// deps whose names pass allowExpand (nil = expand everything, package mode;
-// single-file mode passes inFile to keep sibling-declared deps out). The roots
-// in `wanted` are always emitted.
+// resolveFiltered walks wanted and every struct they reference, following
+// only dependencies whose names pass allowExpand. Package mode passes nil to
+// follow all. Single-file mode passes a filter that keeps out dependencies
+// declared in other files. The roots in wanted are always emitted.
 func (s *structSet) resolveFiltered(wanted []string, allowExpand func(string) bool) ([]StructInfo, error) {
 	generated, errs := s.reachable(wanted, allowExpand)
 	var result []StructInfo
@@ -780,8 +795,8 @@ func (s *structSet) resolveFiltered(wanted []string, allowExpand func(string) bo
 			err = errors.Join(declErr, err)
 		}
 		if err != nil {
-			// Gather rather than bail — one struct's broken tag shouldn't hide
-			// the next one's.
+			// Collect errors instead of stopping. A broken tag on one struct
+			// should not hide the errors of the next.
 			errs = append(errs, err)
 			continue
 		}
@@ -820,9 +835,9 @@ func (s *structSet) resolveFiltered(wanted []string, allowExpand func(string) bo
 	return result, nil
 }
 
-// PrefixBare prefixes every position-less member of err's tree with
-// `<prefix>: `; a RichError already carries file:line:col. A join stays a
-// join, so the logger renders every member.
+// PrefixBare adds `<prefix>: ` to every error in err's tree that has no
+// position. A RichError already has file:line:col. A joined error stays
+// joined, so the logger prints every member.
 func PrefixBare(err error, prefix string) error {
 	if err == nil {
 		return nil
@@ -841,29 +856,31 @@ func PrefixBare(err error, prefix string) error {
 	return fmt.Errorf("%s: %w", prefix, err)
 }
 
-// FileParse is what ParseFile resolves for one file.
+// FileParse is the result of ParseFile for one file.
 type FileParse struct {
 	Structs []StructInfo
 	PkgName string
-	// Siblings is every type the package's per-file passes generate, so a
-	// single-file consumer can treat a cross-file reference as generated
-	// before the sibling's output exists. Nil in the AST-only degraded mode.
+	// Siblings holds every type the package's per-file passes generate. A
+	// single-file consumer can then treat a reference to another file's type
+	// as generated before that file's output exists. Nil in the AST-only
+	// fallback mode.
 	Siblings map[string]struct{}
-	// Package is every annotated struct of the package, resolved: cycle and
-	// callee analyses need the whole package, not just this file. Nil when
-	// degraded or when a sibling fails to resolve (best-effort).
+	// Package holds every annotated type of the package, resolved. The cycle
+	// and callee analyses need the whole package, not just this file. Nil in
+	// the fallback mode or when another file fails to resolve, since this is
+	// best effort.
 	Package []StructInfo
 }
 
-// ParseFile loads structs from a single file (annotated structs when wanted is
-// empty). Tries the packages-aware loader, falling back to AST-only for files
-// outside a resolvable module (e.g. test temp files).
+// ParseFile loads types from a single file, the annotated ones when wanted
+// is empty. It tries the loader with type information first and falls back
+// to AST-only for files outside a module, such as temporary test files.
 func ParseFile(filename string, wanted []string) (FileParse, error) {
 	dir := filepath.Dir(filename)
 	base, xtest, err := loadDirWithTypes(dir)
 	degraded := false
-	// Degrade to AST-only when Load failed or came back empty (orphan files
-	// outside a module). Static interface detection is off in that mode.
+	// Fall back to AST-only when Load failed or found nothing, as for files
+	// outside a module. Interfaces cannot be detected statically then.
 	if err != nil || (base.empty() && (xtest == nil || xtest.empty())) {
 		base, xtest, err = loadStructs([]string{filename})
 		if err != nil {
@@ -877,8 +894,8 @@ func ParseFile(filename string, wanted []string) (FileParse, error) {
 		set = xtest
 	}
 	set.perFile = true
-	// loadDirWithTypes loads the whole package; single-file mode emits only
-	// types declared in `filename`. Filter via structFile.
+	// loadDirWithTypes loads the whole package, but single-file mode emits
+	// only types declared in filename. Filter with structFile.
 	absFile, _ := filepath.Abs(filename)
 	inFile := func(name string) bool {
 		af, ok := set.structFile[name]
@@ -901,9 +918,9 @@ func ParseFile(filename string, wanted []string) (FileParse, error) {
 			}
 		}
 		if len(wanted) == 0 {
-			// No name filter and no annotated struct in this file. Error
-			// loudly. RichError so the pretty logger shows the escape hatch;
-			// no source position — this is file-level.
+			// No name filter and no annotated type in this file, so fail.
+			// Use a RichError so the pretty logger shows how to fix it. It
+			// has no source position because it is about the whole file.
 			return FileParse{PkgName: set.pkgName}, &RichError{
 				Msg:     RelPath(filename) + ": no //ggen:generate-annotated struct found in file",
 				BotHint: "missing //ggen:generate directive",
@@ -914,8 +931,9 @@ func ParseFile(filename string, wanted []string) (FileParse, error) {
 			}
 		}
 	}
-	// Gate expansion to types in `filename`; sibling-declared deps are emitted
-	// by their own pass (else duplicate method declarations).
+	// Only follow types declared in filename. Dependencies declared in other
+	// files are emitted by their own pass, otherwise methods would be
+	// declared twice.
 	structs, err := set.resolveFiltered(wanted, inFile)
 	if err != nil {
 		return FileParse{}, PrefixBare(err, filename)
@@ -930,18 +948,19 @@ func ParseFile(filename string, wanted []string) (FileParse, error) {
 	return res, nil
 }
 
-// Package is one directory's resolved structs.
+// Package holds the resolved types of one directory.
 type Package struct {
 	Dir  string
-	Path string // import path; empty in the AST-only degraded mode
+	Path string // import path, empty in the AST-only fallback mode
 	Name string
-	// Structs holds every generated type (annotated roots plus the structs
-	// they reach), base package first, then the external test package's.
+	// Structs holds every generated type, meaning the annotated roots and
+	// the structs they reach. The base package comes first, then the external
+	// test package.
 	Structs []StructInfo
-	// Types is the type-checked package and Fset its positions; nil in the
-	// AST-only degraded mode. Each ParsePackage call type-checks on its own, so
-	// a type reached from two packages is two distinct types.Object values:
-	// compare by import path and name, not by identity.
+	// Types is the type-checked package and Fset its positions. Both are nil
+	// in the AST-only fallback mode. Each ParsePackage call type-checks on its
+	// own, so a type reached from two packages is two different types.Object
+	// values. Compare types by import path and name, not by identity.
 	Types *types.Package
 	Fset  *token.FileSet
 	// Consts lists every constant of a named string or integer type declared
@@ -952,14 +971,14 @@ type Package struct {
 
 // Const is one typed constant, `const RoleAdmin Role = "admin"`.
 type Const struct {
-	Pkg   string // declaring package's import path
+	Pkg   string // import path of the declaring package
 	Name  string
-	Value string // JSON spelling: `"admin"`, `2`; a string is JSON-escaped
+	Value string // the value as JSON, such as `"admin"` or `2`. Strings are JSON-escaped
 }
 
-// namedConsts walks pkg and every package reachable through its imports.
-// Constants declared in a test file are skipped: they are not part of the
-// package's API.
+// namedConsts collects the constants of named string and integer types from
+// pkg and every package reachable through its imports. Constants declared in
+// a test file are skipped, because they are not part of the package's API.
 func namedConsts(pkg *types.Package, fset *token.FileSet) map[string][]Const {
 	if pkg == nil {
 		return nil
@@ -979,7 +998,8 @@ func namedConsts(pkg *types.Package, fset *token.FileSet) map[string][]Const {
 				consts = append(consts, c)
 			}
 		}
-		// Scope names are sorted; enum values want declaration order.
+		// Scope names are sorted by name, but enum values need declaration
+		// order.
 		slices.SortFunc(consts, func(a, b *types.Const) int { return cmp.Compare(a.Pos(), b.Pos()) })
 		for _, c := range consts {
 			if fset != nil && strings.HasSuffix(fset.Position(c.Pos()).Filename, "_test.go") {
@@ -1021,14 +1041,14 @@ func namedConsts(pkg *types.Package, fset *token.FileSet) map[string][]Const {
 	return out
 }
 
-// ParsePackage loads every eligible .go file in dir and generates only for
-// structs annotated with //ggen:generate (plus any they transitively
-// referenced). Structs of the external test package come back with XTest
-// set; Name and Path are the base package's.
+// ParsePackage loads every eligible .go file in dir. It resolves only the
+// types annotated with //ggen:generate and the types they reach. Types of
+// the external test package come back with XTest set. Name and Path are
+// those of the base package.
 func ParsePackage(dir string) (Package, error) {
 	base, xtest, err := loadDirWithTypes(dir)
 	if err != nil || (base.empty() && (xtest == nil || xtest.empty())) {
-		// AST-only fallback.
+		// Fall back to AST-only.
 		files, ferr := eligibleFiles(dir)
 		if ferr != nil {
 			return Package{}, ferr
@@ -1042,9 +1062,9 @@ func ParsePackage(dir string) (Package, error) {
 		}
 	}
 	if xtest != nil {
-		// Package mode writes both packages' output in this invocation, so
-		// the external test set judges a base-package reference by the base
-		// pass. (Single-file mode does not: ParseFile leaves it unset.)
+		// Package mode writes the output of both packages in this run, so the
+		// external test set judges a reference to the base package by the
+		// base pass. Single-file mode does not, and ParseFile leaves it unset.
 		xtest.libPkg = base
 	}
 	var structs []StructInfo
@@ -1102,7 +1122,7 @@ func eligibleFiles(dir string) ([]string, error) {
 		if !strings.HasSuffix(name, ".go") {
 			continue
 		}
-		// Skip generator output (both library and test flavours).
+		// Skip generated files, both library and test ones.
 		if strings.HasSuffix(name, "_ggen.go") || strings.HasSuffix(name, "_ggen_test.go") {
 			continue
 		}
@@ -1111,21 +1131,23 @@ func eligibleFiles(dir string) ([]string, error) {
 	return files, nil
 }
 
-// extractAlias builds a StructInfo for a top-level non-struct annotated type
-// (primitive, struct, or slice/map/array alias). Channels, interfaces, and
-// funcs are rejected. Struct/container aliases need Go type info.
+// extractAlias builds a StructInfo for a top-level named type that is not a
+// struct declaration: a type over a primitive, a struct, a slice, a map or
+// an array. Channels, interfaces and funcs are rejected. Struct and most
+// container aliases need Go type information.
 func (s *structSet) extractAlias(name string, ts *ast.TypeSpec) (StructInfo, error) {
 	info := StructInfo{Name: name, IsAlias: true}
 
-	// Type-info path (primitives + structs). Lookup via typesInfo.Defs; the
-	// underlying gives the shape, the AST the literal text + import path.
+	// With type information, look the type up in typesInfo.Defs. The
+	// underlying type gives the shape, and the AST gives the written type
+	// name and import path.
 	if s.typesInfo != nil {
 		if obj, ok := s.typesInfo.Defs[ts.Name].(*types.TypeName); ok && obj != nil {
 			return s.extractAliasFromTypes(name, obj.Type(), ts.Type)
 		}
 	}
 
-	// AST-only fallback: primitive aliases + containers of primitives only.
+	// AST-only fallback: only primitives and containers of primitives.
 	switch tt := ts.Type.(type) {
 	case *ast.InterfaceType:
 		return info, fmt.Errorf("type %s: unsupported alias underlying (interface) — JSON has no shape for it", name)
@@ -1155,8 +1177,9 @@ func (s *structSet) extractAlias(name string, ts *ast.TypeSpec) (StructInfo, err
 	return info, nil
 }
 
-// extractContainerAliasAST handles `type T []E` / `type T [N]E` without type
-// info. Element must be a primitive ident; anything richer needs go/types.
+// extractContainerAliasAST handles `type T []E` and `type T [N]E` without
+// type information. The element must be a primitive name. Anything more
+// complex needs go/types.
 func (s *structSet) extractContainerAliasAST(name string, at *ast.ArrayType) (StructInfo, error) {
 	info := StructInfo{Name: name, IsAlias: true}
 	elemIdent, ok := at.Elt.(*ast.Ident)
@@ -1168,7 +1191,7 @@ func (s *structSet) extractContainerAliasAST(name string, at *ast.ArrayType) (St
 		return info, fmt.Errorf("type %s: unsupported element kind %q for container alias", name, elemIdent.Name)
 	}
 	if at.Len == nil {
-		// Slice. `[]byte`/`[]uint8` collapses to KindBytes.
+		// A slice. `[]byte` and `[]uint8` become KindBytes.
 		if elemKindIsBytes(elemIdent.Name) {
 			info.AliasKind = KindBytes
 			info.AliasUnderlying = "[]" + elemIdent.Name
@@ -1180,7 +1203,7 @@ func (s *structSet) extractContainerAliasAST(name string, at *ast.ArrayType) (St
 		info.AliasField = FieldInfo{Kind: KindSlice, ElemType: elemIdent.Name, ElemKind: elemKind}
 		return info, nil
 	}
-	// Array — Len is an *ast.BasicLit INT.
+	// An array. Len must be an integer *ast.BasicLit.
 	lit, ok := at.Len.(*ast.BasicLit)
 	if !ok || lit.Kind != token.INT {
 		return info, fmt.Errorf("type %s: array alias length must be an integer literal", name)
@@ -1195,8 +1218,8 @@ func (s *structSet) extractContainerAliasAST(name string, at *ast.ArrayType) (St
 	return info, nil
 }
 
-// extractMapAliasAST handles `type T map[string]V` without type info.
-// V must be a primitive ident; key must be string.
+// extractMapAliasAST handles `type T map[string]V` without type
+// information. V must be a primitive name and the key must be string.
 func (s *structSet) extractMapAliasAST(name string, mt *ast.MapType) (StructInfo, error) {
 	info := StructInfo{Name: name, IsAlias: true}
 	keyIdent, ok := mt.Key.(*ast.Ident)
@@ -1217,9 +1240,10 @@ func (s *structSet) extractMapAliasAST(name string, mt *ast.MapType) (StructInfo
 	return info, nil
 }
 
-// extractAliasFromTypes derives the alias's kind via go/types, splitting on the
-// underlying shape (Basic / Struct / Slice / Map / Array). `rhs` is the AST the
-// user wrote, used to recover the underlying's literal name + import path.
+// extractAliasFromTypes works out the alias's kind with go/types, by the
+// shape of the underlying type: basic, struct, slice, map or array. rhs is
+// the type expression the user wrote. It gives the written name and import
+// path of the underlying type.
 func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Expr) (StructInfo, error) {
 	info := StructInfo{Name: name, IsAlias: true}
 	underlying := t.Underlying()
@@ -1237,9 +1261,9 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 	if _, ok := underlying.(*types.Struct); ok {
 		info.AliasKind = KindStruct
 		info.AliasUnderlying = s.spell(rhs)
-		// Probe the RHS named type's method set, NOT t — methods don't
-		// propagate from `Inner` to `type Local Inner`. Recover the underlying
-		// *types.TypeName via typesInfo.Uses.
+		// Check the methods of the named type on the right-hand side, not of
+		// t. Methods do not carry over from `Inner` to `type Local Inner`.
+		// Find that *types.TypeName with typesInfo.Uses.
 		var underlyingNamed types.Type
 		switch e := rhs.(type) {
 		case *ast.Ident:
@@ -1259,28 +1283,33 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 		if underlyingNamed != nil {
 			info.AliasIface = s.inspect(underlyingNamed)
 		}
-		// A same-package underlying generated in THIS pass gets its ggen
-		// methods from this run's output, which the type-check only sees
-		// once a previous run wrote it — probing the method set made the
-		// first run hand-roll the alias and every later run delegate.
+		// An underlying type of the same package that this pass generates
+		// gets its ggen methods from this run's output. Type checking only
+		// sees them once an earlier run has written them. So the method set
+		// cannot be trusted here, or the first run would emit the alias in
+		// full and every later run would delegate to the underlying.
 		if id, ok := rhs.(*ast.Ident); ok {
 			if _, inPass := s.passTypes()[id.Name]; inPass {
 				info.AliasIface.AppendJSON, info.AliasIface.JSONSize = true, true
 				info.AliasIface.ByteDecoder, info.AliasIface.StreamDecoder = true, true
 			}
 		}
-		// Dispatch ladder:
-		//   1. ggen-shaped methods on the underlying — delegate (fastest).
-		//   2. Exported fields — introspect + hand-roll (beats marshaler
-		//      delegation; gives thirdparty structs locally-annotated speed).
-		//   3. Opaque struct (no exported fields) with a marshaler pair — delegate.
-		//   4. Nothing usable — error.
-		// Rung 1 only applies when the alias asks for the SAME behaviour the
-		// underlying was generated with. Its own annotation tokens
-		// (`allowdups`, `multierr`, `novalidate`, …) are a request to emit
-		// something different, and a delegating cast cannot honour them —
-		// fall through to field introspection instead of silently dropping
-		// them. CLI-global flags aren't in this map, so they don't block it.
+		// The options, in order of preference:
+		//   1. The underlying has ggen methods. Delegate to them, which is
+		//      fastest.
+		//   2. The underlying has exported fields. Read them and generate
+		//      full code. This is faster than calling marshalers, and gives
+		//      third-party structs the speed of locally annotated ones.
+		//   3. An opaque struct with no exported fields but a marshaler and
+		//      unmarshaler pair. Delegate to them.
+		//   4. Nothing usable. Report an error.
+		// Option 1 only applies when the alias asks for the same behaviour the
+		// underlying was generated with. The alias's own annotation words,
+		// such as `allowdups`, `multierr` or `novalidate`, ask for different
+		// code, and a delegating conversion cannot honour them. So fall
+		// through to reading the fields instead of silently ignoring them.
+		// Flags set on the command line are not in this map, so they do not
+		// block option 1.
 		if info.AliasIface.AppendJSON && info.AliasIface.ByteDecoder && !reshapesCodegen(s.annotations[name]) {
 			return info, nil
 		}
@@ -1293,9 +1322,9 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 			}
 		}
 		if hasExported {
-			// Synthesize a FieldInfo per exported field and treat the alias as
-			// a plain struct (IsAlias→false) — same memory layout, so
-			// `result.X` access is sound.
+			// Build a FieldInfo for each exported field and treat the alias
+			// as a plain struct, with IsAlias false. The memory layout is the
+			// same, so accessing `result.X` is safe.
 			for i := range structType.NumFields() {
 				fv := structType.Field(i)
 				if !fv.Exported() {
@@ -1309,14 +1338,14 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 					continue
 				}
 				// `@Func` steps resolve against the alias's own file and
-				// package, as on a struct's own fields.
+				// package, as they do on a struct's own fields.
 				if err := s.resolvePipeCustoms(name, &fi, fv.Type()); err != nil {
 					qualified := qualifyRichErrors(err, fmt.Sprintf("%s.%s", name, fv.Name()))
 					return info, attachPosition(qualified, s.fileSet.Position(fv.Pos()))
 				}
 				info.Fields = append(info.Fields, fi)
 			}
-			info.IsAlias = false // regular struct codegen
+			info.IsAlias = false // generate it as a normal struct
 			return info, nil
 		}
 		if aliasCanDelegate(info.AliasIface) {
@@ -1325,14 +1354,15 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 		return info, fmt.Errorf("type %s: underlying struct has no exported fields and no marshal/unmarshal methods to delegate to", name)
 	}
 
-	// Slice / Map / Array container aliases — synthesize the shape FieldInfo.
+	// Slice, map and array aliases. Build a FieldInfo that describes the
+	// shape.
 	switch tt := underlying.(type) {
 	case *types.Slice:
 		info.AliasKind = KindSlice
 		info.AliasUnderlying = s.spell(rhs)
 		f := s.aliasContainerField(tt.Elem(), 0)
 		if elemKindIsBytes(f.ElemType) {
-			// `type Bytes []byte` collapses to KindBytes (base64).
+			// `type Bytes []byte` becomes KindBytes, encoded as base64.
 			info.AliasKind = KindBytes
 			info.AliasField = FieldInfo{Kind: KindBytes, GoType: info.AliasUnderlying}
 			return info, nil
@@ -1356,9 +1386,8 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 		f := s.aliasContainerField(tt.Elem(), int(tt.Len()))
 		f.Kind = KindArray
 		f.ArrayLen = int(tt.Len())
-		// [N]byte folds onto the base64 path exactly as it does at field
-		// position. An alias carries no struct tag, so there is no
-		// `format:array` opt-out here.
+		// [N]byte becomes base64, as it does for a field. An alias has no
+		// struct tag, so `format:array` cannot turn this off here.
 		foldByteArray(&f)
 		if f.Kind == KindBytes {
 			info.AliasKind = KindBytes
@@ -1370,8 +1399,8 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 	return info, fmt.Errorf("type %s: alias of %s not supported", name, t)
 }
 
-// aliasContainerField builds a partial FieldInfo for a container alias's
-// element type. The caller sets ArrayLen for arrays.
+// aliasContainerField builds a partial FieldInfo for the element type of a
+// container alias. The caller sets ArrayLen for arrays.
 func (s *structSet) aliasContainerField(elem types.Type, _ int) FieldInfo {
 	fi := FieldInfo{}
 	if pe, ok := elem.(*types.Pointer); ok {
@@ -1385,21 +1414,22 @@ func (s *structSet) aliasContainerField(elem types.Type, _ int) FieldInfo {
 	return fi
 }
 
-// pkgQualifier spells a foreign type by the identifier qualifierFor assigns
-// its package. types.RelativeTo elides only the current package and spells
-// every other one by full import path, which does not parse where the
-// generator pastes it into emitted code.
+// pkgQualifier writes a foreign type with the qualifier that qualifierFor
+// gives its package. types.RelativeTo leaves out only the current package
+// and writes every other one as a full import path, which is not valid Go
+// in the emitted code.
 func (s *structSet) pkgQualifier() types.Qualifier {
 	return s.qualifierFor
 }
 
-// qualifierFor is the identifier the generated file spells package p by:
-// its declared name (`<name>_` when an emitter literal claims that name for
-// another package), unless another package of the pass or a package-level
-// identifier already claims it (then `name2`, `name3`, …). One qualifier per
-// import path, whatever alias each source file imports it under — the
-// AST-derived spellings (spell) and the go/types ones (pkgQualifier) go
-// through the same table, so the type text and the import block agree.
+// qualifierFor returns the name the generated file uses for package p. That
+// is its declared name, or `<name>_` when emitted code uses that name for a
+// different package. If another package of the pass or a package-level
+// identifier already uses the name, it becomes `name2`, `name3` and so on.
+// There is one qualifier per import path, whatever alias each source file
+// imports it under. Type names from the AST (spell) and from go/types
+// (pkgQualifier) use the same table, so the type text and the import block
+// agree.
 func (s *structSet) qualifierFor(p *types.Package) string {
 	if p == s.typesPkg {
 		return ""
@@ -1408,8 +1438,8 @@ func (s *structSet) qualifierFor(p *types.Package) string {
 		return q
 	}
 	base := p.Name()
-	// A name an emitter literal spells (`json`, `time`, …) is claimed for
-	// that package alone; any other package under it takes `<name>_`.
+	// A name that emitted code uses, such as `json` or `time`, belongs to
+	// that package only. Any other package with that name gets `<name>_`.
 	if want, ok := emitterPackages[base]; ok && want != p.Path() {
 		base += "_"
 	}
@@ -1429,17 +1459,19 @@ func (s *structSet) qualifierTaken(q string) bool {
 	return s.typesPkg != nil && s.typesPkg.Scope().Lookup(q) != nil
 }
 
-// typeImport describes p for the generated import block: its qualifier and
-// whether that differs from the declared name (then `qualifier "path"`).
+// typeImport describes p for the generated import block: its qualifier, and
+// whether that differs from the declared name, in which case the import is
+// written as `qualifier "path"`.
 func (s *structSet) typeImport(p *types.Package) TypeImport {
 	q := s.qualifierFor(p)
 	return TypeImport{Path: p.Path(), Name: q, Explicit: q != p.Name()}
 }
 
-// spell renders a type expression the way the generated file must spell it:
-// a package selector goes through qualifierFor, so a file-scoped import alias
-// (`import lf "…/leaf"`, spelled `lf.Name` in the source) and the import
-// block agree. AST-only mode has no type info and keeps the source text.
+// spell writes a type expression the way the generated file must write it.
+// A package selector goes through qualifierFor, so an import alias in a
+// source file, such as `import lf "…/leaf"` used as `lf.Name`, agrees with
+// the import block. AST-only mode has no type information and keeps the
+// source text.
 func (s *structSet) spell(expr ast.Expr) string {
 	if s.typesInfo == nil {
 		return exprToString(expr)
@@ -1453,11 +1485,11 @@ func (s *structSet) spell(expr ast.Expr) string {
 	})
 }
 
-// inspect probes t's method set. Any package this invocation generates —
-// the pass's own, and the base package when this set is its external test
-// package — is judged by what the pass emits, not by what a previous run
-// left on disk: the codec methods in that output are about to be rewritten,
-// and the ones the pass will write are not there yet on a first run.
+// inspect checks the methods of t. A package this run generates is judged
+// by what the pass emits, not by what an earlier run left on disk. That is
+// the pass's own package, and the base package when this set is its external
+// test package. The JSON methods in that output are about to be rewritten,
+// and on a first run the ones the pass will write do not exist yet.
 func (s *structSet) inspect(t types.Type) FieldInterfaces {
 	iface := inspectType(t, s.stdIfaces)
 	for {
@@ -1480,8 +1512,8 @@ func (s *structSet) inspect(t types.Type) FieldInterfaces {
 			return iface
 		}
 		if len(pass) == 0 {
-			// That package has no roots this run, so its output is left
-			// alone and whatever it declares is real.
+			// That package has no roots this run, so its output is not
+			// touched and whatever it declares is real.
 			return iface
 		}
 	} else if pkg != s.typesPkg {
@@ -1509,8 +1541,9 @@ func (s *structSet) inspect(t types.Type) FieldInterfaces {
 	return iface
 }
 
-// elemIface probes the container element / map value of t for interface impls,
-// so slice/array/map elements run the same emit ladder as the field level.
+// elemIface checks which interfaces the element or map value of t
+// implements, so slice, array and map elements get the same code choices as
+// a field.
 func (s *structSet) elemIface(t types.Type) FieldInterfaces {
 	for {
 		p, ok := t.(*types.Pointer)
@@ -1536,23 +1569,23 @@ func (s *structSet) elemIface(t types.Type) FieldInterfaces {
 	return s.inspect(elem)
 }
 
-// elemKindIsBytes reports whether the Go type literal is the byte type — so
-// `[]byte`/`[]uint8` aliases route through the base64 codec.
+// elemKindIsBytes reports whether the Go type name is the byte type, so
+// `[]byte` and `[]uint8` aliases use base64.
 func elemKindIsBytes(elem string) bool {
 	return elem == "byte" || elem == "uint8"
 }
 
-// reshapesCodegen reports whether a per-struct annotation changes the shape of
-// the emitted code (as opposed to `marshal`/`unmarshal`, which only add hook
-// methods around whatever the body already does).
+// reshapesCodegen reports whether a per-struct annotation changes the
+// emitted code. `marshal` and `unmarshal` do not, they only add wrapper
+// methods around the same body.
 func reshapesCodegen(a Flags) bool {
 	return a.MultiErr || a.AllowDups || a.NoValidate || a.IgnoreUnknown ||
 		a.NullZero || a.NoSortKeys || a.UseNumber || a.HTMLEscape || a.Copy ||
 		a.AllowInvalidUTF8
 }
 
-// aliasCanDelegate reports whether the underlying has a marshal+unmarshal pair
-// to delegate to — both directions must reach a call site, not just one.
+// aliasCanDelegate reports whether the underlying has a marshal and
+// unmarshal pair to delegate to. Both directions are needed, not just one.
 func aliasCanDelegate(f FieldInterfaces) bool {
 	if f.AppendJSON && f.ByteDecoder {
 		return true
@@ -1578,9 +1611,10 @@ func isSupportedAliasPrimitive(k TypeKind) bool {
 	return false
 }
 
-// extractFieldFromTypes builds a FieldInfo entirely from go/types data — the
-// type-driven mirror of extractField, used for foreign/method-less struct
-// alias fields where no *ast.Field is available.
+// extractFieldFromTypes builds a FieldInfo from go/types data only. It is
+// the go/types version of extractField, used for the fields of a struct
+// alias whose underlying is foreign or has no methods, where there is no
+// *ast.Field.
 func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, tag string) (FieldInfo, error) {
 	fi := FieldInfo{GoName: field.Name(), StructName: structName}
 	rt := reflect.StructTag(tag)
@@ -1593,9 +1627,9 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 		return fi, nil
 	}
 	if what := unsupportedFieldType(field.Type()); what != "" {
-		// Plain, so the alias caller's `type X:` qualifier and the file
-		// prefix both still reach the message: a foreign field has no
-		// position in the source being generated.
+		// A plain error, so the caller's `type X:` prefix and the file
+		// prefix both reach the message. A foreign field has no position
+		// in the source being generated.
 		return fi, errors.New(unsupportedTypeMsg(field.Name(), what))
 	}
 	qualifier := s.pkgQualifier()
@@ -1624,10 +1658,10 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 		fi.Pointer = true
 		fi.PointeeType = types.TypeString(ptr.Elem(), qualifier)
 		fi.Kind = ResolveKind(fi.PointeeType)
-		// Peel EVERY level: the container switch below is what fills
-		// ElemType/ElemKind and it matches nothing against a pointer, so a
-		// half-peeled `**[]T` would leave ElemKind at its zero value
-		// (KindString) and emit a string scan into a T slot.
+		// Remove every pointer level. The container switch below fills
+		// ElemType and ElemKind, and it matches nothing on a pointer. A
+		// `**[]T` with one level left would keep ElemKind at its zero
+		// value, KindString, and emit a string decode into a T slot.
 		for {
 			p, ok := t.(*types.Pointer)
 			if !ok {
@@ -1649,9 +1683,8 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 		fi.ElemKind = ResolveKind(fi.ElemType)
 		fi.ElemIface = s.inspect(tt.Elem())
 	case *types.Slice:
-		// `[]byte` and `[]uint8` were already classified as KindBytes
-		// by ResolveKind — leave that alone so base64/hex/array paths
-		// stay in play.
+		// ResolveKind already made `[]byte` and `[]uint8` KindBytes.
+		// Keep that, so the base64, hex and array formats still apply.
 		if fi.Kind != KindBytes {
 			fi.Kind = KindSlice
 			elem := tt.Elem()
@@ -1690,9 +1723,9 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 	return fi, nil
 }
 
-// attachPosition stamps pos onto every *RichError in the error tree (an
-// errors.Join batch holds several), so each diagnostic carries file:line:col.
-// A non-RichError tree is wrapped in a thin position-carrying RichError.
+// attachPosition sets pos on every *RichError in the error tree, since an
+// errors.Join batch can hold several. Each error then has file:line:col. A
+// tree with no RichError is wrapped in a small RichError that holds pos.
 func attachPosition(err error, pos token.Position) error {
 	if setPosOnAll(err, pos) {
 		return err
@@ -1700,9 +1733,10 @@ func attachPosition(err error, pos token.Position) error {
 	return &RichError{Pos: pos, Msg: err.Error(), Err: err}
 }
 
-// qualifyRichErrors prefixes every RichError's Msg with `<prefix>: ` (mutating
-// in place), so a Struct.Field qualifier lands on every sub-error of a batch.
-// A tree with no RichError is wrapped in a fresh one carrying the prefixed msg.
+// qualifyRichErrors adds `<prefix>: ` to the Msg of every RichError in the
+// tree, changing them in place. That way a Struct.Field prefix reaches every
+// error of a batch. A tree with no RichError is wrapped in a new one with the
+// prefixed message.
 func qualifyRichErrors(err error, prefix string) error {
 	if err == nil {
 		return nil
@@ -1738,9 +1772,9 @@ func applyQualifier(err error, prefix string) bool {
 	return found
 }
 
-// setPosOnAll fills any unset Pos on every *RichError in the tree, returning
-// true if the tree held any. The Column is refined from the field-decl column
-// to the CodeSpan column so renderers point at the offending token.
+// setPosOnAll sets Pos on every *RichError in the tree that has none, and
+// reports whether the tree held any RichError. The column moves from the
+// field declaration to the CodeSpan, so renderers point at the bad token.
 func setPosOnAll(err error, pos token.Position) bool {
 	if err == nil {
 		return false
@@ -1785,9 +1819,9 @@ func referencedStructName(expr ast.Expr, all map[string]*ast.StructType) string 
 	case *ast.StarExpr:
 		return referencedStructName(e.X, all)
 	case *ast.MapType:
-		// Map-valued references count too — without this a struct reached
-		// only through map[string]Inner never entered generatedTypes and its
-		// values fell to the reflective json.Unmarshal fallback.
+		// Map values count too. Without this, a struct used only through
+		// map[string]Inner would not be generated, and its values would fall
+		// back to the reflection-based json.Unmarshal.
 		return referencedStructName(e.Value, all)
 	}
 	return ""
@@ -1797,15 +1831,16 @@ func (s *structSet) extractStruct(name string, st *ast.StructType) (StructInfo, 
 	return s.extractStructSeen(name, st, map[string]struct{}{name: {}})
 }
 
-// extractStructSeen carries the embedding chain from the root struct so a
-// cyclic embedding (invalid Go, but ggen walks syntax before type-checking)
-// is a diagnostic instead of a fatal generator stack overflow.
+// extractStructSeen carries the chain of embedded structs from the root, so
+// a cyclic embedding is reported as an error instead of overflowing the
+// generator's stack. Such code is invalid Go, but ggen reads the syntax
+// before type checking.
 func (s *structSet) extractStructSeen(name string, st *ast.StructType, seen map[string]struct{}) (StructInfo, error) {
 	info := StructInfo{Name: name}
 	var errs []error
 	for _, field := range st.Fields.List {
 		if len(field.Names) == 0 {
-			// Embedded field: promote its fields into the parent.
+			// An embedded field. Promote its fields into the parent.
 			sub, err := s.extractEmbedded(name, field, seen)
 			if err != nil {
 				errs = append(errs, err)
@@ -1825,15 +1860,16 @@ func (s *structSet) extractStructSeen(name string, st *ast.StructType, seen map[
 			}
 			if extractErr != nil {
 				errs = append(errs, attachPosition(extractErr, s.fileSet.Position(field.Pos())))
-				// Don't continue — extractErr (usually applicability) leaves fi
-				// populated, and a parallel @-ref error still needs surfacing,
-				// so fall through to resolvePipeCustoms.
+				// Do not skip the field. extractErr, usually from the rule
+				// checks, leaves fi filled in, and an error in an `@` reference
+				// must still be reported. So go on to resolvePipeCustoms.
 			}
 			if fi.Ignored {
 				continue
 			}
-			// With type info, resolve the field's go/types.Type and probe
-			// interface impls statically for hardcoded method calls.
+			// With type information, look up the field's go/types type and
+			// find the interfaces it implements, so codegen can emit direct
+			// method calls.
 			var fieldType types.Type
 			if s.typesInfo != nil {
 				if expr, ok := s.fieldExpr[name+"."+ident.Name]; ok {
@@ -1846,11 +1882,12 @@ func (s *structSet) extractStructSeen(name string, st *ast.StructType, seen map[
 						fi.ElemIface = s.elemIface(fieldType)
 						fi.TypeImports = s.foreignImports(fieldType)
 						fi.NamedPrims = s.namedPrims(fieldType)
-						// Named primitives resolve only now — re-run the
-						// applicability matrix so a kind-mismatched rule on a
-						// `type P string` field rejects here instead of
-						// emitting broken code (generate resolves the same
-						// kinds via effectiveKind and emits real rule code).
+						// Named primitives are only resolved now. Run the rule
+						// checks again, so a rule of the wrong kind on a
+						// `type P string` field is rejected here instead of
+						// emitting broken code. The generator resolves the
+						// same kinds with effectiveKind and emits real rule
+						// code.
 						if extractErr == nil {
 							if err := checkRuleApplicability(fi, true); err != nil {
 								extractErr = err
@@ -1860,9 +1897,10 @@ func (s *structSet) extractStructSeen(name string, st *ast.StructType, seen map[
 					}
 				}
 			}
-			// A named-const / const-expr array length (`[size]int`) reads as 0
-			// from the AST — resolve it via go/types or reject loudly; a
-			// silent 0 emits a strict length-0 tuple that rejects everything.
+			// An array length given by a constant, such as `[size]int`, reads
+			// as 0 from the AST. Resolve it with go/types or report an error.
+			// A silent 0 would emit a fixed length-0 array check that rejects
+			// every input.
 			if hasNonLiteralArrayLen(field.Type) && !s.fixConstArrayLens(&fi, fieldType) {
 				errs = append(errs, attachPosition(fmt.Errorf(
 					"%s.%s: fixed-array length must be an integer literal here (constant lengths need type info, and pointer-wrapped const-length arrays are unsupported)",
@@ -1872,24 +1910,25 @@ func (s *structSet) extractStructSeen(name string, st *ast.StructType, seen map[
 				continue
 			}
 			foldByteArray(&fi)
-			// Generic sql.Null[T] (Go 1.22): treat the V slot as a bare T.
-			// Needs go/types; the AST-only loader keeps primitives on the
-			// SQLNullSpec path and custom inners on the encoding/json fallback.
+			// For the generic sql.Null[T], treat the V field as a plain T.
+			// This needs go/types. The AST-only loader keeps primitives on
+			// the SQLNullSpec path and other inner types on the
+			// encoding/json fallback.
 			if inner, imps, ok := s.sqlNullGenericInfo(name, fieldType, &fi); ok {
 				fi.Kind = KindSQLNull
 				fi.SQLNullInner = inner
 				fi.SQLNullImports = imps
 			}
-			// Resolve `@Func` references. Errors are richErrors with CodeSpan
-			// set; qualify every sub-error (a batch may hold several) with the
-			// Struct.Field prefix so CodeSpan/hints survive.
+			// Resolve `@Func` references. The errors are RichErrors with
+			// CodeSpan set. Add the Struct.Field prefix to each one, since a
+			// batch can hold several, so CodeSpan and hints are kept.
 			if err := s.resolvePipeCustoms(name, &fi, fieldType); err != nil {
 				qualified := qualifyRichErrors(err, fmt.Sprintf("%s.%s", name, ident.Name))
 				errs = append(errs, attachPosition(qualified, s.fileSet.Position(field.Pos())))
 				continue
 			}
-			// Append only on clean extraction — a parse-time problem means no
-			// code should be emitted for the field.
+			// Add the field only when there was no error. A parse problem
+			// means no code should be emitted for it.
 			if extractErr == nil {
 				info.Fields = append(info.Fields, fi)
 			}
@@ -1899,17 +1938,19 @@ func (s *structSet) extractStructSeen(name string, st *ast.StructType, seen map[
 	return info, errors.Join(errs...)
 }
 
-// resolveFieldCollisions applies stdlib's dominant-field rule over the
-// own+promoted field set: of the fields sharing a JSON name the shallowest
-// wins, a tie between the parent's OWN fields is a hard error, and a tie
-// between promoted fields drops the name (stdlib ambiguity — every ggen field
-// is json-tagged, so stdlib's tagged tiebreak can never differentiate). The
-// `json:",embed"` catch-all maps form one more such group: jsonv2 keeps the
-// shallowest, refuses two in one struct, and uses none on a deeper tie.
-// Survivors that still share a Go NAME are rejected — the emitters address a
-// promoted field as `result.<GoName>`, which Go reports ambiguous, while
-// stdlib addresses by index path and keeps both, so a silent drop would lose
-// data the stdlib wire carries.
+// resolveFieldCollisions applies encoding/json's dominant-field rule to the
+// parent's own fields plus the promoted ones. Among fields that share a JSON
+// name, the shallowest wins. A tie between the parent's own fields is an
+// error. A tie between promoted fields drops the name, as encoding/json does
+// for an ambiguous name. encoding/json breaks ties in favour of tagged
+// fields, but every ggen field counts as tagged, so that rule never decides
+// anything here. The `json:",embed"` catch-all maps form one more such group.
+// Like jsonv2, the shallowest is kept, two in one struct are an error, and a
+// deeper tie keeps none. Fields that remain but still share a Go name are
+// rejected. The emitters access a promoted field as `result.<GoName>`, which
+// Go reports as ambiguous. encoding/json accesses fields by index path and
+// keeps both, so silently dropping one would lose data that encoding/json
+// would write.
 func resolveFieldCollisions(parent string, fields []FieldInfo, errs *[]error) []FieldInfo {
 	drop := map[int]struct{}{}
 	byName := map[string][]int{}
@@ -1921,9 +1962,10 @@ func resolveFieldCollisions(parent string, fields []FieldInfo, errs *[]error) []
 		}
 		byName[f.JSONName] = append(byName[f.JSONName], i)
 	}
-	// dominate keeps the shallowest of idxs: a lone minimum wins, a tie at
-	// depth 0 is the parent's own mistake (error; one is kept so a broken
-	// emit doesn't pile on), a deeper tie drops them all.
+	// dominate keeps the shallowest of idxs. A single shallowest field wins.
+	// A tie at depth 0 is a mistake in the parent itself. That is an error,
+	// and one field is kept so broken code does not add more errors. A deeper
+	// tie drops them all.
 	dominate := func(idxs []int, clash string) {
 		minD := fields[idxs[0]].EmbedDepth
 		for _, i := range idxs[1:] {
@@ -1998,9 +2040,9 @@ func resolveFieldCollisions(parent string, fields []FieldInfo, errs *[]error) []
 }
 
 // extractEmbedded resolves an embedded field and returns the promoted fields
-// that should be appended to the parent. Supports only same-package named
-// struct embeddings (stdlib semantics). A `json:"-"` embedding promotes
-// nothing, whatever its type; any other json tag value is unsupported.
+// to add to the parent. Only named structs of the same package can be
+// embedded, with encoding/json semantics. A `json:"-"` embedding promotes
+// nothing, whatever its type. Any other json tag value is not supported.
 func (s *structSet) extractEmbedded(parent string, field *ast.Field, seen map[string]struct{}) ([]FieldInfo, error) {
 	switch jsonTag(field) {
 	case "":
@@ -2034,15 +2076,16 @@ func (s *structSet) extractEmbedded(parent string, field *ast.Field, seen map[st
 	if err != nil {
 		return nil, err
 	}
-	// Promoted fields sit one embedding level deeper than where they were
-	// declared — the dominant-field rule keeps the shallowest on a clash.
+	// Promoted fields are one embedding level deeper than where they were
+	// declared. On a name clash the dominant-field rule keeps the shallowest.
 	for i := range sub.Fields {
 		sub.Fields[i].EmbedDepth++
 	}
 	return sub.Fields, nil
 }
 
-// jsonTag returns the value of the field's `json` tag key, "" when absent.
+// jsonTag returns the value of the field's `json` tag, or "" when there is
+// none.
 func jsonTag(field *ast.Field) string {
 	if field.Tag == nil {
 		return ""
@@ -2050,17 +2093,18 @@ func jsonTag(field *ast.Field) string {
 	return reflect.StructTag(strings.Trim(field.Tag.Value, "`")).Get("json")
 }
 
-// checkTagReadable rejects a struct tag that NAMES one of ggen's keys but
-// whose value reflect.StructTag.Get cannot read back. Get unquotes the
-// double-quoted value with Go string rules, so an invalid escape (`\'` — the
-// spelling the docs' "\' is a literal quote" invites inside a backquoted
-// tag) makes Get return "" and every rule in that tag vanish SILENTLY,
-// emitting a field with no validation at all. Inside a backquoted tag the
-// literal quote is `\\'`, which Get unescapes to `\'` for the pipe lexer.
+// checkTagReadable rejects a struct tag that has one of ggen's keys but a
+// value reflect.StructTag.Get cannot read. Get unquotes the double-quoted
+// value with Go string rules. An invalid escape makes Get return "", and
+// every rule in that tag silently disappears, so the field gets no
+// validation at all. The common case is `\'`, because the docs say "\' is a
+// literal quote" and users write that inside a backquoted tag. Inside a
+// backquoted tag the literal quote must be `\\'`, which Get unescapes to
+// `\'` for the pipe tokenizer.
 func checkTagReadable(tag reflect.StructTag, goName string) error {
 	for _, key := range [...]string{"json", "pipe", "hint"} {
-		// Lookup, not Get: a legal empty value (`json:""`) reads back as
-		// ("", true); only a value Go tag syntax cannot parse reports !ok.
+		// Use Lookup, not Get. A valid empty value such as `json:""` gives
+		// ("", true). Only a value Go tag syntax cannot parse gives false.
 		if _, ok := tag.Lookup(key); strings.Contains(string(tag), key+`:"`) && !ok {
 			return fmt.Errorf("field %s: `%s` tag is present but unreadable — reflect.StructTag.Get returned nothing, "+
 				`which silently drops every rule in it (an invalid Go string escape? inside a backquoted tag a literal quote is \', not ')`, goName, key)
@@ -2069,10 +2113,12 @@ func checkTagReadable(tag reflect.StructTag, goName string) error {
 	return nil
 }
 
-// extractField builds a FieldInfo from the field's AST; spell renders type
-// expressions (structSet.spell with type info, exprToString without).
+// extractField builds a FieldInfo from the field's AST. spell writes type
+// expressions. It is structSet.spell with type information and exprToString
+// without.
 func extractField(structName, goName string, field *ast.Field, spell func(ast.Expr) string) (FieldInfo, error) {
-	// HintLen -1 = unset; a tagless field must not read as an explicit hint:"0"
+	// HintLen -1 means unset. A field without tags must not read as an
+	// explicit hint:"0"
 	fi := FieldInfo{GoName: goName, StructName: structName, HintLen: -1}
 
 	if field.Tag != nil {
@@ -2110,17 +2156,17 @@ func extractField(structName, goName string, field *ast.Field, spell func(ast.Ex
 	goType := spell(field.Type)
 	fi.GoType = goType
 
-	// Pointer wrapping: Kind/ElemType describe the pointee.
+	// For a pointer, Kind and ElemType describe the pointee.
 	innerExpr := field.Type
 	if star, ok := innerExpr.(*ast.StarExpr); ok {
 		fi.Pointer = true
 		innerExpr = star.X
 		fi.PointeeType = spell(innerExpr)
 		fi.Kind = ResolveKind(fi.PointeeType)
-		// Peel EVERY level: the map/array branches below are what fill
-		// ElemType/ElemKind and they match nothing against a StarExpr, so a
-		// half-peeled `**[]T` would leave ElemKind at its zero value
-		// (KindString) and emit a string scan into a T slot.
+		// Remove every pointer level. The map and array branches below fill
+		// ElemType and ElemKind, and they match nothing on a StarExpr. A
+		// `**[]T` with one level left would keep ElemKind at its zero value,
+		// KindString, and emit a string decode into a T slot.
 		for {
 			star, ok := innerExpr.(*ast.StarExpr)
 			if !ok {
@@ -2132,7 +2178,7 @@ func extractField(structName, goName string, field *ast.Field, spell func(ast.Ex
 		fi.Kind = ResolveKind(goType)
 	}
 
-	// Map: restrict to string keys (JSON object names must be strings).
+	// A map must have string keys, because JSON object keys are strings.
 	if m, ok := innerExpr.(*ast.MapType); ok {
 		keyIdent, isIdent := m.Key.(*ast.Ident)
 		if !isIdent || keyIdent.Name != "string" {
@@ -2147,10 +2193,11 @@ func extractField(structName, goName string, field *ast.Field, spell func(ast.Ex
 		return fi, embedKindError(fi.Pointer, goType)
 	}
 
-	// `[]byte`/`[]uint8` stay KindBytes (ResolveKind) so they take the
-	// base64/hex/array path, not the generic slice writer.
+	// ResolveKind made `[]byte` and `[]uint8` KindBytes. Keep that, so they
+	// use the base64, hex and array formats and not the plain slice code.
 	if arr, ok := innerExpr.(*ast.ArrayType); ok && fi.Kind != KindBytes {
-		// `[]*T` / `[N]*T`: unwrap the star so ElemType is the pointee.
+		// For `[]*T` and `[N]*T`, remove the star so ElemType is the
+		// pointee.
 		elt := arr.Elt
 		if star, ok := elt.(*ast.StarExpr); ok {
 			fi.ElemPointer = true
@@ -2164,7 +2211,7 @@ func extractField(structName, goName string, field *ast.Field, spell func(ast.Ex
 				fi.ElemArrayLen = ArrayLenFromType(fi.ElemType)
 			}
 		} else {
-			// Fixed-length array: [N]T — treated as a JSON tuple.
+			// A fixed-length array [N]T, a JSON array of exactly N items.
 			n := 0
 			if lit, ok := arr.Len.(*ast.BasicLit); ok && lit.Kind == token.INT {
 				if parsed, err := strconv.Atoi(lit.Value); err == nil {
@@ -2188,9 +2235,9 @@ func extractField(structName, goName string, field *ast.Field, spell func(ast.Ex
 }
 
 // hasNonLiteralArrayLen reports whether the type expression contains a fixed
-// array whose length is not a plain INT literal (`[size]T`, `[2*2]T`) — the
-// AST extractor cannot evaluate those, so they must resolve via go/types or
-// be rejected.
+// array whose length is not a plain integer literal, such as `[size]T` or
+// `[2*2]T`. The AST code cannot evaluate those, so they must be resolved with
+// go/types or rejected.
 func hasNonLiteralArrayLen(expr ast.Expr) bool {
 	found := false
 	ast.Inspect(expr, func(n ast.Node) bool {
@@ -2204,12 +2251,12 @@ func hasNonLiteralArrayLen(expr ast.Expr) bool {
 	return found
 }
 
-// fixConstArrayLens re-derives a container field's shape from go/types when
-// its AST spelling carries a non-literal array length: types evaluates the
-// constant, and types.TypeString re-spells every nested length as a literal,
-// so the string-based depth recursion (StripOneContainer / ArrayLenFromType)
-// sees real numbers. Returns false when the shape can't be re-derived —
-// the caller rejects the field rather than emit a length-0 tuple.
+// fixConstArrayLens rebuilds a container field's shape from go/types when its
+// written type has an array length that is not a literal. go/types evaluates
+// the constant, and types.TypeString writes every nested length as a number,
+// so the string-based helpers StripOneContainer and ArrayLenFromType see real
+// numbers. It returns false when the shape cannot be rebuilt. The caller then
+// rejects the field instead of emitting a length-0 array check.
 func (s *structSet) fixConstArrayLens(fi *FieldInfo, t types.Type) bool {
 	if t == nil {
 		return false
@@ -2233,7 +2280,8 @@ func (s *structSet) fixConstArrayLens(fi *FieldInfo, t types.Type) bool {
 			return false
 		}
 		fi.GoType = types.TypeString(t, qual)
-		// Map values keep their stars on ElemType (the pointer-cascade route).
+		// Map values keep their stars in ElemType, which the pointer code
+		// expects.
 		fi.ElemType = types.TypeString(c.Elem(), qual)
 		fi.ElemKind = ResolveKind(fi.ElemType)
 		return true
@@ -2241,7 +2289,8 @@ func (s *structSet) fixConstArrayLens(fi *FieldInfo, t types.Type) bool {
 		return false
 	}
 	fi.GoType = types.TypeString(t, qual)
-	// Mirror the AST extractor: one leading `*` is already on ElemPointer.
+	// As in the AST code, one leading `*` is already recorded in
+	// ElemPointer.
 	if pe, ok := elem.(*types.Pointer); ok && fi.ElemPointer {
 		elem = pe.Elem()
 	}
@@ -2253,12 +2302,13 @@ func (s *structSet) fixConstArrayLens(fi *FieldInfo, t types.Type) bool {
 	return true
 }
 
-// foldByteArray collapses `[N]byte` / `[N]uint8` onto the KindBytes (base64)
-// path, keeping N in ArrayLen so the emitters can enforce the exact decoded
-// length. jsonv2 base64s a byte ARRAY and REJECTS the number-array form that
-// encoding/json v1 emits — ggen sides with v2, as everywhere else the two
-// disagree. `format:array` opts back into the v1 tuple-of-numbers shape (and
-// every other `format:` — base64url/base32/hex — works too).
+// foldByteArray turns `[N]byte` and `[N]uint8` into KindBytes, encoded as
+// base64. N stays in ArrayLen so the emitters can check the exact decoded
+// length. jsonv2 encodes a byte array as base64 and rejects the array of
+// numbers that encoding/json writes. ggen follows jsonv2, as it does
+// wherever the two differ. `format:array` selects the encoding/json array of
+// numbers instead, and the other formats such as base64url, base32 and hex
+// also work.
 func foldByteArray(fi *FieldInfo) {
 	if fi.Kind != KindArray || fi.ElemPointer || fi.Format == "array" {
 		return
@@ -2270,7 +2320,8 @@ func foldByteArray(fi *FieldInfo) {
 	fi.ElemKind, fi.ElemType = 0, ""
 }
 
-// ArrayLenFromType pulls N out of a "[N]T" type string, 0 on parse failure.
+// ArrayLenFromType returns N from a "[N]T" type string, or 0 when it cannot
+// parse one.
 func ArrayLenFromType(typ string) int {
 	if len(typ) < 3 || typ[0] != '[' {
 		return 0
@@ -2286,14 +2337,14 @@ func ArrayLenFromType(typ string) int {
 	return n
 }
 
-// exprToString spells a type expression as the source wrote it.
+// exprToString writes a type expression as the source wrote it.
 func exprToString(expr ast.Expr) string {
 	return exprToStringQ(expr, nil)
 }
 
-// exprToStringQ is exprToString with a hook for the package identifier of a
-// selector: pkgQual(ident) returns the qualifier to spell it by, or false to
-// keep the source text.
+// exprToStringQ is exprToString with a hook for the package name of a
+// selector. pkgQual(ident) returns the qualifier to write, or false to keep
+// the source text.
 func exprToStringQ(expr ast.Expr, pkgQual func(*ast.Ident) (string, bool)) string {
 	sub := func(e ast.Expr) string { return exprToStringQ(e, pkgQual) }
 	switch e := expr.(type) {
@@ -2318,7 +2369,7 @@ func exprToStringQ(expr ast.Expr, pkgQual func(*ast.Ident) (string, bool)) strin
 	case *ast.BasicLit:
 		return e.Value
 	case *ast.IndexExpr:
-		// Generic instantiation with one type arg, e.g. sql.Null[int].
+		// A generic type with one type argument, such as sql.Null[int].
 		return sub(e.X) + "[" + sub(e.Index) + "]"
 	case *ast.MapType:
 		return "map[" + sub(e.Key) + "]" + sub(e.Value)
@@ -2332,8 +2383,8 @@ func exprToStringQ(expr ast.Expr, pkgQual func(*ast.Ident) (string, bool)) strin
 	}
 }
 
-// embedKindError reports what `json:",embed"` needs, naming the pointer case
-// only for a field that is one.
+// embedKindError says what `json:",embed"` needs. It mentions pointers only
+// when the field is one.
 func embedKindError(pointer bool, goType string) error {
 	if pointer {
 		return fmt.Errorf("json:\",embed\" requires a map[string]T field (not a pointer to one), got %s", goType)
@@ -2341,10 +2392,11 @@ func embedKindError(pointer bool, goType string) error {
 	return fmt.Errorf("json:\",embed\" requires a map[string]T field, got %s", goType)
 }
 
-// unsupportedTypeExpr names the first type literal in expr that has no
-// generated shape: an anonymous struct, a func, or a chan. Returns "" when
-// the whole expression is usable. exprToString has no arm for any of the
-// three — its %T fallback would put a Go AST type name into the emitted file.
+// unsupportedTypeExpr names the first type literal in expr that ggen cannot
+// generate code for: an anonymous struct, a func or a chan. It returns ""
+// when the whole expression is usable. exprToString has no case for any of
+// the three, and its %T fallback would put a Go AST type name into the
+// emitted file.
 func unsupportedTypeExpr(expr ast.Expr) string {
 	switch e := expr.(type) {
 	case *ast.StructType:
@@ -2382,9 +2434,9 @@ func unsupportedTypeExpr(expr ast.Expr) string {
 	return ""
 }
 
-// unsupportedTypeError rejects a field type with no generated shape. An
-// anonymous struct cannot be spelled into the output at all; a func or a
-// channel can, but `json.Marshal` rejects one for every value, so the whole
+// unsupportedTypeError rejects a field type ggen cannot generate code for.
+// An anonymous struct cannot be written into the output at all. A func or a
+// channel can, but `json.Marshal` rejects every value of one, so the whole
 // struct's AppendJSON could never succeed.
 func unsupportedTypeError(goName, what string) error {
 	hint := "A func or channel has no JSON shape: exclude the field with `json:\"-\"`, or unexport it."
@@ -2403,9 +2455,9 @@ func unsupportedTypeMsg(goName, what string) string {
 	return fmt.Sprintf("field %s: %s field types are not supported", goName, what)
 }
 
-// unsupportedFieldType is unsupportedTypeExpr over go/types. A named type
-// stops the walk: it is spelled by name and takes the kind its name resolves
-// to, whatever it is defined over.
+// unsupportedFieldType is unsupportedTypeExpr for go/types. A named type
+// stops the walk. It is written by name and gets the kind its name resolves
+// to, whatever its underlying type is.
 func unsupportedFieldType(t types.Type) string {
 	switch x := types.Unalias(t).(type) {
 	case *types.Struct:
@@ -2487,8 +2539,8 @@ func ResolveKind(goType string) TypeKind {
 	case "any", "interface{}":
 		return KindAny
 	default:
-		// sql.Null[T] with a supported inner; unsupported inners fall through
-		// to KindStruct → encoding/json fallback.
+		// sql.Null[T] with a supported inner type. Other inner types fall
+		// through to KindStruct and use the encoding/json fallback.
 		if inner, ok := sqlNullGenericInner(goType); ok && isSupportedSQLNullInner(ResolveKind(inner)) {
 			return KindSQLNull
 		}
@@ -2498,7 +2550,7 @@ func ResolveKind(goType string) TypeKind {
 		if strings.HasPrefix(goType, "map[") {
 			return KindMap
 		}
-		// [N]T — fixed-length array.
+		// [N]T, a fixed-length array.
 		if len(goType) > 2 && goType[0] == '[' {
 			if end := strings.IndexByte(goType, ']'); end > 1 {
 				if _, err := strconv.Atoi(goType[1:end]); err == nil {
@@ -2510,8 +2562,8 @@ func ResolveKind(goType string) TypeKind {
 	}
 }
 
-// sqlNullGenericInner extracts the inner type string T from a `sql.Null[T]`
-// generic instantiation (Go 1.22). Returns ("", false) for any other type.
+// sqlNullGenericInner returns the inner type T of a generic `sql.Null[T]`
+// type string. It returns ("", false) for any other type.
 func sqlNullGenericInner(goType string) (string, bool) {
 	const prefix = "sql.Null["
 	if !strings.HasPrefix(goType, prefix) || !strings.HasSuffix(goType, "]") {
@@ -2521,9 +2573,10 @@ func sqlNullGenericInner(goType string) (string, bool) {
 	return inner, inner != ""
 }
 
-// isSupportedSQLNullInner reports whether k may sit inside a generic sql.Null[T]
-// on the AST-only path (anything else degrades to encoding/json). The go/types
-// path (sqlNullGenericInfo) isn't gated by this — it handles any renderable T.
+// isSupportedSQLNullInner reports whether k can be the inner type of a
+// generic sql.Null[T] on the AST-only path. Anything else falls back to
+// encoding/json. The go/types path in sqlNullGenericInfo does not use this
+// check, it handles any T the renderers support.
 func isSupportedSQLNullInner(k TypeKind) bool {
 	//exhaustive:ignore not every kind applies here
 	switch k {
@@ -2536,18 +2589,19 @@ func isSupportedSQLNullInner(k TypeKind) bool {
 	return false
 }
 
-// isStdSQLNull reports whether named is the generic database/sql.Null[T]
-// (Go 1.22), i.e. a single-type-arg instantiation of database/sql.Null.
+// isStdSQLNull reports whether named is the generic database/sql.Null[T],
+// that is database/sql.Null with one type argument.
 func isStdSQLNull(named *types.Named) bool {
 	obj := named.Obj()
 	return obj != nil && obj.Name() == "Null" && obj.Pkg() != nil &&
 		obj.Pkg().Path() == "database/sql" && named.TypeArgs().Len() == 1
 }
 
-// sqlNullGenericInfo detects a generic sql.Null[T] field and builds the
-// synthetic FieldInfo for T (via extractFieldFromTypes) plus the foreign
-// imports the emitted type literals reference. ok=false for non-sql.Null or
-// without type info. parent supplies the JSON name for inner diagnostics.
+// sqlNullGenericInfo detects a generic sql.Null[T] field. It builds a
+// synthetic FieldInfo for T with extractFieldFromTypes, and returns the
+// foreign imports the emitted type names refer to. The bool is false for any
+// other type or without type information. parent gives the JSON name used in
+// errors about the inner value.
 func (s *structSet) sqlNullGenericInfo(structName string, t types.Type, parent *FieldInfo) (*FieldInfo, []TypeImport, bool) {
 	named, ok := t.(*types.Named)
 	if !ok || !isStdSQLNull(named) {
@@ -2557,12 +2611,12 @@ func (s *structSet) sqlNullGenericInfo(structName string, t types.Type, parent *
 	innerVar := types.NewVar(token.NoPos, s.typesPkg, "V", innerType)
 	inner, err := s.extractFieldFromTypes(structName, innerVar, "")
 	if err != nil {
-		return nil, nil, false // unmodelable inner — stays on the fallback path
+		return nil, nil, false // the inner type cannot be described, so use the fallback
 	}
-	// extractFieldFromTypes peels a named type's underlying (uuid.UUID →
-	// [16]byte). The AST path keeps a named type as KindStruct unless
-	// ResolveKind knows the name. Mirror that: trust ResolveKind on the name
-	// and drop the spurious element data.
+	// extractFieldFromTypes looks through a named type to its underlying
+	// type, so uuid.UUID becomes [16]byte. The AST path keeps a named type
+	// as KindStruct unless ResolveKind knows the name. Do the same here: use
+	// ResolveKind on the name and drop the element data that does not apply.
 	if _, isNamed := innerType.(*types.Named); isNamed {
 		inner.Kind = ResolveKind(inner.GoType)
 		inner.ElemType, inner.ElemKind = "", 0
@@ -2574,10 +2628,11 @@ func (s *structSet) sqlNullGenericInfo(structName string, t types.Type, parent *
 	return &inner, s.foreignImports(innerType), true
 }
 
-// foreignImports returns the sorted import paths of every package outside the
-// one being generated that t names — the field's own type plus every element,
-// key, pointee and type argument. The emitters spell those types out verbatim,
-// so each one has to reach the generated file's import block.
+// foreignImports returns, sorted by path, the imports for every package
+// other than the one being generated that t names. That covers the field's
+// own type and every element, key, pointee and type argument. The emitters
+// write those type names as is, so each package must be in the generated
+// file's import block.
 func (s *structSet) foreignImports(t types.Type) []TypeImport {
 	if t == nil {
 		return nil
@@ -2592,10 +2647,11 @@ func (s *structSet) foreignImports(t types.Type) []TypeImport {
 	return out
 }
 
-// underlyingStruct reports whether t is a struct type — named, literal, or
-// foreign. Pointers are NOT peeled: `*T` is a nillable field, where omitempty
-// means "omit nil". Only go/types can answer this; on the AST path a named
-// container and a foreign array type read as KindStruct too.
+// underlyingStruct reports whether t is a struct type, whether named,
+// literal or foreign. Pointers are not removed: `*T` is a field that can be
+// nil, where omitempty means "omit nil". Only go/types can answer this. On
+// the AST path a named container and a foreign array type also read as
+// KindStruct.
 func underlyingStruct(t types.Type) bool {
 	if t == nil {
 		return false
@@ -2604,11 +2660,11 @@ func underlyingStruct(t types.Type) bool {
 	return ok
 }
 
-// namedPrims returns every named type t mentions whose underlying type is a
-// primitive, keyed by the same type string the emitters spell (`Priority`,
-// `leaf.Name`). Types that carry their own JSON or text methods are skipped —
-// those keep their method-driven wire shape, so the underlying primitive is
-// not what a rule would be checking.
+// namedPrims returns every named type in t whose underlying type is a
+// primitive. The keys are the type names as the emitters write them, such as
+// `Priority` or `leaf.Name`. Types with their own JSON or text methods are
+// skipped. Their JSON shape comes from those methods, so the underlying
+// primitive is not what a rule would check.
 func (s *structSet) namedPrims(t types.Type) map[string]TypeKind {
 	if t == nil {
 		return nil
@@ -2632,18 +2688,20 @@ func (s *structSet) collectNamedPrims(t types.Type, out map[string]TypeKind, see
 	switch x := t.(type) {
 	case *types.Named:
 		if b, ok := x.Underlying().(*types.Basic); ok {
-			// Source-syntax name (`leaf.Name`, not `xpkg/leaf.Name`): the key
-			// has to match FieldInfo.GoType, which the AST extractor builds
-			// from the type EXPRESSION. types.RelativeTo only elides the
-			// current package and spells every other one by full path.
+			// Use the name as source code writes it, `leaf.Name` and not
+			// `xpkg/leaf.Name`. The key must match FieldInfo.GoType, which the
+			// AST code builds from the type expression. types.RelativeTo only
+			// leaves out the current package and writes every other one as a
+			// full path.
 			name := types.TypeString(t, s.pkgQualifier())
-			// Types the generator gives a wire shape of their own (time.Duration
-			// is a named int64, …) are NOT plain named primitives: ResolveKind
-			// hands them a dedicated kind and their own emitters. Only
-			// KindStruct means "ggen has no idea what this type is".
-			// json.Number is a named STRING whose wire shape is a NUMBER — the
-			// one stdlib type where "named over a primitive" does not imply
-			// "encodes like that primitive". It keeps the encoding/json path.
+			// Types the generator gives their own JSON shape are not plain
+			// named primitives. time.Duration, for example, is a named int64,
+			// but ResolveKind gives it its own kind and emitters. Only
+			// KindStruct means ggen knows nothing special about the type.
+			// json.Number is a named string that is written as a JSON number.
+			// It is the one standard type where being named over a primitive
+			// does not mean it encodes like that primitive. It stays on the
+			// encoding/json path.
 			if full := types.TypeString(t, nil); full == "encoding/json.Number" || full == "encoding/json/v2.Number" {
 				return
 			}
@@ -2670,9 +2728,9 @@ func (s *structSet) collectNamedPrims(t types.Type, out map[string]TypeKind, see
 }
 
 // collectTypeImports walks a types.Type and records, by import path, every
-// package defining a named type it mentions outside the package being
-// generated (nested element types included, e.g. sql.Null[[]uuid.UUID] /
-// map[string]decimal.Decimal).
+// package other than the one being generated that defines a named type in
+// it. Nested element types count too, as in sql.Null[[]uuid.UUID] or
+// map[string]decimal.Decimal.
 func (s *structSet) collectTypeImports(t types.Type, out map[string]TypeImport) {
 	switch x := t.(type) {
 	case *types.Named:
@@ -2694,11 +2752,11 @@ func (s *structSet) collectTypeImports(t types.Type, out map[string]TypeImport) 
 	}
 }
 
-// emitterPackages maps every package qualifier the emitters spell as a
-// literal (`json.RawMessage`, `time.Parse`, `netip.ParseAddr`, …) to the
-// package it means. A user package declared under one of those names
-// (`internal/json`) would collide with that literal, so its types are spelled
-// through the `<name>_` alias instead — see qualifierFor.
+// emitterPackages maps every package qualifier the emitters write in fixed
+// code, such as `json.RawMessage`, `time.Parse` or `netip.ParseAddr`, to the
+// package it means. A user package with one of those names, such as
+// `internal/json`, would clash with that code, so its types use the alias
+// `<name>_` instead. See qualifierFor.
 var emitterPackages = map[string]string{
 	"ggen":     "github.com/sirkostya009/ggen",
 	"archsimd": "simd/archsimd",
@@ -2729,8 +2787,8 @@ const (
 	GenTestSuffix = "_ggen_test.go"
 )
 
-// Apply ORs f into each struct's flags and propagates the struct-level flags
-// down to every field.
+// Apply turns on every flag set in f for each struct, then copies the
+// struct-level flags to every field.
 func (f Flags) Apply(structs []StructInfo) {
 	for i := range structs {
 		if f.Marshal {
@@ -2777,8 +2835,8 @@ func (f Flags) Apply(structs []StructInfo) {
 			structs[i].Fields[j].HTMLEscape = structs[i].HTMLEscape
 			structs[i].Fields[j].Copy = structs[i].Copy
 			structs[i].Fields[j].AllowInvalidUTF8 = structs[i].AllowInvalidUTF8
-			// OR, not assign: a per-field json:",nullzero" must survive when the
-			// struct flag is off.
+			// Combine with OR instead of assigning, so a field's own
+			// `nullzero` pipe variant stays on when the struct flag is off.
 			structs[i].Fields[j].NullZero = structs[i].Fields[j].NullZero || structs[i].NullZero
 		}
 	}
@@ -2787,16 +2845,17 @@ func (f Flags) Apply(structs []StructInfo) {
 // IsPattern reports whether target is a `...` package pattern.
 func IsPattern(target string) bool { return strings.HasSuffix(target, "...") }
 
-// WalkPackages resolves every target (dirs and `...` patterns) in one
-// go/packages load and invokes `act` on each matched package's directory —
-// module-scoped, never crossing module bounds (like `go build <patterns>`).
-// Processing is post-order over the matched import subgraph, so a package's
-// `_ggen.go` lands on disk before any matched importer runs and cross-package
-// field types route through direct DecodeFrom/AppendJSON rather than
-// encoding/json. Deps outside the matched set are left alone. A test-only
-// package is skipped when a pattern matched it and visited when it was named
-// outright. Per-package load errors and act's errors go to report; only a
-// failed load of the whole target set is returned.
+// WalkPackages resolves every target, directories and `...` patterns, in one
+// go/packages load, and calls act on the directory of each matched package.
+// Like `go build <patterns>`, it stays inside the module. Packages are
+// visited in post-order over the import graph of the matched packages. So a
+// package's `_ggen.go` is on disk before any matched package that imports it
+// is processed, and field types from other packages use direct DecodeFrom and
+// AppendJSON calls instead of encoding/json. Dependencies outside the matched
+// set are not touched. A package with only test files is skipped when a
+// pattern matched it, and visited when it was named directly. Load errors of
+// single packages and errors from act go to report. Only a failed load of
+// the whole target set is returned.
 func WalkPackages(targets []string, act func(dir string) error, report func(error)) error {
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedImports,
@@ -2813,7 +2872,7 @@ func WalkPackages(targets []string, act func(dir string) error, report func(erro
 			}
 		}
 	}
-	// A broken-import package shouldn't hide its siblings.
+	// A package with broken imports should not hide the other packages.
 	for _, p := range pkgs {
 		for _, e := range p.Errors {
 			report(fmt.Errorf("%s: %w", p.PkgPath, e))
@@ -2824,8 +2883,8 @@ func WalkPackages(targets []string, act func(dir string) error, report func(erro
 	for _, p := range pkgs {
 		matched[p.PkgPath] = true
 	}
-	// Dedup by directory (packages.Load can return base + test variants for
-	// the same dir; generateDir loads both via Tests:true, so visit once).
+	// Visit each directory once. packages.Load can return the base and test
+	// versions of one directory, and act loads both itself with Tests:true.
 	visited := make(map[string]struct{}, len(pkgs))
 	seenPath := make(map[string]struct{}, len(pkgs))
 	var visit func(p *packages.Package)

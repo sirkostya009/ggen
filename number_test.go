@@ -43,11 +43,12 @@ func TestFloat64_StdlibParity(t *testing.T) {
 	}
 }
 
-// TestFloat32_StdlibParity: Float32 rounds the decimal once, like
-// strconv.ParseFloat(s, 32). Narrowing a float64 parse instead rounds twice
-// and is one ulp off whenever the float64 result is a float32 rounding
-// midpoint, so the random cases sample decimals around such midpoints at
-// every digit count — bytes + stream, bit-exact.
+// TestFloat32_StdlibParity checks that Float32 rounds the decimal once, like
+// strconv.ParseFloat(s, 32). Parsing as float64 and then converting rounds
+// twice. That is off by one step when the float64 result lands exactly
+// halfway between two float32 values. So the random cases are decimals near
+// such halfway points, at many digit counts. Both []byte input and Stream
+// must match bit for bit.
 func TestFloat32_StdlibParity(t *testing.T) {
 	t.Parallel()
 	cases := append([]string{
@@ -89,10 +90,9 @@ func TestFloat32_StdlibParity(t *testing.T) {
 
 func TestFloat64_ErrorParity(t *testing.T) {
 	t.Parallel()
-	// Note: scan primitives expect the caller to have skipped leading
-	// whitespace already (contract per package doc). Stdlib auto-skips,
-	// so " 1" would falsely look like a parity violation — it's not in
-	// scope here.
+	// The scan functions expect the caller to skip leading whitespace
+	// first. The standard library skips it itself, so " 1" would look
+	// like a mismatch. That case is left out on purpose.
 	cases := []string{
 		"",    // empty
 		"-",   // bare sign
@@ -140,8 +140,8 @@ func TestInt64_StdlibParity(t *testing.T) {
 	}
 }
 
-// Stdlib rejects float-shaped values when unmarshaling into int64, so
-// scan's same rejection is a parity property — assert both.
+// Int64 must reject a number with a fraction or exponent. The standard
+// library also rejects it for an int64, so the test checks both.
 func TestInt64_RejectsFloatsParity(t *testing.T) {
 	t.Parallel()
 	for _, in := range []string{"1.5", "1e3", "1.0", "1E5"} {
@@ -159,8 +159,8 @@ func TestInt64_RejectsFloatsParity(t *testing.T) {
 	}
 }
 
-// Uint64 twin of the float-rejection parity property above — it used to
-// accept "1.5" as 1 with a nil error where Int64 (and stdlib) reject.
+// Uint64 must reject a number with a fraction or exponent, like Int64 and
+// the standard library. It must not return 1 for "1.5" with a nil error.
 func TestUint64_RejectsFloatsParity(t *testing.T) {
 	t.Parallel()
 	for _, in := range []string{"1.5", "1e3", "1.0", "1E5"} {
@@ -183,9 +183,10 @@ func TestUint64_RejectsFloatsParity(t *testing.T) {
 	}
 }
 
-// TestInt64_OverflowBoundaryLattice checks values around the 18/19/20-digit
-// boundary stay bit-exact and every overflow is caught, including leading-zero
-// runs that push significant digits past the 18-byte window.
+// TestInt64_OverflowBoundaryLattice checks values near 18, 19 and 20 digits.
+// Int64 reads the first 18 digits without an overflow check, because 18
+// digits always fit in int64. Values around that edge must parse exactly, and
+// every overflow must be caught.
 func TestInt64_OverflowBoundaryLattice(t *testing.T) {
 	t.Parallel()
 	ok := map[string]int64{
@@ -196,9 +197,7 @@ func TestInt64_OverflowBoundaryLattice(t *testing.T) {
 		"-9223372036854775808": math.MinInt64,        // MinInt64
 		"-9223372036854775807": -9223372036854775807, // MinInt64+1
 	}
-	// Leading zeros are invalid JSON (RFC 8259) and now rejected — they used to
-	// be accepted and doubled as unchecked-window coverage. The window is still
-	// covered by the 17/18/19-digit rows above.
+	// Leading zeros are invalid JSON (RFC 8259) and must be rejected.
 	for _, in := range []string{"01", "-01", "0000000000000000007", "00000000000000000009223372036854775807"} {
 		t.Run("leadingzero/"+in, func(t *testing.T) {
 			t.Parallel()
@@ -239,8 +238,8 @@ func TestInt64_OverflowBoundaryLattice(t *testing.T) {
 	}
 }
 
-// TestUint64_OverflowBoundaryLattice mirrors the Int64 lattice around the
-// 19/20-digit boundary.
+// TestUint64_OverflowBoundaryLattice does the same as the Int64 test, near
+// 19 and 20 digits.
 func TestUint64_OverflowBoundaryLattice(t *testing.T) {
 	t.Parallel()
 	ok := map[string]uint64{
@@ -326,9 +325,9 @@ func TestNumber_StdlibParity(t *testing.T) {
 	}
 }
 
-// TestExactShort_ParseFloatDifferential exhaustively cross-checks the
-// exactShort fast path in Float64 against strconv.ParseFloat over randomized
-// short spans — bit-identity (incl. -0) and identical accept/reject.
+// TestExactShort_ParseFloatDifferential checks exactShort, the fast path in
+// Float64 for short numbers, against strconv.ParseFloat on many random short
+// inputs. Each result it accepts must be the same bits, including -0.
 func TestExactShort_ParseFloatDifferential(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewSource(1))
@@ -338,7 +337,7 @@ func TestExactShort_ParseFloatDifferential(t *testing.T) {
 		got, gotOK := exactShort([]byte(s))
 		want, err := strconv.ParseFloat(s, 64)
 		if !gotOK {
-			return // bail is always legal — ParseFloat path takes over
+			return // declining is always fine, ParseFloat handles it
 		}
 		if err != nil {
 			t.Fatalf("exactShort(%q) accepted, ParseFloat rejects: %v", s, err)
@@ -348,9 +347,9 @@ func TestExactShort_ParseFloatDifferential(t *testing.T) {
 				s, got, math.Float64bits(got), want, math.Float64bits(want))
 		}
 	}
-	// The differential below only checks ACCEPTED results, so pin that the
-	// arms actually accept: a fast path that silently always bails would
-	// pass every check() while quietly costing the win it exists for.
+	// check only looks at results exactShort accepts. So first make sure it
+	// does accept these. A fast path that always declined would pass every
+	// check() and give no speedup.
 	for _, s := range []string{
 		"1e5", "1e-5", "1.5e3", "-2.25e-4", "1e22", "1e-22", "1E7",
 		"9007199254740991", "4503599627370496", "12345.6789e-18",
@@ -359,27 +358,27 @@ func TestExactShort_ParseFloatDifferential(t *testing.T) {
 			t.Fatalf("exactShort(%q) declined — fast path should cover it", s)
 		}
 	}
-	// ...and that it still declines what it cannot do exactly.
+	// It must still decline what it cannot compute exactly.
 	for _, s := range []string{"1e23", "1e-23", "9007199254740993", "1e"} {
 		if _, ok := exactShort([]byte(s)); ok {
 			t.Fatalf("exactShort(%q) accepted — outside the exact range", s)
 		}
 	}
-	// Directed cases at the exactness boundaries.
+	// Hand-picked cases at the edges of the exact range.
 	for _, s := range []string{
 		"0", "-0", "0.0", "-0.0", "1.", "-1.", ".5", "-.5", ".",
 		"4503599627370495", "4503599627370496", // 2^52-1, 2^52
 		"9007199254740991", "999999999999999.9", "0.000000000000001",
 		"-4503599627370495", "1234567890.12345", "00000000000000.1",
-		// Mantissa gate: exact through 2^53-1, rounds from 2^53 up.
+		// Digit value: exact up to 2^53-1, rounding starts at 2^53.
 		"9007199254740992", "9007199254740993", "-9007199254740991",
-		// Exponent arm — the |power| ≤ 22 boundary from both directions,
-		// with frac digits shifting power (power = exp - frac).
+		// Exponent forms near the |power| <= 22 limit from both sides.
+		// Fraction digits change power: power = exp - fraction digits.
 		"1e0", "1e22", "1e23", "1e-22", "1e-23", "-1e22", "1E22",
 		"1e+22", "1e+23", "1.5e3", "1.5e-3", "0e0", "-0e0", "0.0e0",
 		"1.234567890123e5", "12345.6789e-18", "1.2345678e22",
 		"9007199254740991e-22", "1e-1", "5e-324", "1e308", "1e309",
-		// Malformed exponent forms exactShort must decline, not mis-parse.
+		// Broken exponent forms. exactShort must decline them.
 		"1e", "1e+", "1e-", "1ee5", "1e5.5", "1e5e5", "e5", "1.e5",
 	} {
 		check(s)
@@ -392,9 +391,10 @@ func TestExactShort_ParseFloatDifferential(t *testing.T) {
 		}
 		check(string(b))
 	}
-	// Well-formed exponent spans — the random alphabet above almost never
-	// assembles a valid one, so the Clinger arm would go uncovered. Exponents
-	// are drawn to straddle the |power| ≤ 22 acceptance boundary.
+	// Valid numbers with an exponent. The random characters above almost
+	// never form one, so the exponent path would go untested. That path is
+	// exact when the digits fit in 53 bits and |power| <= 22 (Clinger's fast
+	// path). Exponents are picked to fall on both sides of that limit.
 	for range 500000 {
 		b := make([]byte, 0, 16)
 		if rng.Intn(4) == 0 {
@@ -428,7 +428,8 @@ func TestExactShort_ParseFloatDifferential(t *testing.T) {
 			check(string(b))
 		}
 	}
-	// Digit-heavy spans (the alphabet above rarely forms long valid numbers).
+	// Mostly digits. The random characters above rarely form long valid
+	// numbers.
 	for range 500000 {
 		n := 1 + rng.Intn(16)
 		b := make([]byte, 0, n+1)
@@ -450,11 +451,11 @@ func TestExactShort_ParseFloatDifferential(t *testing.T) {
 	}
 }
 
-// TestInt_ReferenceDifferential pins Int64/Uint64 against a plain per-digit
-// reference implementation over randomized digit runs (1..25 digits, leading
-// zeros, signs, non-digit tails) — value, end position, and error identity.
-// (Kept from the rejected SWAR-chunk experiment; it caught a real classifier
-// bug there and guards the unchecked-prefix window generally.)
+// TestInt_ReferenceDifferential checks Int64 and Uint64 against a simple
+// digit-by-digit reference on random digit runs. Runs have 1 to 25 digits,
+// leading zeros, signs and non-digit tails. The value, end position and
+// error must all match. This also guards the first 18 digits that Int64
+// reads without an overflow check.
 func TestInt_ReferenceDifferential(t *testing.T) {
 	t.Parallel()
 	refInt := func(data []byte, i int) (int64, int, error) {
@@ -466,7 +467,7 @@ func TestInt_ReferenceDifferential(t *testing.T) {
 		if i >= len(data) || data[i] < '0' || data[i] > '9' {
 			return 0, i, ErrBadNumber
 		}
-		// RFC 8259: no leading zeros (mirrors Int64).
+		// RFC 8259 forbids leading zeros, same as Int64.
 		if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 			return 0, i, ErrBadNumber
 		}
@@ -501,7 +502,7 @@ func TestInt_ReferenceDifferential(t *testing.T) {
 		if i >= len(data) || data[i] < '0' || data[i] > '9' {
 			return 0, i, ErrBadNumber
 		}
-		// RFC 8259: no leading zeros (mirrors Uint64).
+		// RFC 8259 forbids leading zeros, same as Uint64.
 		if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
 			return 0, i, ErrBadNumber
 		}
@@ -564,21 +565,21 @@ func TestSkipNumber_AcceptSetMatchesJSONGrammar(t *testing.T) {
 		"0", "-0", "123", "-123", "1.5", "-1.5", "0.5", "1e5", "1E5",
 		"1e+5", "1e-5", "1.5e10", "-1.5E-10", "1e400", "1e999", "1e1000000",
 		"12345678901234567890", "0.0000001", "-0.0",
-		// invalid — leading + / leading zero / bare or trailing dot
+		// invalid: leading '+', leading zero, lone or trailing dot
 		"+1", "01", "007", "00.5", "1.", "-.5", ".5", "-", "+",
-		// invalid — malformed exp / double dot / trailing junk
+		// invalid: broken exponent, two dots, junk after the number
 		"1e", "1e+", "1e-", "1..2", "1.2.3", "--", "e5", "1.e5",
 		"1ee5", "0x1", "1.2e", "1.2e+",
 		"", "0123", "00",
 	}
 	for _, tok := range cases {
 		got := numberAccepted(tok)
-		// Oracle: a leading-number-byte token is a valid JSON number iff
-		// json.Valid accepts it. Tokens not starting with -/digit are not
-		// routed to skipNumber at all, so restrict the comparison.
+		// A token that starts with '-' or a digit is a valid number exactly
+		// when json.Valid accepts it. Other tokens never reach skipNumber, so
+		// they are not compared.
 		want := json.Valid([]byte(tok))
 		if tok == "" || tok[0] != '-' && (tok[0] < '0' || tok[0] > '9') {
-			// not a number token — skipNumber is never reached; skip oracle
+			// Not a number token, so skipNumber is never called.
 			if got {
 				t.Errorf("%q: skipNumber accepted a non-number-leading token", tok)
 			}
@@ -590,8 +591,11 @@ func TestSkipNumber_AcceptSetMatchesJSONGrammar(t *testing.T) {
 	}
 }
 
-// Stream skip must have the byte-identical accept-set of the bytes path, incl.
-// across chunk boundaries (one-byte reader exercises every refill seam).
+// Stream.SkipValue must accept exactly the numbers that SkipValue on []byte
+// accepts. This must hold when a number is split across reads. The Stream
+// keeps a window, a buffered slice of the reader, and a refill reads more
+// into it. A reader that returns one byte per Read forces a refill at every
+// offset.
 func TestSkipNumber_StreamMatchesBytes(t *testing.T) {
 	t.Parallel()
 	cases := []string{
@@ -603,12 +607,12 @@ func TestSkipNumber_StreamMatchesBytes(t *testing.T) {
 		bp, bErr := SkipValue([]byte(tok), 0)
 		bytesOK := bErr == nil && bp == len(tok)
 
-		// One-byte-per-Read reader forces a refill seam at every offset.
 		var s Stream
 		s.Reset(&chunkedReader{data: []byte(tok)}, make([]byte, 0, 4))
 		sErr := s.SkipValue()
-		// Offset, not raw Pos — the skip tree compacts (like SkipSpace/Int64),
-		// so Pos is buffer-relative.
+		// Use Offset, not Pos. The skip code drops consumed bytes from the
+		// buffer, like SkipSpace and Int64 do, so Pos is relative to the
+		// buffer, not the input.
 		streamOK := sErr == nil && s.Offset() == len(tok)
 		if streamOK != bytesOK {
 			t.Errorf("%q: stream accepted=%v, bytes accepted=%v", tok, streamOK, bytesOK)
@@ -616,10 +620,9 @@ func TestSkipNumber_StreamMatchesBytes(t *testing.T) {
 	}
 }
 
-// BenchmarkFloat64Forms splits the number shapes by which path they take:
-// plain decimals ride exactShort, exponent forms used to fall through to
-// strconv.ParseFloat, and the out-of-range rows still do (they pin that the
-// added arm costs nothing when it declines).
+// BenchmarkFloat64Forms groups numbers by the path they take. Plain decimals
+// and short exponent forms take exactShort. The reject rows fall back to
+// strconv.ParseFloat. They show what the fast path costs when it declines.
 func BenchmarkFloat64Forms(b *testing.B) {
 	forms := []struct{ name, span string }{
 		{"plain_int", "12345"},
@@ -628,8 +631,8 @@ func BenchmarkFloat64Forms(b *testing.B) {
 		{"exp_small", "1.5e3"},
 		{"exp_neg", "-2.25e-4"},
 		{"exp_wide", "1.234567890123e5"},
-		{"exp_reject", "1e23"},                  // |power| > 22 → ParseFloat
-		{"wide_reject", "1.234567890123456789"}, // > 16 B → ParseFloat
+		{"exp_reject", "1e23"},                  // |power| > 22, uses ParseFloat
+		{"wide_reject", "1.234567890123456789"}, // over 16 bytes, uses ParseFloat
 	}
 	for _, f := range forms {
 		data := []byte(f.span + ",")
@@ -641,7 +644,7 @@ func BenchmarkFloat64Forms(b *testing.B) {
 			}
 		})
 	}
-	// A payload-shaped run: many numbers back to back, exponent-heavy.
+	// Many numbers back to back, like a real payload. Half use an exponent.
 	var sb strings.Builder
 	for i := range 200 {
 		if i > 0 {

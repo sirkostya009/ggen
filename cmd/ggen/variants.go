@@ -8,14 +8,16 @@ import (
 	"github.com/sirkostya009/ggen/gen/model"
 )
 
-// Multi-shape decode dispatch (the `pipe:` `/` variants). When a field's
-// decode stage carries a converter variant, ggen peeks the JSON first byte and
-// routes to the single variant claiming it: `.` native, `nullzero` (null →
-// zero), or `@Conv` (scan input W, call func(W) → T). Encode is untouched.
+// Decode dispatch by JSON shape, for the `/` variants of a `pipe:` tag. When
+// a field's decode stage has variants, the generated code looks at the first
+// byte of the JSON value and runs the one variant that claims it. The `.`
+// variant decodes the native type. The `nullzero` variant turns null into the
+// zero value. The `@Conv` variant scans an input of type W and calls a
+// func(W) T to get the field value. Encoding is not affected.
 
-// nativeVariantField strips f to a pure-decode copy for the native case body:
-// no variants, no null-as-zero, no outer pipe (the outer value stage runs once
-// after dispatch). Container-level dive/keys rules are kept.
+// nativeVariantField returns a copy of f for the native case body that only
+// decodes. It drops the variants, null-as-zero, the outer pipe, validation
+// and mods, because the outer value stage runs once after the dispatch.
 func nativeVariantField(f model.FieldInfo) model.FieldInfo {
 	nf := f
 	nf.Variants = nil
@@ -26,11 +28,12 @@ func nativeVariantField(f model.FieldInfo) model.FieldInfo {
 	return nf
 }
 
-// converterInputField builds the synthetic FieldInfo describing a converter's
-// input type W, so renderField/renderStreamField can scan it into a temp. It
-// is shaped like a field of type W: a pointer input takes the pointer path
-// (null → nil, else a fresh leaf — the temp is a known-nil local, hence
-// TargetNil) and NamedPrims carries W's named-primitive resolution.
+// converterInputField builds a synthetic FieldInfo for a converter's input
+// type W, so renderField and renderStreamField can scan it into a temporary.
+// It looks like a field of type W. A pointer input takes the pointer path:
+// null gives nil, anything else gives a fresh value. The temporary is a local
+// known to be nil, which is why TargetNil is set. NamedPrims carries how W's
+// named primitive types resolve.
 func converterInputField(f model.FieldInfo, v model.Variant) model.FieldInfo {
 	in := model.FieldInfo{
 		GoName:           f.GoName,
@@ -57,9 +60,9 @@ func convCall(v model.Variant) string {
 	return v.FuncName
 }
 
-// renderVariantDispatch emits the bytes-path shape dispatch for f into ref,
-// advancing posVar past the consumed value. The outer value stage runs after
-// (caller's validateAndMod).
+// renderVariantDispatch emits the bytes-path shape dispatch that decodes f
+// into ref and moves posVar past the value. The outer value stage runs
+// afterwards, in the caller's validateAndMod.
 func renderVariantDispatch(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	inlineSkipWS(b, posVar)
@@ -130,7 +133,7 @@ func renderVariantDispatchStream(f model.FieldInfo, ref, posVar string) string {
 	return b.String()
 }
 
-// emitConvAssign emits the converter call + assignment for the bytes path.
+// emitConvAssign emits the converter call and assignment for the bytes path.
 func emitConvAssign(b *bytes.Buffer, v model.Variant, field, ref, tmp, posVar string) {
 	call := convCall(v)
 	if !v.Fallible {
@@ -138,15 +141,15 @@ func emitConvAssign(b *bytes.Buffer, v model.Variant, field, ref, tmp, posVar st
 		return
 	}
 	if v.BoolForm {
-		// ModError is a parse error — wrap so it carries the field path like
-		// every other decode failure (mod_error.go doc).
+		// ModError is a parse error. Wrap it so it carries the field path like
+		// every other decode failure (see the ModError doc in mod_error.go).
 		modErr := fmt.Sprintf("ggen.NewParseErr(%s, %s, &ggen.ModError{%sName: %q, Msg: %q, Value: %s})", field, posVar, posLit(posVar), v.FuncName, v.Msg, tmp)
 		fmt.Fprintf(b, "if cv, ok := %s(%s); !ok {\nreturn result, %s, %s\n} else {\n%s = cv\n}\n", call, tmp, posVar, modErr, ref)
 		return
 	}
-	// A converter's own error is foreign — wrap it so it carries the field
-	// path and offset every other decode failure does (errors.As still
-	// reaches the converter's error through the ParseError).
+	// The converter returns its own error type. Wrap it so it carries the
+	// field path and offset like every other decode failure. errors.As still
+	// finds the converter's error through the ParseError.
 	fmt.Fprintf(
 		b,
 		"if cv, err := %s(%s); err != nil {\nreturn result, %s, ggen.NewParseErr(%s, %s, err)\n} else {\n%s = cv\n}\n",
@@ -159,7 +162,8 @@ func emitConvAssign(b *bytes.Buffer, v model.Variant, field, ref, tmp, posVar st
 	)
 }
 
-// emitConvAssignStream is the stream-path counterpart (2-tuple returns).
+// emitConvAssignStream is the stream-path counterpart. Stream decoders
+// return two values, not three.
 func emitConvAssignStream(b *bytes.Buffer, v model.Variant, field, ref, tmp string) {
 	call := convCall(v)
 	if !v.Fallible {

@@ -1,5 +1,5 @@
-// Mega bench family (mega_test.go): the deep Node tree, plus the DeepNested
-// and MapHeavy payloads that share its benchmarks file.
+// Mega benchmark family (mega_test.go): the deep Node tree, plus the
+// DeepNested, MapHeavy and MapValues payloads that share its benchmark file.
 
 //go:generate ../ggen $GOFILE
 package bench
@@ -20,10 +20,10 @@ type Addr struct {
 	City   string `json:"city"`
 }
 
-// Node is the deep-tree benchmark target. Exercises the breadth of ggen
-// kinds: scalars, slices, maps, tuples, slices of pointers, nested slices,
-// pointer fields, time/bytes/raw/any, and validation. All shapes are also
-// supported by jsonv2/sonic/easyjson for apples-to-apples comparison.
+// Node is the deep-tree benchmark type. It covers a wide range of ggen kinds:
+// scalars, slices, maps, fixed arrays, slices of pointers, nested slices,
+// pointer fields, time, bytes, raw JSON, any, and validation. jsonv2, sonic
+// and easyjson support all of these shapes too, so the comparison is fair.
 //
 //ggen:generate
 //easyjson:json
@@ -45,13 +45,14 @@ type Node struct {
 	Raw       json.RawMessage   `json:"raw"`
 }
 
-// AddrPlain strips easyjson's methods off Addr (`type T U` drops U's methods)
-// so NodePlain never falls back to easyjson via the json.Unmarshaler hook.
+// AddrPlain is Addr without easyjson's methods (`type T U` does not inherit
+// U's methods). So NodePlain never calls into easyjson through the
+// json.Unmarshaler interface.
 type AddrPlain Addr
 
-// NodePlain mirrors Node with a self-referential shape free of easyjson's
-// generated methods, so the stdjson/jsonv2 rows measure the reflection path
-// rather than easyjson via the json.Marshaler/Unmarshaler hooks.
+// NodePlain has the same recursive shape as Node but none of easyjson's
+// generated methods. So the stdjson and jsonv2 rows measure their reflection
+// code, not easyjson called through json.Marshaler and json.Unmarshaler.
 type NodePlain struct {
 	ID        int64             `json:"id"`
 	Name      string            `json:"name"`
@@ -70,8 +71,9 @@ type NodePlain struct {
 	Raw       json.RawMessage   `json:"raw"`
 }
 
-// CopyAddr mirrors Addr under -copy: its string fields are copied out of the
-// input instead of aliasing it. Pointed to by CopyNode's Refs / Parent.
+// CopyAddr is Addr under -copy. Its string fields are copied out of the input
+// instead of aliasing it (pointing into it without a copy). CopyNode's Refs
+// and Parent point to it.
 //
 //ggen:generate copy
 type CopyAddr struct {
@@ -79,11 +81,12 @@ type CopyAddr struct {
 	City   string `json:"city"`
 }
 
-// CopyNode is Node generated under -copy (`//ggen:generate copy`): the bytes
-// path copies every retained string, map key/value, json.RawMessage, and
-// any-embedded string out of the input rather than aliasing it. Wire-identical
-// to Node, so it decodes the same MegaPayload — the `ggen_copy` Unmarshal row
-// measures the copy-mode cost against the aliasing `ggen` row.
+// CopyNode is Node generated under -copy (`//ggen:generate copy`). The bytes
+// path copies every retained string, map key and value, json.RawMessage, and
+// string inside an any out of the input instead of aliasing it. It has the
+// same JSON form as Node, so it decodes the same MegaPayload. The `ggen_copy`
+// Unmarshal row measures the cost of copy mode against the aliasing `ggen`
+// row.
 //
 //ggen:generate copy
 type CopyNode struct {
@@ -104,8 +107,8 @@ type CopyNode struct {
 	Raw       json.RawMessage   `json:"raw"`
 }
 
-// nodeToPlain deep-converts a Node tree into NodePlain for the marshal
-// benches. One-shot at init.
+// nodeToPlain converts a whole Node tree into NodePlain for the marshal
+// benchmarks. It runs once at init.
 func nodeToPlain(n Node) NodePlain {
 	p := NodePlain{
 		ID:        n.ID,
@@ -143,9 +146,10 @@ func nodeToPlain(n Node) NodePlain {
 	return p
 }
 
-// MapValues holds maps whose VALUES own allocations — a struct carrying a
-// slice, and a slice — the shapes whose decode reads the carried map so each
-// entry's previous value becomes the decode target.
+// MapValues holds maps whose values own allocations: a struct with a slice,
+// and a slice. For these shapes the decode reads the receiver's existing map,
+// and each entry's previous value becomes the target the new value is decoded
+// into.
 //
 //ggen:generate
 type MapValues struct {
@@ -153,8 +157,8 @@ type MapValues struct {
 	Lists   map[string][]int    `json:"lists"`
 }
 
-// MapHeavyEntry is the same shape with much more per-value memory, testing
-// whether recycling a bigger allocation outweighs rebuilding the map.
+// MapHeavyEntry is the same shape with much more memory per value. It tests
+// whether reusing a bigger allocation is worth more than building a new map.
 //
 //ggen:generate
 type MapHeavyEntry struct {
@@ -175,8 +179,9 @@ type MapEntry struct {
 	Tags []string `json:"tags"`
 }
 
-// MapHeavy holds one big string-keyed map (1K+ entries) where map alloc,
-// hash fill, and iteration dominate — a different bottleneck from mega.
+// MapHeavy holds one big string-keyed map with over 1000 entries. Map
+// allocation, hashing and iteration dominate, which is a different bottleneck
+// from Mega.
 //
 //ggen:generate
 type MapHeavy struct {
@@ -185,19 +190,22 @@ type MapHeavy struct {
 
 var (
 	MegaValue      Node
-	MegaValuePlain NodePlain // converted copy for stdjson/jsonv2/sonic marshal rows
+	MegaValuePlain NodePlain // converted copy for the stdjson, jsonv2 and sonic marshal rows
 	MegaPayload    []byte
 
-	// DeepNestedPayload — single 50-level Node chain, isolating recursion cost.
+	// DeepNestedPayload is a single chain of 50 nested Nodes. It measures
+	// recursion cost alone.
 	DeepNestedPayload []byte
 
-	// MapHeavyPayload — 1024-entry string→string map.
+	// MapHeavyPayload is a map of 1024 string keys to string values.
 	MapHeavyPayload []byte
 
-	// MapValuesPayload — 256 entries per map, values owning allocations.
+	// MapValuesPayload has 256 entries per map, with values that own
+	// allocations.
 	MapValuesPayload []byte
 
-	// MapValuesHeavyPayload — 256 entries whose values own much more memory.
+	// MapValuesHeavyPayload has 256 entries whose values own much more
+	// memory.
 	MapValuesHeavyPayload []byte
 )
 
@@ -205,11 +213,12 @@ func init() {
 	var g gen
 	MegaValue = buildNode(&g, 6, []int{5, 4, 3, 3, 3, 3, 0})
 	MegaValuePlain = nodeToPlain(MegaValue)
-	// No canonicalize: every map in the tree is single-entry, so the encode
-	// is already byte-deterministic and keys keep declaration order.
+	// No canonicalize here. Every map in the tree has a single entry, so the
+	// encoded bytes are already the same on every run, and keys keep their
+	// declaration order.
 	MegaPayload = mustMarshal(MegaValue)
 
-	// Deep-nested 50-level chain.
+	// A chain of 50 nested Nodes.
 	var deep Node
 	deep.ID = 1
 	deep.Name = "leaf"
@@ -222,7 +231,7 @@ func init() {
 	}
 	DeepNestedPayload = mustMarshal(deep)
 
-	// Map-heavy 1024-entry string map.
+	// The 1024-entry string map.
 	m := make(map[string]string, 1024)
 	for i := range 1024 {
 		m["key"+strconv.Itoa(i)] = "value" + strconv.Itoa(i)
@@ -265,10 +274,11 @@ func buildNode(g *gen, depth int, fanout []int) Node {
 		Score:  g.f64() * 100,
 		Active: g.intn(2) == 0,
 		Tags:   genTags(g, 6+g.intn(20)),
-		// Single entry: keeps the map arm in the generated code, but one
-		// entry can't shuffle under Go's randomized map iteration (payload
-		// stays byte-deterministic without canonicalization) and map cost
-		// stays out of the ns/op signal — MapHeavy owns map measurement.
+		// A single entry still runs the map code in the generated decoder.
+		// But one entry cannot be reordered by Go's random map iteration, so
+		// the payload stays the same on every run without canonicalize. It
+		// also keeps map cost out of the ns/op number. MapHeavy is the
+		// benchmark that measures maps.
 		Props:     genProps(g, 1),
 		Coords:    [2]float64{g.f64()*180 - 90, g.f64()*360 - 180},
 		Refs:      genAddrPtrs(g, 4+g.intn(8)),
@@ -306,7 +316,8 @@ func genAddrPtr(g *gen, present bool) *Addr {
 func genAddrPtrs(g *gen, n int) []*Addr {
 	out := make([]*Addr, n)
 	for i := range out {
-		// every 4th element nil — exercises the slab path's null branch
+		// Every 4th element is nil, to exercise the null branch of the slab
+		// path (pointees decoded into one shared backing slice).
 		out[i] = genAddrPtr(g, i%4 != 0)
 	}
 	return out
@@ -333,8 +344,8 @@ func genBytes(g *gen, n int) []byte {
 	return b
 }
 
-// genAny synthesizes an `any` value — mostly scalars or nil, occasionally
-// a small list or object.
+// genAny builds an `any` value. It is mostly a scalar or nil, sometimes a
+// small list or object.
 func genAny(g *gen) any {
 	switch g.intn(10) {
 	case 0, 1, 2, 3:
@@ -356,13 +367,14 @@ func genAny(g *gen) any {
 		}
 		return out
 	default:
-		// Single-entry flat object — deterministic (see the Props note).
+		// A flat object with one entry, so its order is fixed (see the note
+		// on Props).
 		return map[string]string{g.str(4 + g.intn(8)): g.str(8 + g.intn(24))}
 	}
 }
 
-// genRaw synthesizes JSON snippets aliased as RawMessage — objects,
-// arrays of mixed scalars, and standalone scalars.
+// genRaw builds JSON snippets as RawMessage values: objects, arrays of mixed
+// scalars, and single scalars.
 func genRaw(g *gen) json.RawMessage {
 	switch g.intn(6) {
 	case 0:
@@ -380,7 +392,8 @@ func genRaw(g *gen) json.RawMessage {
 	}
 }
 
-// rawObject builds a JSON object literal with n string→scalar entries.
+// rawObject builds a JSON object with n entries, each a string key with a
+// scalar value.
 func rawObject(g *gen, n int) json.RawMessage {
 	var b []byte
 	b = append(b, '{')

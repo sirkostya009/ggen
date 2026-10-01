@@ -14,19 +14,21 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// slowPayload — a few-dozen-KiB Node tree, separate from MegaPayload so the
-// per-iteration I/O cost stays tractable. Built once at init; the counter
-// offset keeps its content distinct from MegaValue's.
+// slowPayload is a Node tree of a few dozen KiB. It is separate from
+// MegaPayload so the I/O time per iteration stays manageable. It is built
+// once at init. The counter offset keeps its content different from
+// MegaValue's.
 var slowPayload []byte
 
 func init() {
 	slowPayload = mustMarshal(buildNode(&gen{n: 1 << 41}, 3, []int{2, 2, 2, 0}))
 }
 
-// slowReader serves a []byte with a chunk size + per-Read delay that ramp
-// from a slow start to a fast steady state — models a connection warming up.
-// Defaults: read 1 at (1500 bytes, 52 ms), settling to (800 bytes, 1.2 ms);
-// latency decays geometrically (>>2 per read), hitting the floor in ~4 reads.
+// slowReader serves a []byte with a chunk size and a per-Read delay that move
+// from a slow start to a fast steady state, like a connection warming up. By
+// default the first read returns 1500 bytes after 52 ms, and reads settle at
+// 800 bytes after 1.2 ms. The extra delay drops to a quarter on each read, so
+// it is close to the floor after about 4 reads.
 type slowReader struct {
 	data       []byte
 	pos        int
@@ -59,9 +61,9 @@ func (s *slowReader) Read(p []byte) (int, error) {
 		return 0, io.EOF
 	}
 	t := min(s.reads, s.rampReads)
-	// Chunk size: linear interp from startChunk to endChunk over rampReads.
+	// Chunk size moves linearly from startChunk to endChunk over rampReads.
 	chunk := s.startChunk + (s.endChunk-s.startChunk)*t/s.rampReads
-	// Delay: geometric decay — each read shaves the remaining gap by 75%.
+	// Each read cuts the remaining extra delay by 75%.
 	extra := s.startDelay - s.endDelay
 	for range s.reads {
 		extra >>= 2 // ×0.25
@@ -81,15 +83,16 @@ func (s *slowReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-// slowState carries per-goroutine reader + decode buffer, so the Sleep stays
-// per-goroutine and the Stream alias buffer doesn't race across workers.
+// slowState holds a reader and a decode buffer for each goroutine. So each
+// Sleep blocks only its own goroutine, and the Stream buffer is not shared
+// between goroutines.
 type slowState struct {
 	r   *slowReader
 	buf []byte
 }
 
-// BenchmarkSlowStream_Valid — same payload through a slow-warming reader.
-// Run with a longer benchtime, e.g.
+// BenchmarkSlowStream_Valid decodes the payload through a reader that starts
+// slow and speeds up. Run it with a longer benchtime, for example
 // `go test -bench=BenchmarkSlowStream -benchtime=10s -cpu=1 .`.
 func BenchmarkSlowStream_Valid(b *testing.B) {
 	slowValidCodecs := []struct {
@@ -156,9 +159,9 @@ func BenchmarkSlowStream_Valid(b *testing.B) {
 }
 
 func BenchmarkSlowStream_Invalid(b *testing.B) {
-	// Streaming's theoretical advantage is being able to reject
-	// invalid payloads without draining io.Reader. jsonv2 doesn't
-	// have this but is streaming so its also present for a baseline comparison.
+	// The advantage of streaming is that an invalid payload can be rejected
+	// before the io.Reader is drained. jsonv2 does not stop early, but it
+	// also streams, so it is here as a baseline.
 	slowInvalidCodecs := []struct {
 		name    string
 		fn      func(*slowState) error
@@ -222,9 +225,8 @@ func BenchmarkSlowStream_Invalid(b *testing.B) {
 	}
 }
 
-// Sanity-check the slowReader before the bench harness invokes it under
-// the timer — easier to debug a wiring mistake here than as a flaky
-// benchmark.
+// Sanity-check the slowReader before the benchmarks use it under the timer.
+// A setup mistake is easier to debug here than as a flaky benchmark.
 func TestSlowReader_DeliversWholePayload(t *testing.T) {
 	t.Parallel()
 	r := newSlowReader(slowPayload)

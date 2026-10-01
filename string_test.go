@@ -14,8 +14,8 @@ import (
 	"unsafe"
 )
 
-// stringHappyCases: every input is a complete JSON string literal that
-// stdlib accepts. String must produce the same Go string.
+// stringHappyCases are complete JSON strings that the standard library
+// accepts. String must decode each to the same Go string.
 var stringHappyCases = []struct {
 	name string
 	in   string
@@ -30,8 +30,8 @@ var stringHappyCases = []struct {
 	{"escape_n", `"a\nb"`},
 	{"escape_r", `"a\rb"`},
 	{"escape_t", `"a\tb"`},
-	{"unicode_bmp", `"é"`},            // é
-	{"unicode_surrogate_pair", `"😀"`}, // 😀
+	{"unicode_bmp", `"é"`},
+	{"unicode_surrogate_pair", `"😀"`},
 	{"unicode_then_text", `"xéy"`},
 	{"utf8_passthrough", `"héllo"`},
 	{"all_ascii_escapes", `"\b\f\n\r\t\"\\\/"`},
@@ -60,10 +60,9 @@ func TestString_StdlibParity(t *testing.T) {
 	}
 }
 
-// TestString_ErrorParity asserts that for every input scan rejects,
-// stdlib json.Unmarshal also rejects (and vice-versa). The exact error
-// type differs — scan returns its sentinel; stdlib has its own — but
-// the accept/reject decision must match.
+// TestString_ErrorParity checks that json.Unmarshal also rejects every input
+// that String rejects. String must return the listed error. The standard
+// library has its own error types, so only the reject decision is compared.
 func TestString_ErrorParity(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -96,18 +95,21 @@ func TestString_ErrorParity(t *testing.T) {
 	}
 }
 
-// TestDetach pins Detach: it returns the SAME string value but detached
-// from data — Detach(String(data,…), data) equals the decoded string and
-// survives a scribble of the source, whether String aliased (clean path → Detach
-// clones) or owned it (escape path → Detach is a no-op). The alloc contract
-// (clone IFF the string aliases data) is what makes -copy single-copy on escapes.
+// TestDetach checks Detach. A string aliases data when it points into data's
+// bytes without a copy. Detach returns the same string value, but no longer
+// tied to data. The result must survive overwriting data. When String
+// aliased data (no escapes), Detach clones the string. When String already
+// made its own copy (escapes), Detach does nothing. Detach clones only when
+// the string aliases data. That is why -copy mode copies an escaped string
+// only once.
 func TestDetach(t *testing.T) { //nolint:paralleltest // measures allocations
-	// Value + scribble-survival across clean (aliased) and escaped (owned) inputs.
+	// The value must survive overwriting the source, for both aliased and
+	// copied strings.
 	cases := []struct{ in, want string }{
-		{`"hello"`, "hello"}, // clean → String aliases → Detach clones
-		{`"xéy"`, "xéy"},     // clean multibyte → aliased
-		{`"a\nb"`, "a\nb"},   // escape → stringSlow owns → Detach no-op
-		{`"😀"`, "😀"},         // surrogate escape → owned
+		{`"hello"`, "hello"}, // no escape: String aliases, Detach clones
+		{`"xéy"`, "xéy"},     // no escape, multi-byte: aliased
+		{`"a\nb"`, "a\nb"},   // escape: stringSlow copies, Detach does nothing
+		{`"😀"`, "😀"},         // no escape, 4-byte rune: aliased
 		{`""`, ""},           // empty
 	}
 	for _, tc := range cases {
@@ -118,16 +120,17 @@ func TestDetach(t *testing.T) { //nolint:paralleltest // measures allocations
 		}
 		got := Detach(s, src)
 		for i := range src {
-			src[i] = 'Z' // corrupts any still-aliasing string
+			src[i] = 'Z' // breaks any string that still aliases src
 		}
 		if got != tc.want {
 			t.Errorf("Detach(%q): got %q after scribble, want %q", tc.in, got, tc.want)
 		}
 	}
 
-	// Alloc contract: clone (1 alloc) iff the string aliases data; a non-aliasing
-	// (already-owned) string is returned untouched (0 allocs) — the escape-path win.
-	owned := string(make([]byte, 64)) // heap string, not in any decode buffer
+	// Allocations: one when the string aliases data, because Detach clones
+	// it. Zero when the string does not alias data, because Detach returns it
+	// as is. The zero case is what saves a copy for escaped strings.
+	owned := string(make([]byte, 64)) // its own heap string, not in buf
 	buf := []byte("an unrelated buffer entirely")
 	if n := testing.AllocsPerRun(100, func() { _ = Detach(owned, buf) }); n != 0 {
 		t.Errorf("Detach of a non-aliasing string allocated %v times, want 0", n)
@@ -141,9 +144,9 @@ func TestDetach(t *testing.T) { //nolint:paralleltest // measures allocations
 		t.Errorf("Detach of an aliasing string allocated %v times, want 1", n)
 	}
 
-	// Empty aliased string: a zero-length header still carries a pointer into
-	// data, pinning the whole backing array under GC — Detach must return the
-	// detached "" instead.
+	// An empty string can still point into data. That pointer keeps the whole
+	// backing array alive for the GC. Detach must return an empty string that
+	// does not point into data.
 	backing := make([]byte, 1<<16)
 	empty := unsafe.String(unsafe.SliceData(backing), 0)
 	detached := Detach(empty, backing)
@@ -157,16 +160,18 @@ func TestDetach(t *testing.T) { //nolint:paralleltest // measures allocations
 	}
 }
 
-// TestString_LoneSurrogateParity: jsonv2 rejects unpaired surrogate escapes
-// ("invalid surrogate pair"); scan matches with ErrInvalidUTF8. encoding/json
-// v1 instead substitutes U+FFFD silently — an intentional divergence from v1.
+// TestString_LoneSurrogateParity checks unpaired surrogate escapes. A
+// character above U+FFFF is written in JSON as two \uXXXX escapes, a high
+// surrogate then a low surrogate. jsonv2 rejects a surrogate escape without
+// its partner, and String does too, with ErrInvalidUTF8. encoding/json v1
+// silently replaces it with U+FFFD. ggen follows jsonv2 here on purpose.
 func TestString_LoneSurrogateParity(t *testing.T) {
 	t.Parallel()
 	cases := []string{
 		`"\uD83D"`,       // lone high surrogate
 		`"\uDC00"`,       // lone low surrogate
 		`"\uD83D\uD83D"`, // two highs (invalid pair)
-		`"a\uD83Db"`,     // lone surrogate sandwiched
+		`"a\uD83Db"`,     // lone surrogate between letters
 	}
 	for _, in := range cases {
 		t.Run(in, func(t *testing.T) {
@@ -176,15 +181,16 @@ func TestString_LoneSurrogateParity(t *testing.T) {
 			}
 		})
 	}
-	// Valid pair (sanity baseline) still decodes to the astral rune.
+	// A valid 4-byte character still decodes.
 	if got, _, err := String([]byte(`"😀"`), 0, true); err != nil || got != "😀" {
 		t.Errorf("valid pair: got %q err=%v", got, err)
 	}
 }
 
-// TestString_InvalidUTF8Rejected: raw malformed UTF-8 inside a string literal
-// errors with ErrInvalidUTF8 on both the clean-span and escape paths (jsonv2
-// parity; v1 would silently substitute U+FFFD).
+// TestString_InvalidUTF8Rejected checks that invalid UTF-8 bytes inside a
+// string give ErrInvalidUTF8. This must hold for strings with and without
+// escapes, which take different code paths. jsonv2 does the same. encoding/json
+// v1 would silently replace the bytes with U+FFFD.
 func TestString_InvalidUTF8Rejected(t *testing.T) {
 	t.Parallel()
 	cases := []struct{ name, in string }{
@@ -205,7 +211,7 @@ func TestString_InvalidUTF8Rejected(t *testing.T) {
 			}
 		})
 	}
-	// Valid multi-byte UTF-8 passes both paths untouched.
+	// Valid multi-byte UTF-8 passes on both paths.
 	for _, in := range []string{"\"héllo wörld żółć\"", "\"a\\né😀\""} {
 		if got, _, err := String([]byte(in), 0, true); err != nil || got == "" {
 			t.Errorf("%q: got %q err=%v", in, got, err)
@@ -213,8 +219,8 @@ func TestString_InvalidUTF8Rejected(t *testing.T) {
 	}
 }
 
-// TestString_ZeroCopyAlias confirms the happy path aliases the input
-// (no escapes → returned string shares memory with data).
+// TestString_ZeroCopyAlias checks that a string without escapes aliases the
+// input. The returned string shares memory with data.
 func TestString_ZeroCopyAlias(t *testing.T) {
 	t.Parallel()
 	data := []byte(`"hello world"`)
@@ -222,20 +228,19 @@ func TestString_ZeroCopyAlias(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The returned string should point inside data[1:12]. Mutate the source
-	// and observe the alias change. (This is exactly the unsafe contract
-	// callers rely on; the test just confirms it holds.)
+	// The string points into data[1:12]. Changing data must change the
+	// string. Callers rely on this unsafe behaviour.
 	data[1] = 'H'
 	if !strings.HasPrefix(s, "H") {
 		t.Errorf("expected zero-copy alias, got %q", s)
 	}
 }
 
-// TestStringEscapeAllocBounded: stringSlow must size its scratch buffer
-// off the string span (closing-quote index), not the whole remaining
-// payload, and must not pay a second exact-size copy on return. A 1 MiB
-// payload with a short escaped string at the front must not allocate
-// megabytes per decode.
+// TestStringEscapeAllocBounded checks how stringSlow sizes its buffer. It
+// must size it from the string itself, up to the closing quote, not from the
+// whole rest of the input. It must also not copy the result a second time on
+// return. A short escaped string at the front of 1 MiB of input must not
+// allocate megabytes per decode.
 func TestStringEscapeAllocBounded(t *testing.T) { //nolint:paralleltest // measures allocations
 	payload := append([]byte(`"ab\nc"`), bytes.Repeat([]byte{' '}, 1<<20)...)
 	var got string
@@ -264,9 +269,9 @@ func TestStringEscapeAllocBounded(t *testing.T) { //nolint:paralleltest // measu
 	}
 }
 
-// TestSkipString_ParityWithString: skipString must agree with String on end
-// position for every accepted input, and reject everything String rejects
-// (error values may differ only where noted — none today).
+// TestSkipString_ParityWithString checks that skipString returns the same end
+// position and error as String for every valid input. It must also reject
+// every input that String rejects.
 func TestSkipString_ParityWithString(t *testing.T) {
 	t.Parallel()
 	for _, tc := range stringHappyCases {
@@ -302,10 +307,12 @@ func TestSkipString_ParityWithString(t *testing.T) {
 	}
 }
 
-// TestSkipString_EscapeDenseLinear pins the memoized quote candidate: an
-// escape-dense skipped string used to re-run the closing-quote IndexByte to
-// the same far quote per escape — O(n·escapes), ~7 ms for a 48 KB string.
-// Parity (incl. escaped quotes, which force a re-locate) plus a growth guard.
+// TestSkipString_EscapeDenseLinear checks that skipString stays linear on a
+// string with many escapes. skipString remembers where it last found a
+// quote. Without that, it would search to the same far closing quote again
+// after every escape, which is quadratic. The test checks results against
+// String, including escaped quotes, which force a new search. It then checks
+// how the run time grows.
 func TestSkipString_EscapeDenseLinear(t *testing.T) {
 	t.Parallel()
 	build := func(n int) []byte {
@@ -330,8 +337,9 @@ func TestSkipString_EscapeDenseLinear(t *testing.T) {
 				in, gotPos, gotErr, wantPos, wantErr)
 		}
 	}
-	// Growth guard: 16× the escapes must cost far less than the quadratic
-	// ~256×; linear is ~16×. 80× splits them with generous noise headroom.
+	// 16 times the escapes should take about 16 times as long if linear,
+	// and about 256 times if quadratic. The 80 times limit sits between
+	// them, with plenty of room for timing noise.
 	fastest := func(data []byte) time.Duration {
 		best := time.Duration(1 << 62)
 		for range 5 {
@@ -352,8 +360,8 @@ func TestSkipString_EscapeDenseLinear(t *testing.T) {
 	}
 }
 
-// TestSkipValue_EscapedStringNoAlloc pins that skipping an escaped string
-// never allocates (String's stringSlow scratch would).
+// TestSkipValue_EscapedStringNoAlloc checks that skipping an escaped string
+// never allocates. Decoding it with String would allocate a buffer.
 func TestSkipValue_EscapedStringNoAlloc(t *testing.T) { //nolint:paralleltest // measures allocations
 	data := []byte(`"a\nbéc\t` + strings.Repeat("x", 100) + `"`)
 	allocs := testing.AllocsPerRun(100, func() {
@@ -366,9 +374,10 @@ func TestSkipValue_EscapedStringNoAlloc(t *testing.T) { //nolint:paralleltest //
 	}
 }
 
-// TestString_CtrlBeforeEscapeRejected pins the stringSlow prefix fix: an
-// unescaped control byte BEFORE the first backslash must reject (stdlib
-// parity) — the prefix used to be copied into scratch unchecked.
+// TestString_CtrlBeforeEscapeRejected checks that a raw control byte before
+// the first backslash is rejected, like the standard library does.
+// stringSlow copies the bytes before the first escape in one go, and it must
+// still check them.
 func TestString_CtrlBeforeEscapeRejected(t *testing.T) {
 	t.Parallel()
 	in := []byte("\"a\x01b\\nc\"")
@@ -379,7 +388,7 @@ func TestString_CtrlBeforeEscapeRejected(t *testing.T) {
 	if err := json.Unmarshal(in, &v); err == nil {
 		t.Errorf("stdlib accepted %q — parity assumption broken", in)
 	}
-	// Stream path shares the fix via (*Stream).stringSlow.
+	// Stream must reject it too, in (*Stream).stringSlow.
 	var s Stream
 	s.Reset(bytes.NewReader(in), nil)
 	if _, err := s.String(true); err != ErrBadString {
@@ -387,9 +396,10 @@ func TestString_CtrlBeforeEscapeRejected(t *testing.T) {
 	}
 }
 
-// stringSlowRef is the pre-gate stringSlow: a byte-at-a-time copy with no bulk
-// arm, kept as the differential oracle for the escRunWindow hybrid. Value,
-// position, and error identity must match the shipped version exactly.
+// stringSlowRef is a simple version of stringSlow that copies one byte at a
+// time. stringSlow copies runs of plain bytes in windows of escRunWindow
+// bytes. stringSlowRef is the reference it is tested against. The value,
+// position and exact error must match.
 func stringSlowRef(data []byte, start, j, capHint int, validate bool) (string, int, error) {
 	bad, rawHigh := ctrlOrHigh(data[start:j])
 	if bad {
@@ -479,8 +489,9 @@ func stringSlowRef(data []byte, start, j, capHint int, validate bool) (string, i
 	return "", len(data), ErrUnterminated
 }
 
-// uEscapePrefixRef is the reference's own prefix-of-\uXXXX test (byte
-// positions spelled out, no shared helper).
+// uEscapePrefixRef reports whether tail could still grow into a full \uXXXX
+// escape. It is written out by hand so the reference shares no code with
+// stringSlow.
 func uEscapePrefixRef(tail []byte) bool {
 	for k, c := range tail {
 		switch {
@@ -493,21 +504,23 @@ func uEscapePrefixRef(tail []byte) bool {
 	return true
 }
 
-// escapeAlphabet: fragments that stress every boundary the escRunWindow gate
-// introduces — runs shorter and longer than the window, escapes straddling it,
-// ctrl/high bytes on both sides of the switchover, truncation-prone \u forms.
+// escapeAlphabet holds pieces for random strings that test the edges of
+// the escRunWindow copy. It has plain runs shorter and longer than the
+// window, escapes that cross a window edge, control and non-ASCII bytes, and
+// \u forms that are easy to cut short.
 var escapeAlphabet = []string{
 	`a`, `bc`, `def`, `ghijklmn`, `opqrstuvwxyz0123`,
-	`0123456789abcdef0123456789abcdef`, // 2× window
+	`0123456789abcdef0123456789abcdef`, // twice the window
 	`\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`,
 	`A`, `é`, `😀`, `\ud83d`, `\ude00`, `\u00`, `\uZZZZ`,
 	"é", "日本語", "😀", "\xc3", "\xff\xfe", "\x80",
 	"\x01", "\x1f", "\x7f", " ", "\t\\t",
 }
 
-// TestStringSlow_RefDifferential pins the escRunWindow bulk arm against the
-// byte-at-a-time reference: same value, same end position, same error, for
-// randomized escape/ctrl/high-byte bodies in both validate modes.
+// TestStringSlow_RefDifferential checks stringSlow against the byte-at-a-time
+// reference on random strings with escapes, control bytes and non-ASCII
+// bytes. The value, end position and error must match, with and without
+// UTF-8 validation.
 func TestStringSlow_RefDifferential(t *testing.T) {
 	t.Parallel()
 	rng := rand.New(rand.NewSource(20260809))
@@ -516,23 +529,24 @@ func TestStringSlow_RefDifferential(t *testing.T) {
 		for range rng.Intn(9) {
 			body = append(body, escapeAlphabet[rng.Intn(len(escapeAlphabet))]...)
 		}
-		// Ensure at least one escape so the input actually reaches stringSlow.
+		// Add at least one escape so the input reaches stringSlow.
 		body = append(body, `\n`...)
 		for range rng.Intn(6) {
 			body = append(body, escapeAlphabet[rng.Intn(len(escapeAlphabet))]...)
 		}
-		if rng.Intn(4) != 0 { // 3/4 terminated, 1/4 truncated
+		if rng.Intn(4) != 0 { // 3 in 4 get a closing quote
 			body = append(body, '"')
 		}
-		// Randomly truncate to exercise every partial-escape/partial-run edge.
+		// Sometimes cut the input short, to end inside an escape or a run.
 		if rng.Intn(5) == 0 && len(body) > 0 {
 			body = body[:rng.Intn(len(body))]
 		}
 		data := append([]byte(`"`), body...)
 
 		for _, validate := range [2]bool{true, false} {
-			// start=1 (past the opening quote); j = first backslash, as the
-			// callers compute it. No backslash → nothing to compare.
+			// start=1 is just past the opening quote. j is the first
+			// backslash, as the callers compute it. With no backslash there
+			// is nothing to compare.
 			j := -1
 			for k := 1; k < len(data); k++ {
 				if data[k] == '\\' {
@@ -567,21 +581,23 @@ func naiveHasCtrl(b []byte) bool {
 	return false
 }
 
-// TestHasCtrlByte_DifferentialExhaustive places a control byte at every
-// position of buffers spanning all 8 word-phase alignments, alongside
-// high-bit (UTF-8) bytes that must NOT false-positive, and checks the SWAR
-// path agrees with the naive byte loop bit-for-bit.
+// TestHasCtrlByte_DifferentialExhaustive checks hasCtrlByte against a simple
+// byte loop. hasCtrlByte uses SWAR: it loads 8 bytes as one uint64 and tests
+// all 8 with a few arithmetic ops. The test puts a control byte at every
+// position, so it lands at each of the 8 offsets within a word. Bytes with
+// the high bit set (UTF-8) are mixed in and must not count as control
+// bytes.
 func TestHasCtrlByte_DifferentialExhaustive(t *testing.T) {
 	t.Parallel()
-	// Base spans cover lengths around the 8-byte word boundary (0..40) so
-	// the SWAR loop, the scalar tail, and their seam are all exercised.
+	// Lengths 0 to 40 cover the 8-byte word loop, the byte-by-byte tail,
+	// and the point where one hands off to the other.
 	for n := range 41 {
-		// All-clean baseline: mix ASCII printable and high (UTF-8) bytes,
-		// none of which are control chars.
+		// Clean input: printable ASCII mixed with high-bit bytes, none of
+		// them control bytes.
 		base := make([]byte, n)
 		for i := range base {
 			if i%3 == 0 {
-				base[i] = 0x80 + byte(i%0x80) // high bit set, must not trip
+				base[i] = 0x80 + byte(i%0x80) // high bit set, not a control byte
 			} else {
 				base[i] = 0x20 + byte(i%0x5f) // printable ASCII
 			}
@@ -589,7 +605,7 @@ func TestHasCtrlByte_DifferentialExhaustive(t *testing.T) {
 		if got, want := hasCtrlByte(base), naiveHasCtrl(base); got != want {
 			t.Fatalf("clean n=%d: hasCtrlByte=%v naive=%v (%v)", n, got, want, base)
 		}
-		// Inject a control byte at every position, with every control value.
+		// Put a control byte at every position, using several control values.
 		for pos := range n {
 			for _, ctrl := range []byte{0x00, 0x01, 0x09, 0x0a, 0x0d, 0x1f} {
 				b := append([]byte(nil), base...)
@@ -603,14 +619,15 @@ func TestHasCtrlByte_DifferentialExhaustive(t *testing.T) {
 	}
 }
 
-// TestHasCtrlByte_Boundary pins 0x1f (control) vs 0x20 (space, the lowest
-// legal byte) at the exact lane boundary.
+// TestHasCtrlByte_Boundary checks 0x1f, the highest control byte, against
+// 0x20, the space and lowest allowed byte. The byte sits at the end of
+// inputs sized around 8 and 16 bytes.
 func TestHasCtrlByte_Boundary(t *testing.T) {
 	t.Parallel()
 	for _, n := range []int{7, 8, 9, 15, 16, 17} {
 		clean := make([]byte, n)
 		for i := range clean {
-			clean[i] = 0x20 // all spaces — lowest legal
+			clean[i] = 0x20 // space, the lowest allowed byte
 		}
 		if hasCtrlByte(clean) {
 			t.Fatalf("n=%d all-0x20 reported ctrl", n)
@@ -623,11 +640,12 @@ func TestHasCtrlByte_Boundary(t *testing.T) {
 	}
 }
 
-// BenchmarkStringUTF8Cost splits the two-pass string decode cost: full
-// String (locate + checkSpan + gated utf8.Valid) vs the utf8.Valid pass
-// alone, on ASCII vs Cyrillic (2-byte runes) spans. The delta between the
-// ascii and cyrillic String rows is what a fused (single-pass) validator
-// could at best reclaim.
+// BenchmarkStringUTF8Cost splits the cost of decoding a string. String first
+// finds the closing quote and checks for control bytes, then runs
+// utf8.Valid only if it saw non-ASCII bytes. The rows compare full String on
+// ASCII text, full String on Cyrillic text (2 bytes per letter), and
+// utf8.Valid alone. The gap between the two String rows is the most a
+// single-pass validator could save.
 func BenchmarkStringUTF8Cost(b *testing.B) {
 	sizes := []struct {
 		name string
@@ -635,7 +653,7 @@ func BenchmarkStringUTF8Cost(b *testing.B) {
 	}{{"16B", 16}, {"64B", 64}, {"256B", 256}, {"1KB", 1024}}
 	for _, sz := range sizes {
 		ascii := strings.Repeat("abcdefgh", sz.n/8)
-		cyr := strings.Repeat("аб", sz.n/4) // 2 runes = 4 bytes
+		cyr := strings.Repeat("аб", sz.n/4) // 2 letters, 4 bytes
 		asciiQ := []byte(`"` + ascii + `"`)
 		cyrQ := []byte(`"` + cyr + `"`)
 		b.Run(sz.name+"/String_ascii", func(b *testing.B) {
@@ -657,14 +675,14 @@ func BenchmarkStringUTF8Cost(b *testing.B) {
 	}
 }
 
-// TestString_MalformedTailIsFinal pins the error-position contract at the
-// end of the data: a malformation sitting before bytes already held reports
-// a position strictly inside data; only a tail that more bytes could still
-// complete reports len(data). String and skipString agree. A `\u` escape
-// used to demand its 6 bytes before looking at the buffered hex digits, and
-// an open-tail control byte read as ErrUnterminated — both marked a final
-// malformation as truncated, which CaptureValue turns into a refill (a live
-// reader then blocked forever) and the stream reported differently.
+// TestString_MalformedTailIsFinal checks the error position at the end of the
+// data. If the bytes already present are broken, the error position must be
+// inside data. Only a tail that more bytes could still complete reports
+// len(data), which means "cut short". String and skipString must agree.
+// This matters for Stream. CaptureValue treats a len(data) position as "read
+// more and retry". A broken value reported as cut short would make a live
+// reader block forever, and Stream would report a different error than
+// []byte input.
 func TestString_MalformedTailIsFinal(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -672,19 +690,19 @@ func TestString_MalformedTailIsFinal(t *testing.T) {
 		pos int
 		err error
 	}{
-		// A non-hex byte among the buffered \u digits: final, at the backslash.
+		// A non-hex byte among the \u digits: broken, at the backslash.
 		{`"\u12"`, 1, ErrBadString},
 		{`"\u1"`, 1, ErrBadString},
 		{`"\u"`, 1, ErrBadString},
 		{`"ab\uZ"`, 3, ErrBadString},
 		{`"abc\u00"`, 4, ErrBadString},
 		{`"\u00ZZ"`, 1, ErrBadString},
-		// Every buffered byte is still a valid prefix: truncated.
+		// Every byte present is still a valid start: cut short.
 		{`"\u00`, 5, ErrBadString},
 		{`"\u`, 3, ErrBadString},
 		{`"\`, 2, ErrBadString},
-		// A control byte in an open tail: final, at the byte itself — never
-		// ErrUnterminated.
+		// A control byte in an unclosed string: broken, at the byte itself,
+		// never ErrUnterminated.
 		{"\"ab\x01}", 3, ErrBadString},
 		{"\"ab\x01", 3, ErrBadString},
 		{"\"ab\x01\\n", 3, ErrBadString},
@@ -699,8 +717,9 @@ func TestString_MalformedTailIsFinal(t *testing.T) {
 			t.Errorf("skipString(%q) = (%d, %v), want (%d, %v)", tc.in, p, err, tc.pos, tc.err)
 		}
 	}
-	// The surrogate low-half probe: a tail that can still become \uXXXX is
-	// truncated; anything else is a lone surrogate at the cursor.
+	// After a high surrogate escape, String looks for the low half. A tail
+	// that can still become \uXXXX is cut short. Anything else is a lone
+	// surrogate, reported at the current position.
 	for _, tc := range []struct {
 		in  string
 		pos int
@@ -718,8 +737,8 @@ func TestString_MalformedTailIsFinal(t *testing.T) {
 	}
 }
 
-// String's no-closing-quote branch classifies the error without copying the
-// payload.
+// When String finds no closing quote, it must pick the error without
+// copying the input.
 func TestStringUnterminatedEscapedNoAlloc(t *testing.T) { //nolint:paralleltest // measures allocations
 	data := append([]byte(`"a\n`), bytes.Repeat([]byte("x"), 1<<20)...)
 	var pos int
@@ -734,8 +753,9 @@ func TestStringUnterminatedEscapedNoAlloc(t *testing.T) { //nolint:paralleltest 
 	}
 }
 
-// stringUnterminated must be (pos, err)-identical to the stringSlow walk it
-// replaces, for every escape/surrogate/ctrl shape and both validate modes.
+// stringUnterminated handles a string with no closing quote. It must return
+// the same position and error as stringSlow for every kind of escape,
+// surrogate and control byte, with and without validation.
 func TestStringUnterminatedParity(t *testing.T) {
 	t.Parallel()
 	bodies := []string{

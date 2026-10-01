@@ -97,7 +97,8 @@ func TestSchemas(t *testing.T) {
 }
 
 // TestRuntime type-checks the schemas and runs inputs through them. It needs
-// GGEN_NODE_MODULES: a node_modules directory with zod and typescript.
+// GGEN_NODE_MODULES, a node_modules directory with zod and typescript, and
+// node on PATH.
 func TestRuntime(t *testing.T) {
 	t.Parallel()
 	modules := os.Getenv("GGEN_NODE_MODULES")
@@ -190,8 +191,8 @@ console.log(JSON.stringify(out));
 	}
 }
 
-// TestFor decides headers, schema names, @Func twins and external types per
-// output file and placed type.
+// TestFor pins the ...For options that decide headers, schema names, @Func
+// actions and external types per output file and placed type.
 func TestFor(t *testing.T) {
 	t.Parallel()
 	set, err := gen.Load("../testdata/api", "../testdata/other")

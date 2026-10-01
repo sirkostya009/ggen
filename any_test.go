@@ -17,9 +17,9 @@ import (
 	"time"
 )
 
-// anyCases covers shapes Any walks. Each input is fed to both
-// stdlib json.Unmarshal (with and without UseNumber) and Any /
-// AnyNumber; outputs must match via reflect.DeepEqual.
+// anyCases covers the shapes Any decodes. Each input goes to json.Unmarshal,
+// with and without UseNumber, and to Any and AnyNumber. The results must be
+// equal under reflect.DeepEqual.
 var anyCases = []struct {
 	name string
 	in   string
@@ -98,9 +98,11 @@ func TestAnyNumber_StdlibParity(t *testing.T) {
 	}
 }
 
-// TestAnyCopy_ParityAndDecoupled checks AnyCopy returns the same value as the
-// stdlib AND that every string is copied: after the source buffer is scribbled
-// over, the decoded value is unchanged (an aliasing decode would corrupt it).
+// TestAnyCopy_ParityAndDecoupled checks that AnyCopy returns the same value as
+// the standard library, and that every string is a copy. A string aliases the
+// input when it points into the input bytes without a copy. After the input
+// is overwritten, the decoded value must not change. An aliased string would
+// change with it.
 func TestAnyCopy_ParityAndDecoupled(t *testing.T) {
 	t.Parallel()
 	for _, tc := range anyCases {
@@ -128,8 +130,8 @@ func TestAnyCopy_ParityAndDecoupled(t *testing.T) {
 	}
 }
 
-// TestAnyNumberCopy_ParityAndDecoupled is the AnyNumberCopy counterpart — the
-// json.Number span is cloned too, so it survives the scribble.
+// TestAnyNumberCopy_ParityAndDecoupled is the same test for AnyNumberCopy. The
+// json.Number text is copied too, so it must survive overwriting the input.
 func TestAnyNumberCopy_ParityAndDecoupled(t *testing.T) {
 	t.Parallel()
 	for _, tc := range anyCases {
@@ -159,9 +161,9 @@ func TestAnyNumberCopy_ParityAndDecoupled(t *testing.T) {
 	}
 }
 
-// payload covers the shape mix Any walks: nested object, array of
-// scalars + nested array, mixed numeric (int + float + large int), strings
-// (no escapes — hits zero-copy alias path), booleans, null.
+// anyPayload mixes the shapes Any decodes: a nested object, an array of
+// scalars with a nested array, ints, floats and a large int, strings without
+// escapes (so they alias the input), booleans and null.
 var anyPayload = []byte(`{
   "name": "alice",
   "age": 30,
@@ -207,9 +209,9 @@ func BenchmarkAny_scanNumber(b *testing.B) {
 	}
 }
 
-// BenchmarkAny_Shapes — per-shape decode benches over anyShapeInputs (the
-// same shape mix the AppendAny bench covers), three rows each: stdjson,
-// Any, AnyNumber.
+// BenchmarkAny_Shapes decodes each input in anyShapeInputs, the same shapes
+// the AppendAny benchmark uses. Each shape has three rows: encoding/json,
+// Any and AnyNumber.
 func BenchmarkAny_Shapes(b *testing.B) {
 	codecs := []struct {
 		name string
@@ -236,9 +238,9 @@ func BenchmarkAny_Shapes(b *testing.B) {
 	}
 }
 
-// anyShapeInputs is the per-shape input table for BenchmarkAny_Shapes.
-// Strings are inlined so the scan benches are independent of the
-// encode package's bench fixtures — same shape mix, locally generated.
+// anyShapeInputs is the input table for BenchmarkAny_Shapes. The JSON is
+// written out here instead of being made from anyShapes, so the decode
+// benchmarks do not depend on the encode fixtures.
 var anyShapeInputs = func() []struct {
 	name    string
 	payload []byte
@@ -253,14 +255,14 @@ var anyShapeInputs = func() []struct {
 		{"int", []byte(`42`)},
 		{"int64", []byte(`1125899906842624`)},
 		{"float64", []byte(`3.14159`)},
-		// 30-digit number — beyond float64 precision (15-17 digits). Any
-		// parses to float64 with silent precision loss; AnyNumber
-		// preserves the exact digits via zero-copy alias, so the
-		// stdjson-vs-ggen-vs-ggen_number row spread is meaningful here.
+		// More digits than float64 can hold (15 to 17). Any parses it to
+		// float64 and silently loses precision. AnyNumber keeps the exact
+		// digits by aliasing the input. So the three rows differ in a
+		// useful way here.
 		{"large_number", []byte(`123456789012345.678901234567890123`)},
 	}
-	// 32-element typed-slice payloads. Plain digits / floats / bools
-	// keep the parser on its happy path (no escapes, no whitespace).
+	// Arrays of 32 elements of one type. Plain ints, floats and bools
+	// keep the parser on its fast path, with no escapes or whitespace.
 	var sb strings.Builder
 	sb.WriteByte('[')
 	for i := range 32 {
@@ -321,9 +323,8 @@ var anyShapeInputs = func() []struct {
 		payload []byte
 	}{"[]string_32", []byte(sb.String())})
 
-	// Object shape with 32 string-keyed entries — exercise the
-	// per-key path under the same map-construction cost as the
-	// AppendAny side.
+	// An object with 32 entries. It covers the per-key code, with the
+	// same map building cost as the AppendAny side.
 	sb.Reset()
 	sb.WriteByte('{')
 	for i := range 32 {
@@ -387,13 +388,15 @@ var anyShapeInputs = func() []struct {
 	return out
 }()
 
-// BenchmarkAppendAny_* — AppendAny across the shapes an `any`
-// field holds at runtime (scalars, homogeneous primitive slices/maps),
-// each container 32 entries. Three rows per shape: stdlib v1, stdlib v2,
-// ggen — surfacing where ggen's concrete fast path beats reflection.
+// The BenchmarkAppendAny* benchmarks run AppendAny on the values an `any`
+// field holds at runtime: scalars, and slices and maps of one primitive type
+// with 32 entries each. Each shape has three rows: encoding/json v1, jsonv2
+// and ggen. They show where ggen's fast paths for concrete types beat
+// reflection.
 
-// reparse marshals via jsonv2 (the reference) and parses to any so map
-// ordering and other Go-representation noise doesn't fail the compare.
+// reparse decodes JSON into an any with jsonv2. Comparing reparsed values
+// ignores map key order and other differences that do not change the
+// meaning.
 func reparse(t *testing.T, b []byte) any {
 	t.Helper()
 	var v any
@@ -441,7 +444,7 @@ func TestAppendAny_String(t *testing.T) {
 	checkAny(t, "hello")
 	checkAny(t, "tab\there")
 	checkAny(t, "quote\"inside")
-	checkAny(t, "<a href=\"x\">b & c</a>") // HTML-escape exercised
+	checkAny(t, "<a href=\"x\">b & c</a>") // HTML characters
 }
 
 func TestAppendAny_Numbers(t *testing.T) {
@@ -453,7 +456,7 @@ func TestAppendAny_Numbers(t *testing.T) {
 	checkAny(t, int64(1<<60))
 	checkAny(t, uint(0))
 	checkAny(t, uint8(255))
-	checkAny(t, byte(7)) // alias for uint8 — same case, exercised explicitly
+	checkAny(t, byte(7)) // byte is uint8, tested on its own anyway
 	checkAny(t, uint16(65535))
 	checkAny(t, uint32(1))
 	checkAny(t, uint64(1<<63))
@@ -469,9 +472,10 @@ func TestAppendAny_JSONNumber(t *testing.T) {
 			t.Errorf("json.Number(%q) → %q, %v", ok, out, err)
 		}
 	}
-	// Zero value → 0 (v1 parity); the raw append used to emit ZERO bytes,
-	// producing {"n":} in a struct field. Non-empty content passes verbatim
-	// unvalidated — same trust as RawMessage.
+	// The zero value writes 0, like encoding/json v1. Writing nothing
+	// would give {"n":} in a struct field, which is invalid JSON.
+	// Non-empty text is written as is, without validation, the same
+	// trust as RawMessage.
 	out, err := AppendAny(nil, json.Number(""))
 	if err != nil || string(out) != "0" {
 		t.Errorf("zero json.Number → %q, %v, want 0", out, err)
@@ -518,7 +522,8 @@ func TestAppendAny_PrimitiveSlices(t *testing.T) {
 
 func TestAppendAny_Bytes(t *testing.T) {
 	t.Parallel()
-	// Stdlib marshals []byte as a base64 string — match.
+	// The standard library writes []byte as a base64 string. So must
+	// AppendAny.
 	checkAny(t, []byte("hello world"))
 	checkAny(t, []byte{0xde, 0xad, 0xbe, 0xef})
 }
@@ -556,7 +561,7 @@ func TestAppendAny_Nested(t *testing.T) {
 	})
 }
 
-// Untagged exported struct — uses Go field names verbatim.
+// A struct without tags uses the Go field names as keys.
 func TestAppendAny_Struct_Bare(t *testing.T) {
 	t.Parallel()
 	type point struct {
@@ -565,7 +570,7 @@ func TestAppendAny_Struct_Bare(t *testing.T) {
 	checkAny(t, point{X: 1, Y: 2})
 }
 
-// json-tagged fields: rename + skip via "-" + omitempty + omitzero.
+// json tags: rename, skip with "-", omitempty and omitzero.
 func TestAppendAny_Struct_Tags(t *testing.T) {
 	t.Parallel()
 	type tagged struct {
@@ -578,7 +583,7 @@ func TestAppendAny_Struct_Tags(t *testing.T) {
 	checkAny(t, tagged{Name: "alice", Skip: "ignored", Present: "hi"})
 }
 
-// Pointer fields and pointer-typed top-level value.
+// Pointer fields, and a pointer as the top-level value.
 func TestAppendAny_Struct_Pointers(t *testing.T) {
 	t.Parallel()
 	type withPtr struct {
@@ -588,14 +593,14 @@ func TestAppendAny_Struct_Pointers(t *testing.T) {
 	name := "alice"
 	n := 42
 	checkAny(t, withPtr{Name: &name, N: &n})
-	checkAny(t, withPtr{}) // both nil → null
-	// Top-level pointer derefs.
+	checkAny(t, withPtr{}) // both nil, so both null
+	// A top-level pointer writes the value it points to.
 	checkAny(t, &n)
 	var nilP *int
 	checkAny(t, nilP)
 }
 
-// Anonymous embedded struct fields are promoted at parent level.
+// Fields of an embedded struct are written as fields of the parent.
 func TestAppendAny_Struct_Embedded(t *testing.T) {
 	t.Parallel()
 	type Base struct {
@@ -610,7 +615,8 @@ func TestAppendAny_Struct_Embedded(t *testing.T) {
 	checkAny(t, Derived{ID: "abc", Meta: "m", Name: "alice"})
 }
 
-// Fields promoted through a nil embedded pointer are omitted, not a panic.
+// Fields reached through a nil embedded pointer are left out. AppendAny must
+// not panic.
 func TestAppendAny_Struct_NilEmbeddedPointer(t *testing.T) {
 	t.Parallel()
 	type Base struct {
@@ -625,9 +631,10 @@ func TestAppendAny_Struct_NilEmbeddedPointer(t *testing.T) {
 	checkAny(t, Derived{Base: &Base{ID: "abc"}, Name: "alice"})
 }
 
-// Field shadowing an embedded field: stdlib dominant-field rules — the
-// shallowest wins, equal-depth tagged beats untagged, ambiguous names drop.
-// Flattening used to emit BOTH keys.
+// A field with the same name as an embedded field follows the standard
+// library rules. The least nested field wins. At equal depth a tagged field
+// beats an untagged one. If that still leaves a tie, the name is dropped.
+// Only one key may be written, never both.
 func TestAppendAny_Struct_EmbeddedShadowing(t *testing.T) {
 	t.Parallel()
 	type Base struct {
@@ -637,7 +644,7 @@ func TestAppendAny_Struct_EmbeddedShadowing(t *testing.T) {
 	type Outer struct {
 		Base
 
-		ID int `json:"id"` // shadows Base.ID
+		ID int `json:"id"` // hides Base.ID
 	}
 	out, err := AppendAny(nil, Outer{Base: Base{ID: 1, Note: "n"}, ID: 2})
 	if err != nil {
@@ -648,7 +655,8 @@ func TestAppendAny_Struct_EmbeddedShadowing(t *testing.T) {
 	}
 	checkAny(t, Outer{Base: Base{ID: 1, Note: "n"}, ID: 2})
 
-	// Two embeds carrying the same name at equal depth — ambiguous, dropped.
+	// Two embedded structs with the same name at equal depth. That is a
+	// tie, so the name is dropped.
 	type Other struct {
 		ID int `json:"id"`
 	}
@@ -661,7 +669,7 @@ func TestAppendAny_Struct_EmbeddedShadowing(t *testing.T) {
 	checkAny(t, Clash{Base: Base{ID: 1, Note: "n"}, Other: Other{ID: 2}, Name: "x"})
 }
 
-// Nested struct fields hit the recursion path.
+// A struct field inside a struct takes the recursive path.
 func TestAppendAny_Struct_Nested(t *testing.T) {
 	t.Parallel()
 	type addr struct {
@@ -674,9 +682,11 @@ func TestAppendAny_Struct_Nested(t *testing.T) {
 	checkAny(t, user{Name: "alice", Addr: addr{City: "Lviv"}})
 }
 
-// ,string quotes numeric kinds only (through one pointer level), matching
-// generated code and jsonv2: bool stays bare, string keeps its single
-// encoding (a bare wrap emitted invalid JSON), nil *int stays bare null.
+// ,string quotes only numbers, also through one pointer, like generated code
+// does. A bool stays unquoted. A string is encoded once, not quoted a second
+// time. A nil *int stays an unquoted null. Stable jsonv2 in Go 1.27 rejects
+// ,string on bool and string instead. That open divergence is tracked in
+// .claude/backlog.md.
 func TestAppendAny_Struct_StringOpt(t *testing.T) {
 	t.Parallel()
 	type quoted struct {
@@ -700,9 +710,9 @@ func TestAppendAny_Struct_StringOpt(t *testing.T) {
 	checkAny(t, in)
 }
 
-// [N]byte through the any-walker used to panic: the base64 arm called
-// Slice() on the unaddressable reflect.ValueOf array (the comment dodged
-// Bytes()'s panic and walked into Slice()'s identical one).
+// A [N]byte value must be written as base64 without a panic. The array from
+// reflect.ValueOf is not addressable, so the code cannot call Bytes() or
+// Slice() on it.
 func TestAppendAny_ByteArray(t *testing.T) {
 	t.Parallel()
 	out, err := AppendAny(nil, [4]byte{1, 2, 3, 4})
@@ -720,11 +730,11 @@ func TestAppendAny_ByteArray(t *testing.T) {
 
 func TestAppendAny_RawMessage(t *testing.T) {
 	t.Parallel()
-	// Non-empty bytes pass through verbatim — no quoting, no escape.
+	// Non-empty bytes are written as is, with no quotes or escapes.
 	checkAny(t, json.RawMessage(`{"a":1,"b":[true,null]}`))
 	checkAny(t, json.RawMessage(`42`))
 	checkAny(t, json.RawMessage(`"escaped\nstring"`))
-	// nil and empty both become JSON null (stdlib v1 parity).
+	// nil and empty both write null, like encoding/json v1.
 	out, err := AppendAny(nil, json.RawMessage(nil))
 	if err != nil || string(out) != "null" {
 		t.Errorf("nil RawMessage: got %q err %v, want null", out, err)
@@ -737,7 +747,7 @@ func TestAppendAny_RawMessage(t *testing.T) {
 
 func TestAppendAny_Time(t *testing.T) {
 	t.Parallel()
-	// Fixed instant so output is byte-stable.
+	// A fixed time, so the output never changes.
 	ts := time.Date(2026, 5, 25, 12, 34, 56, 789_000_000, time.UTC)
 	out, err := AppendAny(nil, ts)
 	if err != nil {
@@ -750,7 +760,7 @@ func TestAppendAny_Time(t *testing.T) {
 	if !bytes.Equal(out, want) {
 		t.Errorf("time.Time fast path: got %s, want %s", out, want)
 	}
-	// *time.Time non-nil: same wire shape as value.
+	// A non-nil *time.Time writes the same as the value.
 	out, err = AppendAny(nil, &ts)
 	if err != nil {
 		t.Fatal(err)
@@ -758,7 +768,7 @@ func TestAppendAny_Time(t *testing.T) {
 	if !bytes.Equal(out, want) {
 		t.Errorf("*time.Time non-nil: got %s, want %s", out, want)
 	}
-	// *time.Time nil: null.
+	// A nil *time.Time writes null.
 	out, err = AppendAny(nil, (*time.Time)(nil))
 	if err != nil || string(out) != "null" {
 		t.Errorf("*time.Time nil: got %q err %v, want null", out, err)
@@ -795,7 +805,7 @@ func TestAppendAny_PrimitivePointers(t *testing.T) {
 	checkAny(t, &u64)
 	checkAny(t, &f32)
 	checkAny(t, &f64)
-	// nil pointers of every primitive kind emit null.
+	// A nil pointer to any primitive kind writes null.
 	checkAny(t, (*string)(nil))
 	checkAny(t, (*bool)(nil))
 	checkAny(t, (*int)(nil))
@@ -804,7 +814,8 @@ func TestAppendAny_PrimitivePointers(t *testing.T) {
 	checkAny(t, (*float64)(nil))
 }
 
-// Named primitive types route through reflection's primitive cases.
+// Named primitive types go through the primitive cases of the reflect
+// path.
 func TestAppendAny_NamedPrimitives(t *testing.T) {
 	t.Parallel()
 	type myString string
@@ -815,7 +826,8 @@ func TestAppendAny_NamedPrimitives(t *testing.T) {
 	checkAny(t, myBool(true))
 }
 
-// Unsupported kinds (channels, funcs) error instead of silently skipping.
+// Unsupported kinds, like channels and funcs, return an error. They must not
+// be skipped silently.
 func TestAppendAny_Unsupported(t *testing.T) {
 	t.Parallel()
 	_, err := AppendAny(nil, make(chan int))
@@ -828,7 +840,7 @@ func TestAppendAny_Unsupported(t *testing.T) {
 	}
 }
 
-// --- interface-dispatch cold-path coverage ---------------------------------
+// Tests for values that implement a marshal interface.
 
 type fakeAppendJSON struct{ payload string }
 
@@ -899,9 +911,8 @@ func TestAppendAny_TextMarshaler(t *testing.T) {
 	}
 }
 
-// fakeTextAndJSON implements BOTH encoding.TextAppender and
-// json.Marshaler with intentionally distinct outputs, so the test
-// can observe which interface dispatch wins.
+// fakeTextAndJSON implements both encoding.TextAppender and json.Marshaler,
+// with different outputs, so the test can see which one AppendAny calls.
 type fakeTextAndJSON struct{}
 
 func (fakeTextAndJSON) AppendText(dst []byte) ([]byte, error) {
@@ -912,8 +923,8 @@ func (fakeTextAndJSON) MarshalJSON() ([]byte, error) {
 	return []byte(`"from-json"`), nil
 }
 
-// TextAppender must outrank json.Marshaler so types implementing both
-// route via AppendText.
+// A type that implements both must be written with AppendText, not
+// MarshalJSON.
 func TestAppendAny_TextAppenderOvertakesMarshalJSON(t *testing.T) {
 	t.Parallel()
 	out, err := AppendAny(nil, fakeTextAndJSON{})
@@ -925,8 +936,8 @@ func TestAppendAny_TextAppenderOvertakesMarshalJSON(t *testing.T) {
 	}
 }
 
-// TextMarshaler must rank above json.Marshaler: types with both route
-// via MarshalText.
+// fakeTextMarshalerAndJSON implements both encoding.TextMarshaler and
+// json.Marshaler. AppendAny must call MarshalText.
 type fakeTextMarshalerAndJSON struct{}
 
 func (fakeTextMarshalerAndJSON) MarshalText() ([]byte, error) {
@@ -956,7 +967,7 @@ func TestAppendAny_NonStringMapKey(t *testing.T) {
 	}
 }
 
-// AppendJSON-style: caller-owned dst gets appended to (not replaced).
+// AppendAny appends to the caller's dst and keeps what is already there.
 func TestAppendAny_AppendsToDst(t *testing.T) {
 	t.Parallel()
 	dst := []byte("prefix:")
@@ -969,9 +980,9 @@ func TestAppendAny_AppendsToDst(t *testing.T) {
 	}
 }
 
-// anyShape pairs a benched shape's name with its value. Encoded bytes
-// are produced once per shape via jsonv2 and reused as the SetBytes
-// reference size.
+// anyShape pairs a benchmark shape's name with its value. enc is the jsonv2
+// encoding, made once per shape. Its length is the byte count passed to
+// SetBytes.
 type anyShape struct {
 	name string
 	val  any
@@ -1012,7 +1023,7 @@ func init() {
 		{name: "json.RawMessage", val: json.RawMessage(`{"raw":true,"n":[1,2,3]}`)},
 		{name: "time.Time", val: time.Date(2026, 5, 25, 12, 34, 56, 789_000_000, time.UTC)},
 
-		// Pointer-to-primitive — common in nullable scalar APIs.
+		// Pointers to primitives, common for nullable fields in APIs.
 		{name: "*string", val: new("pointed-at string value")},
 		{name: "*int", val: new(42)},
 		{name: "*int64", val: new(int64(1 << 50))},
@@ -1181,10 +1192,10 @@ func init() {
 	anyShapes = shapes
 }
 
-// BenchmarkAppendAny — marshal an `any` value via three codecs. ggen
-// goes through AppendAny; the rest go through their generic Marshal.
-// MB/s is computed against the jsonv2-encoded byte length so the
-// reported throughput is comparable across rows for the same shape.
+// BenchmarkAppendAny marshals an `any` value with three encoders. ggen uses
+// AppendAny. The others use their Marshal function. MB/s uses the length of
+// the jsonv2 output for every row, so rows of the same shape compare
+// fairly.
 func BenchmarkAppendAny(b *testing.B) {
 	codecs := []struct {
 		name string
@@ -1211,10 +1222,9 @@ func BenchmarkAppendAny(b *testing.B) {
 	}
 }
 
-// BenchmarkAppendAny_Presized — ggen-only variant that reuses a
-// caller-owned buffer. Isolates per-call output-buffer allocation
-// from the dispatch path itself, surfacing the steady-state cost of
-// the type-switch + per-shape emit.
+// BenchmarkAppendAny_Presized runs only ggen and reuses one buffer across
+// calls. This removes the cost of allocating the output, and leaves the cost
+// of picking the right code path and writing the value.
 func BenchmarkAppendAny_Presized(b *testing.B) {
 	for _, sh := range anyShapes {
 		b.Run(sh.name, func(b *testing.B) {
@@ -1250,9 +1260,9 @@ type ptStruct struct {
 	B bool   `json:"b"`
 }
 
-// TestAppendAny_ReflectHeavy covers the reflect-path shapes (named maps,
-// composite-element slices, struct fields), each checked against jsonv2
-// (reparsed, order-independent).
+// TestAppendAny_ReflectHeavy covers shapes that go through reflect: named
+// maps, slices of composite elements and struct fields. Each is checked
+// against jsonv2, ignoring map key order.
 func TestAppendAny_ReflectHeavy(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 6, 27, 1, 2, 3, 0, time.UTC)
@@ -1268,10 +1278,10 @@ func TestAppendAny_ReflectHeavy(t *testing.T) {
 	checkAny(t, map[string][]int{"ns": {1, 2, 3}})
 }
 
-// TestAppendAny_NoHTMLEscapeDefault: AppendAny strings must use the package
-// default escaping (jsonv2 shape — <, >, & literal), matching the sibling
-// generated string fields. Raw-byte comparison: checkAny reparses decoded
-// values and would mask escaping differences.
+// TestAppendAny_NoHTMLEscapeDefault checks that AppendAny does not escape <, >
+// and & by default, like jsonv2 and generated string fields. The test
+// compares raw bytes. checkAny compares decoded values, which would hide a
+// difference in escaping.
 func TestAppendAny_NoHTMLEscapeDefault(t *testing.T) {
 	t.Parallel()
 	cases := []any{
@@ -1301,8 +1311,8 @@ func TestAppendAny_NoHTMLEscapeDefault(t *testing.T) {
 	}
 }
 
-// quotedAppender's text carries `"`, `\`, and a ctrl byte — the TextAppender
-// arm used to drop it raw between quotes (the TextMarshaler arm escaped).
+// quotedAppender returns text with `"`, `\` and a control byte. AppendAny
+// must escape the AppendText output, the same as it does for MarshalText.
 type quotedAppender struct{ s string }
 
 func (q quotedAppender) AppendText(b []byte) ([]byte, error) { return append(b, q.s...), nil }
@@ -1319,21 +1329,22 @@ func TestAppendAny_TextAppenderEscapes(t *testing.T) {
 	if !json.Valid(out) {
 		t.Errorf("invalid JSON: %s", out)
 	}
-	// Clean text stays on the raw fast path.
+	// Text with nothing to escape is copied as is.
 	out, _ = AppendAny(nil, quotedAppender{s: "plain"})
 	if string(out) != `"plain"` {
 		t.Errorf("clean: got %s", out)
 	}
-	// HTML variant escapes <>& too.
+	// The HTML version also escapes <, > and &.
 	out, _ = AppendAnyHTML(nil, quotedAppender{s: "a<b"})
 	if string(out) != `"a\u003cb"` {
 		t.Errorf("html: got %s", out)
 	}
 }
 
-// Named element types box through the full switch: json.Number stays
-// unquoted, and a named primitive's marshaler is honored — the reflect
-// container walk used to route by KIND, silently bypassing both.
+// Elements of a named type inside a container must get the same handling as
+// a top-level value. json.Number stays unquoted, and a named primitive's
+// marshal method is called. Choosing the code path by the element's kind
+// alone would skip both.
 type levelInt int
 
 func (l levelInt) MarshalJSON() ([]byte, error) {
@@ -1358,7 +1369,8 @@ func TestAppendAny_NamedElemsInContainers(t *testing.T) {
 	checkAny(t, []levelInt{1, 2})
 }
 
-// A (nil, nil) MarshalJSON used to emit ZERO bytes — `{"k":` with nil error.
+// A MarshalJSON that returns (nil, nil) must give an error. Writing nothing
+// would leave invalid JSON like `{"k":` with no error.
 type emptyMarshaler struct{}
 
 func (emptyMarshaler) MarshalJSON() ([]byte, error) { return nil, nil }
@@ -1370,9 +1382,10 @@ func TestAppendAny_EmptyMarshalJSON(t *testing.T) {
 	}
 }
 
-// go1.24 gave big.Int an AppendText, so the TextAppender dispatch started
-// quoting its digits — but v1, jsonv2 and ggen's own KindBigInt field wire
-// all emit a bare number. Concrete cases must precede interface dispatches.
+// big.Int has an AppendText method, so the TextAppender path would quote its
+// digits. But encoding/json v1, jsonv2 and ggen's generated big.Int fields
+// all write an unquoted number. So AppendAny must check for concrete types
+// before it checks for interfaces.
 func TestAppendAny_BigIntStaysNumeric(t *testing.T) {
 	t.Parallel()
 	for _, v := range []any{
@@ -1402,9 +1415,10 @@ func TestAppendAny_BigIntStaysNumeric(t *testing.T) {
 	}
 }
 
-// json.Number is a named STRING whose wire shape is a NUMBER — the one
-// string kind both stdlib versions still quote under `,string` (unlike bool,
-// which jsonv2 deliberately stopped quoting).
+// json.Number is a named string type whose JSON form is a number. Under
+// `,string` it is quoted, like float64. A plain string is encoded once. Stable
+// jsonv2 in Go 1.27 rejects `,string` on a plain string. That open
+// divergence is tracked in .claude/backlog.md.
 func TestAppendAny_NumberStringTag(t *testing.T) {
 	t.Parallel()
 	v := struct {
@@ -1422,9 +1436,9 @@ func TestAppendAny_NumberStringTag(t *testing.T) {
 	}
 }
 
-// A recursively embedded anonymous struct used to recurse forever in
-// collectFields (fatal stack overflow); stdlib breaks the cycle and emits
-// the reachable fields.
+// A struct that embeds a pointer to itself must not make collectFields
+// recurse forever. That would overflow the stack, a fatal crash. The
+// standard library stops at the cycle and writes the fields it can reach.
 func TestAppendAny_RecursiveEmbedNoOverflow(t *testing.T) {
 	t.Parallel()
 	type node struct {
@@ -1441,8 +1455,8 @@ func TestAppendAny_RecursiveEmbedNoOverflow(t *testing.T) {
 	}
 }
 
-// Value-level cycles used to recurse until the process died with a fatal
-// stack overflow.
+// A value that contains itself must stop with ErrMaxDepth. Without the
+// depth limit it would recurse until a fatal stack overflow.
 func TestAppendAny_CyclicValue(t *testing.T) {
 	t.Parallel()
 	s := make([]any, 1)
@@ -1485,10 +1499,10 @@ func TestAppendAny_DepthCap(t *testing.T) {
 	}
 }
 
-// The encode cap counts recursion levels (containers, pointer/interface
-// derefs) while the decode cap counts containers, so the two could disagree
-// at the boundary and leave a value ggen accepts but cannot re-emit. Anything
-// that decodes must re-encode.
+// The encode depth limit counts recursion levels: containers, pointers and
+// interfaces. The decode limit counts only containers. The two could
+// disagree right at the limit, leaving a value ggen decodes but cannot
+// encode. Anything that decodes must encode again.
 func TestAppendAny_DepthCapMatchesDecode(t *testing.T) {
 	t.Parallel()
 	shapes := map[string]func(int) []byte{
@@ -1514,11 +1528,13 @@ func TestAppendAny_DepthCapMatchesDecode(t *testing.T) {
 	}
 }
 
-// Marshal methods declared on *T are called for a T value wherever it sits,
-// addressable (struct field, slice/array element, map value) or not
-// (top-level value, []any / map[string]any element) — jsonv2 semantics; v1
-// skipped pointer-receiver methods on unaddressable values, which turned a
-// big.Rat VALUE inside an any into {}.
+// A marshal method declared on *T is called for a T value wherever it is.
+// That includes addressable places, like a struct field, a slice or array
+// element and a map value. It also includes places that are not
+// addressable, like a top-level value or an element of []any or
+// map[string]any. This is what jsonv2 does. encoding/json v1 skips such
+// methods on values that are not addressable, so a big.Rat value inside an
+// any comes out as {}.
 type r10PtrJSON struct{ V int }
 
 func (p *r10PtrJSON) MarshalJSON() ([]byte, error) { return []byte(`"ptr-json"`), nil }
@@ -1569,10 +1585,11 @@ func TestAppendAny_PointerReceiverMarshalers(t *testing.T) {
 	}
 }
 
-// omitempty drops a field whose value ENCODES as null, "", {} or [] — never
-// for a zero number or false, always for an empty map, slice or string and a
-// raw/marshaled value that came out empty. jsonv2 agrees on every shape here;
-// struct fields are the one divergence, pinned separately below.
+// omitempty drops a field whose encoded value is null, "", {} or []. It never
+// drops a zero number or false. It always drops an empty map, slice or
+// string, and a raw or marshaled value that came out empty. jsonv2 agrees on
+// every shape here. Struct fields are the one difference, tested in the next
+// test.
 func TestAppendAny_OmitEmptyJSONv2Semantics(t *testing.T) {
 	t.Parallel()
 	type inner struct {
@@ -1616,11 +1633,11 @@ func TestAppendAny_OmitEmptyJSONv2Semantics(t *testing.T) {
 	}
 }
 
-// omitempty never drops a struct: it is meaningless there, which is why the
-// generator refuses the option on a struct field outright. A nil pointer or a
-// nil interface still omits — that is the pointer being absent, not the
-// struct being empty. This is a deliberate divergence from jsonv2, which
-// drops a struct that encodes {}.
+// omitempty never drops a struct. It has no meaning there, which is why the
+// generator rejects the option on a struct field. A nil pointer or a nil
+// interface is still dropped, because the pointer is missing, not the struct
+// empty. This differs from jsonv2 on purpose. jsonv2 drops a struct that
+// encodes as {}.
 func TestAppendAny_OmitEmptyKeepsStruct(t *testing.T) {
 	t.Parallel()
 	type inner struct {
@@ -1657,11 +1674,12 @@ func TestAppendAny_OmitEmptyKeepsStruct(t *testing.T) {
 	}
 }
 
-// omitzero consults an IsZero method when the field type (or the value an
-// interface field holds, or the pointer type) has one, nil-guarding
-// pointers and interfaces, else falls back to the structural test —
-// jsonv2 semantics. A zero time.Time carrying a location is the stdlib
-// case: reflect-nonzero, IsZero() true.
+// omitzero calls an IsZero method when there is one. It looks on the field
+// type, on the pointer type, and on the value an interface field holds. It
+// checks pointers and interfaces for nil first. Without an IsZero method it
+// compares the value to its zero value. This is what jsonv2 does. A zero
+// time.Time with a location is the standard library example: it is not the
+// zero value, but IsZero() returns true.
 type r10Zeroer struct{ A, B int }
 
 func (z r10Zeroer) IsZero() bool { return z.A == z.B }
@@ -1706,11 +1724,11 @@ func TestAppendAny_OmitZeroIsZeroMethod(t *testing.T) {
 	}
 }
 
-// The catch-all map is spelled `json:",embed"` (jsonv2); its entries splice
-// into the parent, after every named member whatever the field's declaration
-// position (embedFirst — the emitter orders it that way too). The old
-// `,inline` spelling is an unknown option and the map stays under its own
-// key, as jsonv2 treats it.
+// A catch-all map is marked `json:",embed"`, as in jsonv2. Its entries are
+// written into the parent object, after every named field, wherever the map
+// is declared (see embedFirst). Generated code uses the same order.
+// `,inline` is not a known option, so that map stays under its own key, as
+// in jsonv2.
 func TestAppendAny_EmbedSplices(t *testing.T) {
 	t.Parallel()
 	type embed struct {
@@ -1745,10 +1763,11 @@ func TestAppendAny_EmbedSplices(t *testing.T) {
 	}
 }
 
-// Map keys route through a text marshaler on the key type (either
-// receiver), escaped like any other key; a plain string kind uses the
-// bytes. A key type with a marshaler needs no string kind — only a bare
-// non-string key is rejected (TestAppendAny_NonStringMapKey).
+// A map key goes through a text marshal method on the key type, with a value
+// or pointer receiver. The result is escaped like any other key. A plain
+// string key uses its bytes. A key type with such a method does not need to
+// be a string. Only a non-string key without one is rejected (see
+// TestAppendAny_NonStringMapKey).
 type r10TextKey string
 
 func (k r10TextKey) MarshalText() ([]byte, error) { return []byte("T:" + string(k)), nil }
@@ -1787,18 +1806,18 @@ func TestAppendAny_MapKeyTextMarshaler(t *testing.T) {
 			t.Errorf("%T:\n ggen   %s\n jsonv2 %s", v, got, want)
 		}
 	}
-	// HTML mode escapes the marshaled key text like every other key.
+	// HTML mode escapes the key text like every other key.
 	got, err := AppendAnyHTML(nil, map[r10AppendKey]bool{"<x>": true})
 	if err != nil || string(got) != `{"A:\u003cx\u003e":true}` {
 		t.Errorf("html key: got %s err %v", got, err)
 	}
 }
 
-// time.Duration inside an any carries the units string a Duration FIELD
-// emits by default, so one document never holds two shapes of one Go type.
-// (jsonv2 has no Duration representation at all and errors, so there is
-// no oracle here.) `,string` does not double-wrap it: its wire is already a
-// string.
+// A time.Duration inside an any is written as a string with units, like
+// "1m30s". A generated Duration field writes the same by default, so one
+// document never has two forms of one Go type. jsonv2 has no format for
+// Duration and returns an error, so there is no reference to compare with.
+// `,string` does not quote it a second time, since it is already a string.
 func TestAppendAny_DurationUnits(t *testing.T) {
 	t.Parallel()
 	d := 90 * time.Second
@@ -1861,9 +1880,10 @@ type sizeOuter struct {
 	hidden int             //nolint:unused
 }
 
-// AnySize must bound what AppendAny writes for every dispatch arm, in both
-// escape modes. Control bytes and invalid UTF-8 are left out: JSONSize budgets
-// strings for decoded (legal) JSON text, as it does for typed string fields.
+// AnySize must never be smaller than what AppendAny writes, for every kind of
+// value and in both escape modes. Control bytes and invalid UTF-8 are left
+// out. JSONSize sizes strings for valid JSON text only, the same as for typed
+// string fields.
 func TestAnySize_BoundsAppendAny(t *testing.T) {
 	t.Parallel()
 	str := "q\"b\\n\n<>&h\u00e9😀"

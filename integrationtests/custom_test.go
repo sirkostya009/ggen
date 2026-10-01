@@ -57,7 +57,7 @@ func TestAggregate_allErrors(t *testing.T) {
 			t.Errorf("aggregated error missing %q:\n%s", want, msg)
 		}
 	}
-	// ggen.Errors implements Unwrap() []error — walk via errors.As.
+	// ggen.Errors implements Unwrap() []error, so errors.As can walk it.
 	var ves ggen.Errors
 	if !errors.As(err, &ves) {
 		t.Fatalf("expected ggen.Errors, got %T: %v", err, err)
@@ -86,7 +86,8 @@ type CustomBothStruct struct {
 	Tags []string `json:"tags" pipe:"inner:(@TrimSpace @NotBlank)"`
 }
 
-// Mod (trim) runs before validator (NotBlank): "  ok  " passes, "   " fails.
+// The mod (TrimSpace) runs before the validator (NotBlank). So "  ok  "
+// passes and "   " fails.
 func TestCustomBoth_modThenValidator(t *testing.T) {
 	t.Parallel()
 	good := []byte(`{"tags":["  hello  ","  world  "]}`)

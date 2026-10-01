@@ -111,7 +111,7 @@ type Unrelated struct {
 }
 
 // Single-file mode with neither a //ggen:generate annotation nor an explicit
-// name filter must error, not emit code for every exported struct.
+// name filter must fail, not emit code for every exported struct.
 func TestParseFile_noAnnotationNoFilter_Errors(t *testing.T) {
 	t.Parallel()
 	src := `package test
@@ -180,7 +180,7 @@ type Derived struct {
 	for _, f := range structs[0].Fields {
 		names[f.JSONName] = struct{}{}
 	}
-	// Both promoted and explicit fields should appear.
+	// Both promoted and own fields should appear.
 	_, hasID := names["id"]
 	_, hasName := names["name"]
 	if !hasID || !hasName {
@@ -324,11 +324,11 @@ func writeFile(t *testing.T, dir, name, content string) {
 	}
 }
 
-// TestSQLNullGeneric covers the string-based path (ResolveKind + SQLNullSpec)
-// for generic sql.Null[T]: built-in primitive inners classify as KindSQLNull
-// with the V field; non-primitive inners return false (left on the
-// encoding/json fallback). The go/types path (arbitrary inner T) is exercised
-// in integrationtests.
+// TestSQLNullGeneric covers the string-based path, ResolveKind and
+// SQLNullSpec, for the generic sql.Null[T]. Built-in primitive inner types
+// become KindSQLNull with the V field. Other inner types return false and
+// stay on the encoding/json fallback. The go/types path, which takes any
+// inner T, is tested in integrationtests.
 func TestSQLNullGeneric(t *testing.T) {
 	t.Parallel()
 	supported := []struct {
@@ -361,7 +361,8 @@ func TestSQLNullGeneric(t *testing.T) {
 		})
 	}
 
-	// Non-primitive / malformed inners are not classified by the string path.
+	// The string path does not classify non-primitive or malformed inner
+	// types.
 	for _, goType := range []string{"sql.Null[netip.Addr]", "sql.Null[[]byte]", "sql.Null[]", "sql.NullFoo"} {
 		t.Run("reject/"+goType, func(t *testing.T) {
 			t.Parallel()
@@ -375,13 +376,13 @@ func TestSQLNullGeneric(t *testing.T) {
 	}
 }
 
-// Round-9 parse-layer pins.
+// Parser regression tests.
 func TestParseFile_round9(t *testing.T) {
 	t.Parallel()
 	t.Run("tab_after_directive", func(t *testing.T) {
 		t.Parallel()
-		// Like go:generate, the directive accepts tab separators; a tab used to silently drop
-		// the whole annotation (no output, exit 0).
+		// Like go:generate, the directive accepts tabs as separators. A tab
+		// must not silently drop the whole annotation.
 		file := writeGoFile(t, "package test\n//ggen:generate\tmarshal\ntype A struct{ X int `json:\"x\"` }\n")
 		res, err := ParseFile(file, nil)
 		structs := res.Structs
@@ -395,8 +396,9 @@ func TestParseFile_round9(t *testing.T) {
 
 	t.Run("depth_dominance", func(t *testing.T) {
 		t.Parallel()
-		// A depth-1 promoted field beats a depth-2 one (stdlib dominant-field
-		// rule); the flat resolver used to drop BOTH → `{}` on the wire.
+		// A promoted field at depth 1 beats one at depth 2, by the
+		// encoding/json dominant-field rule. Neither may be dropped, or the
+		// output would be `{}`.
 		src := `package test
 //ggen:generate
 type Top struct {
@@ -435,8 +437,8 @@ type C struct{ X int ` + "`json:\"x\"`" + ` }
 
 	t.Run("cyclic_embedding_errors", func(t *testing.T) {
 		t.Parallel()
-		// Invalid Go, but ggen walks syntax first: must diagnose, not
-		// stack-overflow the generator.
+		// Invalid Go, but ggen reads the syntax first. It must report an
+		// error, not overflow the generator's stack.
 		src := `package test
 //ggen:generate
 type A struct{ B; X int ` + "`json:\"x\"`" + ` }
@@ -451,8 +453,8 @@ type B struct{ A }
 
 	t.Run("ignored_embedding_promotes_nothing", func(t *testing.T) {
 		t.Parallel()
-		// An ignored embedding is exempt whatever its type, and a non-json
-		// tag does not stop promotion.
+		// An ignored embedding is skipped whatever its type, and a tag
+		// without a json key does not stop promotion.
 		src := `package test
 import "sync"
 //ggen:generate
@@ -504,8 +506,8 @@ type Inner struct{ N int ` + "`json:\"n\"`" + ` }
 
 	t.Run("map_value_sibling_generated", func(t *testing.T) {
 		t.Parallel()
-		// A struct reached only through map[string]Inner used to miss
-		// generatedTypes and fall to the json.Unmarshal fallback.
+		// A struct reached only through map[string]Inner must be generated,
+		// not left to the json.Unmarshal fallback.
 		src := `package test
 //ggen:generate
 type Outer struct{ M map[string]Inner ` + "`json:\"m\"`" + ` }
@@ -529,8 +531,9 @@ type Inner struct{ N int ` + "`json:\"n\"`" + ` }
 	})
 }
 
-// A file's name constrains it the way go/build reads it; `_ggen` in the
-// output name masks that rule, so the bucket key has to carry it.
+// A file's name constrains it the way go/build reads it. The `_ggen` suffix
+// of the output name hides that constraint, so the output bucket key must
+// include it.
 func TestFilenameConstraint(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -583,8 +586,8 @@ func TestParseFile_round10(t *testing.T) {
 
 	t.Run("embed_own_dominates_promoted", func(t *testing.T) {
 		t.Parallel()
-		// jsonv2 keeps the shallowest catch-all; the emitters read exactly
-		// one, so the promoted one must be gone.
+		// jsonv2 keeps the shallowest catch-all. The emitters read exactly
+		// one, so the promoted one must be dropped.
 		src := `package test
 type Inner struct{ Extra map[string]any ` + "`json:\",embed\"`" + ` }
 //ggen:generate
@@ -642,8 +645,9 @@ type Two struct {
 
 	t.Run("promoted_go_name_clash_rejected", func(t *testing.T) {
 		t.Parallel()
-		// Distinct JSON names, one Go name: stdlib keeps both, ggen cannot
-		// address them and must say so instead of dropping the pair.
+		// Different JSON names but one Go name. encoding/json keeps both.
+		// ggen cannot access them by name, so it must report an error
+		// instead of dropping the pair.
 		src := `package test
 //ggen:generate
 type Parent struct {
@@ -680,8 +684,8 @@ type E2 struct{ A int ` + "`json:\"a2\"`" + ` }
 		if _, err := ParseFile(writeGoFile(t, src), []string{"A"}); err != nil {
 			t.Errorf("ignored func field: %v", err)
 		}
-		// Interfaces keep their shape: `interface{}` is `any`, and one with
-		// methods carries whatever its dynamic value marshals as.
+		// Interfaces are accepted. `interface{}` is `any`, and one with
+		// methods marshals as whatever value it holds.
 		for _, decl := range []string{"V interface{}", "V interface{ M() }"} {
 			src := "package test\n//ggen:generate\ntype A struct{ " + decl + " `json:\"v\"` }\n"
 			if _, err := ParseFile(writeGoFile(t, src), []string{"A"}); err != nil {
@@ -757,7 +761,7 @@ var _ = http.StatusOK
 			t.Errorf("%s = %v, want %v", k, pkg.Consts[k], v)
 		}
 	}
-	// Reached through an import: net/http's ConnState consts.
+	// Constants reached through an import: net/http's ConnState.
 	if cs := pkg.Consts["net/http.ConnState"]; len(cs) == 0 || cs[0].Name != "StateNew" || cs[0].Value != "0" {
 		t.Errorf("imported consts = %v", cs)
 	}

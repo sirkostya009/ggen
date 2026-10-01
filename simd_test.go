@@ -19,9 +19,11 @@ var stringTiers = []struct {
 	{"AVX512", StringAVX512},
 }
 
-// TestStringSIMD_Parity pins every tier byte-identical to scalar String:
-// same value, same position, same error identity — across escape placement,
-// control bytes, truncation, and vector-width phase alignment.
+// TestStringSIMD_Parity checks every SIMD version of String against the
+// scalar one. SIMD means handling 16, 32 or 64 bytes with one CPU
+// instruction. The value, position and exact error must match. Cases vary
+// where escapes and control bytes sit, cut strings short, and place special
+// bytes right at the edge of a vector-sized block.
 func TestStringSIMD_Parity(t *testing.T) {
 	t.Parallel()
 	cases := [][]byte{
@@ -29,7 +31,8 @@ func TestStringSIMD_Parity(t *testing.T) {
 		{},
 		[]byte(`"unterminated`), []byte(`"trailing\`), []byte(`"bad\u12`),
 		[]byte(`"esc\nape"`), []byte(`"A😀"`), []byte(`"\q"`),
-		// Final malformations at the end of data vs truncated prefixes.
+		// Broken escapes at the very end of the input, next to inputs that
+		// are only cut short.
 		[]byte(`"\u12"`), []byte(`"ab\uZ"`), []byte(`"\u00`), []byte(`"\ud83d\uDE`),
 		[]byte(`"\ud83d"`), []byte("\"ab\x01"), []byte("\"ab\x01}"),
 	}
@@ -38,15 +41,15 @@ func TestStringSIMD_Parity(t *testing.T) {
 		cases = append(cases,
 			[]byte(`"`+body+`"`),
 			[]byte(`"`+body),               // unterminated
-			[]byte(`"`+body+`\n"`),         // escape at phase boundary
-			[]byte(`"`+body+"\x01"+`"`),    // ctrl at phase boundary
+			[]byte(`"`+body+`\n"`),         // escape at a block edge
+			[]byte(`"`+body+"\x01"+`"`),    // control byte at a block edge
 			[]byte(`"`+body+`\n`+body+`"`), // escape mid-string
-			[]byte(`"`+"\x1f"+body+`"`),    // ctrl first
-			[]byte(`"a`+"\x01"+`b\nc"`),    // ctrl before escape
-			[]byte(`"`+body+"\xff"+`"`),    // invalid UTF-8 at phase boundary
+			[]byte(`"`+"\x1f"+body+`"`),    // control byte first
+			[]byte(`"a`+"\x01"+`b\nc"`),    // control byte before an escape
+			[]byte(`"`+body+"\xff"+`"`),    // invalid UTF-8 at a block edge
 			[]byte(`"`+"\xff"+body+`"`),    // invalid UTF-8 first
-			[]byte(`"`+body+"é😀"+`"`),      // valid multi-byte at phase boundary
-			[]byte(`"`+body+"\xe2("+`"`),   // truncated 3-byte rune
+			[]byte(`"`+body+"é😀"+`"`),      // valid multi-byte at a block edge
+			[]byte(`"`+body+"\xe2("+`"`),   // cut-off 3-byte character
 		)
 	}
 	rng := rand.New(rand.NewSource(1))
@@ -55,13 +58,14 @@ func TestStringSIMD_Parity(t *testing.T) {
 		b := make([]byte, n+2)
 		b[0] = '"'
 		for i := 1; i <= n; i++ {
-			b[i] = byte(rng.Intn(130)) // bias into ctrl/quote/backslash space
+			b[i] = byte(rng.Intn(130)) // control bytes, quote, backslash and ASCII
 		}
 		b[n+1] = '"'
 		cases = append(cases, b)
 	}
-	// Both validate arms: strict (jsonv2 reject) AND permissive
-	// (allowinvalidutf8 — raw bytes pass through) must match scalar.
+	// Both modes must match scalar. With validate, invalid UTF-8 is
+	// rejected like jsonv2 does. Without it (allowinvalidutf8), raw bytes
+	// pass through.
 	for _, validate := range []bool{true, false} {
 		for _, tier := range stringTiers {
 			for _, c := range cases {
@@ -78,7 +82,8 @@ func TestStringSIMD_Parity(t *testing.T) {
 	}
 }
 
-// chunkReader yields at most n bytes per Read to force mid-string refills.
+// chunkReader returns at most n bytes per Read. This makes the Stream read
+// more input in the middle of a string.
 type chunkReader struct {
 	r io.Reader
 	n int
@@ -91,11 +96,13 @@ func (c *chunkReader) Read(p []byte) (int, error) {
 	return c.r.Read(p)
 }
 
-// TestStreamStringSIMD_Parity pins the stream tier scanners against scalar
-// Stream.String across every refill shape: bodies sized around lane seams,
-// escapes/ctrl at each phase, chunked reads of 1..64 bytes, and randomized
-// mixed bodies. Value, view, and key contracts all route through the same
-// per-tier core, so String* parity covers all three shells.
+// TestStreamStringSIMD_Parity checks the SIMD versions of Stream.String
+// against the scalar one. The Stream keeps a window, a buffered slice of the
+// reader, and reads more when it runs out. Cases vary where that read
+// happens: string lengths near vector edges, escapes and control bytes at
+// many positions, reads of 1 to 64 bytes, and random strings. StringAVX*,
+// StringViewAVX* and KeyViewAVX* all call the same inner function, so
+// checking StringAVX* covers all three.
 func TestStreamStringSIMD_Parity(t *testing.T) {
 	t.Parallel()
 	tiers := []struct {
@@ -116,7 +123,7 @@ func TestStreamStringSIMD_Parity(t *testing.T) {
 				bb := bytes.Repeat([]byte{'y'}, n)
 				bb[pos] = c
 				if c == '\\' && pos == n-1 {
-					continue // trailing backslash escapes the closing quote
+					continue // a final backslash would escape the closing quote
 				}
 				if c == '\\' {
 					bb[pos+1] = 'n'
@@ -125,8 +132,8 @@ func TestStreamStringSIMD_Parity(t *testing.T) {
 			}
 		}
 	}
-	// Invalid UTF-8 at window seams: permissive mode must pass bytes
-	// through verbatim, strict must reject identically to scalar.
+	// Invalid UTF-8 near vector edges. Without validate, the bytes must
+	// pass through as is. With validate, the error must match scalar.
 	for _, n := range []int{1, 15, 16, 31, 32, 63, 64} {
 		pad := strings.Repeat("x", n)
 		bodies = append(bodies, pad+"\xff", "\xff"+pad, pad+"\xe2(")
@@ -165,7 +172,7 @@ func TestStreamStringSIMD_Parity(t *testing.T) {
 	}
 }
 
-// errAfterReader yields data, then a transient (non-EOF) error forever.
+// errAfterReader returns data, then a non-EOF error on every later Read.
 type errAfterReader struct {
 	data []byte
 	err  error
@@ -180,10 +187,10 @@ func (r *errAfterReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-// TestStreamStringSIMD_RefillErrorIdentity pins the tier refill arms against
-// the scalar contracts (round-7 fix): a drained reader at a string position
-// maps to ErrExpectString / ErrUnterminated like the scalar path, and a
-// transient reader error propagates raw instead of being relabeled.
+// TestStreamStringSIMD_RefillErrorIdentity checks the errors the SIMD
+// versions return when reading more input fails. A reader that hits EOF must
+// give ErrExpectString or ErrUnterminated, like the scalar code. Any other
+// reader error must be returned as is, not replaced by a JSON error.
 func TestStreamStringSIMD_RefillErrorIdentity(t *testing.T) {
 	t.Parallel()
 	tiers := []struct {
@@ -198,23 +205,24 @@ func TestStreamStringSIMD_RefillErrorIdentity(t *testing.T) {
 	for _, tier := range tiers {
 		t.Run(tier.name, func(t *testing.T) {
 			t.Parallel()
-			// Drained at the head: scalar maps to ErrExpectString.
+			// EOF before the string starts gives ErrExpectString.
 			var s Stream
 			s.Reset(strings.NewReader(""), nil)
 			if _, err := tier.fn(&s, true); err != ErrExpectString {
 				t.Errorf("drained head: got %v, want ErrExpectString", err)
 			}
-			// Drained mid-string: ErrUnterminated.
+			// EOF inside the string gives ErrUnterminated.
 			s.Reset(strings.NewReader(`"abc`), nil)
 			if _, err := tier.fn(&s, true); err != ErrUnterminated {
 				t.Errorf("drained mid-string: got %v, want ErrUnterminated", err)
 			}
-			// Transient error at the head propagates raw.
+			// A reader error before the string is returned as is.
 			s.Reset(&errAfterReader{err: boom}, nil)
 			if _, err := tier.fn(&s, true); err != boom {
 				t.Errorf("transient head: got %v, want raw reader error", err)
 			}
-			// Transient error mid-string propagates raw, not ErrUnterminated.
+			// A reader error inside the string is returned as is, not as
+			// ErrUnterminated.
 			s.Reset(&errAfterReader{data: []byte(`"abc`), err: boom}, nil)
 			if _, err := tier.fn(&s, true); err != boom {
 				t.Errorf("transient mid-string: got %v, want raw reader error", err)
@@ -223,11 +231,12 @@ func TestStreamStringSIMD_RefillErrorIdentity(t *testing.T) {
 	}
 }
 
-// TestStreamStringSIMD_ErrorPos is the tier twin of TestStreamString_ErrorPos:
-// every error exit of the stringViewAVX* cores must leave Offset() where the
-// scalar core does. A consumed prefix makes the window compact first, so an
-// exit that skips the rebase reports the pre-compaction cursor — inflated by
-// the discarded prefix, past the document on the unterminated row.
+// TestStreamStringSIMD_ErrorPos is the SIMD version of
+// TestStreamString_ErrorPos. Every error return in stringViewAVX* must leave
+// Offset() where the scalar code does. The prefix is read first, so later
+// reads move the unread bytes to the front of the buffer. An error return
+// that does not adjust Pos for that move reports an offset that is too
+// large. On the unterminated row it would point past the end of the input.
 func TestStreamStringSIMD_ErrorPos(t *testing.T) {
 	t.Parallel()
 	const prefix = `"pre"`
@@ -282,8 +291,9 @@ func TestStreamStringSIMD_ErrorPos(t *testing.T) {
 	}
 }
 
-// Every tier classifies an unterminated escaped string exactly as String does
-// — the escape landing at each lane position — and copies nothing to do it.
+// Every SIMD version must report an unterminated string that holds an escape
+// exactly like String does, with the escape at every position in a vector.
+// It must also do so without allocating.
 func TestStringSIMD_UnterminatedEscaped(t *testing.T) { //nolint:paralleltest // measures allocations
 	tails := []string{`\n`, `\`, `\u`, `\u12`, `\u12zz`, `\q`, `\ud800`, `\ud800abc`, `\ud800\udc0`, "\\n\x01", `\ud83d\ude00x`}
 	for n := range 70 {

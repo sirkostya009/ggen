@@ -17,8 +17,8 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// chunkReader delivers payload max bytes per Read, stressing Stream.ReadMore's
-// per-call grow path.
+// chunkReader returns at most max bytes of the payload per Read. This
+// stresses the path where Stream.ReadMore grows the buffer on each call.
 type chunkReader struct {
 	data []byte
 	pos  int
@@ -137,7 +137,8 @@ func TestUnmarshalStream_chunked(t *testing.T) {
 
 func TestUnmarshalStream_tinyInitial(t *testing.T) {
 	t.Parallel()
-	// Hint smaller than payload forces a mid-parse grow; aliases must survive it.
+	// A buffer smaller than the payload forces the Stream to grow it in the
+	// middle of the parse. Decoded values must survive the grow.
 	var s ggen.Stream
 	s.Reset(bytes.NewReader(complexPayload), make([]byte, 0, 32))
 	got, err := Node{}.DecodeFromStream(&s)
@@ -152,15 +153,17 @@ func TestUnmarshalStream_tinyInitial(t *testing.T) {
 	}
 }
 
-// HugeStringStruct exercises the stream slow path with a multi-MiB body.
+// HugeStringStruct exercises the stream's slow string path with a string of
+// several MiB.
 //
 //ggen:generate
 type HugeStringStruct struct {
 	Big string `json:"big"`
 }
 
-// A 2 MiB string through a tiny buffer decodes losslessly across many grow +
-// compaction cycles.
+// A 2 MiB string read through a tiny buffer decodes without loss across many
+// cycles of growing and compacting the buffer. Compacting means moving the
+// unread bytes to the front of the buffer before reading more.
 func TestUnmarshalStream_SingleHugeString(t *testing.T) {
 	t.Parallel()
 	const size = 2 * 1024 * 1024
@@ -181,7 +184,8 @@ func TestUnmarshalStream_SingleHugeString(t *testing.T) {
 	}
 }
 
-// SkipSpace consumes ~300 KB of whitespace across compaction cycles.
+// SkipSpace consumes about 300 KB of whitespace across many compaction
+// cycles.
 func TestUnmarshalStream_MassiveWhitespace(t *testing.T) {
 	t.Parallel()
 	gap := strings.Repeat("\n \t", 100_000)
@@ -198,8 +202,9 @@ func TestUnmarshalStream_MassiveWhitespace(t *testing.T) {
 	}
 }
 
-// SequentialStringsStruct: many string fields read back-to-back so prior
-// values must survive later compactions (Stream.String copies its result).
+// SequentialStringsStruct has many string fields read one after another, so
+// earlier values must survive later compactions. Stream.String copies its
+// result for this reason.
 //
 //ggen:generate
 type SequentialStringsStruct struct {
@@ -213,8 +218,8 @@ type SequentialStringsStruct struct {
 	H string `json:"h"`
 }
 
-// Earlier decoded values stay correct after later compactions (a string path
-// aliasing s.buf would fail).
+// Earlier decoded values stay correct after later compactions. A string that
+// aliased s.buf (pointed into it without a copy) would fail this test.
 func TestUnmarshalStream_ValuesSurviveCompaction(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"a":"AAAAAAAA","b":"BBBBBBBB","c":"CCCCCCCC","d":"DDDDDDDD",` +
@@ -237,7 +242,7 @@ func TestUnmarshalStream_ValuesSurviveCompaction(t *testing.T) {
 	}
 }
 
-// A json.RawMessage value spanning multiple ReadMore boundaries captures
+// A json.RawMessage value that spans several ReadMore refills is captured
 // intact.
 func TestUnmarshalStream_RawJSONAcrossBoundary(t *testing.T) {
 	t.Parallel()
@@ -258,7 +263,8 @@ func TestUnmarshalStream_RawJSONAcrossBoundary(t *testing.T) {
 	}
 }
 
-// Inline-map keys must be cloned on insertion, else compactions corrupt them.
+// Inline-map keys must be copied when they are inserted, or later compactions
+// corrupt them.
 func TestUnmarshalStream_InlineMapKeyClone(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"name":"alice","kAlpha":1,"kBravoo":2,"kCharlie":3,` +
@@ -277,8 +283,8 @@ func TestUnmarshalStream_InlineMapKeyClone(t *testing.T) {
 	}
 }
 
-// UnknownErrorStruct: closed schema — the unknown key must be cloned before
-// going into ggen.UnknownKeyError.
+// UnknownErrorStruct rejects unknown keys. The unknown key must be copied
+// before it goes into ggen.UnknownKeyError.
 //
 //ggen:generate
 type UnknownErrorStruct struct {
@@ -305,8 +311,9 @@ func TestUnmarshalStream_UnknownKeyErrorClone(t *testing.T) {
 	}
 }
 
-// A 40-field object through a 1-byte reader + buf stresses dispatch-loop
-// compaction and the bitmask seen-flag path.
+// A 40-field object read 1 byte at a time through a small buffer. This
+// stresses compaction in the key dispatch loop and the code that tracks seen
+// fields as bits in an integer.
 func TestUnmarshalStream_TinyBufManyKeys(t *testing.T) {
 	t.Parallel()
 	var parts []string
@@ -328,14 +335,14 @@ func TestUnmarshalStream_TinyBufManyKeys(t *testing.T) {
 	}
 }
 
-// formatField produces a `"fN":"vN"` JSON key/value snippet.
+// formatField returns a `"fN":"vN"` JSON key/value pair.
 func formatField(i int) string {
 	n := strconv.Itoa(i)
 	return `"f` + n + `":"v` + n + `"`
 }
 
-// A hint buf smaller than the value forces repeated slow-path grow +
-// compaction.
+// A buffer smaller than the value forces the slow path to grow and compact
+// the buffer many times.
 func TestUnmarshalStream_HintBufSmallerThanValue(t *testing.T) {
 	t.Parallel()
 	for _, hint := range []int{1, 4, 16, 64, 256} {
@@ -355,7 +362,7 @@ func TestUnmarshalStream_HintBufSmallerThanValue(t *testing.T) {
 	}
 }
 
-// Variable burst-then-stall chunk sizes, modeling a network reader.
+// Chunk sizes vary between bursts and single bytes, like a network reader.
 func TestUnmarshalStream_PartialReadAtBoundaries(t *testing.T) {
 	t.Parallel()
 	r := &burstReader{data: complexPayload, sizes: []int{3, 1, 7, 1, 13, 1, 50, 1}}
@@ -370,7 +377,8 @@ func TestUnmarshalStream_PartialReadAtBoundaries(t *testing.T) {
 	}
 }
 
-// burstReader yields chunks of explicit sizes, wrapping when exhausted.
+// burstReader returns chunks of the given sizes, starting over from the first
+// size when the list runs out.
 type burstReader struct {
 	data  []byte
 	pos   int
@@ -398,8 +406,8 @@ func (b *burstReader) Read(p []byte) (int, error) {
 	return want, nil
 }
 
-// Any payload the bytes path accepts, the stream path decodes equal — catches
-// chunk-boundary-sensitive bugs.
+// Any payload the bytes path accepts, the stream path decodes to an equal
+// value. This catches bugs that depend on where a chunk boundary falls.
 func TestUnmarshalStream_BytesEqualsStream(t *testing.T) {
 	t.Parallel()
 	seeds := [][]byte{
@@ -456,8 +464,8 @@ func TestUnmarshalStream_AcceptedByBytes_AlsoAcceptedByStream(t *testing.T) {
 	}
 }
 
-// The stream path threads field-name context into the ParseError like the
-// bytes path.
+// The stream path puts the field name into the ParseError, like the bytes
+// path.
 func TestStream_parseErrorFieldName(t *testing.T) {
 	t.Parallel()
 	var s ggen.Stream
@@ -478,8 +486,8 @@ func TestStream_parseErrorFieldName(t *testing.T) {
 	}
 }
 
-// decodeBothPaths runs payload through DecodeFrom and DecodeFromStream of T,
-// returning both errors.
+// decodeBothPaths runs payload through T's DecodeFrom and DecodeFromStream and
+// returns both errors.
 func decodeBothPaths[T interface {
 	ggen.Decoder[T]
 	ggen.StreamDecoder[T]
@@ -490,8 +498,8 @@ func decodeBothPaths[T interface {
 	return bytesErr, streamErr
 }
 
-// A trailing comma before a container close is rejected on every container
-// shape and both paths.
+// A trailing comma before `]` or `}` is rejected for every container shape on
+// both paths.
 func TestTrailingCommaRejected(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -524,8 +532,8 @@ func TestTrailingCommaRejected(t *testing.T) {
 	}
 }
 
-// Input ending right after an element comma errors on both paths without
-// panicking the stream path at EOF.
+// Input that ends right after an element comma fails on both paths. The
+// stream path must not panic at EOF.
 func TestTruncatedAfterComma(t *testing.T) {
 	t.Parallel()
 	for _, payload := range []string{`{"tags":["a",`, `{"props":{"a":"b",`} {
@@ -547,7 +555,7 @@ func TestTruncatedAfterComma(t *testing.T) {
 	}
 }
 
-// ValidationPosStruct carries one minlen rule so a violation returns a concrete
+// ValidationPosStruct has one minlen rule, so a violation returns a
 // *ggen.MinLenError.
 //
 //ggen:generate
@@ -556,15 +564,16 @@ type ValidationPosStruct struct {
 	B string `json:"b" pipe:"minlen=4"`
 }
 
-// posPayload places the failing "b" far enough past a long "a" that the stream
+// posPayload puts the failing "b" far enough after a long "a" that the stream
 // buffer compacts before B is validated.
 var posPayload = []byte(`{"a":"` + strings.Repeat("x", 64) + `","b":"yy"}`)
 
-// validation.*Error.Pos is a full-payload byte offset, identical on bytes and
-// stream paths despite stream compaction.
+// A validation error's Pos is a byte offset into the full payload. It is the
+// same on the bytes and stream paths, even though the stream compacts its
+// buffer.
 func TestValidationError_Pos(t *testing.T) {
 	t.Parallel()
-	// Bytes path — Pos sits just past the closing quote of "yy".
+	// Bytes path: Pos is just past the closing quote of "yy".
 	_, _, bErr := ValidationPosStruct{}.DecodeFrom(posPayload)
 	var bMin *ggen.MinLenError
 	if !errors.As(bErr, &bMin) {
@@ -575,7 +584,7 @@ func TestValidationError_Pos(t *testing.T) {
 			bMin.Pos, posPayload[:bMin.Pos])
 	}
 
-	// Stream path — 1-byte chunks + tiny buffer force compaction.
+	// Stream path: 1-byte chunks and a tiny buffer force compaction.
 	r := &chunkReader{data: posPayload, max: 1}
 	var s ggen.Stream
 	s.Reset(r, make([]byte, 0, 16))
@@ -590,9 +599,9 @@ func TestValidationError_Pos(t *testing.T) {
 	}
 }
 
-// NarrowInts carries fixed-width integer fields narrower than 64-bit across the
-// field / map-value / slice-elem / pointer shapes, so the codegen overflow
-// guard is exercised on every emit site + both decode paths.
+// NarrowInts has integer fields narrower than 64 bits as plain fields, map
+// values, slice elements and pointers. This way the generated overflow check
+// runs at every kind of generated site and on both decode paths.
 //
 //ggen:generate
 type NarrowInts struct {
@@ -607,10 +616,11 @@ type NarrowInts struct {
 	PtrU *uint8           `json:"ptrU"`
 }
 
-// TestNarrowIntOverflow pins the overflow guard: an out-of-range value for a
-// narrow integer target must be REJECTED with ErrNumberOverflow, not silently
-// truncated (uint8 ← 256 = 0, the pre-fix bug), matching encoding/json — on the
-// bytes path, the stream path, and every field/map/slice/pointer emit site.
+// TestNarrowIntOverflow pins the overflow check. A value out of range for a
+// narrow integer type must be rejected with ErrNumberOverflow, not silently
+// truncated (256 into a uint8 would give 0). This matches encoding/json. It
+// is checked on the bytes path, the stream path, and for fields, map values,
+// slice elements and pointers.
 func TestNarrowIntOverflow(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -665,15 +675,17 @@ func TestNarrowIntOverflow(t *testing.T) {
 	}
 }
 
-// TestInvalidUTF8Rejected pins the decode UTF-8 contract through GENERATED
-// code (inline window fast path, ggen.String fall, escape arm, stream path):
-// invalid UTF-8 / unpaired surrogates in string values reject with
-// ggen.ErrInvalidUTF8, matching jsonv2 (encoding/json v1 instead replaces
-// with U+FFFD — an intentional divergence from v1). Valid multi-byte UTF-8
-// decodes identically to jsonv2.
+// TestInvalidUTF8Rejected pins the UTF-8 rules for decode through generated
+// code. It covers the inline fast path for short strings, the fallback call
+// to ggen.String, strings with escapes, and the stream path. Invalid UTF-8
+// in a string value is rejected with ggen.ErrInvalidUTF8. So is an unpaired
+// surrogate: a \uD800-\uDFFF escape that is not part of a valid pair. This
+// matches jsonv2. encoding/json v1 instead replaces bad bytes with U+FFFD, and
+// ggen differs from v1 on purpose. Valid multi-byte UTF-8 decodes the same as
+// jsonv2.
 func TestInvalidUTF8Rejected(t *testing.T) {
 	t.Parallel()
-	long := strings.Repeat("x", 40) // past the 32 B inline window → ggen.String fall
+	long := strings.Repeat("x", 40) // longer than the 32-byte inline path, so ggen.String is called
 	cases := []struct {
 		name    string
 		payload string
@@ -724,11 +736,12 @@ func TestInvalidUTF8Rejected(t *testing.T) {
 	}
 }
 
-// TestRawCaptureInvalidUTF8: captured raw spans (json.RawMessage /
-// jsontext.Value) reject invalid UTF-8 BYTES with ggen.ErrInvalidUTF8 (jsonv2
-// rejects those too), bytes + stream. Residual divergence: unpaired \uXXXX
-// surrogate ESCAPES inside a raw span are ASCII text and pass (jsonv2
-// escape-parses raw strings and rejects) — see backlog.
+// TestRawCaptureInvalidUTF8 checks captured raw values (json.RawMessage and
+// jsontext.Value) on both paths. Invalid UTF-8 bytes are rejected with
+// ggen.ErrInvalidUTF8, as jsonv2 does. One known difference remains: an
+// unpaired \uXXXX surrogate escape inside a raw value is plain ASCII text, so
+// ggen accepts it. jsonv2 parses the escapes in raw strings and rejects it.
+// See .claude/backlog.md.
 func TestRawCaptureInvalidUTF8(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -769,13 +782,14 @@ func TestRawCaptureInvalidUTF8(t *testing.T) {
 	}
 }
 
-// TestMaxDepthNoCrash: deeply-nested payloads that formerly overflowed the
-// goroutine stack (fatal, unrecoverable) now return ggen.ErrMaxDepth cleanly
-// through generated code — self-referential struct (Node.Children), any field,
-// ignoreunknown skip, and RawMessage capture, bytes + stream.
+// TestMaxDepthNoCrash checks that very deeply nested payloads return
+// ggen.ErrMaxDepth through generated code instead of overflowing the
+// goroutine stack, which is a fatal crash that cannot be recovered. It covers
+// a self-referential struct (Node.Children), an any field, an ignoreunknown
+// skip and a RawMessage capture, on both paths.
 func TestMaxDepthNoCrash(t *testing.T) {
 	t.Parallel()
-	const n = 2_000_000 // well past MaxDepth and past the old ~2.5MB crash point
+	const n = 2_000_000 // far past MaxDepth, and deep enough to overflow the stack without the cap
 	arr := strings.Repeat("[", n) + strings.Repeat("]", n)
 	cases := []struct {
 		name    string
@@ -807,7 +821,8 @@ func TestMaxDepthNoCrash(t *testing.T) {
 			}
 		})
 	}
-	// Stream path: recursive struct + skip, deep enough to exceed the cap.
+	// Stream path: a recursive struct and a skip, deep enough to exceed the
+	// cap.
 	rec := strings.Repeat(`{"children":[`, n) + strings.Repeat(`]}`, n)
 	var s ggen.Stream
 	s.Reset(strings.NewReader(rec), make([]byte, 0, 4096))
@@ -830,8 +845,8 @@ type RawHolder struct {
 	Raw json.RawMessage `json:"raw"`
 }
 
-// NumGrammar carries one field per number decode path: inline int/uint
-// emitters, float64, and json.Number.
+// NumGrammar has one field per number decode path: the inline int and uint
+// code, float64, and json.Number.
 //
 //ggen:generate
 type NumGrammar struct {
@@ -841,11 +856,11 @@ type NumGrammar struct {
 	N json.Number `json:"n"`
 }
 
-// TestNumberGrammarStrict pins the VALUE decoders to the RFC 8259 number
-// grammar, matching jsonv2. These forms are Go-number-isms that
-// strconv.ParseFloat accepts but JSON forbids; ggen used to accept them while
-// its own SKIP path (skipNumber, used for RawMessage/ignoreunknown) already
-// rejected them — so decoding and skipping disagreed on the same bytes.
+// TestNumberGrammarStrict pins the value decoders to the RFC 8259 number
+// grammar, matching jsonv2. The test inputs are Go number spellings that
+// strconv.ParseFloat accepts but JSON forbids. The skip path (skipNumber, used
+// for RawMessage and ignoreunknown) rejects them too, so decoding and skipping
+// agree on the same bytes.
 func TestNumberGrammarStrict(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -898,8 +913,8 @@ func TestNumberGrammarStrict(t *testing.T) {
 					t.Errorf("stream cap=%d: %+v != jsonv2 %+v", bufCap, sGot, v2)
 				}
 			}
-			// Skip path (RawMessage capture) must agree with the value path —
-			// this asymmetry is exactly what the fix removes.
+			// The skip path (RawMessage capture) must agree with the value
+			// path.
 			raw := `{"raw":` + c.payload[strings.Index(c.payload, ":")+1:]
 			_, _, rErr := RawHolder{}.DecodeFrom([]byte(raw))
 			if (rErr != nil) != c.reject {
@@ -909,9 +924,10 @@ func TestNumberGrammarStrict(t *testing.T) {
 	}
 }
 
-// NarrowFloats pins the float sibling of the narrow-int guard: float32
-// positions used to bare-cast float64 scans, so 1e39 decoded to +Inf with a
-// nil error while v1 and jsonv2 both reject out-of-range float32.
+// NarrowFloats pins the float32 version of the narrow-int check. A value out
+// of float32 range, such as 1e39, must be rejected. A plain conversion from
+// float64 would give +Inf with a nil error. encoding/json v1 and jsonv2 both
+// reject it.
 //
 //ggen:generate
 type NarrowFloats struct {
@@ -941,9 +957,9 @@ func TestNarrowFloatOverflow(t *testing.T) {
 			t.Errorf("stdlib accepted %s — differential premise broken", in)
 		}
 	}
-	// The float32 rounding boundary: values that round DOWN to MaxFloat32
-	// stay accepted (stdlib does the same — the reject line is "converts to
-	// Inf", not MaxFloat32).
+	// The float32 rounding boundary. Values that round down to MaxFloat32 are
+	// accepted. The stdlib does the same: a value is rejected when it
+	// converts to Inf, not when it exceeds MaxFloat32.
 	got, _, err := (NarrowFloats{}).DecodeFrom([]byte(`{"f":3.4028235e38}`))
 	if err != nil || got.F != math.MaxFloat32 {
 		t.Errorf("boundary: got %v, %v", got.F, err)
@@ -951,12 +967,14 @@ func TestNarrowFloatOverflow(t *testing.T) {
 }
 
 // TestNarrowFloat_RoundsDecimalOnce pins single rounding at every float32
-// site (field, slice, map, pointer, `,string`; bytes + stream). Narrowing a
-// float64 scan rounds the decimal twice: the first three tokens are the
-// shortest float64 forms of float32 rounding midpoints — what json.Marshal of
-// such a float64 emits — and landed one ulp off; the last sits just below
-// the overflow midpoint and was rejected as an overflow. Both stdlibs parse
-// at 32 bits.
+// site: field, slice, map, pointer and `,string`, on both paths. Parsing as
+// float64 and then converting to float32 rounds the decimal twice, which can
+// give a different result. The first three inputs are the shortest float64
+// forms of float32 rounding midpoints (what json.Marshal of such a float64
+// emits). Double rounding lands them one ulp (one step between adjacent
+// floats) off. The last input sits just below the overflow midpoint, and
+// double rounding rejects it as an overflow. Both encoding/json v1 and jsonv2
+// parse directly at 32 bits.
 func TestNarrowFloat_RoundsDecimalOnce(t *testing.T) {
 	t.Parallel()
 	pick := func(v NarrowFloats) float32 {
@@ -1001,9 +1019,10 @@ func TestNarrowFloat_RoundsDecimalOnce(t *testing.T) {
 	}
 }
 
-// Round-5 pins: bytes-path slice structural errors wrap in *ggen.ParseError
-// (path + pos), and scan-primitive error positions surface end-to-end,
-// bytes/stream agreeing on the identical payload.
+// The tests below pin two things. Structural errors in slices on the bytes
+// path are wrapped in *ggen.ParseError with a path and a position. And error
+// positions from the scan functions reach the caller unchanged, with the bytes
+// and stream paths agreeing on the same payload.
 
 func nodeStreamErr(t *testing.T, payload []byte) error {
 	t.Helper()
@@ -1054,8 +1073,9 @@ func TestParseError_SliceStructural(t *testing.T) {
 	}
 }
 
-// The pipe: variant dispatch heads (no matching shape, truncated value,
-// malformed null arm) wrap like every other structural guard.
+// Errors at the start of a pipe: variant value are wrapped like every other
+// structural error. The cases are: no variant matches the shape, the value is
+// truncated, and a malformed null.
 func TestParseError_VariantDispatch(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct{ name, payload string }{
@@ -1081,8 +1101,8 @@ func TestParseError_VariantDispatch(t *testing.T) {
 
 func TestParseError_ScanPrimitivePos(t *testing.T) {
 	t.Parallel()
-	// ggen.String fails inside the value; runtime now returns the error
-	// position, which the emitted NewParseErr site stamps unmodified.
+	// ggen.String fails inside the value. It returns the error position, and
+	// the generated NewParseErr call records it unchanged.
 	payload := []byte(`{"name":"ab` + "\x01" + `c"}`)
 	_, _, berr := Node{}.DecodeFrom(payload)
 	var bpe *ggen.ParseError
@@ -1097,18 +1117,21 @@ func TestParseError_ScanPrimitivePos(t *testing.T) {
 	if !errors.As(serr, &spe) {
 		t.Fatalf("stream: got %T %v, want *ggen.ParseError", serr, serr)
 	}
-	// Bytes stamps the string-content start (ggen.String's error pos), the
-	// stream the value start — both real positions, never the old 0.
+	// The bytes path records the start of the string content (ggen.String's
+	// error position). The stream path records the value start. Both are real
+	// positions, never 0.
 	if spe.Pos < 8 {
 		t.Errorf("stream: Pos = %d, want >= 8 (at the value)", spe.Pos)
 	}
 }
 
-// Stream ParseError positions must be full-payload offsets (s.Offset()), not
-// the buffer-relative s.Pos: once a compacting refill slides the window the
-// two diverge, so a small buffer + chunked reader used to report a position
-// near 0 for a failure thousands of bytes in — and the value changed with the
-// chunk size. A 16-byte payload cannot catch it (the window never slides).
+// Stream ParseError positions must be offsets into the full payload
+// (s.Offset()), not s.Pos, which is relative to the buffer. The Stream holds
+// only a window of the input in its buffer. Once a refill compacts the buffer
+// and the window moves, the two values differ. With the wrong one, a small
+// buffer and a chunked reader would report a position near 0 for a failure
+// thousands of bytes in, and the value would change with the chunk size. A
+// 16-byte payload cannot catch this because the window never moves.
 func TestParseError_StreamPosIsPayloadOffset(t *testing.T) {
 	t.Parallel()
 	var sb strings.Builder
@@ -1119,7 +1142,7 @@ func TestParseError_StreamPosIsPayloadOffset(t *testing.T) {
 		}
 		sb.WriteString(`"aaaaaaaaaaaaaaaa"`)
 	}
-	sb.WriteString(`],"id":true}`) // id is an int: fails far into the payload
+	sb.WriteString(`],"id":true}`) // id is an int, so this fails far into the payload
 	payload := []byte(sb.String())
 	wantAtLeast := bytes.Index(payload, []byte(`"id":true`))
 
@@ -1146,10 +1169,12 @@ func TestParseError_StreamPosIsPayloadOffset(t *testing.T) {
 	}
 }
 
-// Round-9: generated value-head refills map a DRAINED reader to the same
-// grammar sentinel the bytes path reports for the truncation (ggen.NotEOF in
-// streamReadMore) — raw io.ErrUnexpectedEOF used to leak at null-peek/map/
-// slice/variant heads. Sweeps every prefix cut of a null-bearing payload.
+// When generated code refills at the start of a value and the reader has no
+// more data, it reports the same grammar error the bytes path reports for
+// the truncated input. ggen.NotEOF in streamReadMore does this mapping. A raw
+// io.ErrUnexpectedEOF must not reach the caller from the null check, map,
+// slice or variant code. The test cuts a payload with nulls at every prefix
+// length.
 func TestTruncationSentinelParity(t *testing.T) {
 	t.Parallel()
 	payload := `{"id":1,"tags":null,"props":null,"children":null,"name":"x"}`
@@ -1165,8 +1190,8 @@ func TestTruncationSentinelParity(t *testing.T) {
 	}
 }
 
-// decodeBothChunked is decodeBothPaths with the stream fed chunk bytes per
-// Read through a small window, so the window compacts mid-value.
+// decodeBothChunked is decodeBothPaths with the stream reading chunk bytes per
+// Read into a small buffer, so the buffer compacts in the middle of a value.
 func decodeBothChunked[T interface {
 	ggen.Decoder[T]
 	ggen.StreamDecoder[T]
@@ -1179,14 +1204,13 @@ func decodeBothChunked[T interface {
 	return bytesErr, streamErr
 }
 
-// Stream scan primitives rebase s.Pos on every error return, so a compacting
-// refill cannot leave a stale cursor behind, and the rebased cursor is the
-// bytes-path error position (where scanning stopped). The user-visible
-// contract that buys: ParseError.Pos and the sentinel are the SAME on both
-// paths and at every chunk size. Integer overflow used to report 236/239/218
-// at chunk 1/7/64 for one payload; a malformed number under an ignoreunknown
-// key stamped a position past the document; a RawMessage span malformed deep
-// inside reported the span's first byte on the stream only.
+// The stream scan functions reset s.Pos on every error return, so a refill
+// that compacted the buffer cannot leave a stale cursor. The reset cursor is
+// the same error position the bytes path reports (where scanning stopped).
+// For the user this means ParseError.Pos and the sentinel error are the same
+// on both paths and at every chunk size. The cases cover integer overflow, a
+// malformed number under an ignored unknown key, and a RawMessage value that
+// is malformed deep inside.
 func TestParseError_StreamPosChunkInvariant(t *testing.T) {
 	t.Parallel()
 	pad := `{"tags":["` + strings.Repeat("a", 200) + `"],`
@@ -1238,8 +1262,9 @@ func TestParseError_StreamPosChunkInvariant(t *testing.T) {
 	}
 }
 
-// Round-9: `format:array` byte elements reject >255 with ErrNumberOverflow
-// (encoding/json v1 and jsonv2 both reject) instead of silently wrapping.
+// `format:array` byte elements reject values above 255 with
+// ErrNumberOverflow instead of silently wrapping. encoding/json v1 and jsonv2
+// both reject them.
 func TestFormatArray_ByteOverflow(t *testing.T) {
 	t.Parallel()
 	bytesErr, streamErr := decodeBothPaths[NativeTypes](`{"byteArray":[300]}`)
@@ -1250,8 +1275,8 @@ func TestFormatArray_ByteOverflow(t *testing.T) {
 	}
 }
 
-// decodeBothPathsChunked is decodeBothPaths with the stream fed chunk bytes
-// per Read through a small window.
+// decodeBothPathsChunked is decodeBothPaths with the stream reading chunk
+// bytes per Read into a small buffer.
 func decodeBothPathsChunked[T interface {
 	ggen.Decoder[T]
 	ggen.StreamDecoder[T]
@@ -1264,10 +1289,9 @@ func decodeBothPathsChunked[T interface {
 	return bytesErr, streamErr
 }
 
-// A control byte inside a string whose closing quote never arrives is a
-// final malformation, not a truncation: both paths report ErrBadString at
-// the same offset. The bytes path used to say ErrUnterminated at the end of
-// input while the stream said ErrBadString at the span start.
+// A control byte inside a string whose closing quote never arrives makes the
+// input malformed, not just truncated. Both paths report ErrBadString at the
+// same offset.
 func TestParseError_CtrlInOpenTailParity(t *testing.T) {
 	t.Parallel()
 	for _, payload := range []string{"{\"name\":\"ab\x01}", "{\"na\x01:1}", "{\"props\":{\"a\":\"b\x01}}", "{\"tags\":[\"a\x01]}"} {
@@ -1288,8 +1312,8 @@ func TestParseError_CtrlInOpenTailParity(t *testing.T) {
 	}
 }
 
-// R10BoolShapes carries a bool at every generated Bool emit site: field,
-// slice element, array element, map value.
+// R10BoolShapes has a bool at every kind of site where generated code calls
+// Bool: field, slice element, array element and map value.
 //
 //ggen:generate
 type R10BoolShapes struct {
@@ -1299,11 +1323,12 @@ type R10BoolShapes struct {
 	ByKey map[string]bool `json:"byKey"`
 }
 
-// Every generated Bool site stamps the give-up byte — the first byte that
-// breaks the literal, or the end of a truncated one — on both paths and at
-// every chunk size (jsonv2's offset). ggen.Bool itself reports the literal
-// start; the emitted error branch derives the position with ggen.BoolEnd,
-// and Stream.Bool leaves Pos there.
+// Every generated Bool site reports the give-up position: the first byte that
+// breaks the true or false literal, or the end of a truncated one. This holds
+// on both paths and at every chunk size, and matches jsonv2's offset.
+// ggen.Bool itself reports the start of the literal. The generated error
+// branch computes the give-up position with ggen.BoolEnd. Stream.Bool leaves
+// Pos at the give-up position.
 func TestParseError_BoolGiveUpPos(t *testing.T) {
 	t.Parallel()
 	shapes := func(p string, c int) (error, error) { return decodeBothPathsChunked[R10BoolShapes](p, c) }
@@ -1347,9 +1372,11 @@ func TestParseError_BoolGiveUpPos(t *testing.T) {
 	}
 }
 
-// The value-head refill sentinel follows the WIRE shape, not the field's Go
-// kind: a pointer chain's leaf, sql.Null*'s inner, the quote a `,string`
-// value opens with, the bracket of a format:array []byte.
+// R10HeadShapes checks the error reported when input runs out at the start
+// of a value. The error follows the JSON shape expected there, not the
+// field's Go kind. Examples: the leaf of a pointer chain, the inner value of
+// a sql.Null* type, the quote a `,string` value opens with, and the bracket of
+// a format:array []byte.
 //
 //ggen:generate
 type R10HeadShapes struct {
@@ -1388,9 +1415,9 @@ func TestTruncationSentinelParity_WireShape(t *testing.T) {
 	}
 }
 
-// An `n` that does not spell `null` is ErrBadLiteral at every null-accepting
-// kind on both paths (jsonv2 reports a literal error there too), including
-// input that runs out mid-literal.
+// An `n` that does not spell `null` gives ErrBadLiteral for every kind that
+// accepts null, on both paths. jsonv2 reports a literal error there too. This
+// includes input that ends in the middle of the literal.
 func TestNullPeekSentinelParity(t *testing.T) {
 	t.Parallel()
 	cases := []struct {

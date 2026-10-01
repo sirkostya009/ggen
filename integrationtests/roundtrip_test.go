@@ -50,7 +50,7 @@ func TestSliceRoundtrip(t *testing.T) {
 		}
 	}
 
-	// String + Reader variants.
+	// The String and Reader variants.
 	s, _ := ggen.MarshalSliceString(addrs)
 	if s[0] != '[' || s[len(s)-1] != ']' {
 		t.Errorf("bad slice string: %q", s)

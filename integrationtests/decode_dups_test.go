@@ -31,13 +31,14 @@ func TestDuplicateKey_firstFieldAlsoRejected(t *testing.T) {
 	}
 }
 
-// AllowDupsStruct opts out of the duplicate-key error: first-wins, later
-// occurrences skipped.
+// AllowDupsStruct opts out of the duplicate-key error. The first occurrence
+// of a key wins and later ones are skipped.
 //
 //ggen:generate allowdups
 type AllowDupsStruct HookedStruct
 
-// First occurrence sticks, the second is skipped not overwritten.
+// The first occurrence sticks. The second is skipped and does not overwrite
+// it.
 func TestAllowDups_firstWins(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"name":"alice","name":"bob","n":1}`)

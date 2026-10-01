@@ -31,13 +31,16 @@ var fuzzSeeds = [][]byte{
 	[]byte(`{"name":"\""}`),
 	[]byte(`{"tags":["a","b",]}`),
 	[]byte(`{"props":{"k":"v",}}`),
-	// Escape/unescape path — raw-string backslashes are JSON escapes: surrogate
-	// pairs (😀), BMP \uXXXX, two-char. Long enough that small chunk
-	// sizes straddle escapes across stream refill boundaries.
+	// Escape path. Backslashes in these raw strings are JSON escapes:
+	// surrogate pairs (😀), single \uXXXX escapes and two-char escapes. A
+	// surrogate pair is two \uXXXX escapes that together encode one character
+	// above U+FFFF. The seeds are long enough that small chunk sizes split an
+	// escape across a refill, where the Stream reads more input into its
+	// buffer.
 	[]byte(`{"name":"a\ud83d\ude00b\u00e9c\n\t\"\\"}`),
 	[]byte(`{"name":"aaaaaaaaaaaaaaaaaaaaaaaa\ud83d\ude00bbbbbbbb","tags":["x\ud83d\ude00y","\u00e9\u00e9"]}`),
 	[]byte(`{"name":"\u00e9\u00e9\u00e9","props":{"k\ud83d\ude00":"v\u00e9"}}`),
-	// Invalid UTF-8 / unpaired surrogates \u2014 both paths must reject identically.
+	// Invalid UTF-8 and unpaired surrogates. Both paths must reject them.
 	[]byte("{\"name\":\"a\xffb\"}"),
 	[]byte("{\"name\":\"a\xe2(z\"}"),
 	[]byte(`{"name":"\ud83d"}`),
@@ -45,8 +48,9 @@ var fuzzSeeds = [][]byte{
 	[]byte("{\"name\":\"h\u00e9llo \u017c\u00f3\u0142\u0107\"}"),
 }
 
-// Bytes and stream paths agree when both succeed; chunk size varies
-// boundary alignment.
+// When the bytes path accepts an input, the stream path must accept it too
+// and decode the same value. The chunk size moves where reads split the
+// input.
 func FuzzStreamEqualsBytes(f *testing.F) {
 	for _, s := range fuzzSeeds {
 		f.Add(s, uint8(1))
@@ -74,16 +78,16 @@ func FuzzStreamEqualsBytes(f *testing.F) {
 		wantOut, _ := ggen.Marshal(want)
 		gotOut, _ := ggen.Marshal(got)
 		if !bytes.Equal(wantOut, gotOut) {
-			// Map marshal order is nondeterministic, so a byte diff may be pure
-			// key order. Re-check order-insensitively (parse both to any) before
-			// failing — a real content divergence still trips.
+			// Map marshal order is random, so a byte diff may be only key
+			// order. Re-check without order, by parsing both to any, before
+			// failing. A real content divergence still fails.
 			var wa, ga any
 			ew := jsonv2.Unmarshal(wantOut, &wa)
 			eg := jsonv2.Unmarshal(gotOut, &ga)
-			// A map key with invalid UTF-8 (faithfully preserved from input)
-			// makes jsonv2's strict-UTF-8 reparse fail at a key whose position
-			// depends on random map order — so the two partial parses diverge
-			// spuriously. Both decoded the same map; skip when either won't parse.
+			// A map key with invalid UTF-8, preserved from the input, makes
+			// jsonv2's strict reparse fail at that key. Its position depends on
+			// random map order, so the two partial parses differ for no real
+			// reason. Both decoded the same map, so skip when either fails.
 			if ew != nil || eg != nil {
 				return
 			}
@@ -95,8 +99,8 @@ func FuzzStreamEqualsBytes(f *testing.F) {
 	})
 }
 
-// BoundaryStruct (float/int/string, no validation) must be panic-free on any
-// input.
+// BoundaryStruct, with float, int and string fields and no validation, must
+// not panic on any input.
 func FuzzBoundaryNoPanic(f *testing.F) {
 	for _, s := range [][]byte{
 		[]byte(`{"f":1.0,"i":1,"str":"a"}`),
@@ -119,8 +123,8 @@ func FuzzBoundaryNoPanic(f *testing.F) {
 	})
 }
 
-// Large strings through tiny bufs exercise the slow-path grow loop; must stay
-// panic-free.
+// Large strings through tiny buffers exercise the slow-path grow loop. They
+// must not panic.
 func FuzzStreamHugeStringNoPanic(f *testing.F) {
 	f.Add(uint16(1), uint32(1024))
 	f.Add(uint16(4), uint32(65536))
@@ -152,9 +156,9 @@ func FuzzStreamHugeStringNoPanic(f *testing.F) {
 	})
 }
 
-// PrimStruct holds one field per primitive kind, fuzzed by value (not payload
-// bytes) so every input is a well-formed payload driving the value-parsers
-// across their full domain.
+// PrimStruct holds one field per primitive kind. It is fuzzed by value, not
+// by payload bytes, so every input is a well-formed payload that drives the
+// value parsers across their full range.
 //
 //ggen:generate
 type PrimStruct struct {
@@ -174,9 +178,9 @@ type PrimStruct struct {
 	Str string  `json:"str"`
 }
 
-// FuzzPrimitivesCompat builds a payload from fuzzed typed values via stdlib,
-// then asserts ggen and stdlib decode it identically: both accept or both
-// reject, and on success the decoded structs are equal.
+// FuzzPrimitivesCompat builds a payload from fuzzed typed values with jsonv2.
+// Then it asserts that ggen and jsonv2 decode it identically. Both accept or
+// both reject, and on success the decoded structs are equal.
 func FuzzPrimitivesCompat(f *testing.F) {
 	add := func(p PrimStruct) {
 		f.Add(p.B, p.I, p.I8, p.I16, p.I32, p.I64, p.U, p.U8, p.U16, p.U32, p.U64, p.F32, p.F64, p.Str)
@@ -191,18 +195,18 @@ func FuzzPrimitivesCompat(f *testing.F) {
 		I8: math.MaxInt8, I16: math.MaxInt16, I32: math.MaxInt32, I64: math.MaxInt64,
 		F32: math.SmallestNonzeroFloat32, F64: math.SmallestNonzeroFloat64, Str: "\"\\\n\t é\U0001f600",
 	})
-	// Invalid UTF-8 seeds — routed to the reject-parity branch below.
+	// Invalid UTF-8 seeds. They take the reject-parity branch below.
 	add(PrimStruct{Str: "a\xffb"})
 	add(PrimStruct{Str: "a\xe2(z"})
 	add(PrimStruct{Str: "\xed\xa0\x80"})
 	f.Fuzz(func(t *testing.T, b bool, i int, i8 int8, i16 int16, i32 int32, i64 int64,
 		u uint, u8 uint8, u16 uint16, u32 uint32, u64 uint64, f32 float32, f64 float64, str string,
 	) {
-		// Invalid UTF-8 can't round-trip through jsonv2.Marshal (it errors), so
-		// build the payload by hand and assert REJECT parity: both ggen and
-		// jsonv2 must refuse it (ggen with ggen.ErrInvalidUTF8). Only when the
-		// raw bytes keep the payload structurally well-formed — a quote/
-		// backslash/ctrl byte would change what is being tested.
+		// Invalid UTF-8 cannot round-trip through jsonv2.Marshal, which errors
+		// on it. So build the payload by hand and assert reject parity: both
+		// ggen and jsonv2 must refuse it, ggen with ggen.ErrInvalidUTF8. Do
+		// this only when the raw bytes keep the payload well-formed. A quote,
+		// backslash or control byte would change what is being tested.
 		if !utf8.ValidString(str) {
 			if strings.ContainsAny(str, "\"\\") || strings.ContainsFunc(str, func(r rune) bool { return r < 0x20 }) {
 				return
@@ -223,8 +227,8 @@ func FuzzPrimitivesCompat(f *testing.F) {
 			B: b, I: i, I8: i8, I16: i16, I32: i32, I64: i64,
 			U: u, U8: u8, U16: u16, U32: u32, U64: u64, F32: f32, F64: f64, Str: str,
 		}
-		// NaN/Inf are the ONLY values with no JSON form — skip those upfront so
-		// any OTHER marshal failure is a real bug, not a silently-swallowed skip.
+		// NaN and Inf are the only values with no JSON form. Skip those up
+		// front, so any other marshal failure is a real bug, not a silent skip.
 		nonFinite := math.IsNaN(f64) || math.IsInf(f64, 0) ||
 			math.IsNaN(float64(f32)) || math.IsInf(float64(f32), 0)
 		payload, err := jsonv2.Marshal(want)

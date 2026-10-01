@@ -1,11 +1,11 @@
-// Package validation holds typed validation errors emitted by ggen-generated
-// parsers. Hard parse errors are wrapped in [ParseError]; only
-// rule-level failures land here. Each rule has its own concrete error type;
-// type-switch via errors.As to inspect specific failures.
+// Typed validation errors returned by generated decoders. Malformed JSON is
+// reported as a [ParseError]. The types here are only for values that parsed
+// but broke a rule. Each rule has its own error type. Use errors.As to check
+// for a specific one.
 //
-// In multierr mode the decoder returns [Errors], a flat slice of failures.
-// Every leaf carries its own root-relative Path; nested-struct decodes have
-// the outer segment prepended via [Append].
+// In multierr mode the decoder returns [Errors], a flat list of failures.
+// Each entry carries its own Path from the document root. When a nested
+// struct fails, [Errors.Append] adds the outer segment to the front.
 
 package ggen
 
@@ -15,17 +15,17 @@ import (
 	"unsafe"
 )
 
-// Error is satisfied by every validation failure type. Every concrete type
-// also has a PrependPath(segment) method (deliberately not part of the
-// interface — implementing Error doesn't require it; path completion asserts
-// for it).
+// Error is implemented by every validation error type. Each concrete type
+// also has PrependPath and AddPos methods. They are left out of the interface
+// on purpose, so implementing Error does not require them. Code that needs
+// them checks for them with a type assertion.
 type Error interface {
 	error
 	Rule() Rule
 }
 
-// prepend returns p with segment as the new head, on a fresh backing array
-// so leaf-shared slices don't corrupt siblings.
+// prepend returns segment followed by p, in a new backing array. Sibling
+// errors may share p, so it must not be modified in place.
 func prepend(p []string, segment string) []string {
 	out := make([]string, len(p)+1)
 	out[0] = segment
@@ -36,7 +36,7 @@ func prepend(p []string, segment string) []string {
 // Rule identifies which validation rule failed.
 type Rule string
 
-// Known rule identifiers, matching the keyword in the `pipe` struct tag.
+// Rule identifiers. Each matches its keyword in the `pipe` struct tag.
 const (
 	Required     Rule = "required"
 	NotEmpty     Rule = "notempty"
@@ -103,8 +103,8 @@ type LenError struct {
 	Path []string
 	Want int
 	Got  int
-	// AtLeast marks Got as a lower bound: decoding stopped at the first
-	// element past Want rather than counting the rest.
+	// AtLeast marks Got as a lower bound. Decoding stopped at the first
+	// element past Want instead of counting the rest.
 	AtLeast bool
 }
 
@@ -190,8 +190,8 @@ func (*MaxRunesError) Rule() Rule             { return MaxRunes }
 func (e *MaxRunesError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
 func (e *MaxRunesError) AddPos(d int)         { e.Pos += d }
 
-// --- numeric range. Limit and Value are `any`: an integer bound above
-// float64's exact range would otherwise be reported rounded.
+// --- numeric range. Limit and Value are `any` so that a large integer is
+// reported exactly. A float64 would round integers above 2^53.
 
 type GTError struct {
 	Pos   int
@@ -249,7 +249,7 @@ func (*LTEError) Rule() Rule             { return LTE }
 func (e *LTEError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
 func (e *LTEError) AddPos(d int)         { e.Pos += d }
 
-// --- equality. Want/Value are `any` to cover both string and numeric fields.
+// --- equality. Want and Value are `any` to cover string and numeric fields.
 
 type EqError struct {
 	Pos   int
@@ -279,7 +279,8 @@ func (*NeqError) Rule() Rule             { return Neq }
 func (e *NeqError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
 func (e *NeqError) AddPos(d int)         { e.Pos += d }
 
-// --- oneof. Allowed points to a frozen package-level slice (not owned by the error).
+// --- oneof. Allowed points to a shared package-level slice. The error does
+// not own it, so do not modify it.
 
 type OneOfError struct {
 	Pos     int
@@ -378,7 +379,7 @@ func (*HexadecimalError) Rule() Rule             { return Hexadecimal }
 func (e *HexadecimalError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
 func (e *HexadecimalError) AddPos(d int)         { e.Pos += d }
 
-// --- prefix/suffix/contains ---
+// --- starts, ends, contains ---
 
 type StartsError struct {
 	Pos         int
@@ -463,9 +464,9 @@ func (e *UnknownKeyError) AddPos(d int)         { e.Pos += d }
 
 // --- custom ---
 
-// CustomError is the failure of a custom error-form validator (`func(T) error`).
-// Name is the func identifier (no `@`); Value is the rejected input; Cause is
-// the error the validator returned.
+// CustomError reports a failed custom validator of the form func(T) error.
+// Name is the function name without the leading '@'. Value is the rejected
+// input. Cause is the error the validator returned.
 type CustomError struct {
 	Pos   int
 	Path  []string
@@ -485,9 +486,9 @@ func (e *CustomError) Unwrap() error        { return e.Cause }
 func (e *CustomError) PrependPath(s string) { e.Path = prepend(e.Path, s) }
 func (e *CustomError) AddPos(d int)         { e.Pos += d }
 
-// PredicateError is the failure for a custom bool-form validator
-// (`func(T) bool`). Name is the func identifier; Msg is the optional inline tag
-// message (empty renders a default); Value is the rejected input.
+// PredicateError reports a failed custom validator of the form func(T) bool.
+// Name is the function name. Msg is the optional message from the tag. When
+// Msg is empty, Error prints a default message. Value is the rejected input.
 type PredicateError struct {
 	Pos   int
 	Path  []string
@@ -508,9 +509,9 @@ func (e *PredicateError) AddPos(d int)         { e.Pos += d }
 
 // --- aggregate ---
 
-// Errors is a flat slice of validation failures from a multierr decoder.
-// Each entry's Path is root-relative. Implements error and Unwrap() []error so
-// errors.Is/As walk every leaf.
+// Errors is a flat list of validation failures from a multierr decoder. Each
+// entry's Path starts at the document root. Errors implements error and
+// Unwrap() []error, so errors.Is and errors.As check every entry.
 //
 //nolint:recvcheck // append needs a pointer receiver
 type Errors []Error
@@ -526,7 +527,8 @@ func (es Errors) Error() string {
 		buf = append(buf, e.Error()...)
 	}
 	if len(buf) == 0 {
-		// A single leaf rendering "" leaves buf nil — &buf[0] would panic.
+		// A single entry that prints "" leaves buf nil, and &buf[0] would
+		// panic.
 		return ""
 	}
 	return unsafe.String(&buf[0], len(buf))
@@ -534,8 +536,8 @@ func (es Errors) Error() string {
 
 func (Errors) Rule() Rule { return MultiErr }
 
-// AddPos rebases every leaf's byte offset by d — the bytes-path nested-
-// decode rebase (see ShiftPos).
+// AddPos shifts the byte offset of every entry by d. Nested decodes on the
+// bytes path use it (see ShiftPos).
 func (es Errors) AddPos(d int) {
 	for _, e := range es {
 		if ap, ok := e.(interface{ AddPos(d int) }); ok {
@@ -544,10 +546,10 @@ func (es Errors) AddPos(d int) {
 	}
 }
 
-// ShiftPos rebases e's Pos by d when e carries one, and returns e. Generated
-// bytes-path code calls it when draining a nested decoder's errors: the
-// callee ran on data[start:], so its positions are sub-slice-relative until
-// shifted by start. Stream positions are already payload-global.
+// ShiftPos shifts the Pos of e by d, if e has one, and returns e. Generated
+// bytes-path code calls it on each error from a nested decoder. That decoder
+// ran on data[start:], so its positions are offsets into the sub-slice until
+// they are shifted by start. Stream positions already cover the whole input.
 func ShiftPos(e Error, d int) Error {
 	if ap, ok := e.(interface{ AddPos(d int) }); ok {
 		ap.AddPos(d)
@@ -555,7 +557,7 @@ func ShiftPos(e Error, d int) Error {
 	return e
 }
 
-// PrependPath propagates the segment into every leaf.
+// PrependPath adds segment to the front of every entry's path.
 func (es Errors) PrependPath(segment string) {
 	for _, e := range es {
 		if p, ok := e.(interface{ PrependPath(segment string) }); ok {
@@ -572,16 +574,16 @@ func (es Errors) Unwrap() []error {
 	return out
 }
 
-// Append adds inner to es, prepending segment to its path. A nested [Errors]
-// is flattened in.
+// Append adds inner to es and puts segment at the front of its path. If inner
+// is itself an [Errors], its entries are added one by one.
 func (es *Errors) Append(segment string, inner Error) {
 	if nested, ok := inner.(Errors); ok {
 		nested.PrependPath(segment)
 		*es = append(*es, nested...)
 		return
 	}
-	// A single leaf gets the segment too — a fail-fast child nested under a
-	// multierr parent used to surface its path missing the outer field.
+	// A single error gets the segment too. This covers a fail-fast child
+	// nested under a multierr parent, so its path includes the outer field.
 	if p, ok := inner.(interface{ PrependPath(segment string) }); ok {
 		p.PrependPath(segment)
 	}

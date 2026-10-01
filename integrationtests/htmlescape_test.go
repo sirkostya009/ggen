@@ -1,5 +1,5 @@
-// HTML-safe string escaping. Default emits <, >, & literally; the htmlescape
-// annotation opts in to \uXXXX escapes.
+// HTML-safe string escaping. By default <, > and & are emitted literally. The
+// htmlescape annotation opts in to \uXXXX escapes for them.
 
 package integrationtests
 

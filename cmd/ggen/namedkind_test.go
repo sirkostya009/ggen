@@ -7,15 +7,15 @@ import (
 	"github.com/sirkostya009/ggen/gen/model"
 )
 
-// A named type over a primitive (`type Priority string`) reports KindStruct at
-// its use sites. Every rule emitter has to resolve the underlying kind through
-// effectiveKind, or the check either fails to compile (raw token / uncast
-// argument) or — worse — emits nothing at all.
+// A named type over a primitive, such as `type Priority string`, has
+// KindStruct where it is used. Every rule emitter must get the underlying kind
+// through effectiveKind. Otherwise the check either does not compile, because
+// of an unquoted value or a missing conversion, or emits no check at all.
 func TestNamedPrimitive_RulesResolveUnderlying(t *testing.T) {
 	gen := func(goType string, kind model.TypeKind, steps []model.Step, seed map[string]model.TypeKind) string {
 		t.Helper()
-		// generate() only seeds the globals when they are nil, so a second call
-		// in the same test would otherwise reuse the first call's namedKinds.
+		// generate() seeds the globals only when they are nil. Without this
+		// reset, a second call would reuse the first call's namedKinds.
 		generatedTypes, namedKinds, cyclicTypes = nil, nil, nil
 		code, err := generate("p", []model.StructInfo{{
 			Name: "V",
@@ -40,8 +40,8 @@ func TestNamedPrimitive_RulesResolveUnderlying(t *testing.T) {
 	})
 
 	t.Run("eq_neq_emit_at_all", func(t *testing.T) {
-		// The regression: `if kind == KindString {…} else if IsNumeric(kind) {…}`
-		// with no else silently dropped the rule for KindStruct.
+		// A branch like `if kind == KindString {…} else if IsNumeric(kind) {…}`
+		// with no else would emit nothing for KindStruct.
 		s := gen("Pri", model.KindStruct, []model.Step{
 			{V: model.ValidationRule{Name: "eq", Value: "low"}},
 			{V: model.ValidationRule{Name: "neq", Value: "high"}},
@@ -80,8 +80,9 @@ func TestNamedPrimitive_RulesResolveUnderlying(t *testing.T) {
 	})
 }
 
-// zeroLit backs `nullzero` and the slice-element pre-grow. A named primitive is
-// not a composite type, so `Pri{}` does not compile.
+// zeroLit is used by `nullzero` and when a slice grows by one element before
+// decoding into it. A named primitive is not a composite type, so `Pri{}`
+// does not compile.
 func TestNamedPrimitive_ZeroLit(t *testing.T) {
 	prev := namedKinds
 	namedKinds = map[string]model.TypeKind{"Pri": model.KindString, "Cnt": model.KindInt, "Flag": model.KindBool}
@@ -106,10 +107,10 @@ func TestNamedPrimitive_ZeroLit(t *testing.T) {
 	}
 }
 
-// A pointer to a container hands its pointee to the leaf decode, which
-// appends into / fills whatever it is given, so the seed empties the leaf at
-// every depth — the same shape a pointer chain gets as a map value or a
-// []**T element, where no entry reset exists.
+// For a pointer to a container, the leaf decode gets the pointed-to value and
+// appends to or fills whatever it is given. So the seed empties the leaf at
+// every pointer depth. A pointer chain as a map value or a []**T element gets
+// the same shape, because nothing resets it on entry.
 func TestPointerContainer_LeafSeedEmptied(t *testing.T) {
 	gen := func(goType string) string {
 		t.Helper()
@@ -145,17 +146,18 @@ func TestPointerContainer_LeafSeedEmptied(t *testing.T) {
 		}
 	}
 
-	// A pointer to a scalar is never seeded — the scan overwrites the leaf.
+	// A pointer to a scalar is never seeded. The scan overwrites the leaf.
 	if s := gen("*int"); strings.Contains(s, "v = (*result.C)") {
 		t.Errorf("pointer-to-scalar must not be seeded:\n%s", s)
 	}
 }
 
-// A field of a named primitive decodes/encodes INLINE — the underlying scan
-// plus a conversion — instead of calling the type's own generated methods.
-// The conversion is free (identical underlying type), the call was not: it
-// forfeits the inline window scan and, for an UNANNOTATED named type, there
-// were no methods at all so the field fell through to encoding/json.
+// A field of a named primitive decodes and encodes inline, with the scan for
+// the underlying type plus a conversion, instead of calling the type's own
+// generated methods. The conversion costs nothing because the underlying type
+// is the same. A call would lose the inline scan. A named type without an
+// annotation has no generated methods, so a call would fall back to
+// encoding/json.
 func TestNamedPrimitive_InlineDecode(t *testing.T) {
 	gen := func(alias model.StructInfo, field model.FieldInfo) string {
 		t.Helper()
@@ -185,7 +187,7 @@ func TestNamedPrimitive_InlineDecode(t *testing.T) {
 	})
 
 	t.Run("unannotated_skips_encoding_json", func(t *testing.T) {
-		// No alias StructInfo at all — the type carries no generated methods.
+		// There is no alias StructInfo, so the type has no generated methods.
 		s := gen(model.StructInfo{Name: "Unused", Fields: nil},
 			model.FieldInfo{GoType: "Tag", Kind: model.KindStruct, NamedPrims: map[string]model.TypeKind{"Tag": model.KindString}})
 		if strings.Contains(s, "json.Unmarshal") || strings.Contains(s, "json.Marshal") {
@@ -198,8 +200,8 @@ func TestNamedPrimitive_InlineDecode(t *testing.T) {
 
 	t.Run("alias_with_own_flags_keeps_its_methods", func(t *testing.T) {
 		// `//ggen:generate htmlescape type HtmlString string` is the documented
-		// way to escape one type and not the rest — inlining it with the
-		// PARENT's flags would silently drop that.
+		// way to HTML-escape one type and not the rest. Inlining it with the
+		// parent's flags would lose that.
 		esc := aliasPri
 		esc.Name, esc.HTMLEscape = "Esc", true
 		s := gen(esc, model.FieldInfo{GoType: "Esc", Kind: model.KindStruct, NamedPrims: map[string]model.TypeKind{"Esc": model.KindString}})

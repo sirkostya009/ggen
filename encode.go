@@ -1,6 +1,6 @@
-// Package encode provides JSON marshaling helpers used by ggen-generated
-// code. Values implement Marshaler by emitting themselves into a caller-owned
-// byte slice via AppendJSON, avoiding intermediate allocations.
+// JSON encoding helpers used by generated code. A value implements Marshaler
+// by appending its JSON to a byte slice the caller owns, through AppendJSON.
+// This avoids intermediate allocations.
 
 package ggen
 
@@ -15,12 +15,13 @@ import (
 	"unsafe"
 )
 
-// Marshaler is satisfied by any type that can append its JSON encoding to dst.
-// Generated code implements this for every ggen-annotated struct.
+// Marshaler is a type that can append its JSON encoding to dst. Generated
+// code implements it for every ggen-annotated struct. JSONSize returns the
+// capacity Marshal reserves for the output.
 //
-// AppendJSON propagates errors from any nested encoder that can fail
-// (TextMarshaler, JSONMarshaler, json.Marshal fallback). On error the
-// returned dst slice is unspecified; callers must not consume it.
+// AppendJSON returns errors from nested encoders that can fail, such as a
+// TextMarshaler, a JSONMarshaler or the json.Marshal fallback. On error the
+// contents of the returned slice are unspecified and must not be used.
 type Marshaler interface {
 	AppendJSON(dst []byte) ([]byte, error)
 	JSONSize() int
@@ -36,18 +37,20 @@ func Marshal[T Marshaler](v T) ([]byte, error) {
 	return v.AppendJSON(make([]byte, 0, v.JSONSize()))
 }
 
-// Returned by AppendFloat when v is non-finite — JSON has no NaN/±Inf.
+// AppendFloat returns these for non-finite values, which JSON cannot
+// represent.
 var (
 	errNaN  = errors.New("ggen: unsupported value: NaN")
 	errPInf = errors.New("ggen: unsupported value: +Inf")
 	errNInf = errors.New("ggen: unsupported value: -Inf")
 )
 
-// AppendFloat appends v to dst as a JSON number, or returns an error when v
-// is NaN / ±Inf. bitSize selects the strconv precision — 32 for float32
-// source, 64 for float64. Format matches stdlib (ES6 ToString): 'f' while
-// the decimal exponent sits in [-6, 21), 'e' otherwise, with no zero-padded
-// negative exponent ("1e-7", not "1e-07").
+// AppendFloat appends v to dst as a JSON number. It returns an error when v
+// is NaN, +Inf or -Inf. bitSize is the strconv precision: 32 for a float32
+// value, 64 for a float64. The format matches the standard library, which
+// follows JavaScript's number-to-string rules. It uses 'f' when the absolute
+// value is in [1e-6, 1e21) and 'e' otherwise. A negative exponent has no
+// leading zero ("1e-7", not "1e-07").
 func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) {
 	if math.IsNaN(v) {
 		return dst, errNaN
@@ -67,7 +70,7 @@ func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) {
 	}
 	dst = strconv.AppendFloat(dst, v, format, -1, bitSize)
 	if format == 'e' {
-		// Trim zero-padded exponent: e-09 → e-9.
+		// Drop the exponent's leading zero: e-09 becomes e-9.
 		if n := len(dst); n >= 4 && dst[n-4] == 'e' && dst[n-3] == '-' && dst[n-2] == '0' {
 			dst[n-2] = dst[n-1]
 			dst = dst[:n-1]
@@ -76,17 +79,17 @@ func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) {
 	return dst, nil
 }
 
-// AppendUnixSeconds appends t as decimal Unix seconds with exact fractional
-// nanoseconds (`format:unix` wire form). Routing through float64(UnixNano())
-// silently emitted garbage outside the int64-nanosecond range (~years
-// 1678-2262) and lost sub-100ns precision at the float64 resolution floor.
+// AppendUnixSeconds appends t as decimal Unix seconds with an exact
+// nanosecond fraction. This is the `format:unix` form. It avoids
+// float64(UnixNano()), which overflows outside roughly the years 1678 to 2262
+// and cannot hold every nanosecond digit.
 func AppendUnixSeconds(dst []byte, t time.Time) []byte {
 	sec, ns := t.Unix(), t.Nanosecond()
 	if ns == 0 {
 		return strconv.AppendInt(dst, sec, 10)
 	}
-	// Nanosecond() is [0,1e9): a negative time with a fraction prints as
-	// -(|sec+1| + (1e9-ns)/1e9), e.g. sec=-1 ns=5e8 → "-0.5".
+	// Nanosecond() is in [0,1e9). So a negative time with a fraction prints
+	// as -(|sec+1| + (1e9-ns)/1e9). For example sec=-1, ns=5e8 gives "-0.5".
 	if sec < 0 {
 		dst = append(dst, '-')
 		sec = -(sec + 1)
@@ -106,8 +109,8 @@ func AppendUnixSeconds(dst []byte, t time.Time) []byte {
 	return append(dst, frac[:n]...)
 }
 
-// MarshalString returns the JSON encoding of v as a string. The returned
-// string aliases the freshly allocated buffer via unsafe conversion.
+// MarshalString returns the JSON encoding of v as a string. The string
+// shares memory with a newly allocated buffer, so no copy is made.
 func MarshalString[T Marshaler](v T) (string, error) {
 	b, err := v.AppendJSON(make([]byte, 0, v.JSONSize()))
 	if err != nil {
@@ -116,18 +119,19 @@ func MarshalString[T Marshaler](v T) (string, error) {
 	return BytesToString(b), nil
 }
 
-// BytesToString returns a string that aliases buf without copying. The caller
-// must not mutate buf after this call, and buf must not be pooled/reused.
+// BytesToString returns a string that shares buf's memory, without a copy.
+// The caller must not modify buf after this call, and must not reuse or pool
+// buf.
 func BytesToString(buf []byte) string {
 	if len(buf) == 0 {
 		return ""
 	}
-	// Documented contract: caller never mutates buf afterwards.
+	// Safe because the caller never modifies buf afterwards.
 	return unsafe.String(unsafe.SliceData(buf), len(buf))
 }
 
-// WriteTo writes the JSON encoding of v directly to w using a pooled buffer.
-// Returns the first non-nil error from AppendJSON or the writer.
+// WriteTo writes the JSON encoding of v to w through a pooled buffer. It
+// returns the first error from AppendJSON or from the writer.
 func WriteTo[T Marshaler](w io.Writer, v T) error {
 	bufp := bufPool.Get().(*[]byte)
 	buf, err := v.AppendJSON((*bufp)[:0])
@@ -142,31 +146,32 @@ func WriteTo[T Marshaler](w io.Writer, v T) error {
 	return werr
 }
 
-// ErrEmptyMarshalJSON reports a MarshalJSON that returned (empty, nil) —
-// appending nothing would corrupt the output, and stdlib v1/v2 both treat
-// it as a broken marshaler rather than inventing a value.
+// ErrEmptyMarshalJSON reports a MarshalJSON that returned empty output and a
+// nil error. Writing nothing would produce invalid JSON. encoding/json and
+// jsonv2 both treat this as a broken marshaler and do not invent a value.
 var ErrEmptyMarshalJSON = errors.New("encode: MarshalJSON returned empty output")
 
-// isNilable reports whether T can hold a nil that breaks the value-receiver
-// call: a pointer (auto-deref) or an interface (T = Marshaler is
-// explicitly supported — a nil element used to panic in JSONSize/AppendJSON
-// where stdlib emits null).
+// isNilable reports whether T is a pointer or an interface type. Such a T can
+// hold nil, and calling a value-receiver method through a nil pointer or nil
+// interface panics. T = Marshaler is supported, and a nil element encodes as
+// null like in the standard library.
 func isNilable[T Marshaler]() bool {
 	k := reflect.TypeFor[T]().Kind()
 	return k == reflect.Pointer || k == reflect.Interface
 }
 
-// nilItem reports whether v is nil under a nilable T: a nil interface boxes
-// to an invalid reflect.Value; an interface holding a typed nil pointer is
-// nil for marshal purposes too (stdlib emits null for both).
+// nilItem reports whether v, of a nilable T, should encode as null. A nil
+// interface gives an invalid reflect.Value. An interface holding a nil
+// pointer also counts. The standard library writes null for both.
 func nilItem[T Marshaler](v T) bool {
 	rv := reflect.ValueOf(v)
 	return !rv.IsValid() || (rv.Kind() == reflect.Pointer && rv.IsNil())
 }
 
-// AppendSlice appends a JSON array of items to dst. A nil items slice emits
-// `null` and an empty non-nil one `[]` (stdlib parity); nil pointer /
-// nil-interface items emit `null`. Returns the first error encountered.
+// AppendSlice appends items to dst as a JSON array. A nil slice encodes as
+// null and an empty non-nil slice as [], as in the standard library. A nil
+// pointer or nil interface element encodes as null. It returns the first
+// error it hits.
 func AppendSlice[T Marshaler](dst []byte, items []T) ([]byte, error) {
 	if items == nil {
 		return append(dst, "null"...), nil
@@ -190,8 +195,8 @@ func AppendSlice[T Marshaler](dst []byte, items []T) ([]byte, error) {
 	return append(dst, ']'), nil
 }
 
-// MarshalSlice returns the JSON encoding of items as an array (`null` for a
-// nil slice, like AppendSlice).
+// MarshalSlice returns the JSON encoding of items as an array. A nil slice
+// encodes as null, like in AppendSlice.
 func MarshalSlice[T Marshaler](items []T) ([]byte, error) {
 	if items == nil {
 		return []byte("null"), nil

@@ -5,19 +5,20 @@ import (
 	"testing"
 )
 
-// Unit tests for applicability.go. Two matrices drive the bulk (val rule ×
-// kind, mod rule × kind); per-rule shape errors and the orchestrator's
-// structural checks (keys:/inner:/hintlen scoping, KindStruct rejection) get their
-// own tables.
+// Unit tests for applicability.go. Two matrices do most of the work: every
+// validation rule against every kind, and every mod against every kind.
+// Value errors per rule and the structural checks get their own tables. The
+// structural checks cover where keys:, inner: and hint may appear, and the
+// rejection of KindStruct.
 
 // kindEntry is one row of the kind matrix.
 type kindEntry struct {
 	kind TypeKind
-	name string // human label; mirrors a Go type literal
+	name string // label for humans, written like a Go type
 }
 
-// allKindEntries covers every TypeKind the field-level resolver can emit,
-// including KindStruct for the opaque-rejection path.
+// allKindEntries covers every TypeKind a field can resolve to, including
+// KindStruct for the rejection of opaque types.
 var allKindEntries = []kindEntry{
 	{KindString, "string"},
 	{KindBool, "bool"},
@@ -52,7 +53,8 @@ var allKindEntries = []kindEntry{
 	{KindStruct, "Foo"},
 }
 
-// Acceptance predicates, declared once to keep the per-rule tables readable.
+// Predicates for which kinds a rule accepts, declared once so the per-rule
+// tables stay readable.
 var (
 	anyKind         = func(k TypeKind) bool { return true }
 	stringOnly      = func(k TypeKind) bool { return k == KindString }
@@ -62,9 +64,9 @@ var (
 	stringOrNumeric = func(k TypeKind) bool { return k == KindString || IsNumeric(k) }
 )
 
-// valSpec is a validation rule + a sample value chosen to pass the value-shape
-// check on every accepted kind, so the kind matrix never trips over value
-// shape (that's TestCheckOneValRule_ValueShape's job).
+// valSpec is a validation rule plus a sample value that passes the value
+// check on every accepted kind. That way the kind matrix never fails on the
+// value itself, which TestCheckOneValRule_ValueShape covers.
 type valSpec struct {
 	name   string
 	value  string
@@ -86,12 +88,12 @@ var valSpecs = []valSpec{
 	{"lt", "100", numericOnly},
 	{"lte", "100", numericOnly},
 	{"multiple", "2", integerOnly},
-	// eq/neq are string-or-numeric. Use a value that's valid as a
-	// numeric literal AND as a string literal so neither path trips.
+	// eq and neq take strings or numbers. Use a value that is valid both
+	// as a number and as a string, so neither path fails.
 	{"eq", "5", stringOrNumeric},
 	{"neq", "5", stringOrNumeric},
-	// oneof: numeric parts must be parseable; "1|2|3" works for both
-	// string and numeric kinds.
+	// oneof: numeric parts must parse. "1|2|3" works for both string and
+	// numeric kinds.
 	{"oneof", "1|2|3", stringOrNumeric},
 	{"url", "", stringOnly},
 	{"alphanum", "", stringOnly},
@@ -121,7 +123,7 @@ func TestCheckOneValRule_KindMatrix(t *testing.T) {
 					t.Errorf("rule=%q kind=%s: expected reject, got nil", spec.name, ke.name)
 				}
 				if !accepted && err != nil {
-					// Reject path references rule name and field type.
+					// The rejection names the rule and the field type.
 					if !strings.Contains(err.Error(), spec.name) {
 						t.Errorf("rule=%q kind=%s: diagnostic missing rule name: %v", spec.name, ke.name, err)
 					}
@@ -134,9 +136,9 @@ func TestCheckOneValRule_KindMatrix(t *testing.T) {
 	}
 }
 
-// Unrecognised rule names must error, not silently no-op (catches typos).
-// Custom `@FuncName` rules are excluded — they resolve later in
-// resolveCustomRules.
+// Unknown rule names must give an error, not silently do nothing, so typos
+// are caught. Custom `@FuncName` rules are excluded, because they are
+// resolved later in resolvePipeCustoms.
 func TestCheckOneValRule_UnknownRuleRejected(t *testing.T) {
 	t.Parallel()
 	for _, ke := range allKindEntries {
@@ -172,11 +174,11 @@ func TestCheckOneValRule_ValueShape(t *testing.T) {
 		name     string
 		rule     ValidationRule
 		kind     TypeKind
-		wantSub  string // substring expected in err.Error(); empty = expect nil
+		wantSub  string // text expected in err.Error(), empty means no error
 		typeName string
 	}
 	cases := []tc{
-		// len/minlen/maxlen: integer required.
+		// len, minlen and maxlen need an integer.
 		{"len_good", ValidationRule{Name: "len", Value: "5"}, KindString, "", "string"},
 		{"len_empty", ValidationRule{Name: "len"}, KindString, "requires an integer value", "string"},
 		{"len_non_numeric", ValidationRule{Name: "len", Value: "abc"}, KindString, "value is not a valid integer", "string"},
@@ -189,20 +191,20 @@ func TestCheckOneValRule_ValueShape(t *testing.T) {
 		{"minlen_empty", ValidationRule{Name: "minlen"}, KindString, "requires an integer value", "string"},
 		{"maxlen_non_numeric", ValidationRule{Name: "maxlen", Value: "x"}, KindSlice, "is not a valid integer", "[]int"},
 
-		// runes/minrunes/maxrunes: integer required.
+		// runes, minrunes and maxrunes need an integer.
 		{"runes_good", ValidationRule{Name: "runes", Value: "3"}, KindString, "", "string"},
 		{"runes_empty", ValidationRule{Name: "runes"}, KindString, "requires an integer value", "string"},
 		{"runes_bad", ValidationRule{Name: "minrunes", Value: "abc"}, KindString, "value is not a valid integer", "string"},
 
-		// gt/gte/lt/lte: float required.
+		// gt, gte, lt and lte need a number.
 		{"gt_good", ValidationRule{Name: "gt", Value: "1"}, KindInt, "", "int"},
 		{"gt_float_ok", ValidationRule{Name: "gt", Value: "1.5"}, KindFloat64, "", "float64"},
 		{"gt_empty", ValidationRule{Name: "gt"}, KindInt, "requires a numeric value", "int"},
 		{"gt_bad", ValidationRule{Name: "gt", Value: "abc"}, KindInt, "value is not a valid number", "int"},
 		{"lte_bad", ValidationRule{Name: "lte", Value: "abc"}, KindInt, "value is not a valid number", "int"},
-		// Integral bounds parse at the kind's width and sign: a uint64 may
-		// carry any bound up to 2^64-1; fractional and out-of-range bounds
-		// have their own diagnostics.
+		// Integer bounds parse at the kind's width and sign, so a uint64 can
+		// take any bound up to 2^64-1. Fractional and out-of-range bounds
+		// have their own errors.
 		{"gte_uint64_above_int63", ValidationRule{Name: "gte", Value: "9223372036854775808"}, KindUint64, "", "uint64"},
 		{"eq_uint64_max", ValidationRule{Name: "eq", Value: "18446744073709551615"}, KindUint64, "", "uint64"},
 		{"lt_uint64_max", ValidationRule{Name: "lt", Value: "18446744073709551615"}, KindUint64, "", "uint64"},
@@ -210,7 +212,7 @@ func TestCheckOneValRule_ValueShape(t *testing.T) {
 		{"gt_fractional_int", ValidationRule{Name: "gt", Value: "1.5"}, KindInt, "integer field needs an integer bound", "int"},
 		{"gt_uint8_negative", ValidationRule{Name: "gt", Value: "-1"}, KindUint8, "out of the field type's range", "uint8"},
 
-		// multiple: integer required.
+		// multiple needs an integer.
 		{"multiple_good", ValidationRule{Name: "multiple", Value: "2"}, KindInt, "", "int"},
 		{"multiple_empty", ValidationRule{Name: "multiple"}, KindInt, "requires an integer value", "int"},
 		{"multiple_bad", ValidationRule{Name: "multiple", Value: "abc"}, KindInt, "value is not a valid integer", "int"},
@@ -220,13 +222,14 @@ func TestCheckOneValRule_ValueShape(t *testing.T) {
 		{"multiple_int8_overflow", ValidationRule{Name: "multiple", Value: "300"}, KindInt8, "out of the field type's range", "int8"},
 		{"multiple_fractional", ValidationRule{Name: "multiple", Value: "1.5"}, KindInt, "value is not a valid integer", "int"},
 
-		// eq/neq numeric: must be valid number; string: any value OK.
+		// eq and neq: a numeric kind needs a valid number, a string takes
+		// any value.
 		{"eq_str_any_value", ValidationRule{Name: "eq", Value: "abc"}, KindString, "", "string"},
 		{"eq_int_bad", ValidationRule{Name: "eq", Value: "abc"}, KindInt, "value is not a valid number", "int"},
 		{"eq_int_empty", ValidationRule{Name: "eq"}, KindInt, "requires a numeric value", "int"},
 		{"neq_int_bad", ValidationRule{Name: "neq", Value: "x"}, KindInt, "value is not a valid number", "int"},
 
-		// oneof: non-empty list; numeric kind requires numeric parts.
+		// oneof needs a non-empty list. A numeric kind needs numeric parts.
 		{"oneof_str_any", ValidationRule{Name: "oneof", Value: "a|b|c"}, KindString, "", "string"},
 		{"oneof_empty", ValidationRule{Name: "oneof"}, KindString, "requires a", "string"},
 		{"oneof_num_good", ValidationRule{Name: "oneof", Value: "1|2|3"}, KindInt, "", "int"},
@@ -234,9 +237,10 @@ func TestCheckOneValRule_ValueShape(t *testing.T) {
 		{"oneof_num_trailing", ValidationRule{Name: "oneof", Value: " 1 | 2 "}, KindInt, "", "int"},
 		{"oneof_quoted_space", ValidationRule{Name: "oneof", Value: "'New York'|LA"}, KindString, "", "string"},
 		{"oneof_quoted_dup", ValidationRule{Name: "oneof", Value: "'LA'|LA"}, KindString, "is a duplicate", "string"},
-		// Numeric parts dedupe by VALUE on the kind: integral kinds key on
-		// the integer (a float64 key merged distinct integers above 2^53),
-		// integer-valued spellings still fold, floats fold -0 onto 0.
+		// Numeric parts are compared by value for duplicates. Integer kinds
+		// compare the integer itself, because a float64 key would merge
+		// different integers above 2^53. A float spelling of a whole number
+		// still matches its integer, and floats treat -0 as 0.
 		{"oneof_int64_above_2p53_distinct", ValidationRule{Name: "oneof", Value: "9007199254740993|9007199254740992"}, KindInt64, "", "int64"},
 		{"oneof_uint64_top_distinct", ValidationRule{Name: "oneof", Value: "18446744073709551615|18446744073709551614"}, KindUint64, "", "uint64"},
 		{"oneof_int_value_dup", ValidationRule{Name: "oneof", Value: "1|1.0"}, KindInt, "is a duplicate", "int"},
@@ -244,19 +248,20 @@ func TestCheckOneValRule_ValueShape(t *testing.T) {
 		{"oneof_float_neg_zero_dup", ValidationRule{Name: "oneof", Value: "0|-0.0"}, KindFloat64, "is a duplicate", "float64"},
 		{"oneof_float_distinct", ValidationRule{Name: "oneof", Value: "1.5|2.5"}, KindFloat64, "", "float64"},
 
-		// len/minlen size the container's make(): a capacity make() cannot
-		// honour is rejected here instead of panicking at decode. maxlen is
-		// a bound only, and strings never preallocate.
+		// len and minlen set the capacity of the container's make(). A
+		// capacity make() cannot handle is rejected here instead of
+		// panicking at decode. maxlen is only a bound, and strings never
+		// preallocate.
 		{"len_slice_prealloc_ceiling", ValidationRule{Name: "len", Value: "4294967296"}, KindSlice, "prealloc ceiling", "[]int"},
 		{"minlen_map_prealloc_ceiling", ValidationRule{Name: "minlen", Value: "4294967296"}, KindMap, "prealloc ceiling", "map[string]int"},
-		// The ceiling is MaxInt32, so every accepted value is a legal int
+		// The limit is MaxInt32, so every accepted value is a valid int
 		// constant on a 32-bit target too.
 		{"len_slice_at_ceiling", ValidationRule{Name: "len", Value: "2147483647"}, KindSlice, "", "[]int"},
 		{"len_slice_over_ceiling", ValidationRule{Name: "len", Value: "2147483648"}, KindSlice, "prealloc ceiling", "[]int"},
 		{"maxlen_slice_no_ceiling", ValidationRule{Name: "maxlen", Value: "4294967296"}, KindSlice, "", "[]int"},
 		{"len_string_no_ceiling", ValidationRule{Name: "len", Value: "4294967296"}, KindString, "", "string"},
 
-		// starts/ends/contains: non-empty value required.
+		// starts, ends and contains need a non-empty value.
 		{"starts_good", ValidationRule{Name: "starts", Value: "x"}, KindString, "", "string"},
 		{"starts_empty", ValidationRule{Name: "starts"}, KindString, "requires a non-empty value", "string"},
 		{"ends_empty", ValidationRule{Name: "ends"}, KindString, "requires a non-empty value", "string"},
@@ -282,7 +287,7 @@ func TestCheckOneValRule_ValueShape(t *testing.T) {
 	}
 }
 
-// ----- mod rule matrix -----
+// ----- mod matrix -----
 
 type modSpec struct {
 	name   string
@@ -329,7 +334,8 @@ func TestCheckOneModRule_KindMatrix(t *testing.T) {
 	}
 }
 
-// Unrecognised mod names must error (typo-catching); `@FuncName` mods exempt.
+// Unknown mod names must give an error, so typos are caught. `@FuncName`
+// mods are excluded.
 func TestCheckOneModRule_UnknownModRejected(t *testing.T) {
 	t.Parallel()
 	for _, ke := range allKindEntries {
@@ -365,17 +371,18 @@ func TestCheckOneModRule_ValueShape(t *testing.T) {
 		wantSub string
 	}
 	cases := []tc{
-		// trim/lower/upper take no value — any value (or none) is accepted.
+		// trim, tolower and toupper take no value. Any value, or none, is
+		// accepted.
 		{"trim_no_value", ModRule{Name: "trim"}, KindString, ""},
 		{"tolower_no_value", ModRule{Name: "tolower"}, KindString, ""},
 		{"toupper_no_value", ModRule{Name: "toupper"}, KindString, ""},
 
-		// trimleft/trimright require non-empty value.
+		// trimleft and trimright need a non-empty value.
 		{"trimleft_good", ModRule{Name: "trimleft", Value: "X"}, KindString, ""},
 		{"trimleft_empty", ModRule{Name: "trimleft"}, KindString, "requires a non-empty value"},
 		{"trimright_empty", ModRule{Name: "trimright"}, KindString, "requires a non-empty value"},
 
-		// replace requires "old|new" with non-empty old.
+		// replace needs "old|new" with a non-empty old.
 		{"replace_good", ModRule{Name: "replace", Value: "old|new"}, KindString, ""},
 		{"replace_empty_new_ok", ModRule{Name: "replace", Value: "old|"}, KindString, ""},
 		{"replace_no_pipe", ModRule{Name: "replace", Value: "foo"}, KindString, "requires `old|new` form"},
@@ -384,7 +391,7 @@ func TestCheckOneModRule_ValueShape(t *testing.T) {
 		{"replace_three_parts", ModRule{Name: "replace", Value: "a|b|c"}, KindString, "requires `old|new` form"},
 		{"replace_quoted_pipe", ModRule{Name: "replace", Value: "'a|b'|c"}, KindString, ""},
 
-		// clamp requires "lo|hi"; at least one bound must be present; each
+		// clamp needs "lo|hi". At least one bound must be given, and each
 		// bound must be a valid number.
 		{"clamp_good", ModRule{Name: "clamp", Value: "0|10"}, KindInt, ""},
 		{"clamp_lo_only", ModRule{Name: "clamp", Value: "0|"}, KindInt, ""},
@@ -421,11 +428,12 @@ func TestCheckOneModRule_ValueShape(t *testing.T) {
 	}
 }
 
-// ----- skip-paths -----
+// ----- KindStruct and custom rules -----
 
-// KindStruct fields reach these checks only when they are genuine
-// struct/opaque types (named primitives were resolved by eff() upstream) —
-// kinded rules must reject; required/optional/@Func still pass.
+// KindStruct fields reach these checks only when they are real struct or
+// opaque types, because eff() already resolved named primitives. Rules that
+// need a specific kind must reject them. required, optional and @Func still
+// pass.
 func TestCheckValRules_KindStructRejected(t *testing.T) {
 	t.Parallel()
 	for _, r := range []ValidationRule{
@@ -442,14 +450,14 @@ func TestCheckValRules_KindStructRejected(t *testing.T) {
 			t.Errorf("rule %q on KindStruct must reject, got nil", r.Name)
 		}
 	}
-	// Kind-agnostic rules keep working on structs.
+	// Rules that work on any kind still work on structs.
 	ok := []ValidationRule{{Name: "required"}, {Name: "optional"}}
 	if err := checkValRules(ok, "ggen", KindStruct, "Foo", "field f"); err != nil {
 		t.Errorf("required/optional on KindStruct must pass, got: %v", err)
 	}
 }
 
-// TestCheckModRules_KindStructRejected mirrors the val-side rejection.
+// TestCheckModRules_KindStructRejected is the same rejection test for mods.
 func TestCheckModRules_KindStructRejected(t *testing.T) {
 	t.Parallel()
 	for _, m := range []ModRule{
@@ -463,12 +471,12 @@ func TestCheckModRules_KindStructRejected(t *testing.T) {
 	}
 }
 
-// @Func rules bypass the matrix — resolveCustomRules already type-checked the
-// signature against the field's go/types.Type.
+// @Func rules skip the matrix, because resolvePipeCustoms checks the
+// signature against the field's go/types type.
 func TestCheckValRules_CustomSkipped(t *testing.T) {
 	t.Parallel()
 	rules := []ValidationRule{
-		// Custom=true skips the matrix despite the int/alphanum mismatch.
+		// Custom=true skips the matrix, whatever the field kind.
 		{Name: "@MyCheck", Custom: true, FuncName: "MyCheck"},
 	}
 	if err := checkValRules(rules, "ggen", KindInt, "int", "field f"); err != nil {
@@ -486,12 +494,12 @@ func TestCheckModRules_CustomSkipped(t *testing.T) {
 	}
 }
 
-// ----- helper-predicate sanity -----
+// ----- helper predicates -----
 
 func TestCanDive(t *testing.T) {
 	t.Parallel()
-	// []byte / [N]byte decode as one base64 string: no element loop, so an
-	// `inner:` step there could never run.
+	// []byte and [N]byte decode as one base64 string with no element loop,
+	// so an `inner:` step there could never run.
 	accepted := map[TypeKind]bool{
 		KindSlice: true, KindArray: true, KindMap: true,
 	}
@@ -540,7 +548,7 @@ func TestNeedInt(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
 		value   string
-		wantSub string // empty = nil expected
+		wantSub string // empty means no error
 	}{
 		{"5", ""},
 		{" 5 ", ""},
@@ -600,19 +608,19 @@ func TestNeedFloat(t *testing.T) {
 	}
 }
 
-// ----- orchestrator: keys / dive / hintlen structural checks -----
+// ----- structural checks: keys:, inner: and hint -----
 
-// TestCheckRuleApplicability_Structural exercises the orchestration logic
-// (keys:/inner:/hintlen scoping) through FieldInfo, apart from the rule matrix.
+// TestCheckRuleApplicability_Structural tests, through FieldInfo, where
+// keys:, inner: and hint may appear. The rule matrix is tested separately.
 func TestCheckRuleApplicability_Structural(t *testing.T) {
 	t.Parallel()
 	type tc struct {
 		name    string
 		fi      FieldInfo
-		wantSub string // empty = expect nil
+		wantSub string // empty means no error
 	}
 	cases := []tc{
-		// keys: only on maps.
+		// keys: is only valid on maps.
 		{
 			"keys_val_on_string",
 			FieldInfo{
@@ -647,16 +655,16 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 			FieldInfo{
 				GoName: "M", GoType: "map[string]int", JSONName: "m",
 				Kind: KindMap, ElemKind: KindInt, ElemType: "int",
-				// `gt` is numeric — invalid on string keys even though
-				// the parent IS a map.
+				// `gt` is numeric, so it is invalid on string keys even
+				// though the parent is a map.
 				KeyValidation: []ValidationRule{{Name: "gt", Value: "1"}},
 				HintLen:       -1,
 			},
 			"`gt` is inapplicable to string",
 		},
 
-		// inner: only on containers — and a byte slice/array is not one on
-		// the wire (one base64 string), folded or not.
+		// inner: is only valid on containers. A byte slice or array is not
+		// one in JSON, since it is one base64 string, folded or not.
 		{
 			"dive_on_bytes",
 			FieldInfo{
@@ -753,7 +761,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 			"",
 		},
 
-		// hintlen restricted to slice/map.
+		// hint is only valid on slices and maps.
 		{
 			"hintlen_on_int",
 			FieldInfo{
@@ -783,7 +791,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 			"hintlen_zero_on_bool",
 			FieldInfo{
 				GoName: "B", GoType: "bool", JSONName: "b", Kind: KindBool,
-				HintLen: 0, // 0 is still "explicitly set", not "unset"
+				HintLen: 0, // 0 still counts as set, not as unset
 			},
 			"`hint` is only valid on slice/map fields",
 		},
@@ -814,7 +822,7 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 			"",
 		},
 
-		// happy: a full-feature map with keys + dive + hintlen + all rules valid.
+		// valid: a map using keys:, inner: and hint, with every rule valid.
 		{
 			"map_full_features_ok",
 			FieldInfo{
@@ -830,10 +838,10 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 			"",
 		},
 
-		// `omitempty` on a struct: the option never omits one, so it is a
-		// reject instead of a silent no-op. UnderlyingStruct is the go/types
-		// verdict — a named primitive and a foreign array read as KindStruct
-		// too, and neither is a struct.
+		// `omitempty` on a struct never omits it, so the option is rejected
+		// instead of silently doing nothing. UnderlyingStruct is the answer
+		// from go/types. A named primitive and a foreign array also read as
+		// KindStruct, and neither is a struct.
 		{
 			"omitempty_on_struct_rejects",
 			FieldInfo{
@@ -892,7 +900,8 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 			"",
 		},
 
-		// pointer fields: rules apply to the pointee, fi.Kind == pointee kind.
+		// pointer fields: rules apply to the pointee, and fi.Kind is the
+		// pointee kind.
 		{
 			"pointer_int_alphanum_rejects",
 			FieldInfo{
@@ -934,8 +943,8 @@ func TestCheckRuleApplicability_Structural(t *testing.T) {
 	}
 }
 
-// Every reject must reference the Go field name (not the JSON wire name) so
-// users can jump-to-definition / grep their source.
+// Every rejection must name the Go field, not the JSON key, so users can
+// jump to the definition or grep their source.
 func TestCheckRuleApplicability_FieldNameInDiagnostic(t *testing.T) {
 	t.Parallel()
 	// Format: "<Struct>.<Field>: `<rule>` is inapplicable to <type>".
@@ -962,9 +971,9 @@ func TestCheckRuleApplicability_FieldNameInDiagnostic(t *testing.T) {
 	}
 }
 
-// A field with no elements gets exactly one diagnostic for its `inner:` tag.
-// The element pass has no element type to name a rule against, so it does not
-// run and cannot print `is inapplicable to ` with the type left blank.
+// A field with no elements gets exactly one error for its `inner:` tag. The
+// element check has no element type to judge a rule against, so it does not
+// run and cannot print `is inapplicable to ` with an empty type.
 func TestCheckRuleApplicability_NonDiveableReportsOnce(t *testing.T) {
 	t.Parallel()
 	cases := []FieldInfo{

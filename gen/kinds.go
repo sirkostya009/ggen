@@ -3,7 +3,7 @@
 //
 // A script loads packages, picks types, places each type's input or output
 // shape into files it names, and writes. Emitters turn placed shapes into
-// text; the package knows nothing about any target language.
+// text. The package itself knows nothing about any target language.
 package gen
 
 // Mode is the direction a Shape describes.
@@ -94,7 +94,7 @@ type Unknown uint8
 const (
 	Reject  Unknown = iota // an undeclared key is an error
 	Ignore                 // undeclared keys are skipped
-	Collect                // undeclared keys go to the json:",embed" map; see Shape.Rest
+	Collect                // undeclared keys go to the json:",embed" map, typed by Shape.Rest
 )
 
 func (u Unknown) String() string {
@@ -109,7 +109,7 @@ const (
 	Len         // byte length of a string, decoded length of bytes, item count of an array or map
 	MinLen
 	MaxLen
-	Runes // code point count
+	Runes // count of runes, where a rune is one Unicode code point
 	MinRunes
 	MaxRunes
 	GT
@@ -149,5 +149,5 @@ var opNames = [...]string{
 	Replace: "replace", Clamp: "clamp", Func: "func",
 }
 
-// String is the rule's name as written in a pipe: tag.
+// String returns the rule's name as written in a `pipe:` tag.
 func (o Op) String() string { return opNames[o] }

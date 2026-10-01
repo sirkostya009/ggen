@@ -10,8 +10,8 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// EmbedStruct exercises the json:",embed" fallback: unknown keys absorbed
-// into Extra, spliced back out at the object level on marshal.
+// EmbedStruct exercises the json:",embed" catch-all. Decode absorbs unknown
+// keys into Extra, and marshal splices them back out as top-level keys.
 //
 //ggen:generate
 type EmbedStruct struct {
@@ -50,7 +50,7 @@ func TestEmbed_decodeAbsorbsUnknown(t *testing.T) {
 	if len(got.Extra) != 3 {
 		t.Fatalf("Extra len = %d, want 3: %+v", len(got.Extra), got.Extra)
 	}
-	// bare numbers decode into float64 for any.
+	// Bare numbers decode into float64 for any.
 	if age, _ := got.Extra["age"].(float64); age != 30 {
 		t.Errorf("Extra[age] = %v", got.Extra["age"])
 	}
@@ -65,7 +65,7 @@ func TestEmbed_decodeAbsorbsUnknown(t *testing.T) {
 
 func TestEmbed_emptyDecode(t *testing.T) {
 	t.Parallel()
-	// No unknown keys → Extra stays nil.
+	// With no unknown keys, Extra stays nil.
 	got, _, err := EmbedStruct{}.DecodeFrom([]byte(`{"name":"bob"}`))
 	if err != nil {
 		t.Fatalf("unmarshal: %v", err)
@@ -87,7 +87,7 @@ func TestEmbed_marshalSpreads(t *testing.T) {
 			t.Errorf("missing %q in %q", want, out)
 		}
 	}
-	// No nested object — extras should be at the top level.
+	// No nested object. The extras must be at the top level.
 	if strings.Contains(out, `"Extra"`) || strings.Contains(out, `{"age"`) && !strings.HasPrefix(out, `{"`) {
 		t.Errorf("inline shouldn't be nested: %q", out)
 	}
@@ -132,7 +132,7 @@ func TestEmbed_marshalEmpty(t *testing.T) {
 
 func TestEmbed_marshalOnlyExtras(t *testing.T) {
 	t.Parallel()
-	// Empty fixed field + inline entries — comma logic must hold.
+	// An empty fixed field plus catch-all entries. The comma logic must hold.
 	s := EmbedStruct{Extra: map[string]any{"k": "v"}}
 	out, _ := ggen.MarshalString(s)
 	if !strings.Contains(out, `"k":"v"`) {
@@ -158,7 +158,7 @@ func TestEmbed_FixedFieldOrderStable(t *testing.T) {
 	}
 }
 
-// Typed inline catch-all: map[string]string (no any boxing).
+// A typed catch-all: map[string]string, with no boxing into any.
 func TestEmbed_TypedString_Decode(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"name":"alice","city":"Lviv","role":"admin"}`)
@@ -188,7 +188,7 @@ func TestEmbed_TypedString_EmptyExtra(t *testing.T) {
 	}
 }
 
-// Non-string value into a string-typed inline must error.
+// A non-string value into a string-typed catch-all must error.
 func TestEmbed_TypedString_RejectsNonString(t *testing.T) {
 	t.Parallel()
 	_, _, err := EmbedStringsStruct{}.DecodeFrom([]byte(`{"name":"alice","age":30}`))
@@ -238,8 +238,8 @@ func TestEmbed_TypedString_Roundtrip(t *testing.T) {
 	}
 }
 
-// Typed inline catch-all: map[string]EmbedStruct, decoded via the elem
-// type's DecodeFrom (not json.Unmarshal fallback).
+// A typed catch-all: map[string]EmbedStruct. Each value decodes through the
+// element type's DecodeFrom, not the json.Unmarshal fallback.
 func TestEmbed_TypedStruct_Decode(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"name":"root","kid":{"name":"alice","age":30},"sib":{"name":"bob"}}`)
@@ -257,7 +257,7 @@ func TestEmbed_TypedStruct_Decode(t *testing.T) {
 	if kid.Name != "alice" {
 		t.Errorf("kid.Name = %q", kid.Name)
 	}
-	// Inner EmbedStruct has its own catch-all — age:30 lands there.
+	// The inner EmbedStruct has its own catch-all, so age:30 lands there.
 	if age, _ := kid.Extra["age"].(float64); age != 30 {
 		t.Errorf("kid.Extra[age] = %v", kid.Extra["age"])
 	}
@@ -299,7 +299,7 @@ func TestEmbed_TypedStruct_Roundtrip(t *testing.T) {
 	}
 }
 
-// Empty-Extra marshal: typed inline emits only the fixed fields.
+// With an empty Extra, the typed catch-all marshals only the fixed fields.
 func TestEmbed_TypedString_MarshalEmpty(t *testing.T) {
 	t.Parallel()
 	out, _ := ggen.MarshalString(EmbedStringsStruct{Name: "alice"})
@@ -316,9 +316,9 @@ func TestEmbed_TypedStruct_MarshalEmpty(t *testing.T) {
 	}
 }
 
-// An EMPTY RawMessage entry in the inline map must marshal as null — the
-// raw passthrough used to append zero bytes, emitting `"k":` with no value
-// (corrupt JSON). Field-level raw emit and AppendAny already null empties.
+// An empty RawMessage entry in the catch-all map must marshal as null.
+// Appending its zero bytes would emit `"k":` with no value, which is corrupt
+// JSON. The field-level raw emit and AppendAny also write null for empties.
 func TestEmbed_EmptyRawMessageMarshalsNull(t *testing.T) {
 	t.Parallel()
 	out, err := ggen.Marshal(EmbedRawStruct{

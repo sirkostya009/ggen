@@ -1,12 +1,14 @@
-// Package bench hosts the macro-benchmark types and payloads. Types live in
-// non-test files so easyjson's bootstrap (which compiles the non-test build)
-// can see them; each bench family keeps its types + values + payloads in the
-// file matching its _test.go (mega.go ↔ mega_test.go, …).
+// Package bench holds the types and payloads for the end-to-end benchmarks.
+// The types live in non-test files so easyjson's bootstrap step can see them,
+// because it compiles only the non-test build. Each benchmark family keeps
+// its types, values and payloads in the file that matches its _test.go file,
+// for example mega.go and mega_test.go.
 //
-// All values are built deterministically at init — no randomness, no clock —
-// so every run parses byte-identical payloads. Multi-entry maps exist only
-// in MapHeavy, whose payload is canonicalized after encode; every other map
-// is single-entry, immune to Go's randomized iteration order.
+// All values are built the same way on every run at init, with no randomness
+// and no clock, so every run parses byte-identical payloads. Only MapHeavy
+// has maps with more than one entry, and its payload is put in a fixed order
+// after encoding. Every other map has a single entry, so Go's random map
+// iteration order cannot change it.
 package bench
 
 import (
@@ -24,12 +26,13 @@ func mustMarshal[T ggen.Marshaler](v T) []byte {
 	return out
 }
 
-// canonicalize round-trips a payload through encoding/json v1, which emits
-// map keys sorted — freezing the entry order that ggen.Marshal leaves to
-// Go's randomized map iteration. UseNumber keeps numeric text verbatim.
-// Needed only by MapHeavy (the one multi-entry-map payload); the cost is
-// that ALL object keys sort (struct fields too), trading natural field
-// order for byte-identical runs.
+// canonicalize round-trips a payload through encoding/json v1, which writes
+// map keys in sorted order. This fixes the entry order that ggen.Marshal
+// leaves to Go's random map iteration. UseNumber keeps number text exactly as
+// written. Only MapHeavy needs this, because it is the only payload with
+// multi-entry maps. The cost is that all object keys get sorted, struct
+// fields included, so the natural field order is lost in exchange for
+// byte-identical runs.
 func canonicalize(b []byte) []byte {
 	dec := json.NewDecoder(bytes.NewReader(b))
 	dec.UseNumber()
@@ -46,25 +49,26 @@ func canonicalize(b []byte) []byte {
 	return bytes.TrimSuffix(out.Bytes(), []byte{'\n'})
 }
 
-// mix is a fixed 64-bit bit-mixer (splitmix64 finalizer). Payload values keep
-// full-entropy digits / blob bytes — 18-19-digit ints, 17-significant-digit
-// floats — while being a pure function of the counter, identical every run.
+// mix is a fixed 64-bit bit mixer (the splitmix64 finalizer). Payload values
+// look random, with 18-19 digit ints and floats with 17 significant digits,
+// but they depend only on the counter, so they are the same on every run.
 func mix(n uint64) uint64 {
 	n = (n ^ (n >> 30)) * 0xbf58476d1ce4e5b9
 	n = (n ^ (n >> 27)) * 0x94d049bb133111eb
 	return n ^ (n >> 31)
 }
 
-// gen hands out deterministic values off an incrementing counter. Distinct
-// payloads seed distinct counter offsets so their contents don't collide.
+// gen returns repeatable values derived from an incrementing counter.
+// Different payloads start the counter at different offsets so their contents
+// do not repeat each other.
 type gen struct{ n uint64 }
 
 func (g *gen) next() uint64 { g.n++; return mix(g.n) }
 
 func (g *gen) intn(n int) int { return int(g.next() % uint64(n)) }
 
-// f64 is uniform [0,1) with a full 53-bit mantissa (like rand.Float64), so
-// float fields keep their 17-significant-digit wire form.
+// f64 returns a uniform value in [0,1) with a full 53-bit mantissa, like
+// rand.Float64, so float fields encode with 17 significant digits.
 func (g *gen) f64() float64 { return float64(g.next()>>11) / (1 << 53) }
 
 const asciiLetters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"

@@ -4,7 +4,7 @@ import "math/rand"
 
 // --- complex payload: small handcrafted Node -------------------------------
 //
-// Small fixed-value Node for the roundtrip / read / scan-decode families.
+// A small fixed Node used by the roundtrip, read and scan-decode tests.
 
 var complexPayload = []byte(`{
     "id": 42,
@@ -35,13 +35,14 @@ var complexValue = Node{
 
 // --- mega value: deep Node tree ≈ 1 MB ------------------------------------
 
-// megaValue is a pseudorandom 6-level-deep Node tree built at init with a
-// fixed seed. Used by stdcompat to catch drift that only shows up at scale.
+// megaValue is a pseudorandom Node tree, 6 levels deep, built at init with a
+// fixed seed. The stdcompat tests use it to catch differences that only show
+// up at scale.
 var megaValue Node
 
 func init() {
 	r := rand.New(rand.NewSource(1))
-	// Fanout per level lands the payload near 1 MiB.
+	// These per-level child counts make the payload close to 1 MiB.
 	megaValue = buildNode(r, 6, []int{4, 4, 4, 4, 3, 3, 0})
 }
 

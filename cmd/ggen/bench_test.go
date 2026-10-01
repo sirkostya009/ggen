@@ -8,8 +8,8 @@ import (
 	"github.com/sirkostya009/ggen/gen/model"
 )
 
-// BenchmarkGenerate parses integrationtests/shared_test.go and rounds through
-// generate() repeatedly.
+// BenchmarkGenerate parses integrationtests/shared_test.go once and runs
+// generate() on it in a loop.
 func BenchmarkGenerate(b *testing.B) {
 	wd, _ := os.Getwd()
 	src := filepath.Join(wd, "integrationtests", "shared_test.go")

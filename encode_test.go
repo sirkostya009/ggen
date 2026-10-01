@@ -11,11 +11,12 @@ import (
 	"time"
 )
 
-// TestAppendFloatStdlibParity: float wire bytes must match stdlib (v1 and
-// v2 agree on ES6-style formatting): 'f' notation while the decimal
-// exponent sits in [-6, 21), 'e' otherwise — with no zero-padded negative
-// exponent ("1e-7", not "1e-07"). Every row is cross-checked against
-// encoding/json v1 so the table can't drift.
+// TestAppendFloatStdlibParity checks that float output matches the standard
+// library. encoding/json v1 and v2 both use JavaScript (ES6) style. They use
+// plain decimal notation while the decimal exponent is in [-6, 21) and
+// exponent notation otherwise. A negative exponent is not zero-padded, so it
+// is "1e-7", not "1e-07". Every row is also checked against encoding/json v1
+// so the table cannot go wrong unnoticed.
 func TestAppendFloatStdlibParity(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -59,9 +60,9 @@ func TestAppendFloatStdlibParity(t *testing.T) {
 	}
 }
 
-// fatItem is a minimal Marshaler whose JSONSize depends on its content —
-// the zero value reports 2 bytes while populated items report much more,
-// exposing zero-value-based presizing in MarshalSlice.
+// fatItem is a minimal Marshaler whose JSONSize depends on its content. The
+// zero value reports 2 bytes and a filled item reports much more. This
+// catches MarshalSlice sizing its buffer from the zero value.
 type fatItem struct{ s string }
 
 func (f fatItem) JSONSize() int { return 2 + 2*len(f.s) }
@@ -70,8 +71,8 @@ func (f fatItem) AppendJSON(dst []byte) ([]byte, error) {
 	return AppendStringNoHTML(dst, f.s), nil
 }
 
-// TestMarshalSlicePointerElems: instantiating MarshalSlice with a pointer
-// type must not panic (`var zero *T; zero.JSONSize()` derefs nil), and nil
+// TestMarshalSlicePointerElems checks that MarshalSlice works with a pointer
+// element type. It must not call JSONSize on a nil *T, which would panic. Nil
 // elements must marshal as JSON null.
 func TestMarshalSlicePointerElems(t *testing.T) {
 	t.Parallel()
@@ -90,9 +91,9 @@ func TestMarshalSlicePointerElems(t *testing.T) {
 	}
 }
 
-// TestMarshalSliceSingleAlloc: the output buffer must be presized from the
-// items' actual JSONSize sum — not the zero value's — so marshaling does a
-// single allocation instead of walking the append growth chain.
+// TestMarshalSliceSingleAlloc checks that the output buffer is sized from
+// the sum of the items' real JSONSize, not the zero value's. Then marshaling
+// does one allocation instead of growing the buffer again and again.
 func TestMarshalSliceSingleAlloc(t *testing.T) { //nolint:paralleltest // measures allocations
 	items := make([]fatItem, 64)
 	for i := range items {
@@ -108,9 +109,10 @@ func TestMarshalSliceSingleAlloc(t *testing.T) { //nolint:paralleltest // measur
 	}
 }
 
-// refNoHTML / refHTML are an independent comparison-chain reference for the
-// table-based escapers — TestAppendString_TableParity checks the table
-// matches them byte-for-byte.
+// refEscapeAt, refNoHTML and refHTML are a simple reference escaper written
+// with plain comparisons. AppendString and AppendStringNoHTML use a lookup
+// table instead. TestAppendString_TableParity checks that both give the same
+// bytes.
 func refEscapeAt(dst []byte, s string, i, start int) (int, []byte) {
 	if start < i {
 		dst = append(dst, s[start:i]...)
@@ -167,8 +169,8 @@ func refHTML(dst []byte, s string) []byte {
 	return append(dst, '"')
 }
 
-// TestAppendString_TableParity: the table-based escapers must match the
-// comparison-chain reference over every byte value and representative strings.
+// TestAppendString_TableParity checks the table-based escapers against the
+// reference for every single byte value and a few typical strings.
 func TestAppendString_TableParity(t *testing.T) {
 	t.Parallel()
 	inputs := []string{
@@ -188,8 +190,9 @@ func TestAppendString_TableParity(t *testing.T) {
 	}
 }
 
-// MarshalSlice/AppendSlice with interface-typed T used to panic on nil
-// elements (the guard only engaged for pointer kinds); stdlib emits null.
+// MarshalSlice with an interface element type must write a nil element as
+// null, like the standard library. It must not call a method on it and
+// panic.
 func TestMarshalSlice_NilInterfaceElem(t *testing.T) {
 	t.Parallel()
 	items := []Marshaler{nil, mtItem{}}
@@ -207,7 +210,8 @@ type mtItem struct{}
 func (mtItem) AppendJSON(dst []byte) ([]byte, error) { return append(dst, '{', '}'), nil }
 func (mtItem) JSONSize() int                         { return 2 }
 
-// A nil items slice marshals as null (stdlib parity); empty non-nil as [].
+// A nil slice marshals as null, like the standard library. An empty non-nil
+// slice marshals as [].
 func TestSliceWalkers_NilVsEmpty(t *testing.T) {
 	t.Parallel()
 	out, err := AppendSlice[mtItem]([]byte("x:"), nil)
@@ -224,8 +228,9 @@ func TestSliceWalkers_NilVsEmpty(t *testing.T) {
 	}
 }
 
-// AppendUnixSeconds must be exact where float64(UnixNano())/1e9 was not:
-// outside the int64-nano range (~1678-2262) and at sub-100ns precision.
+// AppendUnixSeconds must be exact in the cases where float64(UnixNano())/1e9
+// is not. That is outside the years UnixNano can hold as int64 (about 1678 to
+// 2262) and at precision finer than 100ns.
 func TestAppendUnixSeconds(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -248,10 +253,11 @@ func TestAppendUnixSeconds(t *testing.T) {
 	}
 }
 
-// AppendNetipAddr writes body + closing quote (caller opens). Zone bytes are
-// arbitrary — ParseAddr accepts `%q"z` — and must escape or the output is
-// invalid JSON; zone-free addrs stay on the raw path. Byte-parity against
-// stdlib json.Marshal, which escapes the same class.
+// AppendNetipAddr writes the address and the closing quote. The caller
+// writes the opening quote. The zone after '%' can hold any bytes, since
+// ParseAddr accepts `%q"z`. Those bytes must be escaped, or the output is not
+// valid JSON. Addresses without a zone are written as is. The output must
+// match json.Marshal byte for byte, which escapes the same set of bytes.
 func TestAppendNetipAddr(t *testing.T) {
 	t.Parallel()
 	for _, raw := range []string{
@@ -260,7 +266,7 @@ func TestAppendNetipAddr(t *testing.T) {
 		"fe80::1%eth0",
 		`fe80::1%q"z`,
 		`fe80::1%a\b`,
-		"fe80::1%z\x01n", // ctrl byte in zone → \u0001
+		"fe80::1%z\x01n", // a control byte in the zone must be escaped
 	} {
 		a, err := netip.ParseAddr(raw)
 		if err != nil {
@@ -280,11 +286,11 @@ func TestAppendNetipAddr(t *testing.T) {
 	}
 }
 
-// TestAppendURL pins AppendURL against (*url.URL).String for a
-// representative cross-section of URL shapes: the body must match String()
-// byte-for-byte (plus the closing quote AppendURL owns) — ggen-emitted code
-// uses AppendURL in place of String() to avoid the per-call alloc, so any
-// divergence is a silent wire-format regression.
+// TestAppendURL checks AppendURL against (*url.URL).String for many URL
+// shapes. The output must equal String() byte for byte, plus the closing
+// quote that AppendURL writes. Generated code calls AppendURL instead of
+// String() to avoid an allocation per call. Any difference would silently
+// change the JSON output.
 func TestAppendURL(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -334,9 +340,9 @@ func TestAppendURL(t *testing.T) {
 	}
 }
 
-// TestAppendURL_AppendsNotOverwrites verifies the function appends to
-// the existing dst tail rather than replacing it — generated codegen
-// reuses the same buffer across many field emits.
+// TestAppendURL_AppendsNotOverwrites checks that AppendURL appends after the
+// existing bytes in dst and keeps them. Generated code writes many fields
+// into the same buffer.
 func TestAppendURL_AppendsNotOverwrites(t *testing.T) {
 	t.Parallel()
 	u, _ := url.Parse("https://example.com/x")
@@ -348,10 +354,10 @@ func TestAppendURL_AppendsNotOverwrites(t *testing.T) {
 	}
 }
 
-// TestAppendURL_Construction covers values built programmatically
-// (not via Parse) — exercises code paths the parser doesn't normally
-// reach: empty Scheme + Host, ForceQuery without RawQuery, OmitHost,
-// Opaque with fragment, raw Fragment that needs escaping.
+// TestAppendURL_Construction covers URL values built by hand, not by Parse.
+// They reach code paths that parsed URLs usually do not: empty Scheme and
+// Host, ForceQuery without RawQuery, OmitHost, Opaque with a fragment, and a
+// Fragment that needs escaping.
 func TestAppendURL_Construction(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -365,18 +371,19 @@ func TestAppendURL_Construction(t *testing.T) {
 		{"raw_fragment_set", url.URL{Scheme: "https", Host: "ex.com", Fragment: "a b", RawFragment: "a%20b"}},
 		{"fragment_with_special", url.URL{Scheme: "https", Host: "ex.com", Fragment: "<script>"}},
 		{"path_no_host_with_colon_first_seg", url.URL{Path: "this:that"}},
-		// EscapedPath consistency: a stale RawPath (validly encoded but not
-		// an encoding of Path) must lose to escape(Path).
+		// A RawPath that is valid but does not encode Path is ignored. The
+		// escaped Path is used instead, like EscapedPath does.
 		{"stale_rawpath", url.URL{Scheme: "https", Host: "ex.com", Path: "/new", RawPath: "/old%20path"}},
 		{"consistent_rawpath", url.URL{Scheme: "https", Host: "ex.com", Path: "/a b", RawPath: "/a%20b"}},
 		{"malformed_rawpath", url.URL{Scheme: "https", Host: "ex.com", Path: "/a b", RawPath: "/a%2"}},
-		// Host-relative '/' insertion applies to the RawPath and "*" branches
-		// too, not just escape(Path).
+		// With a host, a '/' is added before a path that lacks one. This
+		// also applies when RawPath or "*" is used, not only the escaped
+		// Path.
 		{"rawpath_no_leading_slash", url.URL{Scheme: "https", Host: "ex.com", Path: "a b", RawPath: "a%20b"}},
 		{"asterisk_with_host", url.URL{Scheme: "http", Host: "ex.com", Path: "*"}},
 		{"asterisk_no_host", url.URL{Path: "*"}},
-		// Path presence, not its first byte, decides the authority/path
-		// '/' — a NUL-leading path is still a path.
+		// Whether a path is present decides the '/' between host and path,
+		// not its first byte. A path starting with NUL is still a path.
 		{"nul_leading_path", url.URL{Scheme: "http", Host: "h", Path: "\x00x"}},
 		{"nul_leading_rawpath", url.URL{Scheme: "http", Host: "h", Path: "\x00x", RawPath: "%00x"}},
 	}
@@ -388,8 +395,10 @@ func TestAppendURL_Construction(t *testing.T) {
 			if got != want {
 				t.Errorf("mismatch\n want: %q\n  got: %q", want, got)
 			}
-			// Same wire under a non-empty dst — the §4.2 "./" and every
-			// length-relative check must be entry-relative, not absolute.
+			// The output must be the same when dst already holds bytes.
+			// The "./" prefix rule from RFC 3986 section 4.2 and every
+			// length check must count from where AppendURL started, not
+			// from the start of dst.
 			pgot := string(AppendURL([]byte(`{"u":"`), c.u))
 			if pgot != `{"u":"`+want {
 				t.Errorf("prefixed mismatch\n want: %q\n  got: %q", `{"u":"`+want, pgot)
@@ -398,9 +407,8 @@ func TestAppendURL_Construction(t *testing.T) {
 	}
 }
 
-// TestAppendURL_LongRandomized stresses the appender against a
-// generated batch of URLs (every parse-round-trip output of String
-// should be appended back to the same bytes).
+// TestAppendURL_LongRandomized checks AppendURL on a few long URLs. For each
+// parsed URL, AppendURL must write the same bytes as String().
 func TestAppendURL_LongRandomized(t *testing.T) {
 	t.Parallel()
 	corpus := []string{
@@ -422,10 +430,10 @@ func TestAppendURL_LongRandomized(t *testing.T) {
 	}
 }
 
-// A URL ggen itself accepts can smuggle JSON-breaking bytes: RawQuery and
-// Opaque pass through String verbatim, Host's char class admits `"`, and a
-// stale RawFragment used to win over Fragment. AppendURL must emit a valid
-// JSON string whose unquoted body still equals String().
+// A URL that ggen accepts can carry bytes that break JSON. String() copies
+// RawQuery and Opaque as is, and Host may contain `"`. A RawFragment that
+// does not match Fragment must lose to Fragment. AppendURL must write a valid
+// JSON string, and its decoded value must still equal String().
 func TestAppendURL_JSONSafety(t *testing.T) {
 	t.Parallel()
 	parse := func(raw string) url.URL {
@@ -464,9 +472,10 @@ func TestAppendURL_JSONSafety(t *testing.T) {
 	}
 }
 
-// Named map/func types with value-receiver marshal hooks: their nil values
-// box a nil interface data word — exactly like a typed-nil pointer — but
-// calling the method on them is safe Go that stdlib performs.
+// Named map and func types with value-receiver marshal methods. Inside an
+// interface, their nil value has a nil data pointer, just like a typed nil
+// pointer. Calling the method on them is still safe, and the standard
+// library does call it.
 type nilMapJSON map[string]int
 
 func (m nilMapJSON) MarshalJSON() ([]byte, error) {
@@ -480,10 +489,10 @@ type nilFuncText func()
 
 func (nilFuncText) MarshalText() ([]byte, error) { return []byte("fn"), nil }
 
-// TestAppendAny_NilMapFuncNotNull pins that a nil named map/func with a
-// value-receiver hook has its method CALLED (stdlib parity) — isNilPtr must
-// not read their nil data word as a typed-nil pointer — while a typed-nil
-// pointer still emits null.
+// TestAppendAny_NilMapFuncNotNull checks that AppendAny calls the marshal
+// method of a nil named map or func with a value receiver, like the standard
+// library. isNilPtr must not treat their nil data pointer as a typed nil
+// pointer. A typed nil pointer must still write null.
 func TestAppendAny_NilMapFuncNotNull(t *testing.T) {
 	t.Parallel()
 	cases := []any{nilMapJSON(nil), nilFuncText(nil), (*nilMapJSON)(nil)}

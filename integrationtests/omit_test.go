@@ -15,7 +15,7 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// OmitStruct exercises omitempty / omitzero / string tag options.
+// OmitStruct exercises the omitempty, omitzero and string tag options.
 //
 //ggen:generate
 type OmitStruct struct {
@@ -124,9 +124,9 @@ func TestOmit_roundtrip(t *testing.T) {
 
 // --- json:",string" width variants -----------------------------------------
 
-// StringTagStruct exercises ,string across every numeric width plus bool
-// (bool is a no-op: stays bare true/false). *int + ,string lives in
-// brokencodegen_test.go.
+// StringTagStruct exercises ,string across every numeric width plus bool.
+// On a bool, ,string has no effect and the value stays a bare true or false.
+// The *int with ,string case is in brokencodegen_test.go.
 //
 //ggen:generate
 type StringTagStruct struct {
@@ -188,11 +188,13 @@ func TestStringTag_AllVariants_unmarshal(t *testing.T) {
 	}
 }
 
-// TestStringTag_JSONSize_NoRealloc lives in jsonsize_test.go.
+// The JSONSize check for StringTagStruct is
+// TestJSONSize_StringTagStruct_NoRealloc in jsonsize_test.go.
 
-// The quoted text of a `,string` field takes the bare number grammar, range
-// and narrowing checks. strconv alone also took Go-literal spellings jsonv2
-// rejects, and a NaN or Inf admitted that way could not be marshaled back.
+// The quoted text of a `,string` field goes through the same JSON number
+// grammar, range and narrowing checks as a bare number. strconv alone accepts
+// Go literal spellings that jsonv2 rejects. A NaN or Inf accepted that way
+// could not be marshaled back.
 func TestStringTag_quotedTextTakesNumberGrammar(t *testing.T) {
 	t.Parallel()
 	reject := []struct {
@@ -239,9 +241,10 @@ func TestStringTag_quotedTextTakesNumberGrammar(t *testing.T) {
 	}
 }
 
-// BigOmit pins that omitempty never drops a big.Int/Float/Rat: a zero one
-// encodes as `0` / `"0"`, which is not a JSON-empty value (v1 never omits a
-// struct; jsonv2 omits only null/""/{}/[]). ggen used to skip the zero.
+// BigOmit pins that omitempty never drops a big.Int, big.Float or big.Rat. A
+// zero one encodes as `0` or `"0"`, which is not an empty JSON value.
+// encoding/json v1 never omits a struct. jsonv2 omits only null, "", {} and
+// [].
 //
 //ggen:generate
 type BigOmit struct {
@@ -263,14 +266,15 @@ func TestOmitEmpty_bigTypesNeverOmitted(t *testing.T) {
 	}
 }
 
-// R10OmitEmpty pins omitempty's JSON-empty rule (null / "" / [] / {}) on the
-// kinds whose empty encoding is not Go-zero-shaped: text kinds that encode
-// "", `any`, pointers to empty values and a `[0]T`. url.URL is checked
-// against ggen's own string wire (jsonv2 encodes it as an object). `In` is
-// the struct case: a struct never counts as empty (omitempty on a struct
-// FIELD is a generate-time error), so the pointer omits on nil alone and a
-// non-nil one emits `{}`. Raw pins omitzero on a `[N]byte`, which compared
-// an array against nil.
+// R10OmitEmpty pins the omitempty rule: omit when the encoded value is
+// null, "", [] or {}. It covers kinds where "empty when encoded" differs from
+// the Go zero value: text kinds that encode "", `any`, pointers to empty
+// values and a `[0]T`. url.URL is checked against ggen's own string encoding
+// (jsonv2 encodes it as an object). `In` is the struct case. A struct never
+// counts as empty, and omitempty on a struct field is a generate-time error.
+// So the pointer is omitted only when nil, and a non-nil one emits `{}`. Raw
+// pins omitzero on a `[N]byte`, where the zero check must compare the array
+// contents, not compare against nil.
 //
 //ggen:generate
 type R10OmitEmpty struct {

@@ -5,10 +5,11 @@ import (
 	"time"
 )
 
-// AppendRFC3339 appends t in layout (time.RFC3339 or time.RFC3339Nano) and
-// refuses the timestamps that grammar cannot spell — a year outside
-// [0,9999] or a zone hour of 24 or more — the way time.Time.AppendText and
-// jsonv2 do. Writing them produced strings no RFC 3339 parser reads back.
+// AppendRFC3339 appends t formatted with layout, which is time.RFC3339 or
+// time.RFC3339Nano. It returns an error for timestamps RFC 3339 cannot
+// express: a year outside [0,9999] or a zone hour of 24 or more. No RFC 3339
+// parser could read such text back. time.Time.AppendText and jsonv2 refuse
+// the same values.
 func AppendRFC3339(dst []byte, t time.Time, layout string) ([]byte, error) {
 	n0 := len(dst)
 	dst = t.AppendFormat(dst, layout)
@@ -25,16 +26,18 @@ func AppendRFC3339(dst []byte, t time.Time, layout string) ([]byte, error) {
 	return dst, nil
 }
 
-// ParseRFC3339 parses s as RFC 3339 (fractional seconds optional) with the
-// checks time.Parse skips and jsonv2 applies: a two-digit hour, `.` as the
-// fraction separator, a zone hour below 24 and a zone minute below 60.
+// ParseRFC3339 parses s as RFC 3339 with optional fractional seconds. It adds
+// the checks that jsonv2 applies and time.Parse skips. The hour must have two
+// digits, the fraction separator must be '.', the zone hour must be below 24
+// and the zone minute below 60.
 func ParseRFC3339(s string) (time.Time, error) {
 	t, err := time.Parse(time.RFC3339Nano, s)
 	if err != nil {
 		return t, err
 	}
-	// A parsed value is at least "2006-01-02T1:04:05Z" long; the hour check
-	// runs first because only a two-digit hour puts index 19 in range.
+	// A parsed value is at least "2006-01-02T1:04:05Z" long. The hour check
+	// runs first because index 19 is only in range once the hour has two
+	// digits.
 	switch {
 	case s[len("2006-01-02T")+1] == ':':
 		return time.Time{}, &time.ParseError{Layout: time.RFC3339, Value: s, LayoutElem: "15", ValueElem: s[len("2006-01-02T"):][:1]}

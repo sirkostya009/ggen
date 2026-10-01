@@ -16,49 +16,52 @@ import (
 	"github.com/sirkostya009/ggen/internal/prealloc"
 )
 
-// Stream wraps an io.Reader. The cursor lives in [Stream.Pos] — every
-// scan primitive consumes from there and updates it on return. Raw spans
-// (RawJSON capture, json.Unmarshal fallback) come from [Stream.CaptureValue].
+// Stream decodes JSON from an io.Reader. It keeps a buffer that holds a
+// window of the input: the bytes read so far that are still needed. A refill
+// ([Stream.ReadMore]) reads more bytes into the buffer. The cursor is
+// [Stream.Pos]. Every scan method starts reading there and moves it forward
+// on return. Raw spans, used for RawJSON capture and the json.Unmarshal
+// fallback, come from [Stream.CaptureValue].
 //
 //	var s Stream
 //	s.Reset(r, buf)
 //
-// Strings returned by Stream methods are owned copies — the buffer is
-// purely a parse working area, recyclable immediately after decode.
+// Strings returned by Stream methods are owned copies. The buffer is only
+// working space for parsing, and it can be reused right after decode.
 type Stream struct {
 	buf []byte
 	r   io.Reader
-	// Pos is the parse cursor — offset of the next byte to consume. Every
-	// scan primitive reads it and writes it back. Generated code reads it
+	// Pos is the parse cursor, the offset in buf of the next byte to read.
+	// Every scan method reads it and writes it back. Generated code reads it
 	// directly to capture raw spans.
 	Pos int
-	// consumed is the number of bytes discarded off the front of buf by
-	// compacting ReadMore, so buf[0] sits at absolute document offset
-	// consumed and the cursor's absolute offset is consumed + Pos (see
-	// Offset). Pos alone is buffer-relative.
+	// consumed is the number of bytes that ReadMore dropped from the front
+	// of buf. So buf[0] is at document offset consumed, and the cursor is
+	// at document offset consumed + Pos. See Offset. Pos alone is an
+	// offset into buf.
 	consumed int
 }
 
-// Offset returns the absolute byte offset of the cursor within the full
-// document — bytes already discarded by buffer compaction plus the
-// buffer-relative [Stream.Pos]. Use it (vs Pos) when reporting a position
-// that must stay meaningful across a long, compacting stream.
+// Offset returns the byte offset of the cursor in the whole document. It is
+// the number of bytes already dropped from the buffer plus [Stream.Pos],
+// which counts from the start of the buffer. Use Offset instead of Pos to
+// report a position that must stay correct over a long stream.
 func (s *Stream) Offset() int { return s.consumed + s.Pos }
 
-// NewStream allocates a Stream bound to r with buf as the initial
-// backing slice (see Reset for buf semantics). Use Reset directly to
-// recycle an existing Stream without the heap alloc.
+// NewStream allocates a Stream that reads from r and starts with buf as its
+// buffer. See Reset for how buf is used. Call Reset on an existing Stream
+// to reuse it without a heap allocation.
 func NewStream(r io.Reader, buf []byte) *Stream {
 	return (&Stream{}).Reset(r, buf)
 }
 
-// Reset binds the Stream to r with buf as the initial backing slice.
-// buf is truncated to length 0 — its capacity is retained for parse
-// working area. Pass nil to start with no backing (ReadMore allocates
-// on first pull); pass a pre-sized slice to avoid growth allocs.
+// Reset makes the Stream read from r and use buf as its buffer. buf is cut
+// to length 0, and its capacity is kept as working space. Pass nil to start
+// with no buffer, and ReadMore allocates one on the first read. Pass a slice
+// with enough capacity to avoid allocations as the buffer grows.
 //
-// Returns s so a freshly declared Stream can be built and handed to a
-// decode helper in one expression:
+// Reset returns s, so a new Stream can be set up and passed to a decode
+// helper in one expression:
 //
 //	v, err := s.Reset(r, buf).Value[T]()
 func (s *Stream) Reset(r io.Reader, buf []byte) *Stream {
@@ -66,29 +69,31 @@ func (s *Stream) Reset(r io.Reader, buf []byte) *Stream {
 	return s
 }
 
-// Bytes returns the current backing buffer. Mutating the slice
-// corrupts the Stream. Callers can recycle the slice after decode
-// completes — strings inside the decoded value are owned copies.
+// Bytes returns the current buffer. Changing the slice corrupts the Stream.
+// Callers can reuse the slice after decode completes, because strings in the
+// decoded value are owned copies.
 func (s *Stream) Bytes() []byte { return s.buf }
 
-// ReadMore pulls a single chunk from the reader. `keep` is the lowest
-// offset the caller still requires; bytes at offsets < keep are
-// eligible for discard:
+// ReadMore makes one Read call on the reader. keep is the lowest offset the
+// caller still needs. Bytes before keep may be dropped:
 //
-//   - keep == 0           — grow without shifting (allocate larger
-//     backing if currently full).
-//   - keep == len(s.buf)  — discard everything; reads refill from 0.
-//   - 0 < keep < len(buf) — in-place memmove of s.buf[keep:n] down
-//     to s.buf[0:n-keep], reads refill the freed tail.
+//   - keep == 0: nothing is dropped. If the buffer is full, a larger one is
+//     allocated and the bytes are copied over.
+//   - keep == len(s.buf): everything is dropped, and the read fills the
+//     buffer from 0.
+//   - 0 < keep < len(s.buf): s.buf[keep:] is moved down to the start of the
+//     buffer, and the read fills the space freed at the end.
 //
-// Callers MUST subtract `keep` from every cursor / index >= keep they
-// hold (including [Stream.Pos] when mid-scan). String aliases into s.buf
-// become invalid when keep > 0 — the bytes physically move.
+// Callers must subtract keep from every cursor or index >= keep they hold,
+// including [Stream.Pos] in the middle of a scan. When keep > 0 the bytes
+// move, so any string that aliases s.buf, meaning it points into the buffer
+// with no copy, is no longer valid.
 //
-// NEVER loops the Read call: one chunk in, return what the reader gave.
+// ReadMore never loops on Read. It reads once and returns what the reader
+// gave.
 func (s *Stream) ReadMore(keep int) error {
-	// Compact first, even on a subsequent Read error — callers adjust their
-	// offsets unconditionally after a keep > 0 call.
+	// Drop bytes first, even if the Read then fails. Callers always adjust
+	// their offsets after a keep > 0 call.
 	if keep > 0 {
 		if keep >= len(s.buf) {
 			s.consumed += len(s.buf)
@@ -107,27 +112,30 @@ func (s *Stream) ReadMore(keep int) error {
 	n, err := s.r.Read(s.buf[len(s.buf):cap(s.buf)])
 	s.buf = s.buf[:len(s.buf)+n]
 	if n == 0 {
-		// No progress is terminal for this call: drained (io.EOF), a real
-		// error, or a pathological (0, nil) reader — don't spin.
+		// No bytes ends this call. The reader is drained (io.EOF), failed,
+		// or returned (0, nil). Do not loop.
 		if err == nil || err == io.EOF {
 			return io.ErrUnexpectedEOF
 		}
 		return err
 	}
-	// Bytes arrived — deliver them; a simultaneous non-EOF error re-surfaces
-	// on the reader's next call (io.Reader contract: process n > 0 before
-	// err — the number scanners' refill swallow would otherwise return a
-	// TRUNCATED value with the fresh digits sitting unread in the buffer).
+	// Bytes arrived, so deliver them and return nil. The io.Reader contract
+	// says to process n > 0 bytes before looking at err. A non-EOF error
+	// returned with them comes back on the next Read. Returning it now would
+	// break the number scanners, which ignore a refill error. They would
+	// return a cut-short number while the new digits sit unread in the
+	// buffer.
 	return nil
 }
 
-// SkipSpace advances Pos past whitespace, pulling more bytes as needed.
-// Compacts in-place (consumed WS overwritten via ReadMore(Pos)), so the
-// caller must hold no aliases at offsets < Pos (e.g. a prior KeyView key).
+// SkipSpace moves Pos past whitespace, reading more bytes as needed. It
+// drops the skipped whitespace from the buffer with ReadMore(Pos), so the
+// caller must not hold aliases at offsets < Pos, such as an earlier KeyView
+// key.
 func (s *Stream) SkipSpace() error {
-	// Inlinable fast path: cursor in-bounds on a non-whitespace byte. The
-	// no-temp shape is load-bearing — adding an `i := s.Pos` temp pushes it
-	// over the inline budget.
+	// Fast path the compiler can inline: the cursor is in bounds on a byte
+	// that is not whitespace. Keep it without a local variable. Adding
+	// `i := s.Pos` makes it too big to inline.
 	if s.Pos < len(s.buf) && s.buf[s.Pos] > ' ' {
 		return nil
 	}
@@ -136,8 +144,8 @@ func (s *Stream) SkipSpace() error {
 
 func (s *Stream) skipSpaceSlow() error {
 	i := s.Pos
-	// buf hoisted into a local so the inner loop compares against a
-	// registerized len(buf); refill reloads it in the outer loop.
+	// buf is copied to a local so the inner loop compares against
+	// len(buf) held in a register. The outer loop reloads it after a refill.
 	buf := s.buf
 	for {
 		for i < len(buf) {
@@ -160,9 +168,10 @@ func (s *Stream) skipSpaceSlow() error {
 	}
 }
 
-// ConsumeColon skips whitespace, consumes ':', then skips whitespace
-// again. Compacts in-place via SkipSpace, invalidating caller aliases at
-// offsets < Pos — use only after the key is dispatched / consumed.
+// ConsumeColon skips whitespace, reads ':', then skips whitespace again.
+// SkipSpace may drop bytes from the buffer, which breaks caller aliases at
+// offsets < Pos. Call it only after the key has been matched and is no
+// longer needed.
 func (s *Stream) ConsumeColon() error {
 	if err := s.SkipSpace(); err != nil {
 		return err
@@ -181,7 +190,7 @@ func (s *Stream) ConsumeColon() error {
 	return s.SkipSpace()
 }
 
-// ObjectOpen skips whitespace then consumes '{'.
+// ObjectOpen skips whitespace then reads '{'.
 func (s *Stream) ObjectOpen() error {
 	if err := s.SkipSpace(); err != nil {
 		return err
@@ -194,7 +203,7 @@ func (s *Stream) ObjectOpen() error {
 	return nil
 }
 
-// ArrayOpen skips whitespace then consumes '['.
+// ArrayOpen skips whitespace then reads '['.
 func (s *Stream) ArrayOpen() error {
 	if err := s.SkipSpace(); err != nil {
 		return err
@@ -207,41 +216,42 @@ func (s *Stream) ArrayOpen() error {
 	return nil
 }
 
-// String decodes a JSON string. Always copies the body out of the
-// buffer — the result is owned, no dependency on the buffer. validate as in
-// String (false = allowinvalidutf8 opt-out).
+// String decodes a JSON string. It always copies the body out of the
+// buffer, so the result does not depend on the buffer. validate works as in
+// the package-level String. false is the allowinvalidutf8 opt-out.
 func (s *Stream) String(validate bool) (string, error) {
 	v, owned, err := s.stringView(validate)
 	if err != nil {
 		return "", err
 	}
 	if owned {
-		// stringSlow already copied into fresh scratch — no second clone.
+		// stringSlow already copied into a new buffer. Do not clone again.
 		return v, nil
 	}
 	return strings.Clone(v), nil
 }
 
-// StringView reads a JSON string value and returns it as an alias into the
-// Stream's buffer — zero-copy. Escapes fall back to the copy path.
+// StringView reads a JSON string and returns it as an alias into the
+// Stream's buffer, with no copy. A string with escapes is copied instead.
 //
-// USE ONLY where the caller finishes consuming the string before the next
-// Stream op AND retains none of its bytes past that point. The alias is
-// invalidated by the next compacting ReadMore, so a consumer that keeps a
-// substring MUST use [Stream.String], which copies.
+// Use it only when the caller is done with the string before the next
+// Stream call and keeps none of its bytes after that. The next ReadMore that
+// drops bytes breaks the alias. A caller that keeps any part of the string
+// must use [Stream.String], which copies.
 func (s *Stream) StringView(validate bool) (string, error) {
 	v, _, err := s.stringView(validate)
 	return v, err
 }
 
-// stringView is the shared scan behind StringView / String. owned reports
-// whether v already lives in fresh scratch (stringSlow escape path) vs
-// aliasing s.buf.
+// stringView is the shared scan behind StringView and String. owned
+// reports whether v is already in a new buffer, from the stringSlow escape
+// path, instead of aliasing s.buf.
 func (s *Stream) stringView(validate bool) (v string, owned bool, err error) {
 	i := s.Pos
 	if i >= len(s.buf) {
-		// Drained where a string must start matches bytes String's
-		// ErrExpectString; a transient reader error propagates raw.
+		// Input that ends where a string must start reports
+		// ErrExpectString, like the bytes String. Any other reader error is
+		// returned as is.
 		err := s.ReadMore(i)
 		i = 0
 		if err != nil {
@@ -274,9 +284,9 @@ func (s *Stream) stringView(validate bool) (v string, owned bool, err error) {
 			j -= start
 			start = 0
 			if err != nil {
-				// Post-compaction rebase: the whole window is the span, so the
-				// off-the-end position is its end — mirrors bytes String's
-				// len(data). Without it Offset() kept the pre-compaction cursor.
+				// After ReadMore(start) the whole window is the string body, so
+				// the error position is the end of the window. This matches
+				// len(data) in the bytes String, and keeps Offset() correct.
 				s.Pos = len(s.buf)
 				return "", false, NotEOF(err, ErrUnterminated)
 			}
@@ -292,8 +302,9 @@ func (s *Stream) stringView(validate bool) (v string, owned bool, err error) {
 			s.Pos = j + ctrlIndex(s.buf[j:end])
 			return "", false, ErrBadString
 		}
-		// Full-span check — a rune may straddle the chunk cursor j, so per-chunk
-		// validation would false-error; ReadMore(start) keeps the span contiguous.
+		// Validate the full span. A multi-byte rune may cross the cursor j,
+		// so validating each piece alone would report false errors.
+		// ReadMore(start) keeps the whole span in one slice.
 		if validate && (sawHigh || hi) && !utf8.Valid(s.buf[start:end]) {
 			s.Pos = start
 			return "", false, ErrInvalidUTF8
@@ -303,17 +314,17 @@ func (s *Stream) stringView(validate bool) (v string, owned bool, err error) {
 	}
 }
 
-// KeyView reads a JSON string and returns it as an alias into the
-// Stream's buffer — zero-copy on the happy path. The alias survives a
-// grow-only ReadMore but is invalidated by a compacting one.
+// KeyView reads a JSON string and returns it as an alias into the Stream's
+// buffer, with no copy in the common case. The alias survives a ReadMore
+// that only grows the buffer, but a ReadMore that drops bytes breaks it.
 //
-// USE ONLY for short-lived dispatch where the string never escapes the
-// call frame (object-key matching). For values stored in the decoded
-// struct use [Stream.String]. Escapes fall back to the copy path.
+// Use it only for short-lived matching where the string never leaves the
+// calling function, such as matching object keys. For values stored in the
+// decoded struct use [Stream.String]. A string with escapes is copied.
 func (s *Stream) KeyView(validate bool) (string, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
-		// Drained here matches bytes String's ErrExpectString — see stringView.
+		// Input that ends here reports ErrExpectString. See stringView.
 		err := s.ReadMore(i)
 		i = 0
 		if err != nil {
@@ -326,10 +337,11 @@ func (s *Stream) KeyView(validate bool) (string, error) {
 		return "", ErrExpectString
 	}
 	start := i + 1
-	// Scalar prelude: one pass over the first window locates the closing
-	// quote while validating backslash/control — short dispatch keys finish
-	// here. A longer key / escape / not-yet-buffered quote falls to the
-	// IndexByte loop, which resumes at the window end (j = we).
+	// Short-key check: one byte-by-byte pass over the first few bytes
+	// looks for the closing quote and checks for a backslash or control
+	// byte. Short object keys finish here. A longer key, an escape, or a
+	// quote not yet in the buffer goes to the IndexByte loop below, which
+	// starts where this pass stopped (j = we).
 	we := min(start+stringPreludeWindow, len(s.buf))
 	var hb byte
 	for k := start; k < we; k++ {
@@ -384,7 +396,7 @@ func (s *Stream) KeyView(validate bool) (string, error) {
 			s.Pos = j + ctrlIndex(s.buf[j:end])
 			return "", ErrBadString
 		}
-		// Full-span check — see stringView (rune may straddle j).
+		// Validate the full span, since a rune may cross j. See stringView.
 		if validate && (sawHigh || hi) && !utf8.Valid(s.buf[start:end]) {
 			s.Pos = start
 			return "", ErrInvalidUTF8
@@ -394,13 +406,13 @@ func (s *Stream) KeyView(validate bool) (string, error) {
 	}
 }
 
-// stringPreludeWindow bounds KeyView's scalar pass before it falls back to
-// the IndexByte loop.
+// stringPreludeWindow is how many bytes KeyView checks one at a time before
+// it switches to the IndexByte loop.
 const stringPreludeWindow = 24
 
-// skipString advances Pos past a JSON string — no copy, no decode,
-// escapes validated only enough to advance. Used when the value isn't
-// needed (SkipValue, skipObject key-skip).
+// skipString moves Pos past a JSON string without copying or decoding it.
+// Escapes are checked only enough to step over them. It is used when the
+// value is not needed, as in SkipValue and when skipObject skips a key.
 func (s *Stream) skipString() error {
 	i := s.Pos
 	if i >= len(s.buf) {
@@ -417,10 +429,10 @@ func (s *Stream) skipString() error {
 	}
 	start := i + 1
 	j := start
-	// q memoizes the next '"' at or after j (len(buf) = none buffered) so the
-	// quote probe is O(n) across escape iterations instead of a rescan to the
-	// same far quote per escape — see the bytes-path skipString. Every refill
-	// shifts indices, so refill sites reset q to -1 (re-locate).
+	// q remembers the next '"' at or after j, or len(buf) when none is
+	// buffered. Without it, each escape would search again for the same far
+	// quote, which is quadratic. See the bytes-path skipString. Every refill
+	// shifts indices, so refill sites set q to -1 to search again.
 	q := -1
 	for {
 		if q < j {
@@ -430,10 +442,11 @@ func (s *Stream) skipString() error {
 				q = len(s.buf)
 			}
 		}
-		// Bound the backslash probe to the closing quote (a whole-tail probe
-		// makes SkipValue quadratic on fully buffered payloads).
+		// Search for a backslash only up to the closing quote. Searching the
+		// whole rest of the buffer makes SkipValue quadratic when the whole
+		// payload is buffered.
 		bsRel := bytes.IndexByte(s.buf[j:q], '\\')
-		// Closing quote, no backslash before it — fast path.
+		// Fast path: a closing quote with no backslash before it.
 		if q < len(s.buf) && bsRel < 0 {
 			if hasCtrlByte(s.buf[j:q]) {
 				s.Pos = j + ctrlIndex(s.buf[j:q])
@@ -442,8 +455,8 @@ func (s *Stream) skipString() error {
 			s.Pos = q + 1
 			return nil
 		}
-		// Backslash before any closing quote — slow path: validate
-		// literal bytes up to the backslash, then handle the escape.
+		// Slow path: a backslash before any closing quote. Check the
+		// plain bytes up to the backslash, then handle the escape.
 		if bsRel >= 0 {
 			bs := j + bsRel
 			if hasCtrlByte(s.buf[j:bs]) {
@@ -454,8 +467,9 @@ func (s *Stream) skipString() error {
 			if bs+1 >= len(s.buf) {
 				err := s.ReadMore(bs)
 				if err != nil {
-					// ReadMore compacted from bs: a truncated escape reports
-					// the end of what arrived, like the bytes path's len(data).
+					// ReadMore moved the buffer to start at bs. A cut-short
+					// escape reports the end of what arrived, like len(data) on
+					// the bytes path.
 					s.Pos = len(s.buf)
 					return NotEOF(err, ErrBadString)
 				}
@@ -467,9 +481,10 @@ func (s *Stream) skipString() error {
 			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
 				j = bs + 2
 			case 'u':
-				// Need 4 hex digits past `\u`; refill only while the buffered
-				// tail can still become them — a non-hex byte is final and
-				// must not wait on a live reader (see uEscapePrefix).
+				// Need 4 hex digits after `\u`. Refill only while the
+				// buffered tail can still become them. A non-hex byte is a
+				// final error and must not wait on a live reader. See
+				// uEscapePrefix.
 				for bs+6 > len(s.buf) {
 					if !uEscapePrefix(s.buf[bs:]) {
 						s.Pos = bs
@@ -495,15 +510,15 @@ func (s *Stream) skipString() error {
 			}
 			continue
 		}
-		// Neither quote nor backslash in current buffer — validate
-		// what's there, then read more.
+		// No quote or backslash in the buffer. Check what is there, then
+		// read more.
 		if hasCtrlByte(s.buf[j:]) {
 			s.Pos = j + ctrlIndex(s.buf[j:])
 			return ErrBadString
 		}
-		// Everything buffered is validated and being DISCARDED — full
-		// compaction keeps the window at chunk size instead of growing the
-		// buffer toward the skipped string's length.
+		// Everything buffered is checked and not needed again. Dropping it
+		// all keeps the buffer at one read's size, instead of growing it to
+		// the length of the skipped string.
 		j = len(s.buf)
 		err := s.ReadMore(j)
 		j = 0
@@ -515,9 +530,10 @@ func (s *Stream) skipString() error {
 	}
 }
 
-// stringSlow handles escape sequences into a fresh owned scratch buffer,
-// seeded from the already-scanned prefix. The window compacts on refill
-// (see loop comment); the result aliases the scratch, never s.buf.
+// stringSlow decodes a string with escapes into a new buffer it owns,
+// starting with the part already scanned. Refills drop consumed bytes from
+// the window, see the comment before the loop. The result points into the
+// new buffer, never into s.buf.
 func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 	bad, rawHigh := ctrlOrHigh(s.buf[start:j])
 	if bad {
@@ -527,13 +543,14 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 	buf := make([]byte, 0, 32)
 	buf = append(buf, s.buf[start:j]...)
 	var rawHi byte
-	// `start` is dead now — the decoded output lives in the owned scratch `buf`,
-	// so s.buf can COMPACT (discard consumed bytes) on refill instead of growing
-	// to hold the whole raw string. Every ReadMore keeps from the cursor j and
-	// rebases it, exactly like Int64/Float64/Number, so a multi-MB escaped string
-	// streams through a bounded buffer. Multi-byte reads (\X, \uXXXX, surrogate
-	// pair) buffer their whole span via a compacting ensure-loop before indexing
-	// s.buf[j+k].
+	// start is no longer needed, because the decoded output lives in buf. So
+	// a refill can drop consumed bytes from s.buf instead of growing it to hold
+	// the whole raw string. Every ReadMore keeps bytes from the cursor j and
+	// shifts j to match, like Int64, Float64 and Number. A multi-megabyte
+	// escaped string then passes through a buffer of bounded size. Escapes
+	// longer than one byte (\X, \uXXXX, a surrogate pair) first get their whole
+	// span into the buffer, with a refill loop that drops consumed bytes, before
+	// reading s.buf[j+k].
 	for {
 		if j >= len(s.buf) {
 			err := s.ReadMore(j)
@@ -543,9 +560,10 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 				return "", NotEOF(err, ErrUnterminated)
 			}
 		}
-		// Raw bytes copy through a windowed inner loop, escape dispatch hoisted
-		// out — see the bytes-path stringSlow. Bounded by the buffered window
-		// too; a run reaching its edge resumes after the refill at the loop top.
+		// Plain bytes are copied by a short inner loop of at most escRunWindow
+		// bytes, with escape handling outside it. See the bytes-path stringSlow.
+		// The loop also stops at the end of the buffer. A run that reaches it
+		// continues after the refill at the top of the outer loop.
 		we := min(j+escRunWindow, len(s.buf))
 		for j < we {
 			c := s.buf[j]
@@ -561,14 +579,14 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 			j++
 		}
 		if j >= len(s.buf) {
-			continue // refill at the loop top
+			continue // refill at the top of the loop
 		}
 		c := s.buf[j]
 		if c == '"' {
-			// Escape outputs are valid encodings by construction (surrogates
-			// error below), so only RAW bytes copied through can make buf
-			// invalid — skip the walk when they were all ASCII. buf is the
-			// assembled output, so refill boundaries can't split a rune here.
+			// Decoded escapes are always valid UTF-8, since lone surrogates
+			// fail below. Only plain bytes copied through can make buf
+			// invalid, so skip validation when they were all ASCII. buf is
+			// the finished output, so a refill cannot split a rune here.
 			if validate && (rawHigh || rawHi&0x80 != 0) && !utf8.Valid(buf) {
 				s.Pos = j
 				return "", ErrInvalidUTF8
@@ -577,12 +595,13 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 			return unsafe.String(unsafe.SliceData(buf), len(buf)), nil
 		}
 		if c == '\\' {
-			// Bound checks stay inline; the refill helper is a call, taken
-			// only at a window edge (same split as refillSkip).
+			// The bounds check stays inline. The refill helper is a call,
+			// made only at the end of the window. refillSkip is split the
+			// same way.
 			if j+2 > len(s.buf) {
 				if err := s.ensureSpan(&j, 2); err != nil {
-					// A truncated escape reports the end of what arrived,
-					// like the bytes path's len(data).
+					// A cut-short escape reports the end of what arrived,
+					// like len(data) on the bytes path.
 					s.Pos = len(s.buf)
 					return "", NotEOF(err, ErrBadString)
 				}
@@ -608,7 +627,7 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 				buf = append(buf, '\t')
 				j += 2
 			case 'u':
-				// Refill only while the tail can still become \uXXXX — see
+				// Refill only while the tail can still become \uXXXX. See
 				// skipString.
 				for j+6 > len(s.buf) {
 					if !uEscapePrefix(s.buf[j:]) {
@@ -618,8 +637,8 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 					err := s.ReadMore(j)
 					j = 0
 					if err != nil {
-						// A truncated escape reports the end of what arrived,
-						// like the bytes path's len(data).
+						// A cut-short escape reports the end of what arrived,
+						// like len(data) on the bytes path.
 						s.Pos = len(s.buf)
 						return "", NotEOF(err, ErrBadString)
 					}
@@ -631,12 +650,15 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 				}
 				j += 6
 				if utf16.IsSurrogate(r) {
-					// Pair with an immediately following low-surrogate escape,
-					// which may straddle a refill boundary (unbuffered, the pair
-					// split into two lone surrogates: 😀 → ��). Refill only while
-					// the buffered tail can still become \uXXXX, so a live reader
-					// is never asked for bytes past the closing quote; a drained
-					// reader leaves r a lone surrogate, matching the bytes path.
+					// A surrogate is half of a UTF-16 pair. Runes above U+FFFF
+					// are written as two \uXXXX escapes, a high surrogate then a
+					// low one. Pair r with a low-surrogate escape right after it.
+					// That escape may cross a refill boundary. Without the refill
+					// the pair would split into two lone surrogates and decode
+					// as two U+FFFD. Refill only while the buffered tail can
+					// still become \uXXXX, so a live reader is never asked for
+					// bytes past the closing quote. If the reader is drained, r
+					// stays a lone surrogate, the same as on the bytes path.
 					var err error
 					for j+6 > len(s.buf) && uEscapePrefix(s.buf[j:]) {
 						err = s.ReadMore(j)
@@ -654,19 +676,21 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 						}
 					}
 					if err != nil && err != io.ErrUnexpectedEOF {
-						// Transient reader error — surfacing ErrInvalidUTF8 for
-						// it would mislabel a hiccup as a lone surrogate.
+						// A reader error other than EOF. Reporting
+						// ErrInvalidUTF8 here would call a passing read failure a
+						// lone surrogate.
 						s.Pos = len(s.buf)
 						return "", err
 					}
-					// Still a surrogate → lone/unpaired: jsonv2 rejects;
-					// permissive mode keeps the U+FFFD substitution.
+					// Still a surrogate means it has no pair. jsonv2 rejects
+					// it. Permissive mode writes U+FFFD in its place.
 					if validate && utf16.IsSurrogate(r) {
 						s.Pos = j
 						if err != nil {
-							// Drained while the tail was still a valid escape
-							// prefix — truncated, not lone: report the end of
-							// what arrived, like the bytes path's len(data).
+							// The reader was drained while the tail could
+							// still become an escape. The input is cut short,
+							// not a lone surrogate. Report the end of what
+							// arrived, like len(data) on the bytes path.
 							s.Pos = len(s.buf)
 						}
 						return "", ErrInvalidUTF8
@@ -679,14 +703,15 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 			}
 			continue
 		}
-		// Neither '"' nor '\\': the inner loop stopped at the window bound
-		// mid-run, so the outer loop simply opens the next window.
+		// Neither '"' nor '\\'. The inner loop stopped at its escRunWindow
+		// limit in the middle of a run, so the outer loop just continues.
 	}
 }
 
-// ensureSpan buffers n bytes from *j, compacting from *j and rebasing it on
-// every refill (the escape spans stringSlow needs whole are ≤ 6 bytes).
-// Returns ReadMore's error when the reader cannot supply them.
+// ensureSpan makes sure n bytes from *j are in the buffer. Each refill drops
+// the bytes before *j and sets *j to 0. The escapes stringSlow needs whole
+// are at most 6 bytes. It returns ReadMore's error when the reader cannot
+// supply them.
 func (s *Stream) ensureSpan(j *int, n int) error {
 	for *j+n > len(s.buf) {
 		err := s.ReadMore(*j)
@@ -698,35 +723,36 @@ func (s *Stream) ensureSpan(j *int, n int) error {
 	return nil
 }
 
-// Int64 scans an integer with per-digit overflow detection, sign applied
-// at the end. Matches Int64, error position included: a grammar error or
-// overflow reports the byte scanning stopped at; only a transient reader
-// error keeps the value head, so a retry re-scans the intact span.
+// Int64 scans an integer, checking for overflow at each digit and applying
+// the sign at the end. It matches the package-level Int64, including error
+// positions. A grammar error or overflow reports the byte where scanning
+// stopped. Only a reader error other than EOF leaves Pos at the start of the
+// value, so a retry scans the whole number again.
 func (s *Stream) Int64() (int64, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
-		// ReadMore(i) discards the window before it Reads, so the cursor is
-		// rebased even when the Read fails.
+		// ReadMore(i) drops the window before it reads, so the cursor
+		// moves to 0 even when the Read fails.
 		if err := s.ReadMore(i); err != nil {
 			s.Pos = 0
 			return 0, NotEOF(err, ErrBadNumber)
 		}
 		i = 0
 	}
-	// start is the value head. Every refill keeps from it (number spans are
-	// bounded at ~20 bytes, so retaining them is free) and rebases, so a
-	// transient reader error can return with s.Pos back on the intact span and
-	// a retry re-scans it — refilling from the cursor instead discarded the
-	// '-' and the digits already folded into the accumulator, silently flipping
-	// the sign or truncating the value.
+	// start is the start of the value. Every refill keeps bytes from start
+	// and shifts the cursors. Numbers are about 20 bytes at most, so keeping
+	// them costs nothing. Then a reader error other than EOF can return with
+	// s.Pos on the whole number, and a retry scans it again. Refilling from
+	// the cursor instead would drop the '-' and the digits already added to
+	// the value, so a retry would silently lose the sign or digits.
 	start := i
 	neg := false
 	if s.buf[i] == '-' {
 		neg = true
 		i++
 		if i >= len(s.buf) {
-			// Drained after a bare "-" is a grammar error, like the bytes
-			// path; a transient reader error still propagates raw.
+			// Input that ends after a bare "-" is a grammar error, like
+			// on the bytes path. Any other reader error is returned as is.
 			err := s.ReadMore(start)
 			i -= start
 			start = 0
@@ -744,16 +770,16 @@ func (s *Stream) Int64() (int64, error) {
 		s.Pos = i
 		return 0, ErrBadNumber
 	}
-	// RFC 8259: no leading zeros. A '0' first digit must end the integer part;
-	// peek one byte (refilling if the window ends here) to catch "01".
+	// RFC 8259 forbids leading zeros. A first digit '0' must end the integer
+	// part. Look at the next byte, refilling if the window ends here, to catch
+	// "01".
 	if s.buf[i] == '0' {
 		if i+1 >= len(s.buf) {
-			// ReadMore compacts BEFORE the Read, so rebase unconditionally
-			// (rebasing only on success left a stale cursor). Swallow only the
-			// drained-reader case — bare "0" at EOF is a valid number, the
-			// digit loop then hits the stable EOF; a transient error must
-			// propagate or the "01" rejection is silently lost when a later
-			// refill resumes the digit loop.
+			// ReadMore drops bytes before the Read, so always shift the
+			// cursors. Ignore only a drained reader. A bare "0" at EOF is a
+			// valid number, and the digit loop then sees EOF again. Any other
+			// error must be returned. Otherwise a later refill resumes the
+			// digit loop and "01" is silently accepted.
 			err := s.ReadMore(start)
 			i -= start
 			start = 0
@@ -773,11 +799,11 @@ func (s *Stream) Int64() (int64, error) {
 	}
 	var u uint64
 	buf := s.buf
-	// digits counts unchecked-prefix consumption across refills. First ≤18
-	// digits can't overflow int64 (see bytes-path Int64); the checked loop
-	// only ever consumes once digits hits 18 — an unchecked exit below 18
-	// means the buffered bytes ran out, so the checked loop no-ops into the
-	// refill.
+	// digits counts the digits read without an overflow check, across
+	// refills. The first 18 digits cannot overflow int64. See the bytes-path
+	// Int64. The checked loop reads digits only once digits reaches 18. If
+	// the unchecked loop stops below 18, the buffer ran out, so the checked
+	// loop does nothing and the refill follows.
 	digits := 0
 scan:
 	for {
@@ -808,10 +834,11 @@ scan:
 		i -= start
 		start = 0
 		if err != nil {
-			// Drained is a legitimate value end (the digits ran to EOF); a
-			// real reader error is NOT — swallowing it returned a TRUNCATED
-			// value with a nil error, silently wrong at top level and a
-			// bogus grammar error one frame up.
+			// A drained reader is a valid end of the value, since the
+			// digits ran to EOF. Any other reader error is not. Ignoring it
+			// would return a cut-short value with a nil error. That is
+			// silently wrong at the top level and a false grammar error one
+			// level up.
 			if err != io.ErrUnexpectedEOF {
 				s.Pos = start
 				return 0, err
@@ -830,8 +857,8 @@ scan:
 	return int64(u), nil
 }
 
-// Uint64 scans an unsigned integer with overflow detection. Returns
-// ErrNumberOverflow when the magnitude exceeds MaxUint64.
+// Uint64 scans an unsigned integer and checks for overflow. It returns
+// ErrNumberOverflow when the value is above MaxUint64.
 func (s *Stream) Uint64() (uint64, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
@@ -841,14 +868,15 @@ func (s *Stream) Uint64() (uint64, error) {
 		}
 		i = 0
 	}
-	// start is the value head — refills keep from it so a transient reader
-	// error leaves the span intact for a retry. See Int64.
+	// start is the start of the value. Refills keep bytes from it, so a
+	// reader error other than EOF leaves the whole number for a retry. See
+	// Int64.
 	start := i
 	if s.buf[i] < '0' || s.buf[i] > '9' {
 		s.Pos = i
 		return 0, ErrBadNumber
 	}
-	// RFC 8259: no leading zeros — see Int64's peek for the error contract.
+	// RFC 8259 forbids leading zeros. See Int64 for how errors are handled.
 	if s.buf[i] == '0' {
 		if i+1 >= len(s.buf) {
 			err := s.ReadMore(start)
@@ -866,7 +894,8 @@ func (s *Stream) Uint64() (uint64, error) {
 	}
 	var n uint64
 	buf := s.buf
-	// First ≤19 digits can't overflow uint64 — see Int64's prefix comment.
+	// The first 19 digits cannot overflow uint64. See the digits comment in
+	// Int64.
 	digits := 0
 scan:
 	for {
@@ -897,10 +926,11 @@ scan:
 		i -= start
 		start = 0
 		if err != nil {
-			// Drained is a legitimate value end (the digits ran to EOF); a
-			// real reader error is NOT — swallowing it returned a TRUNCATED
-			// value with a nil error, silently wrong at top level and a
-			// bogus grammar error one frame up.
+			// A drained reader is a valid end of the value, since the
+			// digits ran to EOF. Any other reader error is not. Ignoring it
+			// would return a cut-short value with a nil error. That is
+			// silently wrong at the top level and a false grammar error one
+			// level up.
 			if err != io.ErrUnexpectedEOF {
 				s.Pos = start
 				return 0, err
@@ -913,8 +943,8 @@ scan:
 	return n, nil
 }
 
-// Float64 scans a JSON number span then delegates to strconv.ParseFloat
-// (or the exact-short fast path for ≤16 B spans).
+// Float64 scans a JSON number and parses it with strconv.ParseFloat. Numbers
+// of at most 16 bytes try the exactShort fast path first.
 func (s *Stream) Float64() (float64, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
@@ -925,11 +955,11 @@ func (s *Stream) Float64() (float64, error) {
 		i = 0
 	}
 	start := i
-	// buf hoisted into a local; refills compact from start (bytes before it
-	// are consumed) and rebase — without compaction every mid-number refill
-	// lands with len == cap (readers fill the whole window) and doubles the
-	// buffer. The span s.buf[start:i] is re-sliced after the loop, so the
-	// rebase keeps it valid.
+	// buf is copied to a local. Refills drop the bytes before start, which
+	// are already consumed, and shift the cursors. Without that, every refill
+	// in the middle of a number finds the buffer full, since readers fill the
+	// whole window, and doubles it. s.buf[start:i] is sliced again after the
+	// loop, so shifting keeps it valid.
 	buf := s.buf
 	if buf[i] == '-' {
 		i++
@@ -948,10 +978,11 @@ scan:
 		i -= start
 		start = 0
 		if err != nil {
-			// Drained is a legitimate value end (the digits ran to EOF); a
-			// real reader error is NOT — swallowing it returned a TRUNCATED
-			// value with a nil error, silently wrong at top level and a
-			// bogus grammar error one frame up.
+			// A drained reader is a valid end of the value, since the
+			// digits ran to EOF. Any other reader error is not. Ignoring it
+			// would return a cut-short value with a nil error. That is
+			// silently wrong at the top level and a false grammar error one
+			// level up.
 			if err != io.ErrUnexpectedEOF {
 				s.Pos = start
 				return 0, err
@@ -964,24 +995,26 @@ scan:
 		s.Pos = i
 		return 0, ErrBadNumber
 	}
-	// The refill loop collects a LOOSE [0-9.eE+-] span (it doubles as the
-	// extent finder across refills), so run the RFC 8259 grammar over the
-	// assembled — now contiguous — span. The grammar END is authoritative,
-	// NOT the loose scan's: the bytes path is maximal-munch (it stops at the
-	// first byte that cannot extend the number and leaves the rest to the
-	// caller), so truncating here is what keeps the two paths byte-identical
-	// on `1.5.5` / `1e5e` / `01` instead of erroring where bytes succeeds.
-	// On a grammar error end is where it stopped — the bytes-path position.
+	// The refill loop collects any run of [0-9.eE+-] bytes, which finds the
+	// extent across refills. Now that the span is in one slice, check it
+	// against the RFC 8259 grammar. The number ends where the grammar stops,
+	// not where the loose scan stopped. The bytes path stops at the first
+	// byte that cannot extend the number and leaves the rest to the caller.
+	// Cutting the span here keeps the two paths identical on inputs like
+	// `1.5.5`, `1e5e` and `01`, instead of failing where the bytes path
+	// succeeds. On a grammar error, end is where the grammar stopped, the same
+	// position the bytes path reports.
 	end, gerr := skipNumber(s.buf[start:i], 0)
 	if gerr != nil {
 		s.Pos = start + end
 		return 0, ErrBadNumber
 	}
 	i = start + end
-	// Short spans skip ParseFloat's re-scan when exactly representable —
-	// mirror of the bytes-path Float64 gate (exactShort is bit-identical
-	// to ParseFloat on the accepted shape; the ≤16 B bound excludes the
-	// 17-significant-digit floats that made the ungated variant regress).
+	// Short numbers that a float64 holds exactly skip ParseFloat, the same
+	// as in the bytes-path Float64. exactShort gives the same bits as
+	// ParseFloat for every input it accepts. The 16-byte limit keeps out
+	// floats with 17 significant digits, which made the fast path slower
+	// without it.
 	if i-start <= 16 {
 		if v, ok := exactShort(s.buf[start:i]); ok {
 			s.Pos = i
@@ -998,8 +1031,9 @@ scan:
 	return v, nil
 }
 
-// Float32 is the stream counterpart of [Float32]: the same span assembly as
-// [Stream.Float64], parsed at 32 bits so the decimal rounds once.
+// Float32 is the stream version of [Float32]. It collects the number like
+// [Stream.Float64] and parses it at 32 bits, so the decimal is rounded only
+// once.
 func (s *Stream) Float32() (float32, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
@@ -1066,26 +1100,26 @@ scan:
 	return float32(v), nil
 }
 
-// refillSkip refills the window mid-skip. Skip-path exclusive: bytes
-// before i are consumed and discardable, so the refill compacts from i
-// and rebases it to 0 — without compaction every mid-number refill lands
-// with len == cap (readers fill the whole window) and doubles the buffer.
-// Callers keep the hot `i < len(s.buf)` bounds check inline and call this
-// only on exhaustion. Cursor and recorded error are passed and returned BY
-// VALUE: an address-taken cursor across this (non-inlinable) call would
-// force every digit iteration through the stack.
+// refillSkip refills the window while skipping a value. Only skip code uses
+// it. Bytes before i are consumed and not needed, so the refill drops them
+// and sets i to 0. Without that, every refill in the middle of a number
+// finds the buffer full, since readers fill the whole window, and doubles
+// it. Callers keep the frequent `i < len(s.buf)` check inline and call this
+// only when the buffer runs out. The cursor and the saved error are passed
+// and returned by value. Passing the cursor's address to this call, which
+// cannot be inlined, would force every digit step to go through memory.
 func (s *Stream) refillSkip(i int, rerr error) (int, error, bool) {
 	if rerr != nil {
-		// A recorded reader error ends the scan: retrying would issue fresh
-		// blocking Reads on a reader that already failed, wedging the decode
-		// where every sibling value scanner returns at once.
+		// A saved reader error ends the scan. Retrying would make new
+		// blocking Reads on a reader that already failed and could hang the
+		// decode, while every other value scanner returns at once.
 		return i, rerr, false
 	}
 	err := s.ReadMore(i)
 	i = 0
 	if err != nil {
-		// A drained window legitimately ends the value; a real reader error
-		// must abort the skip rather than read as "number ended here".
+		// A drained reader is a valid end of the value. Any other reader
+		// error must stop the skip, not be taken as "the number ended here".
 		if err != io.ErrUnexpectedEOF {
 			rerr = err
 		}
@@ -1094,12 +1128,12 @@ func (s *Stream) refillSkip(i int, rerr error) (int, error, bool) {
 	return i, rerr, i < len(s.buf)
 }
 
-// NotEOF keeps a real reader error intact and maps only the drained-window
-// case to the grammar sentinel the caller would report at true end of input.
-// Relabeling a recoverable hiccup as malformed JSON destroys error identity
-// (and contradicts ReadMore's "a transient error that loses no bytes resumes
-// losslessly" contract). Exported for generated stream decoders, whose
-// dispatch-loop refills need the same mapping the primitives apply.
+// NotEOF returns err unchanged unless the reader is drained. A drained
+// reader becomes sentinel, the grammar error the caller reports at the real
+// end of input. A reader error that loses no bytes can be retried, so
+// reporting it as malformed JSON would give the wrong error. It is exported
+// for generated stream decoders, whose refills in the key loop need the
+// same mapping the scan methods use.
 func NotEOF(err, sentinel error) error {
 	if err != io.ErrUnexpectedEOF {
 		return err
@@ -1107,8 +1141,9 @@ func NotEOF(err, sentinel error) error {
 	return sentinel
 }
 
-// orBadNumber prefers a recorded reader error over the grammar sentinel —
-// a refill that failed for I/O reasons is not a malformed number.
+// orBadNumber returns the saved reader error if there is one, and
+// ErrBadNumber otherwise. A refill that failed with an I/O error is not a
+// malformed number.
 func orBadNumber(rerr error) error {
 	if rerr != nil {
 		return rerr
@@ -1116,13 +1151,13 @@ func orBadNumber(rerr error) error {
 	return ErrBadNumber
 }
 
-// skipNumber is the stream mirror of the bytes-path [skipNumber] — same
-// RFC 8259 grammar, same accept-set, same give-up position: refillSkip
-// compacts and rebases i, so every exit writes it back or Offset() keeps
-// counting the discarded prefix twice.
+// skipNumber is the stream version of the bytes-path [skipNumber]. It uses
+// the same RFC 8259 grammar, accepts the same inputs and stops at the same
+// position. refillSkip drops bytes and moves i, so every exit must write i
+// back to Pos. Otherwise Offset() counts the dropped bytes twice.
 func (s *Stream) skipNumber() error {
 	i := s.Pos
-	var rerr error // set by refillSkip on a real (non-drained) reader error
+	var rerr error // set by refillSkip on a reader error other than EOF
 	var ok bool
 	if i >= len(s.buf) {
 		if i, rerr, ok = s.refillSkip(i, rerr); !ok {
@@ -1227,14 +1262,14 @@ func (s *Stream) skipNumber() error {
 	return rerr
 }
 
-// Bool scans a true/false literal byte-by-byte, bounds-checking each char
-// and refilling only when exhausted. Mismatch fails fast, reporting the
-// literal head like the bytes-path Bool.
+// Bool scans a true or false literal one byte at a time, refilling only when
+// the buffer runs out. A wrong byte fails at once. Error positions are
+// described in the loop below.
 func (s *Stream) Bool() (bool, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
-		// ReadMore(i) drops everything before i, so the literal head is 0
-		// now — rebase before any error exit reports it.
+		// ReadMore(i) drops everything before i, so the literal starts at 0
+		// now. Set Pos before any error return reports it.
 		err := s.ReadMore(i)
 		i = 0
 		s.Pos = i
@@ -1253,10 +1288,11 @@ func (s *Stream) Bool() (bool, error) {
 		s.Pos = i
 		return false, ErrBadBool
 	}
-	// On failure Pos is where the scan gave up, like bytes BoolEnd: the
-	// mismatching byte, or the window end when the reader drained
-	// mid-literal. A transient reader error leaves Pos on the literal head
-	// (the grow-only refill keeps it buffered) so a retry re-scans it whole.
+	// On failure Pos is where the scan gave up, like the bytes BoolEnd. That
+	// is the wrong byte, or the end of the window when the reader drained in
+	// the middle of the literal. A reader error other than EOF leaves Pos at
+	// the start of the literal, so a retry scans it again. The refill only
+	// grows the buffer, so the literal is still there.
 	for k := range len(want) {
 		pos := i + 1 + k
 		if pos >= len(s.buf) {
@@ -1276,7 +1312,8 @@ func (s *Stream) Bool() (bool, error) {
 	return first == 't', nil
 }
 
-// SkipValue skips an arbitrary JSON value (literal/number/string/array/object).
+// SkipValue skips any JSON value: a literal, number, string, array or
+// object.
 func (s *Stream) SkipValue() error {
 	return s.skipValueDepth(0)
 }
@@ -1312,10 +1349,11 @@ func (s *Stream) skipValueDepth(depth int) error {
 	return ErrBadValue
 }
 
-// skipLiteral consumes the fixed literal want whose first byte sits at Pos,
-// byte by byte so a mismatch fails without fetching the rest. bad is the
-// sentinel; Pos then marks the give-up byte like the bytes-path litEnd —
-// the end of what arrived for a truncated prefix, else the first mismatch.
+// skipLiteral reads the fixed literal want, whose first byte is at Pos. It
+// reads one byte at a time, so a wrong byte fails without reading the rest.
+// bad is the error to return. Pos then marks where the scan gave up, like
+// the bytes-path litEnd. That is the end of what arrived when the input is
+// cut short, and the first wrong byte otherwise.
 func (s *Stream) skipLiteral(want string, bad error) error {
 	j := s.Pos
 	for k := 1; k < len(want); k++ {
@@ -1335,31 +1373,32 @@ func (s *Stream) skipLiteral(want string, bad error) error {
 	return nil
 }
 
-// CaptureValue returns the raw bytes of the next JSON value as a slice into the
-// Stream's buffer — valid only until the next Stream op, so copy it if you retain
-// it (json.Unmarshal / UnmarshalText / SetString consume it in place, no copy
-// needed). It buffers the whole value contiguously and locates its end with the
-// BYTES-path SkipValue — reused verbatim (SIMD tiers included), no streaming
-// skip. SkipValue preserves its give-up position on error, so a failure at a
-// byte strictly inside the window is surfaced as final immediately; only an
-// off-the-end failure means "read more" and keeps reading until EOF says no
-// more bytes can fix it. A huge value grows s.buf to its size, which is
-// inherent: the raw bytes must be contiguous to hand off anyway.
+// CaptureValue returns the raw bytes of the next JSON value as a slice of
+// the Stream's buffer. The slice is valid only until the next Stream call,
+// so copy it to keep it. json.Unmarshal, UnmarshalText and SetString use it
+// in place and need no copy. CaptureValue gets the whole value into the
+// buffer as one slice and finds its end with the bytes-path SkipValue,
+// unchanged. The SIMD tiers do the same with their own SkipValue. On error,
+// SkipValue returns where it gave up. A failure at a byte inside the window,
+// not at its end, is final and is returned at once. Only a failure at the
+// end of the window means "read more", and reading continues until EOF says
+// no more bytes can fix it. A huge value grows s.buf to its size. That
+// cannot be avoided, because the raw bytes must be returned as one slice.
 func (s *Stream) CaptureValue() ([]byte, error) {
 	start := s.Pos
-	// eof: the reader drained during this capture (ReadMore returned
-	// io.ErrUnexpectedEOF) — no more bytes can arrive, so the next skip's
-	// verdict is final. Purely local; Stream carries no reader state.
+	// eof means the reader drained during this capture, when ReadMore
+	// returned io.ErrUnexpectedEOF. No more bytes can arrive, so the next
+	// skip's result is final. It is local, since Stream keeps no reader state.
 	eof := false
 	for {
 		end, err := SkipValue(s.buf, start)
-		// Trust the end when a byte past it is buffered (end < len) or the
-		// stream is drained — else a NUMBER ending at the window edge (e.g.
-		// "123" that may continue "1234") could be cut short. Every other
-		// value is self-delimiting (closing quote/bracket, fixed literal),
-		// so its clean end is final even at the edge: demanding a lookahead
-		// byte there would block forever on a live reader (socket) that has
-		// delivered the whole value and has nothing in flight.
+		// Trust the end when a byte after it is buffered (end < len) or the
+		// reader is drained. Otherwise a number that ends at the window edge,
+		// such as "123" that may go on as "1234", could be cut short. Every
+		// other value ends on its own: a closing quote or bracket, or a fixed
+		// literal. So its end is final even at the edge. Waiting for one more
+		// byte there would block forever on a live reader, such as a socket,
+		// that has sent the whole value and has nothing more to send.
 		if err == nil {
 			if end < len(s.buf) || eof {
 				s.Pos = end
@@ -1370,35 +1409,36 @@ func (s *Stream) CaptureValue() ([]byte, error) {
 				return s.buf[start:end], nil
 			}
 		}
-		// A final error leaves Pos on the skip's give-up byte — the position
-		// the bytes path reports for the same span, not the span head.
+		// A final error leaves Pos where the skip gave up, the position the
+		// bytes path reports for the same span, not the start of the value.
 		if eof {
 			s.Pos = end
 			return nil, err
 		}
-		// A skip that failed at a byte STRICTLY INSIDE the window is final —
-		// no future byte can repair a malformation that sits before bytes we
-		// already hold. Surfacing it now is what keeps a live (never-EOF)
-		// reader from wedging the decode: without this, a fully-delivered
-		// `{"a":}` on a socket blocked in Read forever waiting for bytes that
-		// could not have helped. Only an off-the-end failure (end == len) is
-		// ambiguous with truncation and keeps reading. SkipValue preserves
-		// its give-up position on error, so no re-walk is needed. ErrMaxDepth
-		// is final wherever it lands — no arriving byte can un-exceed the cap.
+		// A skip that failed at a byte inside the window, not at its end, is
+		// final. No later byte can repair an error that comes before bytes we
+		// already hold. Returning it now keeps a live reader that never sends
+		// EOF from hanging the decode. Without this, a complete `{"a":}` on a
+		// socket would block in Read forever, waiting for bytes that cannot
+		// help. Only a failure at the end (end == len) could be cut-short
+		// input, so only that keeps reading. SkipValue returns where it gave
+		// up, so there is no need to scan again. ErrMaxDepth is final wherever
+		// it happens, because no new byte can bring the depth back down.
 		if err != nil && (end < len(s.buf) || err == ErrMaxDepth) {
 			s.Pos = end
 			return nil, err
 		}
-		// First refill compacts the consumed prefix (keep=start): the dead
-		// bytes before the value become free tail capacity instead of being
-		// dragged through every grow. start rebases to 0; later refills are
-		// pure grow. Entry deliberately does NOT compact — the value may
-		// already be fully buffered, and ReadMore always Reads (could block).
-		// One Read, then re-skip: once these bytes may complete the value, a
-		// second Read on a momentarily-drained live reader would block. An
-		// eager reader (file, bytes.Reader) fills the whole spare tail per
-		// Read, so its skips still land on a doubling window; a short-read
-		// regime re-skips per delivery — the price of liveness.
+		// The first refill drops the bytes before the value (keep=start). That
+		// frees space at the end instead of copying unused bytes on every
+		// grow. start becomes 0, so later refills only grow. Do not drop bytes
+		// before the first skip. The value may already be fully buffered, and
+		// ReadMore always calls Read, which could block. Read once, then skip
+		// again. Once these bytes might complete the value, a second Read on a
+		// live reader with nothing to send yet would block. A reader that
+		// fills all free space per Read, such as a file or bytes.Reader, still
+		// doubles the window each time. A reader that returns small pieces
+		// causes a new skip per piece. That is the cost of never blocking on a
+		// complete value.
 		if e := s.ReadMore(start); e != nil {
 			if e != io.ErrUnexpectedEOF {
 				s.Pos = 0
@@ -1418,8 +1458,9 @@ func (s *Stream) skipArray(depth int) error {
 		return err
 	}
 	if s.Pos >= len(s.buf) {
-		// Drained right after '[' matches bytes skipArray, whose element
-		// skipValue reports ErrUnexpectedEnd — not ErrBadArray.
+		// Input that ends right after '[' reports ErrUnexpectedEnd, not
+		// ErrBadArray. That matches the bytes skipArray, where the element
+		// skipValue reports it.
 		if err := s.ReadMore(s.Pos); err != nil {
 			return NotEOF(err, ErrUnexpectedEnd)
 		}
@@ -1472,9 +1513,9 @@ func (s *Stream) skipObject(depth int) error {
 	}
 	for {
 		if err := s.skipString(); err != nil {
-			// skipString reports ErrExpectString only at the key head (drained
-			// or a non-quote byte); the bytes loop reports ErrBadObject for
-			// both, so the relabel is unconditional.
+			// skipString reports ErrExpectString only when the key does not
+			// start with '"', or the input ends there. The bytes loop reports
+			// ErrBadObject for both, so always replace it.
 			if err == ErrExpectString {
 				return ErrBadObject
 			}
@@ -1505,9 +1546,9 @@ func (s *Stream) skipObject(depth int) error {
 		}
 		if s.buf[s.Pos] == ',' {
 			s.Pos++
-			// The loop head expects the next key's opening quote directly —
-			// skip separator whitespace here (the bytes-path mirror does the
-			// same); without it pretty-printed input fails ErrExpectString.
+			// The top of the loop expects the next key's opening quote. Skip
+			// whitespace after ',' here, as the bytes path does. Without it
+			// pretty-printed input fails with ErrExpectString.
 			if err := s.SkipSpace(); err != nil {
 				return err
 			}
@@ -1521,8 +1562,8 @@ func (s *Stream) skipObject(depth int) error {
 	}
 }
 
-// Any is the stream-buffered counterpart of [Any]. Mirrors stdlib
-// encoding/json defaults for the JSON-to-any mapping.
+// Any is the stream version of [Any]. It maps JSON to Go values the same
+// way encoding/json does by default.
 func (s *Stream) Any(validate bool) (any, error) {
 	return s.anyValueDepth(0, validate)
 }
@@ -1558,13 +1599,13 @@ func (s *Stream) anyArray(depth int, validate bool) ([]any, error) {
 	if depth > maxDepth {
 		return nil, ErrMaxDepth
 	}
-	s.Pos++ // consume '['
+	s.Pos++ // skip '['
 	if err := s.SkipSpace(); err != nil {
 		return nil, err
 	}
 	if s.Pos >= len(s.buf) {
-		// Drained right after '[' matches bytes anyArray, whose element
-		// anyValue reports ErrUnexpectedEnd.
+		// Input that ends right after '[' reports ErrUnexpectedEnd, like
+		// the bytes anyArray, where the element anyValue reports it.
 		if err := s.ReadMore(s.Pos); err != nil {
 			return nil, NotEOF(err, ErrUnexpectedEnd)
 		}
@@ -1609,13 +1650,13 @@ func (s *Stream) anyObject(depth int, validate bool) (map[string]any, error) {
 	if depth > maxDepth {
 		return nil, ErrMaxDepth
 	}
-	s.Pos++ // consume '{'
+	s.Pos++ // skip '{'
 	if err := s.SkipSpace(); err != nil {
 		return nil, err
 	}
 	if s.Pos >= len(s.buf) {
-		// Drained right after '{' matches bytes anyObject, whose key String
-		// reports ErrExpectString.
+		// Input that ends right after '{' reports ErrExpectString, like
+		// the bytes anyObject, where the key String reports it.
 		if err := s.ReadMore(s.Pos); err != nil {
 			return nil, NotEOF(err, ErrExpectString)
 		}
@@ -1675,8 +1716,8 @@ func (s *Stream) anyObject(depth int, validate bool) (map[string]any, error) {
 	}
 }
 
-// Number is the stream counterpart of [Number] — returns json.Number
-// copied out of the buffer.
+// Number is the stream version of [Number]. It returns a json.Number copied
+// out of the buffer.
 func (s *Stream) Number() (json.Number, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
@@ -1687,8 +1728,9 @@ func (s *Stream) Number() (json.Number, error) {
 		i = 0
 	}
 	start := i
-	// buf hoisted into a local; refills compact from start and rebase (see
-	// Float64) so a number straddling window edges can't balloon the buffer.
+	// buf is copied to a local. Refills drop the bytes before start and shift
+	// the cursors, see Float64, so a number that crosses window edges cannot
+	// make the buffer grow without bound.
 	buf := s.buf
 	if buf[i] == '-' {
 		i++
@@ -1707,10 +1749,11 @@ scan:
 		i -= start
 		start = 0
 		if err != nil {
-			// Drained is a legitimate value end (the digits ran to EOF); a
-			// real reader error is NOT — swallowing it returned a TRUNCATED
-			// value with a nil error, silently wrong at top level and a
-			// bogus grammar error one frame up.
+			// A drained reader is a valid end of the value, since the
+			// digits ran to EOF. Any other reader error is not. Ignoring it
+			// would return a cut-short value with a nil error. That is
+			// silently wrong at the top level and a false grammar error one
+			// level up.
 			if err != io.ErrUnexpectedEOF {
 				s.Pos = start
 				return "", err
@@ -1723,7 +1766,8 @@ scan:
 		s.Pos = i
 		return "", ErrBadNumber
 	}
-	// Grammar end is authoritative — see Float64 (bytes-path parity).
+	// The number ends where the grammar stops, to match the bytes path. See
+	// Float64.
 	end, gerr := skipNumber(s.buf[start:i], 0)
 	if gerr != nil {
 		s.Pos = start + end
@@ -1734,8 +1778,8 @@ scan:
 	return json.Number(string(s.buf[start:i])), nil
 }
 
-// AnyNumber is the [Stream.Any] variant that decodes JSON numbers as
-// json.Number instead of float64.
+// AnyNumber is [Stream.Any] but decodes JSON numbers as json.Number instead
+// of float64.
 func (s *Stream) AnyNumber(validate bool) (any, error) {
 	return s.anyNumberValueDepth(0, validate)
 }
@@ -1776,8 +1820,8 @@ func (s *Stream) anyNumberArray(depth int, validate bool) ([]any, error) {
 		return nil, err
 	}
 	if s.Pos >= len(s.buf) {
-		// Drained right after '[' matches bytes anyArray, whose element
-		// anyValue reports ErrUnexpectedEnd.
+		// Input that ends right after '[' reports ErrUnexpectedEnd, like
+		// the bytes anyArray, where the element anyValue reports it.
 		if err := s.ReadMore(s.Pos); err != nil {
 			return nil, NotEOF(err, ErrUnexpectedEnd)
 		}
@@ -1827,8 +1871,8 @@ func (s *Stream) anyNumberObject(depth int, validate bool) (map[string]any, erro
 		return nil, err
 	}
 	if s.Pos >= len(s.buf) {
-		// Drained right after '{' matches bytes anyObject, whose key String
-		// reports ErrExpectString.
+		// Input that ends right after '{' reports ErrExpectString, like
+		// the bytes anyObject, where the key String reports it.
 		if err := s.ReadMore(s.Pos); err != nil {
 			return nil, NotEOF(err, ErrExpectString)
 		}
@@ -1888,33 +1932,33 @@ func (s *Stream) anyNumberObject(depth int, validate bool) (map[string]any, erro
 	}
 }
 
-// StreamDecoder is the interface a type satisfies to be read off a Stream.
-// Every ggen-generated struct implements it; the bytes-path counterpart is
-// Decoder, which needs no Stream. [Stream.Value], [Stream.Slice],
-// [Stream.Array] and [Stream.Seq] constrain on it.
+// StreamDecoder is the interface a type implements to be read from a Stream.
+// Every struct ggen generates code for implements it. The bytes-path version
+// is Decoder, which needs no Stream. [Stream.Value], [Stream.Slice],
+// [Stream.Array] and [Stream.Seq] require it.
 type StreamDecoder[T any] interface {
 	DecodeFromStream(s *Stream) (T, error)
 }
 
-// Value reads one T from the Stream, leaving the cursor just past the value so
+// Value reads one T from the Stream and leaves the cursor just after it, so
 // the next read continues where this one stopped:
 //
 //	s := ggen.NewStream(r, buf)
 //	u, err := s.Value[User]()
 //
-// An optional rcv is decoded INTO: generated decoders seed their result from
-// the receiver and reset containers keeping capacity (`clear(m)`, `sl[:0]`), so
-// handing back a previously decoded value reuses its maps and slices instead of
-// allocating fresh ones. Only rcv[0] is read.
+// An optional rcv is decoded into. Generated decoders start their result
+// from the receiver and empty its containers while keeping their capacity
+// (`clear(m)`, `sl[:0]`). So passing back a value decoded before reuses its
+// maps and slices instead of allocating new ones. Only rcv[0] is read.
 //
 //	u, err = s.Value(u) // reuses u's containers
 //
-// The receiver only lends its memory: the result equals a fresh decode of the
-// payload — every field the payload omits comes back zeroed, containers are
-// emptied and refilled keeping their capacity.
+// The receiver only lends its memory. The result equals a fresh decode of the
+// payload. Every field the payload omits comes back zeroed, and containers
+// are emptied and refilled while keeping their capacity.
 //
-// The error is whatever the generated decoder returned — there is no enclosing
-// array to name, so nothing is prepended.
+// The error is whatever the generated decoder returned. There is no
+// enclosing array index to add to its path.
 func (s *Stream) Value[T StreamDecoder[T]](rcv ...T) (T, error) {
 	var into T
 	if len(rcv) > 0 {
@@ -1923,26 +1967,25 @@ func (s *Stream) Value[T StreamDecoder[T]](rcv ...T) (T, error) {
 	return into.DecodeFromStream(s)
 }
 
-// Slice reads a JSON array of T, leaving the cursor just past the closing
-// bracket. Trailing data is NOT rejected — a Stream may legitimately carry
-// further values, and probing for them would block a live reader — so the
-// caller decides what follows:
+// Slice reads a JSON array of T and leaves the cursor just after the closing
+// bracket. Data after it is not rejected. A Stream may carry more values,
+// and looking for them would block a live reader. The caller decides what
+// comes next:
 //
 //	users, err := s.Slice[User]()
-//	// s is still positioned; keep reading
+//	// s is still positioned, so keep reading
 //
-// An optional rcv is reused as the destination buffer, and NOT merely appended
-// into: the slice itself is truncated to keep its capacity, AND element i is
-// decoded into rcv[0][i], so each element's own maps and slices are recycled
-// too. That makes a steady-state re-decode allocation-free rather than just
-// saving the outer backing array.
+// An optional rcv is reused, not just appended to. The slice is cut to
+// length 0 and keeps its capacity, and element i is decoded into rcv[0][i].
+// So each element's own maps and slices are reused too. Decoding the same
+// shape again then allocates nothing, instead of only saving the outer
+// array.
 //
-//	users, err = s.Slice(users) // reuses the slice AND every element's containers
+//	users, err = s.Slice(users) // reuses the slice and each element's containers
 //
 // Elements past the new length keep their allocations but are not returned.
-// A `[]` decodes to a non-nil empty slice, matching the bytes walker and
-// jsonv2. Errors carry no element path (that wrapping lives in decode, which
-// scan cannot import).
+// A `[]` decodes to a non-nil empty slice, matching the bytes path and
+// jsonv2. Errors carry no element index in their path.
 func (s *Stream) Slice[T StreamDecoder[T]](rcv ...[]T) ([]T, error) {
 	var prev []T
 	if len(rcv) > 0 {
@@ -1970,16 +2013,16 @@ func (s *Stream) Slice[T StreamDecoder[T]](rcv ...[]T) ([]T, error) {
 	}
 	for {
 		// Drop consumed elements once the window is full, so the next refill
-		// reuses that space instead of doubling — see [Stream.Seq].
+		// reuses that space instead of doubling the buffer. See [Stream.Array].
 		if s.Pos > 0 && len(s.buf) == cap(s.buf) {
 			s.consumed += s.Pos
 			copy(s.buf, s.buf[s.Pos:])
 			s.buf = s.buf[:len(s.buf)-s.Pos]
 			s.Pos = 0
 		}
-		// Decode into the element the buffer already holds at this index, so
-		// its containers are recycled. Read BEFORE the append that overwrites
-		// this slot — result and prev share a backing array.
+		// Decode into the element already at this index, so its containers
+		// are reused. Read it before the append that overwrites this slot,
+		// because result and prev share one backing array.
 		var into T
 		if i := len(result); i < len(prev) {
 			into = prev[i]
@@ -2001,8 +2044,9 @@ func (s *Stream) Slice[T StreamDecoder[T]](rcv ...[]T) ([]T, error) {
 		switch s.buf[s.Pos] {
 		case ',':
 			s.Pos++
-			// Separator WS — scalar/alias element decoders don't skip leading
-			// space themselves (mirrors the bytes walker's SkipSpace(i+1)).
+			// Skip whitespace after ','. Scalar and alias element decoders do
+			// not skip leading whitespace. The bytes path does the same with
+			// SkipSpace(i+1).
 			if err := s.SkipSpace(); err != nil {
 				return nil, err
 			}
@@ -2015,26 +2059,27 @@ func (s *Stream) Slice[T StreamDecoder[T]](rcv ...[]T) ([]T, error) {
 	}
 }
 
-// Array iterates a JSON array WITHOUT gathering it, yielding one element at a
-// time. It is the lazy sibling of [Stream.Slice] — same grammar and the same
-// element decoding, but nothing accumulates, so a million-element array costs
-// one element of memory rather than a million:
+// Array iterates over a JSON array without collecting it, yielding one
+// element at a time. It is the lazy version of [Stream.Slice], with the same
+// grammar and element decoding. Nothing builds up, so a million-element
+// array costs the memory of one element, not a million:
 //
 //	for v, err := range ggen.NewStream(r, buf).Array[Item]() {
 //		if err != nil { break }
 //		handle(v)
 //	}
 //
-// The range ends when the closing bracket is consumed, leaving the cursor just
-// past it so the Stream can be read from again. A malformed array yields one
-// error and stops. Breaking out early leaves the cursor INSIDE the array —
-// there is no way to know where the array ends without walking it — so a
-// Stream abandoned mid-range is only good for closing.
+// The range ends when the closing bracket is read, and leaves the cursor just
+// after it so the Stream can be read again. A malformed array yields one
+// error and stops. Breaking out early leaves the cursor inside the array.
+// There is no way to find the end of the array without reading through it.
+// So a Stream left in the middle of a range is only good for closing.
 //
-// Like [Stream.Seq] it reuses one value for the whole iteration, seeded from an
-// optional rcv, so a long array settles at zero allocations per element; and
-// like Seq that means a yielded value is valid only until the next pull. Copy
-// anything retained past the loop body (strings are owned, maps/slices alias).
+// Like [Stream.Seq], it reuses one value for the whole loop, starting from an
+// optional rcv. A long array then reaches zero allocations per element. Also
+// like Seq, a yielded value is valid only until the next step. Copy anything
+// kept after the loop body. Strings are owned, but maps and slices are
+// reused.
 func (s *Stream) Array[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 	return func(yield func(T, error) bool) {
 		var into, zero T
@@ -2062,12 +2107,13 @@ func (s *Stream) Array[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 		}
 		for {
 			// Drop yielded elements once the window is full, so the next refill
-			// reuses that space. len == cap is exactly ReadMore's grow
-			// condition, which keeps this off the path whenever the buffer has
-			// spare tail: generated container decoders refill grow-only, so a
-			// full window is the one state that doubles. The gate is what
-			// bounds the cost — compacting every element would memmove the
-			// unread remainder each time.
+			// reuses that space. len == cap is exactly the condition under
+			// which ReadMore grows the buffer, so this does nothing while the
+			// buffer has free space at the end. Generated container decoders
+			// refill without dropping bytes, so a full window is the one state
+			// that doubles the buffer. The condition keeps the cost low.
+			// Dropping bytes after every element would copy all the unread
+			// bytes each time.
 			if s.Pos > 0 && len(s.buf) == cap(s.buf) {
 				s.consumed += s.Pos
 				copy(s.buf, s.buf[s.Pos:])
@@ -2097,8 +2143,8 @@ func (s *Stream) Array[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 			switch s.buf[s.Pos] {
 			case ',':
 				s.Pos++
-				// Separator WS — scalar/alias element decoders don't skip
-				// leading space themselves.
+				// Skip whitespace after ','. Scalar and alias element decoders
+				// do not skip leading whitespace.
 				if err := s.SkipSpace(); err != nil {
 					yield(zero, err)
 					return
@@ -2114,39 +2160,41 @@ func (s *Stream) Array[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 	}
 }
 
-// Seq yields consecutive top-level values off the Stream — concatenated JSON or
-// NDJSON — and keeps going for as long as the reader keeps producing:
+// Seq yields top-level values from the Stream one after another, as in
+// concatenated JSON or NDJSON. It keeps going as long as the reader keeps
+// producing:
 //
 //	for v, err := range ggen.NewStream(conn, buf).Seq[Event]() {
 //		if err != nil { break }
 //		handle(v)
 //	}
 //
-// The iteration ends cleanly (no error yielded) when the reader drains at a
-// value boundary, so a file or a closed socket terminates the range normally.
-// Anything else — a malformed value, a real reader error — is yielded once as
-// the error half and then ends the sequence. Breaking out of the range stops
-// reading; the Stream is left wherever the last value finished, so it can be
-// handed to another method afterwards.
+// The loop ends cleanly, with no error yielded, when the reader drains
+// between values. So a file or a closed socket ends the range normally.
+// Anything else, such as a malformed value or a reader error, is yielded
+// once as the error and then ends the sequence. Breaking out of the range
+// stops reading. The Stream is left where the last value ended, so it can be
+// passed to another method afterwards.
 //
-// It never reads past a completed value before delivering it, so a quiet
-// socket cannot stall an element that has already arrived: the refill for the
-// NEXT value happens on the next pull, not eagerly after yielding this one.
+// It never reads past a complete value before yielding it, so a quiet socket
+// cannot hold back an element that has already arrived. The refill for the
+// next value happens on the next step, not right after yielding this one.
 //
-// Seq REUSES ONE VALUE for the whole iteration: each decode goes into the
-// previous one, recycling its maps and slices, so a long stream settles at zero
-// allocations per element. An optional rcv seeds that value with containers the
-// caller already has; without it the sequence starts from a zero T declared
-// before the loop and warms up on the first element.
+// Seq reuses one value for the whole loop. Each decode goes into the previous
+// value and reuses its maps and slices, so a long stream reaches zero
+// allocations per element. An optional rcv gives that value containers the
+// caller already has. Without it, the sequence starts from a zero T and
+// allocates its containers on the first element.
 //
-// The window is kept bounded: consumed values are dropped (gated — see the
-// loop body) so generated container decoders, whose refills are grow-only,
-// cannot ratchet the buffer upward across a long stream.
+// The window stays bounded. Consumed values are dropped when the window is
+// full, see [Stream.Array] for why. Generated container decoders refill
+// without dropping bytes, so without this they would keep growing the
+// buffer over a long stream.
 //
-// CONSEQUENCE: a yielded value is only valid until the next pull — the
-// following iteration decodes over its containers. Copy anything you retain
-// past the loop body (strings are owned, so only maps/slices alias). Ranging
-// twice over the same Seq is fine; each run starts its own value.
+// As a result, a yielded value is only valid until the next step, because
+// the next step decodes over its containers. Copy anything you keep after
+// the loop body. Strings are owned, so only maps and slices are shared.
+// Ranging twice over the same Seq is fine. Each run starts its own value.
 func (s *Stream) Seq[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 	return func(yield func(T, error) bool) {
 		var into T
@@ -2160,8 +2208,8 @@ func (s *Stream) Seq[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 				return
 			}
 			if s.Pos >= len(s.buf) {
-				// At a value boundary with nothing buffered: pull once. A
-				// drained reader is the clean end of the sequence.
+				// Between values with nothing buffered, read once. A drained
+				// reader is the clean end of the sequence.
 				if err := s.ReadMore(s.Pos); err != nil {
 					if err == io.ErrUnexpectedEOF {
 						return
@@ -2171,7 +2219,8 @@ func (s *Stream) Seq[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 					return
 				}
 				s.Pos = 0
-				// The fresh chunk may lead with whitespace (NDJSON newline).
+				// The new bytes may start with whitespace, such as an NDJSON
+				// newline.
 				continue
 			}
 			// Drop consumed values once the window is full.

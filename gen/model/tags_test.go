@@ -21,37 +21,38 @@ func TestParseJSONTag(t *testing.T) {
 		{"field1,omitempty,omitzero,string", "field1", JSONOptions{OmitEmpty: true, OmitZero: true, String: true}, false, false},
 		{"-", "", JSONOptions{}, true, false},
 		{",omitempty", "", JSONOptions{OmitEmpty: true}, false, false},
-		// jsonv2 quoting: commas survive inside single quotes, \' is literal.
+		// jsonv2 quoting: commas stay inside single quotes, and \' is a
+		// literal quote.
 		{"t,format:'Jan 2, 2006'", "t", JSONOptions{Format: "Jan 2, 2006"}, false, false},
 		{"t,format:RFC3339", "t", JSONOptions{Format: "RFC3339"}, false, false},
 		{"'a,b'", "a,b", JSONOptions{}, false, false},
 		{`'it\'s',omitempty`, "it's", JSONOptions{OmitEmpty: true}, false, false},
 		{"'-'", "-", JSONOptions{}, false, false},
-		// The embedded fallback carries no name and no companion option, and
-		// the older `inline` spelling is rejected rather than read as a name.
+		// The catch-all map has no name and no other option, and `inline` is
+		// rejected instead of being read as a name.
 		{",embed", "", JSONOptions{Embed: true}, false, false},
 		{",inline", "", JSONOptions{}, false, true},
 		{"extra,inline", "", JSONOptions{}, false, true},
 		{"extra,embed", "", JSONOptions{}, false, true},
 		{",embed,omitempty", "", JSONOptions{}, false, true},
 		{",embed,string", "", JSONOptions{}, false, true},
-		// jsonv2 malformed forms: `-` with options, empty options.
+		// forms jsonv2 rejects: `-` with options, and empty options.
 		{"-,", "", JSONOptions{}, false, true},
 		{"-,omitempty", "", JSONOptions{}, false, true},
 		{"a,", "", JSONOptions{}, false, true},
 		{"a,,omitempty", "", JSONOptions{}, false, true},
-		// The name is verbatim — encoding/json v1 and v2 both keep the
-		// whitespace — while a whitespace-padded OPTION is malformed (v2:
-		// "invalid character ' ' at start of option").
+		// The name is kept as written, whitespace included, as in
+		// encoding/json and jsonv2. An option padded with whitespace is an
+		// error, as in jsonv2: "invalid character ' ' at start of option".
 		{" a", " a", JSONOptions{}, false, false},
 		{"a ", "a ", JSONOptions{}, false, false},
 		{"' a '", " a ", JSONOptions{}, false, false},
 		{"a, omitempty", "", JSONOptions{}, false, true},
 		{"a,omitempty ", "", JSONOptions{}, false, true},
-		// `case:` (case-insensitive matching) is not implemented, so it is
-		// refused rather than silently matching exactly; near-miss spellings
-		// of a known option are rejected the way jsonv2 rejects them; a
-		// genuinely unknown word still passes.
+		// `case:` asks for case-insensitive matching, which is not
+		// implemented, so it is rejected instead of silently matching
+		// exactly. Near-miss spellings of a known option are rejected, as
+		// jsonv2 does. A truly unknown word still passes.
 		{"a,case:ignore", "", JSONOptions{}, false, true},
 		{"a,case:strict", "", JSONOptions{}, false, true},
 		{"a,case", "", JSONOptions{}, false, true},

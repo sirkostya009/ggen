@@ -4,10 +4,11 @@ import "regexp"
 
 var goIdentRe = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*`)
 
-// CyclicTypes over-approximates the reference graph by scraping type
-// identifiers out of each field's type strings and intersecting with the
-// generated set — an extra hit only costs a struct an unnecessary (correct)
-// depth shim, so precision is not load-bearing.
+// CyclicTypes returns the generated types that can reach themselves through
+// their fields. It builds the reference graph by pulling identifiers out of
+// each field's type strings and keeping the ones that name a generated type.
+// This can find extra edges. An extra edge only gives a struct a depth shim
+// it does not need, which is still correct, so precision does not matter.
 func CyclicTypes(structs []StructInfo) map[string]struct{} {
 	names := make(map[string]struct{}, len(structs))
 	for _, s := range structs {
@@ -43,7 +44,7 @@ func CyclicTypes(structs []StructInfo) map[string]struct{} {
 	}
 	cyc := make(map[string]struct{})
 	for name := range adj {
-		// name is cyclic iff it can reach itself.
+		// name is cyclic if and only if it can reach itself.
 		seen := map[string]struct{}{}
 		stack := make([]string, 0, 8)
 		for n := range adj[name] {

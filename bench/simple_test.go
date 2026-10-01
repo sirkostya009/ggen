@@ -12,9 +12,10 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// BenchmarkNoAlloc_Unmarshal — bytes-path decode of a wide, flat,
-// scalar-only record (Account). No alloc-forcing kind, so ggen decodes at
-// zero allocations — isolates the raw scan + dispatch + assign loop.
+// BenchmarkNoAlloc_Unmarshal decodes a wide, flat record of scalar fields
+// (Account) on the bytes path. No field forces an allocation, so ggen decodes
+// with zero allocations. This measures only the scan, key dispatch and
+// assignment loop.
 func BenchmarkNoAlloc_Unmarshal(b *testing.B) {
 	codecs := []struct {
 		name string
@@ -25,8 +26,8 @@ func BenchmarkNoAlloc_Unmarshal(b *testing.B) {
 		{"sonic_fast", func(p []byte) error { var v Account; return sonic.ConfigFastest.Unmarshal(p, &v) }},
 		{"easyjson", func(p []byte) error { var v EasyAccount; return v.UnmarshalJSON(p) }},
 		{"ggen", func(p []byte) error { _, _, err := Account{}.DecodeFrom(p); return err }},
-		// ggen_copy: -copy mode (CopyAccount) — bytes path copies strings out
-		// of the input; no longer zero-alloc, isolates the copy-out cost.
+		// ggen_copy: -copy mode (CopyAccount). The bytes path copies strings
+		// out of the input, so it allocates. This measures the copy cost.
 		{"ggen_copy", func(p []byte) error { _, _, err := CopyAccount{}.DecodeFrom(p); return err }},
 	}
 	for _, c := range codecs {
@@ -48,10 +49,11 @@ func BenchmarkNoAlloc_Unmarshal(b *testing.B) {
 	}
 }
 
-// BenchmarkNoAlloc_Reader — Reader-path decode of the Account payload. The
-// stream path copies strings out of the recycled buffer, so it is not
-// zero-alloc. ggen_stream starts with a fresh 512-byte buffer (forces refill
-// + compaction); ggen_readall is the io.ReadAll-then-bytes-path pattern.
+// BenchmarkNoAlloc_Reader decodes the Account payload from an io.Reader. The
+// stream path copies strings out of its reused buffer, so it allocates.
+// ggen_stream starts with a fresh 512-byte buffer, which forces refills and
+// compaction. ggen_readall reads everything with io.ReadAll and then uses the
+// bytes path.
 func BenchmarkNoAlloc_Reader(b *testing.B) {
 	type readerState struct{ r bytes.Reader }
 	codecs := []struct {
@@ -73,9 +75,10 @@ func BenchmarkNoAlloc_Reader(b *testing.B) {
 			var v EasyAccount
 			return easyjson.UnmarshalFromReader(&s.r, &v)
 		}},
-		// Fresh 512-byte buffer per iteration (< payload) so the stream
-		// genuinely refills + compacts; a carried-forward grown buffer
-		// would settle at payload size and degenerate into the bytes path.
+		// A fresh 512-byte buffer per iteration, smaller than the payload, so
+		// the stream really refills and compacts. A buffer kept across
+		// iterations would grow to the payload size and act like the bytes
+		// path.
 		{"ggen_stream", func(s *readerState) error {
 			s.r.Reset(AccountPayload)
 			var st ggen.Stream

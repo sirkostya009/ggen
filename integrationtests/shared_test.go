@@ -1,6 +1,6 @@
-// Shared annotated structs used across multiple test files. Feature-specific
-// structs (HookedStruct, PointerStruct, NativeTypes, OmitStruct, …) live next
-// to the test functions that exercise them.
+// Shared annotated structs used across several test files. Structs for one
+// feature (HookedStruct, PointerStruct, NativeTypes, OmitStruct and so on)
+// live next to the tests that use them.
 
 package integrationtests
 
@@ -13,8 +13,8 @@ type Address struct {
 	ZipCode string `json:"zipCode" pipe:"required len=5"`
 }
 
-// Node is a recursive tree node mixing scalars, slices, maps, and a
-// self-referential child array.
+// Node is a recursive tree node with scalars, a slice, a map, and a slice of
+// child Nodes.
 //
 //ggen:generate
 type Node struct {
@@ -27,8 +27,9 @@ type Node struct {
 	Children []Node            `json:"children"`
 }
 
-// WideStruct exercises the bitmask seen-flag path: 40 required fields, past the
-// 32-field threshold.
+// WideStruct has 40 required fields. Above 32 fields, the generated code
+// tracks seen fields as bits in an integer, and this struct exercises that
+// path.
 //
 //ggen:generate
 type WideStruct struct {

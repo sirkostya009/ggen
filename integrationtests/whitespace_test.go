@@ -6,10 +6,10 @@ import (
 	"testing"
 )
 
-// wsify inserts assorted whitespace (space/tab/newline/CR) around every
-// structural token ({ } [ ] : ,) that sits OUTSIDE a string literal, so a
-// decode of the result exercises every whitespace-skip site the generated
-// decoders emit (after `:`, before/after `[`/`{`, around `,`, before `]`/`}`).
+// wsify inserts mixed whitespace (space, tab, newline, CR) around every
+// structural token ({ } [ ] : ,) outside a string. Decoding the result
+// exercises every place where generated decoders skip whitespace: after `:`,
+// before and after `[` and `{`, around `,`, and before `]` and `}`.
 func wsify(s string) string {
 	const ws = " \t\n\r "
 	var b strings.Builder
@@ -43,9 +43,9 @@ func wsify(s string) string {
 	return b.String()
 }
 
-// Decoding a whitespace-laden payload yields the same value as the compact
-// form, across every container shape (slice, map, nested slice, fixed array,
-// slice-of-array, array-of-slice, nested struct) — the rest of the suite uses
+// A payload full of whitespace decodes to the same value as the compact form,
+// for every container shape: slice, map, nested slice, fixed array, slice of
+// arrays, array of slices and nested struct. The rest of the suite uses
 // compact JSON.
 func TestWhitespace_Tolerance(t *testing.T) {
 	t.Parallel()
@@ -69,8 +69,8 @@ func TestWhitespace_Tolerance(t *testing.T) {
 			`{"id":1,"name":"n","score":9.5,"active":true,"tags":["a","b"],"props":{"k":"v"},"children":[{"id":2,"name":"c","score":0,"active":false,"tags":[],"props":{},"children":[]}]}`,
 			func(p []byte) (any, error) { v, _, e := Node{}.DecodeFrom(p); return v, e },
 		},
-		// Top-level container aliases — exercise the alias decode path's leading
-		// whitespace handling.
+		// Top-level container aliases exercise leading whitespace in the
+		// alias decode path.
 		{
 			"alias_slice",
 			`["a","b","c"]`,

@@ -103,7 +103,8 @@ func PrototypeMember(name string) bool {
 	return ok
 }
 
-// FileStem is the last path element without extensions: "shared/money.ts" → "money".
+// FileStem returns the last path element without extensions: "money" for
+// "shared/money.ts".
 func FileStem(path string) string {
 	stem := path[strings.LastIndexByte(path, '/')+1:]
 	if dot := strings.IndexByte(stem, '.'); dot > 0 {
@@ -160,9 +161,9 @@ func Paren(s string) string {
 	return s
 }
 
-// IntRange is the inclusive range of a Go integer kind, clipped to the
-// integers JavaScript holds exactly; ok is false when that is every safe
-// integer.
+// IntRange returns the inclusive range of a Go integer kind, clipped to the
+// integers JavaScript holds exactly. ok is false when that range is every
+// safe integer.
 func IntRange(bits int, unsigned bool) (lo, hi string, ok bool) {
 	switch {
 	case bits >= 53:
@@ -203,21 +204,22 @@ func (h *Helpers) mark(name string) {
 	}
 }
 
-// Direct returns the helpers a file refers to itself, sorted: what it imports
-// from a runtime file.
+// Direct returns the helpers a file refers to itself, sorted. These are what
+// the file imports from a runtime file.
 func (h *Helpers) Direct() []string {
 	names := slices.Clone(h.direct)
 	slices.Sort(names)
 	return names
 }
 
-// Source is the TypeScript source of every used helper, sorted by name, each
-// followed by a blank line; "" when none is used.
+// Source returns the TypeScript source of every used helper, sorted by name,
+// each followed by a blank line. It returns "" when none is used.
 func (h *Helpers) Source() string {
 	return source(h.used, "")
 }
 
-// Runtime is the source of every helper, exported, for a shared runtime file.
+// Runtime returns the source of every helper, exported, for a shared runtime
+// file.
 func Runtime() string {
 	names := make([]string, 0, len(helperSource))
 	for n := range helperSource {
@@ -399,7 +401,8 @@ var helperSource = map[string]string{
 	"ggenHex":       `const ggenHex = /^(?:[0-9a-fA-F]{2})*$/;`,
 }
 
-// FormatBits is the bits one character of a binary encoding carries, or 0.
+// FormatBits returns how many bits one character of a binary encoding
+// carries, or 0.
 // Unlike FormatCheck it marks no helper as used.
 func FormatBits(format string) int {
 	switch format {
@@ -421,8 +424,8 @@ type Check struct {
 	Bits int // bits per character of a binary encoding, 0 otherwise
 }
 
-// FormatCheck returns the check for a string format, marking its helper used;
-// ok is false for formats with no helper of their own.
+// FormatCheck returns the check for a string format and marks its helper
+// used. ok is false for formats with no helper of their own.
 func (h *Helpers) FormatCheck(format string) (Check, bool) {
 	c := Check{Bits: FormatBits(format)}
 	switch format {
@@ -451,8 +454,9 @@ func (h *Helpers) FormatCheck(format string) (Check, bool) {
 	return c, true
 }
 
-// TimeCheck returns the check for a Go time layout: the common layouts get a
-// regex-backed helper, every other one walks the layout at run time.
+// TimeCheck returns the check for a Go time layout. The common layouts get a
+// regex-backed helper. Every other layout gets a helper that walks the layout
+// at run time.
 func (h *Helpers) TimeCheck(layout string) (name string, oneArg bool) {
 	switch layout {
 	case "2006-01-02":
@@ -465,8 +469,8 @@ func (h *Helpers) TimeCheck(layout string) (name string, oneArg bool) {
 	return h.Use("ggenIsTime"), false
 }
 
-// Count renders "3 bytes" / "1 byte" for a message, with the plural the unit
-// takes ("entry" -> "entries").
+// Count renders a count for a message, such as "3 bytes" or "1 byte", with
+// the plural the unit takes ("entry" becomes "entries").
 func Count(n, unit string) string {
 	if n == "1" {
 		return n + " " + unit
@@ -477,10 +481,11 @@ func Count(n, unit string) string {
 	return n + " " + unit + "s"
 }
 
-// UTF16Len is the length JavaScript sees, which String.slice counts in.
+// UTF16Len returns the length JavaScript sees, in UTF-16 units. String.slice
+// counts in the same units.
 func UTF16Len(s string) int { return len(utf16.Encode([]rune(s))) }
 
-// ClassRegex is the anchored regex of a character-class rule.
+// ClassRegex returns the anchored regex of a character-class rule.
 func ClassRegex(rule string) string {
 	switch rule {
 	case "alphanum":

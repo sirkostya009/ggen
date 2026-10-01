@@ -1,35 +1,40 @@
 //go:build goexperiment.simd
 
-// 64-byte-lane sibling of validUTF8x16, for the avx512 tier only. Same
-// Lemire/simdjson lookup4 algorithm and the same accept set — the only
-// differences are width and how the prev1/2/3 vectors are obtained.
+// 64-byte version of validUTF8x16, used only by the avx512 tier. AVX-512 is
+// the x86 vector instruction set that processes 64 bytes with one
+// instruction. A lane is one byte slot inside a vector. The algorithm and the
+// set of accepted inputs are the same as validUTF8x16, so see that file for
+// how UTF-8 and the lookup tables work. Only two things differ: the width,
+// and how the vectors of the previous 1, 2 and 3 bytes (prevN) are built.
 //
-// simdutf builds those with cross-lane shuffles (VPERMI2D/VPERM2I128) because
-// its input is a register it already holds. ggen always validates a CONTIGUOUS
-// []byte span, so prevN is just an unaligned load from b[i-N:] — three L1-hot
-// loads replace a permute plus three VPALIGNRs and shorten the dependency
-// chain. That also sidesteps archsimd having no non-grouped byte concat-shift
-// above 128 bits.
+// simdutf builds prevN by shuffling bytes across registers, because its input
+// is already in a register. ggen always validates a contiguous []byte, so
+// prevN is just a load from b[i-N:]. Three loads from cache replace a shuffle
+// plus three byte shifts and give a shorter chain of dependent instructions.
+// It also avoids a gap in archsimd, which has no byte shift across a whole
+// vector wider than 128 bits.
 //
-// VPSHUFB at 512 bits operates per 128-bit lane, which is exactly what a
-// nibble LUT wants, so the 16-entry tables are simply repeated 4×.
+// The 512-bit table lookup (VPSHUFB) works on each 128-bit quarter
+// separately. That suits a 16-entry nibble table, so the tables are just
+// repeated 4 times.
 //
-// The first block has no preceding bytes, so it runs one 16-lane classify with
-// prev = zero (no EOF check — the rune may continue into the wide region); the
-// wide loop then starts at 16, where every prevN load is in bounds. The final
-// block starts at len(b)-64 rather than loading zero-padded past the end:
-// archsimd's LoadUint8x64Part is an unmasked full-width load, which reads
-// past the span and faults at a page edge. Re-classifying the lanes it
-// overlaps is idempotent (each lane is a function of its own four bytes,
-// ORed into errAcc), and ending exactly at len(b) leaves a dangling rune to
-// the check_eof sub.
+// The first block has no bytes before it. So the first 16 bytes run through
+// the 16-byte lookup with zero as the previous bytes. There is no end check
+// there, because a rune may continue into the next block. The wide loop then
+// starts at 16, where every prevN load is in bounds. The final block starts at
+// len(b)-64 instead of loading zero-padded past the end. archsimd's
+// LoadUint8x64Part is a full 64-byte load that reads past the slice and
+// faults at a page edge. Checking the overlapping lanes twice is harmless.
+// Each lane depends only on its own four bytes and is ORed into errAcc.
+// Because the final block ends exactly at len(b), a rune cut short there is
+// caught by the end check (check_eof) after the loop.
 
 package ggen
 
 import "simd/archsimd"
 
-// rep4 repeats a 16-entry nibble LUT across the four 128-bit lanes of a
-// 512-bit register (VPSHUFB indexes within its own lane).
+// rep4 repeats a 16-entry nibble table across the four 128-bit quarters of a
+// 512-bit register. The lookup indexes only within its own quarter.
 func rep4(t [16]uint8) (o [64]uint8) {
 	for i := range o {
 		o[i] = t[i%16]
@@ -43,9 +48,9 @@ var (
 	utf8Byte2High64 = rep4(utf8Byte2High)
 )
 
-// utf8MaxIncomplete64 is utf8MaxIncomplete at 64 lanes: only the final three
-// positions are constrained, so a saturating sub is non-zero exactly when the
-// last block ends mid-rune.
+// utf8MaxIncomplete64 is utf8MaxIncomplete at 64 lanes. Only the last three
+// positions have a limit, so a saturating subtract is non-zero exactly when
+// the last block ends in the middle of a rune.
 var utf8MaxIncomplete64 = func() (o [64]uint8) {
 	for i := range o {
 		o[i] = 0xFF
@@ -54,19 +59,21 @@ var utf8MaxIncomplete64 = func() (o [64]uint8) {
 	return
 }()
 
-// utf8x64MinLen gates validUTF8x64: below it the wider setup (three 64-byte
-// LUT loads on top of the 16-lane head's) costs more than the block count it
-// saves, so short spans stay on validUTF8x16.
+// utf8x64MinLen is the shortest input validUTF8x64 handles itself. Below it
+// the extra setup costs more than the fewer loop steps save. That setup is
+// three 64-byte table loads on top of the 16-byte head's. Shorter input stays
+// on validUTF8x16.
 const utf8x64MinLen = 128
 
-// validUTF8x64 reports whether b is well-formed UTF-8 — same accept set as
-// unicode/utf8.Valid and validUTF8x16 (pinned by TestValidUTF8x64_Parity).
+// validUTF8x64 reports whether b is valid UTF-8. It accepts exactly what
+// unicode/utf8.Valid and validUTF8x16 accept, which TestValidUTF8x64_Parity
+// checks.
 func validUTF8x64(b []byte) bool {
 	if len(b) < utf8x64MinLen {
 		return validUTF8x16(b)
 	}
 
-	// Head: first 16 bytes with prev = zero, 16-lane classify, no EOF check.
+	// Head: the first 16 bytes, zero as the previous bytes, no end check.
 	lo1 := archsimd.LoadUint8x16(utf8Byte1High[:])
 	lo2 := archsimd.LoadUint8x16(utf8Byte1Low[:])
 	lo3 := archsimd.LoadUint8x16(utf8Byte2High[:])
@@ -97,8 +104,9 @@ func validUTF8x64(b []byte) bool {
 	errAcc := zero
 	prev := zero
 
-	// Full blocks only: every load is a plain in-bounds full load (b[i-3:]
-	// holds ≥ 64 bytes). The last block is pulled back to end at len(b).
+	// Full blocks only. Every load is a full 64-byte load that stays in
+	// bounds, since b[i-3:] holds at least 64 bytes. The last block is moved
+	// back so it ends at len(b).
 	for i := 16; ; i += 64 {
 		if i+64 > len(b) {
 			if i >= len(b) {
@@ -119,7 +127,7 @@ func validUTF8x64(b []byte) bool {
 		errAcc = errAcc.Or(must.Xor(sc))
 		prev = c
 	}
-	// check_eof on the final block (see validUTF8x16).
+	// End check on the final block. See validUTF8x16.
 	maxInc := archsimd.LoadUint8x64(utf8MaxIncomplete64[:])
 	errAcc = errAcc.Or(prev.SubSaturated(maxInc))
 	return errAcc.Equal(zero).ToBits() == ^uint64(0)

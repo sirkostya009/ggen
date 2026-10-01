@@ -7,12 +7,13 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// Seq must keep the Stream's buffer bounded across a long run of GENERATED
-// container-bearing values. Node carries []string, map[string]string and
-// []Node, whose emitted stream refills are grow-only (ReadMore(0)) — a full
-// window doubles rather than reusing the space consumed values leave behind,
-// so a 422-byte value through a 1 KiB buffer can ratchet it to 4 KiB unless
-// Seq drops those consumed bytes.
+// Seq must keep the Stream's buffer bounded across a long run of values whose
+// generated decoders hold containers. Node has []string, map[string]string and
+// []Node. The generated stream code for those refills with ReadMore(0), which
+// only grows the buffer. When the buffer is full, it doubles instead of
+// reusing the space that already-decoded values left behind. So a 422-byte
+// value read through a 1 KiB buffer could grow it to 4 KiB, unless Seq drops
+// the consumed bytes first.
 func TestSeqBufferStaysBounded(t *testing.T) {
 	t.Parallel()
 	for _, bufCap := range []int{64, 256, 1024} {
@@ -36,8 +37,8 @@ func TestSeqBufferStaysBounded(t *testing.T) {
 		if n != 200 {
 			t.Errorf("bufCap=%d: yielded %d values, want 200", bufCap, n)
 		}
-		// The window may need to hold one whole value, never more than a
-		// doubling past that.
+		// The buffer may need to hold one whole value, and never more than
+		// one doubling past that.
 		if want := max(bufCap, 2*len(complexPayload)); cap(s.Bytes()) > want {
 			t.Errorf("bufCap=%d: buffer ratcheted to %d, want <= %d (value is %d B)",
 				bufCap, cap(s.Bytes()), want, len(complexPayload))
@@ -45,8 +46,9 @@ func TestSeqBufferStaysBounded(t *testing.T) {
 	}
 }
 
-// Slice gathers every element, but the Stream's window must stay bounded the
-// same way Seq's and Array's do — consumed bytes are dropped once it is full.
+// Slice collects every element, but the Stream's buffer must stay bounded the
+// same way it does for Seq and Array. Consumed bytes are dropped once the
+// buffer is full.
 func TestSliceBufferStaysBounded(t *testing.T) {
 	t.Parallel()
 	for _, bufCap := range []int{64, 256, 1024} {
@@ -80,9 +82,10 @@ func TestSliceBufferStaysBounded(t *testing.T) {
 	}
 }
 
-// Array must hold the same bound as Seq over a long array of GENERATED
-// container-bearing elements: yielded elements are dropped once the window is
-// full, so the grow-only emitted refills cannot ratchet it.
+// Array must keep the same bound as Seq over a long array of elements whose
+// generated decoders hold containers. Elements already yielded are dropped
+// once the buffer is full, so the grow-only refills in generated code cannot
+// keep growing it.
 func TestArrayBufferStaysBounded(t *testing.T) {
 	t.Parallel()
 	for _, bufCap := range []int{64, 256, 1024} {

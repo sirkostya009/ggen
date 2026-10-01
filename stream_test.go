@@ -13,9 +13,10 @@ import (
 	"time"
 )
 
-// chunkedReader returns one byte per Read until exhausted. Forces every
-// Stream primitive to grow the buffer one byte at a time, exercising the
-// refill and value-spans-buffer-boundary paths exhaustively.
+// chunkedReader returns one byte per Read until it runs out. A Stream keeps a
+// window, a buffered slice of the reader, and a refill reads more into it.
+// With one byte per Read, every Stream function must refill at every byte,
+// and every value crosses the edge of the buffered data.
 type chunkedReader struct {
 	data []byte
 	pos  int
@@ -33,7 +34,7 @@ func (r *chunkedReader) Read(p []byte) (int, error) {
 	return 1, nil
 }
 
-// readStreamAny drains a Stream via Any with hint=0 (cold buffer).
+// readStreamAny decodes in with Stream.Any, starting with no buffer.
 func readStreamAny(t *testing.T, in string) any {
 	t.Helper()
 	var s Stream
@@ -45,8 +46,8 @@ func readStreamAny(t *testing.T, in string) any {
 	return v
 }
 
-// TestStream_AnyChunked: every byte arrives via a separate Read; the
-// result must still match stdlib's all-at-once parse.
+// TestStream_AnyChunked feeds every byte through a separate Read. The result
+// must still match the standard library parsing the whole input at once.
 func TestStream_AnyChunked(t *testing.T) {
 	t.Parallel()
 	for _, tc := range anyCases {
@@ -108,8 +109,8 @@ func TestStream_NumberChunked(t *testing.T) {
 	}
 }
 
-// TestStream_HintZeroVsHinted: the result must be identical regardless of
-// whether the caller pre-sized the buffer.
+// TestStream_HintEquivalence checks that the result is the same whatever
+// buffer size the caller passes in.
 func TestStream_HintEquivalence(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"k":[1,2,3],"s":"hello"}`)
@@ -130,15 +131,15 @@ func TestStream_HintEquivalence(t *testing.T) {
 	}
 }
 
-// TestStream_TruncatedInput: reader exhausts mid-token. Must surface an
-// error, not panic.
+// TestStream_TruncatedInput checks a reader that ends in the middle of a
+// value. Stream must return an error, not panic.
 func TestStream_TruncatedInput(t *testing.T) {
 	t.Parallel()
 	cases := []string{
-		`{"k":1,"s":"hel`, // string mid-flight
-		`{"k":12`,         // number mid-flight
-		`[1,2,`,           // array mid-flight
-		`tru`,             // literal mid-flight
+		`{"k":1,"s":"hel`, // inside a string
+		`{"k":12`,         // inside a number
+		`[1,2,`,           // inside an array
+		`tru`,             // inside a literal
 		``,                // empty
 	}
 	for _, in := range cases {
@@ -159,9 +160,9 @@ func TestStream_TruncatedInput(t *testing.T) {
 	}
 }
 
-// TestStream_ReadMoreKeepZero_GrowsWithoutShift: keep==0 must allocate
-// a bigger backing if the current buffer is full, but offsets stay valid
-// in the original coordinate system (no shift).
+// TestStream_ReadMoreKeepZero_GrowsWithoutShift checks ReadMore(0). When the
+// buffer is full, it must allocate a bigger one. It must not move the bytes,
+// so earlier offsets stay valid.
 func TestStream_ReadMoreKeepZero_GrowsWithoutShift(t *testing.T) {
 	t.Parallel()
 	var s Stream
@@ -180,8 +181,8 @@ func TestStream_ReadMoreKeepZero_GrowsWithoutShift(t *testing.T) {
 	}
 }
 
-// TestStream_ReadMoreKeepFull_ResetsBuffer: keep == len(buf) clears
-// the buffer entirely; next Read refills from offset 0.
+// TestStream_ReadMoreKeepFull_ResetsBuffer checks ReadMore(len(buf)). It
+// drops every buffered byte, and the next Read fills from offset 0.
 func TestStream_ReadMoreKeepFull_ResetsBuffer(t *testing.T) {
 	t.Parallel()
 	var s Stream
@@ -202,9 +203,10 @@ func TestStream_ReadMoreKeepFull_ResetsBuffer(t *testing.T) {
 	}
 }
 
-// TestStream_ReadMoreKeepMid_Memmoves: 0 < keep < len(buf) memmoves
-// the tail to offset 0 and refills behind it. Bytes at the original
-// keep offset must now be at offset 0.
+// TestStream_ReadMoreKeepMid_Memmoves checks ReadMore(keep) with
+// 0 < keep < len(buf). It moves the bytes from keep onward to offset 0 and
+// reads more after them. The byte that was at offset keep must now be at
+// offset 0.
 func TestStream_ReadMoreKeepMid_Memmoves(t *testing.T) {
 	t.Parallel()
 	var s Stream
@@ -225,12 +227,13 @@ func TestStream_ReadMoreKeepMid_Memmoves(t *testing.T) {
 	}
 }
 
-// TestStream_EOFAfterContent: reader returns content then io.EOF on the
-// same call (io.Reader interface allows this). Stream must consume the
-// content and surface EOF on the NEXT call only. ReadMore is stateless —
-// the deferred EOF comes from re-Reading the drained reader (io.Reader EOF
-// is stable), not a Stream flag — so both reader shapes are pinned:
-// separate-call EOF (bytes.Reader) and data+EOF-same-call (DataErrReader).
+// TestStream_EOFAfterContent checks a reader that returns data together with
+// io.EOF in the same call, which io.Reader allows. Stream must keep the data
+// and report the end only on the next call, as io.ErrUnexpectedEOF. ReadMore
+// keeps no EOF flag. It sees the end again by calling Read on the drained
+// reader, which keeps returning io.EOF. So the test covers both reader
+// kinds: EOF on a separate call (bytes.Reader) and data plus EOF in one call
+// (iotest.DataErrReader).
 func TestStream_EOFAfterContent(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -258,8 +261,8 @@ func TestStream_EOFAfterContent(t *testing.T) {
 	}
 }
 
-// TestStream_PathologicalZeroRead: a reader returning (0, nil) must not
-// spin; Stream surfaces ErrUnexpectedEOF.
+// TestStream_PathologicalZeroRead checks a reader that returns (0, nil).
+// Stream must not loop forever. It returns io.ErrUnexpectedEOF.
 func TestStream_PathologicalZeroRead(t *testing.T) {
 	t.Parallel()
 	var s Stream
@@ -274,11 +277,12 @@ type zeroReader struct{}
 
 func (zeroReader) Read(p []byte) (int, error) { return 0, nil }
 
-// TestFloatNumberBufBounded pins the compacting mid-number refill: a
-// float/number straddling window edges must refill from the value start, not
-// grow-only from 0 — else every mid-number refill lands with len == cap and
-// DOUBLES the buffer (a 64 B buffer ballooned to 1 MB on a 50k short-float
-// stream before the fix). Same class the skip-tree compaction already fixed.
+// TestFloatNumberBufBounded checks the refill in the middle of a number. When
+// a float crosses the end of the buffered data, the refill must keep only
+// the bytes from the start of the number and drop the rest. If it kept the
+// whole buffer instead, every refill would find the buffer full and double
+// it. Then a 64-byte buffer would grow to megabytes over a long array of
+// short floats.
 func TestFloatNumberBufBounded(t *testing.T) {
 	t.Parallel()
 	build := func(elem string) string {
@@ -288,7 +292,7 @@ func TestFloatNumberBufBounded(t *testing.T) {
 			if i > 0 {
 				sb.WriteByte(',')
 			}
-			sb.WriteString(elem) // 16 chars — straddles the 64 B window
+			sb.WriteString(elem) // 16 bytes, so values cross the 64-byte edge
 		}
 		sb.WriteByte(']')
 		return sb.String()
@@ -331,11 +335,12 @@ func TestFloatNumberBufBounded(t *testing.T) {
 	})
 }
 
-// TestStreamCaptureValue pins CaptureValue: byte-exact spans across chunked
-// refills, correct stop at the value's real end when input continues, errors
-// surfacing only at EOF, and the first-refill prefix compaction (a capture
-// starting mid-window must reuse the consumed prefix as tail capacity instead
-// of dragging it through every grow).
+// TestStreamCaptureValue checks CaptureValue. The captured bytes must be exact
+// when the value arrives in small reads. Capture must stop at the real end of
+// the value when more input follows. Errors must show up only at EOF. When a
+// capture starts in the middle of the buffer, the first refill must drop the
+// bytes already consumed and reuse that space. It must not carry them along
+// through every buffer growth.
 func TestStreamCaptureValue(t *testing.T) {
 	t.Parallel()
 	values := []string{
@@ -344,7 +349,7 @@ func TestStreamCaptureValue(t *testing.T) {
 		`"` + strings.Repeat("a", 5000) + `"`,
 	}
 	for _, v := range values {
-		// 1-byte reads: value split at every offset.
+		// One byte per Read, so the value is split at every offset.
 		var s Stream
 		s.Reset(&chunkedReader{data: []byte(v)}, make([]byte, 0, 8))
 		got, err := s.CaptureValue()
@@ -354,7 +359,7 @@ func TestStreamCaptureValue(t *testing.T) {
 		if string(got) != v {
 			t.Fatalf("%.20q chunked: got %.20q", v, got)
 		}
-		// Trailing input: must stop at the value's real end.
+		// More input after the value. Capture must stop at the value's end.
 		var s2 Stream
 		s2.Reset(strings.NewReader(v+` ,"next"`), make([]byte, 0, 16))
 		got2, err := s2.CaptureValue()
@@ -371,11 +376,11 @@ func TestStreamCaptureValue(t *testing.T) {
 
 	t.Run("prefix compaction", func(t *testing.T) {
 		t.Parallel()
-		// Two ~700 B values through a 1024 B window: capturing the second
-		// starts at Pos≈702 with the window full. The first refill must
-		// compact the consumed prefix — the second value then fits in the
-		// freed space and the buffer NEVER grows. Grow-only (the old shape)
-		// would double to 2048.
+		// Two values of about 700 bytes go through a 1024-byte buffer. The
+		// second capture starts at Pos 702 or so, with the buffer full. The
+		// first refill must drop the consumed bytes. Then the second value
+		// fits in the freed space and the buffer never grows. Keeping the
+		// consumed bytes would double the buffer to 2048.
 		v := `"` + strings.Repeat("a", 698) + `"`
 		payload := `[` + v + `,` + v + `]`
 		var s Stream
@@ -413,9 +418,10 @@ func TestStreamCaptureValue(t *testing.T) {
 
 	t.Run("live reader", func(t *testing.T) {
 		t.Parallel()
-		// A keep-alive connection delivers the whole value and then has
-		// nothing in flight — the capture must complete without another
-		// Read (which would block forever; liveChunkReader errors instead).
+		// A keep-alive connection sends the whole value and then nothing
+		// more for a while. The capture must finish without another Read.
+		// On a real connection that Read would block forever.
+		// liveChunkReader returns an error instead.
 		for _, chunks := range liveReaderCases {
 			want := strings.Join(chunks, "")
 			var s Stream
@@ -428,9 +434,9 @@ func TestStreamCaptureValue(t *testing.T) {
 				t.Fatalf("%q: got %q", want, got)
 			}
 		}
-		// A bare number at the window edge is genuinely not final — "123"
-		// may continue "1234", so the lookahead Read is required and a live
-		// reader must deliver a delimiter or EOF. Pinned as inherent.
+		// A bare number at the end of the buffered data is really not
+		// finished. "123" may go on as "1234", so one more Read is needed. A
+		// live reader must send a delimiter or EOF. This cannot be avoided.
 		var s Stream
 		s.Reset(&liveChunkReader{chunks: []string{`123`}}, nil)
 		if _, err := s.CaptureValue(); !errors.Is(err, errBlockingRead) {
@@ -439,8 +445,8 @@ func TestStreamCaptureValue(t *testing.T) {
 	})
 }
 
-// liveReaderCases: each entry is one value delivered across that many Reads.
-// Shared with the SIMD tier twin (simd_skip_stream_test.go).
+// liveReaderCases holds values split into chunks, one chunk per Read. The
+// SIMD version of the test in simd_skip_test.go uses them too.
 var liveReaderCases = [][]string{
 	{`{"a":1}`},
 	{`{"a`, `":1}`},
@@ -450,14 +456,15 @@ var liveReaderCases = [][]string{
 	{`nu`, `ll`},
 }
 
-// TestStreamInt_LeadingZeroPeekTransientError pins the leading-zero peek's
-// error contract: a transient (non-EOF) reader error during the "01" peek
-// used to be swallowed with an un-rebased cursor, so a later refill resumed
-// the digit loop and "01" decoded as 1 with a nil error.
+// TestStreamInt_LeadingZeroPeekTransientError checks the read after a leading
+// "0". Int64 reads one more byte to reject a leading zero like "01". If that
+// read fails with a non-EOF error, the error must be returned. Ignoring it
+// would let a later read go on with the digits, and "01" would decode as 1
+// with a nil error.
 func TestStreamInt_LeadingZeroPeekTransientError(t *testing.T) {
 	t.Parallel()
 	errTransient := errors.New("transient")
-	// "0" delivered, one transient error, then "1" — malformed "01" overall.
+	// "0", then a non-EOF error, then "1". The whole input "01" is invalid.
 	mk := func() *flakyReader {
 		return &flakyReader{seq: []any{"0", errTransient, "1"}}
 	}
@@ -470,7 +477,8 @@ func TestStreamInt_LeadingZeroPeekTransientError(t *testing.T) {
 	if _, err := s.Uint64(); !errors.Is(err, errTransient) {
 		t.Errorf("Uint64: got %v, want the transient error propagated", err)
 	}
-	// Bare "0" at EOF stays a valid number (the swallowed-EOF arm).
+	// A bare "0" followed by EOF is still a valid number. Here EOF is not an
+	// error.
 	s.Reset(strings.NewReader("0"), nil)
 	if v, err := s.Int64(); err != nil || v != 0 {
 		t.Errorf("bare 0: got %d, %v", v, err)
@@ -481,14 +489,13 @@ func TestStreamInt_LeadingZeroPeekTransientError(t *testing.T) {
 	}
 }
 
-// TestStreamTransientErrorNeverSilentNorMislabeled sweeps every value
-// primitive against a reader that hiccups (0, err) at each byte position.
-// Two failure modes are pinned: the number scanners' refill loops used to
-// `break` on ANY ReadMore error and return the digits scanned so far with a
-// NIL error (silent truncation — `12345` → 1234 at top level), and the
-// string/bool/literal/skip refill arms relabeled the hiccup as a grammar
-// sentinel (ErrUnterminated / ErrBadBool / ErrBadObject), destroying error
-// identity. Both contradict ReadMore's documented contract.
+// TestStreamTransientErrorNeverSilentNorMislabeled runs every value function
+// against a reader that fails once with (0, err) at each byte position. Two
+// bugs are checked. First, a number must not stop at the error and return
+// the digits read so far with a nil error, so "12345" must not become 1234.
+// Second, string, bool, literal and skip code must not replace the reader
+// error with a JSON error like ErrUnterminated, ErrBadBool or ErrBadObject.
+// The caller must get the reader's own error, as ReadMore documents.
 func TestStreamTransientErrorNeverSilentNorMislabeled(t *testing.T) {
 	t.Parallel()
 	errTransient := errTransientHiccup
@@ -520,7 +527,7 @@ func TestStreamTransientErrorNeverSilentNorMislabeled(t *testing.T) {
 			s.Reset(r, make([]byte, 0, 1))
 			v, err := tc.run(&s)
 			if r.calls < at {
-				continue // value completed before the hiccup could fire
+				continue // the value ended before the failing Read
 			}
 			if err == nil {
 				t.Errorf("%s hiccup@%d: got (%v, nil) — silent truncation", tc.name, at, v)
@@ -531,8 +538,8 @@ func TestStreamTransientErrorNeverSilentNorMislabeled(t *testing.T) {
 			}
 		}
 	}
-	// Control: the drained-window path still ends values normally, and real
-	// grammar errors still report as grammar errors.
+	// Control cases. At EOF, values still end normally, and real JSON errors
+	// are still reported as JSON errors.
 	var s Stream
 	s.Reset(strings.NewReader("12345"), make([]byte, 0, 1))
 	if v, err := s.Int64(); err != nil || v != 12345 {
@@ -548,11 +555,12 @@ func TestStreamTransientErrorNeverSilentNorMislabeled(t *testing.T) {
 	}
 }
 
-// The stream number scanners collect a loose [0-9.eE+-] span across refills
-// and then grammar-check it; the GRAMMAR end is authoritative, not the loose
-// scan's, so they stop where the bytes path stops (maximal munch). Erroring
-// on the whole span instead made `1.5.5` / `1e5e` / `01` reject on the
-// stream where the bytes path succeeds — a bytes/stream parity break.
+// The Stream number functions first collect every byte in [0-9.eE+-], across
+// refills, and then check the grammar. The number ends where the grammar
+// says, not where the collected bytes end. So Stream stops where the []byte
+// functions stop, at the longest valid number. Rejecting the whole collected
+// run would make "1.5.5", "1e5e" and "01" fail on Stream but succeed on
+// []byte input.
 func TestStreamNumberMaximalMunchMatchesBytes(t *testing.T) {
 	t.Parallel()
 	for _, in := range []string{"01", "1.5.5", "1e5e", "0", "-0", "12345", "1.5", "1e5", "00", "1-2"} {
@@ -570,7 +578,7 @@ func TestStreamNumberMaximalMunchMatchesBytes(t *testing.T) {
 		if gotV != wantV || s.Pos != wantN {
 			t.Errorf("Float64(%q): stream (%v, pos %d), bytes (%v, pos %d)", in, gotV, s.Pos, wantV, wantN)
 		}
-		// Number mirrors the same extent.
+		// Number must stop at the same place.
 		wantNum, wantNumN, numErr := Number([]byte(in), 0)
 		s.Reset(strings.NewReader(in), make([]byte, 0, 1))
 		gotNum, gotNumErr := s.Number()
@@ -584,10 +592,10 @@ func TestStreamNumberMaximalMunchMatchesBytes(t *testing.T) {
 	}
 }
 
-// A live (never-EOF) reader that has delivered a complete but MALFORMED
-// value must get an error, not a hang: the capture loop treated every skip
-// failure as "read more" and blocked in Read forever waiting for bytes that
-// could not repair a malformation sitting before bytes already buffered.
+// A live reader, one that never sends EOF, has sent a complete but broken
+// value. CaptureValue must return an error, not hang. More bytes cannot fix
+// an error that sits before bytes already in the buffer, so CaptureValue must
+// not call Read again waiting for them.
 func TestStreamCaptureValue_LiveMalformedDoesNotHang(t *testing.T) {
 	t.Parallel()
 	for _, payload := range []string{`{"a":}`, `[1,]x`, `{"a" 1}`, `[1 2]`, `tru3`} {
@@ -611,8 +619,9 @@ func TestStreamCaptureValue_LiveMalformedDoesNotHang(t *testing.T) {
 	}
 }
 
-// A TRUNCATED value on a live reader must still wait (more bytes can
-// complete it) — the control proving the finality check isn't over-eager.
+// A value that is only cut short on a live reader must still wait, because
+// more bytes can complete it. This is the control case. It shows the check
+// for broken values does not give up too early.
 func TestStreamCaptureValue_LiveTruncatedStillWaits(t *testing.T) {
 	t.Parallel()
 	block := make(chan struct{})
@@ -632,8 +641,8 @@ func TestStreamCaptureValue_LiveTruncatedStillWaits(t *testing.T) {
 	close(block)
 }
 
-// liveReader delivers its payload, then blocks until block is closed (a
-// socket with nothing in flight) and finally reports EOF.
+// liveReader returns its data, then blocks until block is closed, like a
+// socket with nothing more to send. Then it returns EOF.
 type liveReader struct {
 	data  []byte
 	pos   int
@@ -650,9 +659,10 @@ func (r *liveReader) Read(p []byte) (int, error) {
 	return 0, io.EOF
 }
 
-// hiccupReader delivers one byte per Read except call #hiccupAt, which
-// returns (0, errTransient) — the recoverable-reader class (a net.Conn read
-// deadline), distinct from a drained window.
+// hiccupReader returns one byte per Read, except call number hiccupAt,
+// which returns (0, errTransientHiccup). This is a reader error the caller
+// can recover from, like a net.Conn read deadline. It is not the end of the
+// input.
 type hiccupReader struct {
 	data     []byte
 	pos      int
@@ -675,7 +685,7 @@ func (r *hiccupReader) Read(p []byte) (int, error) {
 
 var errTransientHiccup = errors.New("transient")
 
-// flakyReader plays a sequence of string chunks and injected errors.
+// flakyReader returns a sequence of string chunks and errors, one per Read.
 type flakyReader struct {
 	seq []any // string or error
 }
@@ -695,9 +705,9 @@ func (r *flakyReader) Read(p []byte) (int, error) {
 	return copy(p, head.(string)), nil
 }
 
-// liveChunkReader delivers each chunk in one Read, then errors on any further
-// Read — a stand-in for a live socket whose next Read would block forever
-// once the value has been delivered.
+// liveChunkReader returns one chunk per Read, then an error on any later
+// Read. It stands in for a live socket, where a Read after the value has
+// arrived would block forever.
 type liveChunkReader struct {
 	chunks []string
 }
@@ -717,11 +727,10 @@ func (r *liveChunkReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-// TestStreamSkipValue_MatchesBytes pins stream SkipValue against the bytes
-// tree over compact + pretty-printed values and truncations — the stream
-// skipObject comma branch used to miss the separator whitespace skip, so any
-// indented object with 2+ keys failed ErrExpectString (never caught: stream
-// skip was only ever exercised on compact payloads).
+// TestStreamSkipValue_MatchesBytes checks Stream.SkipValue against SkipValue
+// on []byte input. Inputs are compact values, indented values and
+// truncations. Indented objects matter: after each comma, the skip code must
+// also skip the whitespace before the next key.
 func TestStreamSkipValue_MatchesBytes(t *testing.T) {
 	t.Parallel()
 	seeds := []string{
@@ -729,10 +738,9 @@ func TestStreamSkipValue_MatchesBytes(t *testing.T) {
 		`{"a":{"x":true,"y":[1,2]},"b":"s","c":null}`,
 		`[{"a":1,"b":2},{"c":3}]`,
 	}
-	// Non-string object keys: the stream loop used to relabel the key
-	// skipString's ErrExpectString only when the window was drained, so a
-	// buffered non-quote key reported ErrExpectString where bytes reports
-	// ErrBadObject.
+	// Object keys that are not strings. Stream must report ErrBadObject,
+	// like []byte input does, whether or not the key is already in the
+	// buffer.
 	cases := [][]byte{
 		[]byte(`{5:1}`),
 		[]byte(`{"a":1,5:2}`),
@@ -766,8 +774,8 @@ func TestStreamSkipValue_MatchesBytes(t *testing.T) {
 			if gotErr != wantErr {
 				t.Fatalf("stream(%q, chunk=%d) err=%v, bytes err=%v", in, chunk, gotErr, wantErr)
 			}
-			// On error too: the skip's give-up position is what generated
-			// ignoreunknown/allowdups decoders stamp into ParseError.Pos.
+			// Check the offset on error too. Generated decoders with
+			// ignoreunknown or allowdups put it in ParseError.Pos.
 			if s.Offset() != wantPos {
 				t.Fatalf("stream(%q, chunk=%d) offset=%d, bytes pos=%d (%v)", in, chunk, s.Offset(), wantPos, wantErr)
 			}
@@ -775,12 +783,10 @@ func TestStreamSkipValue_MatchesBytes(t *testing.T) {
 	}
 }
 
-// TestStreamStringSurrogateAcrossRefill pins the stream stringSlow surrogate
-// fix: a \uXXXX\uXXXX pair straddling a tiny-buffer refill boundary must
-// assemble into the astral rune, not split into two lone surrogates (😀 → ��).
-// Positioned at every offset so the pair lands across a ReadMore at some cap;
-// checked against the (fully-buffered, correct) bytes path. Regression guard for
-// a bug the escape-free fuzz/bench payloads never exercised.
+// TestStreamStringSurrogateAcrossRefill checks a 4-byte character that
+// crosses the end of the buffered data, with small buffers. The character is
+// placed at every offset, so for some buffer size it lands across a refill.
+// Stream must decode it the same as String on the whole input.
 func TestStreamStringSurrogateAcrossRefill(t *testing.T) {
 	t.Parallel()
 	for pad := range 48 {
@@ -804,16 +810,16 @@ func TestStreamStringSurrogateAcrossRefill(t *testing.T) {
 	}
 }
 
-// TestStreamStringSlowBufBounded pins the compacting escape refill: a long
-// escaped string must stream through a bounded window, not grow-only. stringSlow
-// decodes into its own scratch and aliases THAT (not s.buf), so every ReadMore
-// keeps from the cursor + rebases (like Float64/Number) — else each mid-string
-// refill lands with len == cap (readers fill the whole window) and DOUBLES the
-// buffer (a 64 B buffer ballooned to 256 KB on a 200 KB escaped string before the
-// fix). Same class the float/number/skip-tree compaction already fixed. Every
-// escape kind — simple, \uXXXX, surrogate pair — routes through stringSlow's
-// distinct ensure-loops, so all three must stay bounded. Value checked against
-// the (fully buffered, correct) bytes path.
+// TestStreamStringSlowBufBounded checks that a long escaped string passes
+// through a buffer that stays small. stringSlow writes the decoded string
+// into its own buffer and does not point into the Stream's buffer. So each
+// refill can drop the bytes before the current position and adjust the
+// position, as Float64 and Number do. Without that, each refill would find
+// the buffer full, because readers fill all free space, and would double it.
+// A 64-byte buffer would then grow past the size of the string. Simple
+// escapes, \uXXXX escapes and surrogate pairs each have their own refill
+// loop in stringSlow, so all three are checked. The value is compared with
+// String on the whole input.
 func TestStreamStringSlowBufBounded(t *testing.T) {
 	t.Parallel()
 	cases := map[string]string{
@@ -846,11 +852,11 @@ func TestStreamStringSlowBufBounded(t *testing.T) {
 	}
 }
 
-// TestStreamStringInvalidUTF8: the stream string paths (String/StringView/
-// KeyView + stringSlow) reject invalid UTF-8 with ErrInvalidUTF8 (jsonv2
-// parity), across refill boundaries; valid multi-byte runes straddling a
-// refill still pass (the utf8.Valid runs over the full contiguous span, never
-// per chunk).
+// TestStreamStringInvalidUTF8 checks that String, StringView and KeyView on a
+// Stream reject invalid UTF-8 with ErrInvalidUTF8, like jsonv2, also across
+// refills. A rune is one UTF-8 encoded character of 1 to 4 bytes. A valid
+// multi-byte rune split across a refill must still pass, because utf8.Valid
+// runs over the whole string, never one chunk at a time.
 func TestStreamStringInvalidUTF8(t *testing.T) {
 	t.Parallel()
 	invalid := []struct{ name, payload string }{
@@ -880,7 +886,7 @@ func TestStreamStringInvalidUTF8(t *testing.T) {
 			}
 		}
 	}
-	// Valid multi-byte runes straddling one-byte refills decode intact.
+	// Valid multi-byte runes split by one-byte reads decode intact.
 	valid := []string{"\"héllo wörld żółć\"", "\"a😀b\"", "\"a\\né😀\"", `"żółć"`}
 	for _, payload := range valid {
 		want, _, err := String([]byte(payload), 0, true)
@@ -898,9 +904,9 @@ func TestStreamStringInvalidUTF8(t *testing.T) {
 	}
 }
 
-// ReadMore used to surface a simultaneous non-EOF error even when the Read
-// delivered bytes — the number scanners' refill swallow then returned a
-// TRUNCATED value with the fresh digits sitting unread in the buffer.
+// A Read may return bytes and a non-EOF error together. ReadMore must keep the
+// bytes and not report the error, so Int64 reads the new digits. Otherwise
+// the number would come back cut short, with the new digits left unread.
 func TestStreamReadMore_BytesBeforeError(t *testing.T) {
 	t.Parallel()
 	var s Stream
@@ -911,8 +917,9 @@ func TestStreamReadMore_BytesBeforeError(t *testing.T) {
 	}
 }
 
-// skipSpaceSlow's error paths wrote the PRE-compaction cursor: Offset()
-// double-counted the discarded whitespace run and Pos landed past len(buf).
+// When SkipSpace fails, Pos must account for the whitespace bytes dropped
+// from the buffer. Otherwise Offset() counts the whitespace twice and Pos
+// points past len(buf).
 func TestStreamSkipSpace_ErrorPos(t *testing.T) {
 	t.Parallel()
 	var s Stream
@@ -928,8 +935,9 @@ func TestStreamSkipSpace_ErrorPos(t *testing.T) {
 	}
 }
 
-// The surrogate-pair ensure loop swallowed transient reader errors and
-// mislabeled them as lone surrogates (spurious ErrInvalidUTF8).
+// A reader error while waiting for the low half of a surrogate pair must be
+// returned as is. It must not turn into ErrInvalidUTF8 for a lone
+// surrogate.
 func TestStreamStringSurrogate_TransientError(t *testing.T) {
 	t.Parallel()
 	var s Stream
@@ -941,22 +949,22 @@ func TestStreamStringSurrogate_TransientError(t *testing.T) {
 
 var errFlaky = errors.New("flaky reader")
 
-// bothRead delivers bytes AND an error from one Read call (io.Reader permits
-// and documents this pairing).
+// bothRead makes flakyReader return bytes and an error from one Read call.
+// io.Reader allows this.
 type bothRead struct {
 	data string
 	err  error
 }
 
-// intT also satisfies StreamDecoder (its bytes-path half is in decode_test.go).
+// intT also implements StreamDecoder. Its []byte half is in decode_test.go.
 func (intT) DecodeFromStream(s *Stream) (intT, error) {
 	v, err := s.Int64()
 	return intT(v), err
 }
 
-// sliceT is a StreamDecoder whose value carries a container, so buffer reuse
-// is observable. It threads its own buffer into the nested Slice call, which
-// is how a generated decoder with a slice field recycles it.
+// sliceT is a StreamDecoder that holds a slice, so buffer reuse can be seen.
+// It passes its own slice to the nested Slice call. A generated decoder with
+// a slice field reuses it the same way.
 type sliceT struct{ Vals []intT }
 
 func (recv sliceT) DecodeFromStream(s *Stream) (sliceT, error) {
@@ -966,9 +974,10 @@ func (recv sliceT) DecodeFromStream(s *Stream) (sliceT, error) {
 	return result, err
 }
 
-// TestStreamMethods pins the generic Stream methods: Reset chains into them,
-// and both leave the cursor positioned so the caller can keep reading — the
-// capability the bytes walkers cannot offer.
+// TestStreamMethods checks the generic Stream methods. NewStream can be
+// chained into them. Value and Slice leave the position right after the
+// value, so the caller can keep reading. The []byte functions cannot do
+// that.
 func TestStreamMethods(t *testing.T) {
 	t.Parallel()
 	v, err := NewStream(strings.NewReader("42"), nil).Value[intT]()
@@ -976,8 +985,8 @@ func TestStreamMethods(t *testing.T) {
 		t.Fatalf("Value = %v, %v; want 42", v, err)
 	}
 
-	// Slice does NOT reject trailing data, so a value after the array is
-	// still readable from the same Stream.
+	// Slice does not reject data after the array, so the next value can
+	// still be read from the same Stream.
 	s := NewStream(strings.NewReader("[1,2] 7"), nil)
 	got, err := s.Slice[intT]()
 	if err != nil || len(got) != 2 || got[0] != 1 || got[1] != 2 {
@@ -990,13 +999,13 @@ func TestStreamMethods(t *testing.T) {
 		t.Errorf("Value after Slice = %v, %v; want 7", tail, err)
 	}
 
-	// An empty array decodes to a NON-nil empty slice, matching the bytes
-	// walker and jsonv2.
+	// An empty array decodes to a non-nil empty slice, like UnmarshalSlice
+	// and jsonv2.
 	if e, err := NewStream(strings.NewReader(" [ ] "), nil).Slice[intT](); err != nil || e == nil || len(e) != 0 {
 		t.Errorf("Slice([]) = %#v, %v; want non-nil empty", e, err)
 	}
 
-	// Consecutive values off one Stream.
+	// Several values in a row from one Stream.
 	s = NewStream(strings.NewReader("1 2"), nil)
 	first, err := s.Value[intT]()
 	if err != nil || first != 1 {
@@ -1015,9 +1024,10 @@ func TestStreamMethods(t *testing.T) {
 	}
 }
 
-// TestStreamSeq pins the iterator: consecutive top-level values, a clean end
-// when the reader drains, early break leaving the Stream usable, and the
-// one-value reuse that makes a long run allocation-free.
+// TestStreamSeq checks the Seq iterator. It yields top-level values one after
+// another and ends cleanly when the reader runs out. Breaking out early
+// leaves the Stream usable. It reuses one value for every iteration, so a
+// long run does not allocate.
 func TestStreamSeq(t *testing.T) { //nolint:paralleltest // measures allocations
 	var got []intT
 	for v, err := range NewStream(strings.NewReader("1 2\n3\n"), nil).Seq[intT]() {
@@ -1030,7 +1040,7 @@ func TestStreamSeq(t *testing.T) { //nolint:paralleltest // measures allocations
 		t.Errorf("Seq = %v, want [1 2 3]", got)
 	}
 
-	// Empty / whitespace-only input ends immediately with no error.
+	// Empty or whitespace-only input ends at once with no error.
 	for _, err := range NewStream(strings.NewReader("  \n "), nil).Seq[intT]() {
 		t.Fatalf("Seq over blank input yielded %v", err)
 	}
@@ -1048,8 +1058,9 @@ func TestStreamSeq(t *testing.T) { //nolint:paralleltest // measures allocations
 		t.Errorf("malformed stream: vals=%d errs=%d, want 1/1", vals, errs)
 	}
 
-	// Seq reuses one value across iterations, so a long run settles at zero
-	// allocations; an rcv seeds that value with containers already to hand.
+	// Seq reuses one value across iterations, so a long run reaches zero
+	// allocations. Passing a value to Seq gives it slices to reuse from the
+	// start.
 	var r strings.Reader
 	var st Stream
 	sbuf := make([]byte, 0, 256)
@@ -1073,11 +1084,11 @@ func TestStreamSeq(t *testing.T) { //nolint:paralleltest // measures allocations
 		t.Errorf("rcv.Seq() allocates %.0f per drain; want 0", allocs)
 	}
 
-	// The window stays bounded over a long stream. Seq drops consumed values
-	// once the buffer is full, so refills reuse that space instead of
-	// doubling. (The generated-decoder case, where the emitted refills are
-	// grow-only and this actually bites, is TestSeqBufferStaysBounded in
-	// integrationtests.)
+	// The buffer stays small over a long stream. Once the buffer is full,
+	// Seq drops the values already consumed, so refills reuse that space
+	// instead of doubling it. Generated decoders refill without dropping
+	// bytes, which is where this really matters. That case is
+	// TestSeqBufferStaysBounded in integrationtests.
 	{
 		const n = 2000
 		var sb strings.Builder
@@ -1119,8 +1130,9 @@ func TestStreamSeq(t *testing.T) { //nolint:paralleltest // measures allocations
 	}
 }
 
-// TestStreamBufferReuse pins that rcv recycles containers — the outer slice
-// AND each element's own slice — so a steady-state re-decode stops allocating.
+// TestStreamBufferReuse checks that Slice reuses the slices it is given: the
+// outer slice and each element's own slice. Decoding again into the same
+// value then stops allocating.
 func TestStreamBufferReuse(t *testing.T) { //nolint:paralleltest // measures allocations
 	const payload = `[[1,2,3],[4,5,6]]`
 	// Reuse the reader, the Stream and its buffer so the only allocations left
@@ -1160,15 +1172,17 @@ func TestStreamBufferReuse(t *testing.T) { //nolint:paralleltest // measures all
 		t.Errorf("reuse still allocates %.0f per decode; want 0", n)
 	}
 
-	// Without rcv the decode is independent (fresh containers every time).
+	// Without a slice to reuse, each decode makes new slices.
 	fresh := decodeInto(nil)
 	if &fresh[0] == outerPtr {
 		t.Error("no-rcv decode must not reuse the previous buffer")
 	}
 }
 
-// TestStreamArray pins the lazy array iterator: same grammar as Slice, cursor
-// left past the closing bracket, one error then stop, and no accumulation.
+// TestStreamArray checks the Array iterator, which yields array elements one
+// at a time. It follows the same grammar as Slice. It leaves the position
+// after the closing bracket. On error it yields one error and stops. It
+// does not collect elements.
 func TestStreamArray(t *testing.T) {
 	t.Parallel()
 	// Agrees with Slice on element values.
@@ -1226,8 +1240,8 @@ func TestStreamArray(t *testing.T) {
 		t.Error("Array over a non-array must yield an error")
 	}
 
-	// A long array through a small buffer: nothing accumulates and the window
-	// stays bounded.
+	// A long array through a small buffer. Nothing builds up and the buffer
+	// stays small.
 	const count = 5000
 	var sb strings.Builder
 	sb.WriteByte('[')
@@ -1278,7 +1292,8 @@ func TestStreamArrayNoAlloc(t *testing.T) { //nolint:paralleltest // measures al
 	}
 }
 
-// sizedChunkReader delivers at most n bytes per Read, then a stable io.EOF.
+// sizedChunkReader returns at most n bytes per Read, then io.EOF on every
+// later call.
 type sizedChunkReader struct {
 	data []byte
 	n    int
@@ -1294,10 +1309,10 @@ func (r *sizedChunkReader) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-// TestBytesStreamTruncationErrorParity pins the drained-truncation error
-// identity of the stream walkers to the bytes path: for every truncated
-// input, SkipValue / Any / AnyNumber must surface the SAME sentinel on both
-// paths, at every chunk size (each refill site is a potential divergence).
+// TestBytesStreamTruncationErrorParity checks errors for input that ends too
+// early. For every such input, SkipValue, Any and AnyNumber must return the
+// same error on Stream as on []byte input. This must hold at every chunk
+// size, because each refill is a place where the two could differ.
 func TestBytesStreamTruncationErrorParity(t *testing.T) {
 	t.Parallel()
 	inputs := []string{
@@ -1305,7 +1320,8 @@ func TestBytesStreamTruncationErrorParity(t *testing.T) {
 		"[", "[1,", "[1", "[[", "[ ",
 		"{", `{"a"`, `{"a":`, `{"a":1`, `{"a":1,`,
 		`"ab`, `"a\`, "-", "1.", "12.", "1e",
-		// Final malformations at the end of the data (never a truncation).
+		// Broken values at the very end of the input, next to some that are
+		// only cut short.
 		"\"ab\x01", "\"abc\x01", "{\"a\x01:1}", `"\u12"`, `"ab\uZ"`, `"\u00`, `"\ud83d"`, `"\ud83d\uDE`,
 		"trux", "falsy",
 	}
@@ -1330,9 +1346,9 @@ func TestBytesStreamTruncationErrorParity(t *testing.T) {
 			}
 		}
 	}
-	// Value primitives called with the window already drained: every head
-	// used to return the raw ReadMore error where the bytes twin reports a
-	// grammar sentinel ("-" additionally covers Int64's sign arm).
+	// Value functions called when the input has already ended. Each must
+	// return the same JSON error as its []byte version, not the raw ReadMore
+	// error. "-" also covers the sign handling in Int64.
 	heads := []struct {
 		name   string
 		in     string
@@ -1357,8 +1373,9 @@ func TestBytesStreamTruncationErrorParity(t *testing.T) {
 			}
 		}
 	}
-	// ConsumeColon has no bytes twin — generated bytes code reports
-	// ErrBadObject for a missing ':', so a drained head must too.
+	// ConsumeColon has no []byte version. Generated []byte code reports
+	// ErrBadObject for a missing ':', so ConsumeColon at the end of input
+	// must too.
 	var s Stream
 	s.Reset(&sizedChunkReader{data: nil, n: 1}, nil)
 	if got := s.ConsumeColon(); got != ErrBadObject {
@@ -1366,13 +1383,14 @@ func TestBytesStreamTruncationErrorParity(t *testing.T) {
 	}
 }
 
-// TestStreamNumberLosslessRetry pins the number scanners' post-compaction
-// cursor. Every mid-number refill keeps from the VALUE HEAD, so a transient
-// reader error can return with Pos back on the intact span and the documented
-// lossless retry re-scans it. Refilling from the cursor instead threw the span
-// away: Int64 lost its '-' (silently flipping the sign) and the digit loops
-// lost the digits already folded into the accumulator, while Float64/Number
-// left a pre-compaction Pos that inflated Offset() by the discarded prefix.
+// TestStreamNumberLosslessRetry checks that a number can be read again after
+// a reader error. A refill in the middle of a number keeps the bytes from the
+// start of the number. So after a non-EOF reader error, Pos is back at the
+// start of the number with all its bytes still buffered, and a retry reads
+// it in full, as documented. If the refill dropped the bytes already read,
+// Int64 would lose its '-' and flip the sign, and the digit loops would lose
+// digits. Float64 and Number would also leave Pos unadjusted, so Offset()
+// would be too large.
 func TestStreamNumberLosslessRetry(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
@@ -1449,17 +1467,18 @@ func TestStreamNumberLosslessRetry(t *testing.T) {
 	}
 }
 
-// TestStreamString_ErrorPos pins the string scanners' error POSITION across a
-// compacting refill: Pos is buffer-relative, so an error return that skips the
-// rebase leaves the pre-compaction cursor — generated stream decoders stamp it
-// straight into ParseError.Pos, where it reads as inflated by the discarded
-// prefix and can even exceed the document length. Every scanner reports the
-// control byte itself, as the bytes twins do — skipString discards windows as
-// it goes, so the offending byte is the only position all of them can name.
+// TestStreamString_ErrorPos checks the error position of the string functions
+// after a refill that drops consumed bytes. Pos is relative to the buffer, so
+// every error return must adjust it for the dropped bytes. Generated Stream
+// decoders put the position straight into ParseError.Pos. A missed
+// adjustment makes it too large, even past the end of the input. Every
+// function reports the control byte itself, like the []byte versions.
+// skipString drops buffered data as it goes, so the bad byte is the only
+// position all of them can report.
 func TestStreamString_ErrorPos(t *testing.T) {
 	t.Parallel()
-	// A leading string is consumed first so the scanner under test starts at a
-	// non-zero Pos — the offset the stale cursor inflates.
+	// The prefix string is read first, so the function under test starts at
+	// a non-zero Pos. A missed adjustment would add that offset again.
 	const prefix = `"pre"`
 	in := prefix + `"` + strings.Repeat("a", 100) + "\x01\""
 	for _, tc := range []struct {
@@ -1493,8 +1512,9 @@ func TestStreamString_ErrorPos(t *testing.T) {
 	}
 }
 
-// TestStreamStringSlow_ErrorPos is the escape-path sibling: stringSlow copies
-// into an owned scratch and compacts s.buf from its cursor on every refill.
+// TestStreamStringSlow_ErrorPos is the same check for strings with escapes.
+// stringSlow copies into its own buffer and drops consumed bytes from the
+// Stream's buffer on every refill.
 func TestStreamStringSlow_ErrorPos(t *testing.T) {
 	t.Parallel()
 	in := `"\n` + strings.Repeat("a", 100) + "\x01\""
@@ -1513,11 +1533,12 @@ func TestStreamStringSlow_ErrorPos(t *testing.T) {
 	}
 }
 
-// TestStreamSkipNumber_StopsAfterReaderError: refillSkip records a real reader
-// error and returns false, but the fraction/exponent/sign gates read false as
-// merely "no more bytes" — each called refillSkip AGAIN, issuing fresh blocking
-// Reads before the error was ever consulted. On a reader that stops producing
-// after the hiccup, SkipValue wedged in Read and no deadline could cancel it.
+// TestStreamSkipNumber_StopsAfterReaderError checks that skipping a number
+// stops at a reader error. refillSkip records the error and returns false.
+// The checks for a fraction, exponent or sign must not read false as only
+// "no more bytes" and call refillSkip again. That would start new Reads
+// before anyone looks at the error. On a reader that sends nothing after
+// the error, SkipValue would block in Read, and no deadline could stop it.
 func TestStreamSkipNumber_StopsAfterReaderError(t *testing.T) {
 	t.Parallel()
 	block := make(chan struct{})
@@ -1538,8 +1559,8 @@ func TestStreamSkipNumber_StopsAfterReaderError(t *testing.T) {
 	}
 }
 
-// errThenBlockReader delivers its payload, then fails once, then blocks — a
-// reader whose error must end the scan instead of triggering another Read.
+// errThenBlockReader returns its data, then fails once, then blocks. Its
+// error must end the scan instead of causing another Read.
 type errThenBlockReader struct {
 	data  string
 	err   error
@@ -1560,11 +1581,12 @@ func (r *errThenBlockReader) Read(p []byte) (int, error) {
 	return 0, io.EOF
 }
 
-// TestStreamCaptureValue_MaxDepthDoesNotHang: the finality test was purely
-// positional (end < len(buf)), but skipArray/skipObject return ErrMaxDepth with
-// the cursor on the last consumed bracket — a bracket run ending at the window
-// edge looked like truncation, so the depth cap's own DoS hardening wedged the
-// goroutine in Read. No arriving byte can un-exceed the cap.
+// TestStreamCaptureValue_MaxDepthDoesNotHang checks a run of '[' deeper than
+// maxDepth on a live reader. skipArray and skipObject return ErrMaxDepth with
+// the position on the last bracket read. If that bracket is the last
+// buffered byte, CaptureValue must not judge by position alone and treat it
+// as cut short. That would block in Read, so the depth limit meant to stop
+// abuse would hang the goroutine. No later byte can undo too much depth.
 func TestStreamCaptureValue_MaxDepthDoesNotHang(t *testing.T) {
 	t.Parallel()
 	block := make(chan struct{})
@@ -1586,13 +1608,14 @@ func TestStreamCaptureValue_MaxDepthDoesNotHang(t *testing.T) {
 	}
 }
 
-// A live (never-EOF) reader that delivered a complete string whose escape or
-// control byte is final must get an error, not a hang: the `\u` refill
-// demanded 6 bytes before looking at the buffered digits, the surrogate
-// probe waited for a low half the buffered `"` already ruled out, and an
-// open-tail control byte was classified as truncated — String, SkipValue and
-// CaptureValue all blocked in Read. Each op must return what the bytes path
-// returns; a truncated escape is the control and must still wait.
+// A live reader, one that never sends EOF, has sent a complete string with a
+// broken escape or a control byte. String, SkipValue and CaptureValue must
+// return an error, not block in Read. A `\u` escape must be judged on the
+// digits already buffered, without waiting for all 6 bytes. A high surrogate
+// followed by a buffered `"` cannot get its low half, so there is nothing to
+// wait for. A control byte in an unclosed string is already an error. Each
+// call must return what the []byte version returns. An escape that is only
+// cut short is the control case and must still wait.
 func TestStreamString_LiveMalformedTailDoesNotHang(t *testing.T) {
 	t.Parallel()
 	ops := []struct {
@@ -1655,11 +1678,11 @@ func TestStreamString_LiveMalformedTailDoesNotHang(t *testing.T) {
 	}
 }
 
-// Stream.Bool leaves Pos where the scan gave up on failure — the first byte
-// that breaks the literal, or the window end when the reader drained
-// mid-literal — so a generated ParseError.Pos matches the bytes path's
-// BoolEnd at every chunk size. A transient reader error keeps Pos on the
-// literal head so a retry re-scans the whole literal.
+// When Stream.Bool fails, it leaves Pos where the scan gave up. That is the
+// first byte that does not match, or the end of the data when the reader
+// ended inside the literal. So a generated ParseError.Pos matches BoolEnd on
+// []byte input at every chunk size. After a non-EOF reader error, Pos stays
+// at the start of the literal, so a retry reads the whole literal again.
 func TestStreamBool_ErrorPosMatchesBytes(t *testing.T) {
 	t.Parallel()
 	for _, in := range []string{"tru", "trux", "fals", "falsy", "t", "f", "x", "", "true", "false"} {
@@ -1691,13 +1714,13 @@ func TestStreamBool_ErrorPosMatchesBytes(t *testing.T) {
 	}
 }
 
-// TestStreamStringSurrogate_LiveReader: after a high-surrogate escape the
-// low-surrogate lookahead used to demand six more bytes before checking whether
-// a backslash even followed — bytes that lie PAST the closing quote when the
-// escape is lone — so a live reader that had delivered the whole string blocked
-// in Read forever, where the bytes path answers at once (ErrInvalidUTF8, or
-// U+FFFD under allowinvalidutf8). The paired row is the control: pairing across
-// the lookahead must still complete.
+// TestStreamStringSurrogate_LiveReader checks a lone high surrogate escape on
+// a live reader that has sent the whole string. When looking for the low
+// half, String must first check whether a backslash follows at all. It must
+// not wait for six more bytes, which for a lone escape lie past the closing
+// quote. Otherwise it blocks in Read forever. The []byte version answers at
+// once: ErrInvalidUTF8, or U+FFFD under allowinvalidutf8. The last row is the
+// control case: a complete 4-byte character must still decode.
 func TestStreamStringSurrogate_LiveReader(t *testing.T) {
 	t.Parallel()
 	type res struct {
@@ -1734,17 +1757,17 @@ func TestStreamStringSurrogate_LiveReader(t *testing.T) {
 	}
 }
 
-// TestStreamErrorPos_MatchesBytes pins the stream error-position contract to
-// the bytes path: whatever a primitive returns, Offset() is the position the
-// bytes twin returns for the same input, at every chunk size, and never runs
-// past the window or the document. A prefix is consumed first so the window
-// has compacted by the time the primitive under test runs — an error return
-// that skipped the post-compaction rebase left the pre-compaction cursor
-// behind, inflating Offset() by the discarded prefix (chunk == len(prefix) is
-// the sharpest shape: the primitive starts at Pos == len(buf) > 0, so its head
-// refill discards the whole window before the Read fails). Covers the number
-// scanners, Bool, String, the skip tree (numbers, literals, brackets,
-// truncated escapes), CaptureValue and both Any walkers.
+// TestStreamErrorPos_MatchesBytes checks that Stream reports the same error
+// positions as []byte input. Whatever a function returns, Offset() must equal
+// the position its []byte version returns for the same input, at every
+// chunk size. It must never point past the buffer or the input. A prefix is
+// read first, so the buffer has dropped bytes by the time the function under
+// test runs. An error return that does not adjust Pos for the dropped bytes
+// makes Offset() too large. chunk == len(prefix) is the hardest case. The
+// function starts at Pos == len(buf) > 0, so its first refill drops the
+// whole buffer before the Read fails. The test covers the number functions,
+// Bool, String, skipping (numbers, literals, brackets, cut-off escapes),
+// CaptureValue, Any and AnyNumber.
 func TestStreamErrorPos_MatchesBytes(t *testing.T) {
 	t.Parallel()
 	const prefix = `"pre"`
@@ -1753,10 +1776,11 @@ func TestStreamErrorPos_MatchesBytes(t *testing.T) {
 		"12", "12.5", "1.5.5", "99999999999999999999", "-99999999999999999999",
 		"18446744073709551616", "1.5e", "0", "-0", "0x",
 	}
-	// A ctrl byte inside a SKIPPED string reports the byte's own index on
-	// both paths — the span head is gone by then on the stream (skipString
-	// discards windows as it goes), so the offending byte is the position
-	// both can name. The long rows put it past a chunk boundary.
+	// A control byte inside a skipped string reports the byte's own index
+	// on both paths. On Stream the start of the string is gone by then,
+	// because skipString drops buffered data as it goes. So the bad byte is
+	// the position both can report. The long rows put it past a chunk
+	// edge.
 	skips := []string{
 		"", " ", "-", "1.", "1e", "1e+", "1.e5", "1ee", "01", "   1.", "x", "12",
 		"n", "nul", "nulx", "null", "t", "tru", "trux", "true", "f", "fals", "false",
@@ -1766,8 +1790,8 @@ func TestStreamErrorPos_MatchesBytes(t *testing.T) {
 		"\"abc\x01", "\"abc\x01\"", "\"ab\x01c\"", "\"a\\n\x01\"",
 		"\"abcdefghijklmnop\x01\"", "\"abcdefghij\\n" + strings.Repeat("k", 20) + "\x01\"",
 	}
-	// CaptureValue skips with the bytes tree over the buffered window, so
-	// its positions are the bytes positions even inside a string.
+	// CaptureValue runs the []byte SkipValue over the buffered data, so its
+	// positions are the []byte positions, even inside a string.
 	captures := skips
 	anys := append(append([]string{}, skips...), "\"\xff\"", `["a\`, `{"k":"v\u1"}`)
 	prims := []struct {
@@ -1795,7 +1819,8 @@ func TestStreamErrorPos_MatchesBytes(t *testing.T) {
 			func(d []byte, i int) (int, error) { _, p, e := Number(d, i); return p, e },
 			func(s *Stream) error { _, e := s.Number(); return e },
 		},
-		// Bool is a head probe; generated code stamps BoolEnd's give-up byte.
+		// Bool on []byte reports the literal start. Generated code reports
+		// BoolEnd's position instead, so the test does the same.
 		{
 			"Bool",
 			[]string{"", "t", "tru", "trux", "true", "f", "fals", "false", "x", "null", "1"},
@@ -1826,8 +1851,8 @@ func TestStreamErrorPos_MatchesBytes(t *testing.T) {
 				"\"\xff\"",
 				`"a\n"`,
 				"\"a\\n\xff\"",
-				// A drained reader mid-`\uXXXX` is truncated, not a lone
-				// surrogate: both paths report the end of what arrived.
+				// Input that ends inside a `\uXXXX` is cut short, not a lone
+				// surrogate. Both paths report the end of the input.
 				`"\ud83d\ude0`,
 				`"\ud83d\`,
 				`"\ud83d\u`,

@@ -18,12 +18,13 @@ type Option func(*Emitter)
 // Header writes line at the top of every file, e.g. a generated-code marker.
 func Header(line string) Option { return HeaderFor(func(*gen.File) string { return line }) }
 
-// HeaderFor decides the first line per output file; "" writes none.
+// HeaderFor decides the first line per output file. Returning "" writes no
+// header.
 func HeaderFor(fn func(f *gen.File) string) Option { return func(e *Emitter) { e.header = fn } }
 
 // IgnoreUnknown marks every class @JsonIgnoreUnknownKeys, whatever the Go
 // decoder does with an undeclared key. A generated client outlives the server
-// version it was built against: the Go side describes a server that rejects
+// version it was built against. The Go side describes a server that rejects
 // unknown keys, not a client that must tolerate a new field.
 func IgnoreUnknown() Option { return func(e *Emitter) { e.ignoreAll = true } }
 
@@ -33,8 +34,8 @@ func External(goPath, kotlinType string, imports ...string) Option {
 	return func(e *Emitter) { e.external[goPath] = external{kotlinType, "", imports} }
 }
 
-// ExternalWith is External for a type kotlinx has no serializer for: the
-// annotation goes on the type itself, "@Contextual" or
+// ExternalWith is like External, for a type kotlinx has no serializer for.
+// The annotation goes on the type itself, for example "@Contextual" or
 // "@Serializable(with = InstantSerializer::class)".
 func ExternalWith(goPath, kotlinType, annotation string, imports ...string) Option {
 	return func(e *Emitter) { e.external[goPath] = external{kotlinType, annotation, imports} }
@@ -65,7 +66,7 @@ type Emitter struct {
 
 	placed  gen.Placed // the shape Decl is rendering
 	imports map[string]struct{}
-	aliases map[string]string // qualified name → local name
+	aliases map[string]string // local name, keyed by qualified name
 	locals  map[string]struct{}
 	optIn   bool
 	body    strings.Builder
@@ -150,13 +151,13 @@ func (e *Emitter) class(ctx *gen.Context, s *gen.Shape, name string) {
 		e.ignoreUnknown()
 	}
 	if len(s.Fields) == 0 {
-		// An object is a singleton, so == holds; a class with no members
+		// An object is a singleton, so == holds. A class with no members
 		// would compare by identity and break every data class holding one.
 		fmt.Fprintf(&e.body, "@Serializable\nobject %s\n", name)
 		return
 	}
 	fmt.Fprintf(&e.body, "@Serializable\ndata class %s(\n", name)
-	seen := map[string]string{} // property → the JSON name that took it
+	seen := map[string]string{} // the JSON name that took each property
 	for _, f := range s.Fields {
 		where := declName(s) + "." + f.JSONName
 		e.body.WriteString(kdoc(f.Doc, "    "))
@@ -288,7 +289,7 @@ func (e *Emitter) base(ctx *gen.Context, s *gen.Shape, t *gen.Type, where string
 	return "JsonElement"
 }
 
-// primitive is the Kotlin type of a scalar by its wire and Go kind.
+// primitive returns the Kotlin type of a scalar by its wire and Go kind.
 func primitive(t *gen.Type) string {
 	//exhaustive:ignore not every kind applies here
 	switch t.Wire {
@@ -309,15 +310,13 @@ func primitive(t *gen.Type) string {
 	}[t.Go]
 }
 
-// zero is the Kotlin literal of Go's zero value for a rendered type, which is
-// what an absent key decodes to on the Go side; "" for a class or enum type,
-// which has no such literal.
-// zero is the Kotlin literal of what Go's zero value encodes to, which is
-// what an absent key means on the Go side. kotlinx omits a default-valued
+// zero returns the Kotlin literal of what Go's zero value encodes to, which
+// is what an absent key means on the Go side. kotlinx omits a default-valued
 // property, so the two agree in both directions. It returns "" when the wire
-// form of the zero is not a literal of the rendered type — a formatted time
-// ("0001-01-01"), a duration ("0s"), a fixed-size byte array — and the field
-// becomes nullable instead, since a wrong default is worse than a null.
+// form of the zero is not a literal of the rendered type, such as a formatted
+// time ("0001-01-01"), a duration ("0s") or a fixed-size byte array. It also
+// returns "" for a class or enum type, which has no such literal. The field
+// then becomes nullable instead, since a wrong default is worse than a null.
 func (e *Emitter) zero(t *gen.Type, typ string) string {
 	if strings.HasSuffix(typ, "?") {
 		return "null"
@@ -391,8 +390,8 @@ func (e *Emitter) ref(ctx *gen.Context, d *gen.TypeDecl, mode gen.Mode, name str
 	return local
 }
 
-// entryName is an enum entry: RoleAdmin in type Role → ADMIN, or the value
-// when the constant name is unknown.
+// entryName returns an enum entry name: RoleAdmin in type Role becomes ADMIN.
+// It falls back to the value when the constant name is unknown.
 func entryName(typeName string, v gen.EnumValue) string {
 	base := strings.TrimPrefix(v.Name, typeName)
 	if base == "" {

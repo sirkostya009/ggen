@@ -38,7 +38,7 @@ func TestWords(t *testing.T) {
 		{"in_progress", []string{"in", "progress"}},
 		{"in-progress", []string{"in", "progress"}},
 		{"in progress", []string{"in", "progress"}},
-		// A digit is not a word boundary: X509Cert stays one word.
+		// A digit is not a word boundary, so v2Beta stays one word.
 		{"v2Beta", []string{"v2Beta"}},
 		{"", nil},
 		{"__", nil},

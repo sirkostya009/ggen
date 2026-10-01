@@ -11,10 +11,14 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// PermissiveDoc opts out of decode UTF-8 validation: raw invalid bytes flow
-// into string fields / keys / raw spans untouched, unpaired \uXXXX surrogates
-// substitute U+FFFD (encoding/json v1 shape, minus v1's raw-byte U+FFFD
-// substitution — bytes pass through verbatim here).
+// PermissiveDoc opts out of UTF-8 validation on decode. UTF-8 is the byte
+// encoding of Unicode text, and invalid bytes are ones that do not form a
+// valid character. Raw invalid bytes pass untouched into string fields, keys
+// and raw spans. An unpaired \uXXXX surrogate escape becomes U+FFFD, the
+// replacement character. A surrogate is one half of the two-escape pair that
+// encodes a character above U+FFFF. This matches encoding/json v1, except
+// that v1 also replaces raw invalid bytes with U+FFFD. Here they pass through
+// as they are.
 //
 //ggen:generate allowinvalidutf8
 type PermissiveDoc struct {
@@ -25,10 +29,11 @@ type PermissiveDoc struct {
 	Raw   json.RawMessage   `json:"raw"`
 }
 
-// TestAllowInvalidUTF8 pins the permissive contract on every string-producing
-// shape (inline window, long-span ggen.String fall, escape arm, slice elem,
-// map key+value, raw capture), bytes + stream, against the strict default
-// (Address) as control.
+// TestAllowInvalidUTF8 pins the permissive contract on every shape that
+// produces a string, on the bytes and stream paths. The shapes are the short
+// inline scan, the long-string ggen.String call, the escape branch, a slice
+// element, a map key and value, and a raw capture. The strict default,
+// Address, is the control.
 func TestAllowInvalidUTF8(t *testing.T) {
 	t.Parallel()
 	long := strings.Repeat("x", 40)
@@ -99,7 +104,7 @@ func TestAllowInvalidUTF8(t *testing.T) {
 			}
 		})
 	}
-	// Grammar errors still reject in permissive mode — only UTF-8 checks are off.
+	// Grammar errors still reject in permissive mode. Only UTF-8 checks are off.
 	for _, bad := range []string{"{\"name\":\"a\x01b\"}", `{"name":"a\q"}`, `{"name":"unterminated`} {
 		if _, _, err := (PermissiveDoc{}).DecodeFrom([]byte(bad)); err == nil {
 			t.Errorf("grammar error accepted: %q", bad)
@@ -111,10 +116,10 @@ func TestAllowInvalidUTF8(t *testing.T) {
 	}
 }
 
-// R10PermissiveAny: the opt-out reaches `any` values too — every string and
-// key inside an any field, map[string]any values and the json:",embed"
-// catch-all — on both the float64 and usenumber shapes. AnyStruct (strict)
-// is the control.
+// R10PermissiveAny shows the opt-out reaches `any` values too. That covers
+// every string and key inside an any field, map[string]any values and the
+// json:",embed" catch-all, on both the float64 and usenumber shapes.
+// AnyStruct, which is strict, is the control.
 //
 //ggen:generate allowinvalidutf8
 type R10PermissiveAny struct {

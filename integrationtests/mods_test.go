@@ -13,8 +13,8 @@ import (
 	_ "github.com/sirkostya009/ggen/integrationtests/thirdparty"
 )
 
-// ModStruct exercises pipe mods: transforms applied after decode, before
-// validation.
+// ModStruct exercises pipe mods. A mod is a transform that runs after the
+// field decodes and before validation.
 //
 //ggen:generate
 type ModStruct struct {
@@ -60,7 +60,7 @@ func TestMods_trimleft(t *testing.T) {
 		t.Errorf("SKU = %q", got.SKU)
 	}
 
-	// No prefix → pass-through.
+	// Without the prefix the value passes through unchanged.
 	in2 := []byte(`{"sku":"XYZ"}`)
 	got2, _, _ := ModStruct{}.DecodeFrom(in2)
 	if got2.SKU != "XYZ" {
@@ -68,16 +68,16 @@ func TestMods_trimleft(t *testing.T) {
 	}
 }
 
-// FallibleModStruct pairs a fallible mod with validators that would also fail;
-// the mod error short-circuits as a parse error.
+// FallibleModStruct pairs a fallible mod with validators that would also
+// fail. The mod error stops decoding and is returned as a parse error.
 //
 //ggen:generate
 type FallibleModStruct struct {
 	Email string `json:"email" pipe:"required @RejectShort contains=@ minlen=10"`
 }
 
-// FallibleModMultierrStruct: same fields in multierr mode — a fallible mod
-// still returns a single parse error, not aggregated.
+// FallibleModMultierrStruct has the same fields in multierr mode. A fallible
+// mod still returns a single parse error, not an aggregate.
 //
 //ggen:generate multierr
 type FallibleModMultierrStruct struct {
@@ -91,9 +91,10 @@ func RejectShort(s string) (string, error) {
 	return s, nil
 }
 
-// A fallible mod's own error is foreign, so it gets wrapped like every other
-// decode failure: field path + payload offset, reachable via errors.As. It
-// used to propagate bare, leaving the caller no idea which field failed.
+// A fallible mod's error comes from user code, so it is wrapped like every
+// other decode failure. The wrapper carries the field path and the payload
+// offset and is reachable via errors.As, so the caller knows which field
+// failed.
 func TestFallibleMod_errorCarriesPathAndPos(t *testing.T) {
 	t.Parallel()
 	_, _, err := FallibleModStruct{}.DecodeFrom([]byte(`{"email":"ab"}`))
@@ -145,10 +146,12 @@ func TestFallibleMod_multierrStillShortCircuits(t *testing.T) {
 	}
 }
 
-// A passing mod is a gate, not a bypass — downstream validation still runs.
+// A mod that passes does not skip validation. The validators after it still
+// run.
 func TestFallibleMod_passLetsValidationRun(t *testing.T) {
 	t.Parallel()
-	// "abcdef" passes RejectShort (len >= 3) but fails contains=@ + minlen=10.
+	// "abcdef" passes RejectShort (len >= 3) but fails contains=@ and
+	// minlen=10.
 	_, _, err := FallibleModStruct{}.DecodeFrom([]byte(`{"email":"abcdef"}`))
 	if err == nil {
 		t.Fatal("expected validation error after mod passed")
@@ -158,8 +161,8 @@ func TestFallibleMod_passLetsValidationRun(t *testing.T) {
 	}
 }
 
-// CrossPkgModStruct exercises @pkg.Func resolution for validators and mods
-// from the sibling thirdparty package, one flavor per field.
+// CrossPkgModStruct exercises @pkg.Func references to validators and mods in
+// the sibling thirdparty package, one kind per field.
 //
 //ggen:generate
 type CrossPkgModStruct struct {
@@ -215,9 +218,9 @@ func TestCrossPkgValidator_accepts(t *testing.T) {
 	}
 }
 
-// NestedMultierrStruct wraps a multierr struct plus its own rules — the
-// outer must drain inner validation errors into one aggregate, not
-// short-circuit.
+// NestedMultierrStruct wraps a multierr struct and adds its own rules. The
+// outer struct must collect the inner validation errors into one aggregate,
+// not stop at the first one.
 //
 //ggen:generate multierr
 type NestedMultierrStruct struct {
@@ -228,9 +231,10 @@ type NestedMultierrStruct struct {
 
 func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
 	t.Parallel()
-	// "abcdef" passes the mod but fails inner contains=@ + minlen=10; outer also
-	// fails on name (required/minlen=2) and code (lte=100). Inner returns a
-	// ggen.Errors aggregate the outer must drain.
+	// "abcdef" passes the mod but fails the inner contains=@ and minlen=10.
+	// The outer struct also fails on name (required, minlen=2) and on code
+	// (lte=100). The inner struct returns a ggen.Errors aggregate that the
+	// outer must merge into its own.
 	in := []byte(`{"inner":{"email":"abcdef"},"name":"","code":200}`)
 	_, _, err := NestedMultierrStruct{}.DecodeFrom(in)
 	if err == nil {
@@ -243,8 +247,8 @@ func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
 	if len(leaves) < 4 {
 		t.Errorf("got %d leaves, want >= 4 (inner+outer combined): %v", len(leaves), leaves)
 	}
-	// Inner leaves get the outer field prepended (Path ["inner","email"]);
-	// outer leaves stay one segment deep.
+	// Inner errors get the outer field name prepended to their path, giving
+	// ["inner","email"]. Outer errors keep a one-segment path.
 	buckets := map[string]int{}
 	for _, e := range leaves {
 		buckets[strings.Join(pathOf(e), ".")]++
@@ -254,8 +258,8 @@ func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
 			t.Errorf("missing %q leaf (chaining/grouping broken): %v", want, leaves)
 		}
 	}
-	// Drained inner leaves carry FULL-payload offsets — the multierr drain
-	// rebases each via ggen.ShiftPos at the nested call site.
+	// Merged inner errors carry offsets into the full payload. The nested
+	// call site shifts each one with ggen.ShiftPos.
 	var ce *ggen.ContainsError
 	if !errors.As(err, &ce) {
 		t.Fatalf("no ContainsError leaf: %v", leaves)
@@ -265,8 +269,9 @@ func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
 	}
 }
 
-// pathOf reads the Path slice off a validation error, via the pathSegments
-// interface if present, else a type switch over the leaf types this test uses.
+// pathOf returns the Path of a validation error. It uses the pathSegments
+// interface if the error has it, else a type switch over the error types this
+// test uses.
 func pathOf(e ggen.Error) []string {
 	type pathed interface{ pathSegments() []string }
 	if p, ok := e.(pathed); ok {
@@ -287,8 +292,8 @@ func pathOf(e ggen.Error) []string {
 	return nil
 }
 
-// An inner parse error returns immediately (not drained), wrapped in
-// *ggen.ParseError.
+// An inner parse error returns immediately, wrapped in *ggen.ParseError. It
+// is not collected into the aggregate.
 func TestNestedMultierr_innerParseErrorReturnsEarly(t *testing.T) {
 	t.Parallel()
 	// Inner email is a number, not a string.
@@ -302,9 +307,10 @@ func TestNestedMultierr_innerParseErrorReturnsEarly(t *testing.T) {
 	}
 }
 
-// Quoted `|`-parts: quotes scope one part (space or literal pipe inside),
-// and the quote layer must NOT leak into the allowed set / replace args —
-// a whole-value strip + naive split used to emit `'New York'` as the case.
+// QuotedParts checks quoted `|`-separated parts. Quotes wrap one part, so the
+// part can hold a space or a literal pipe. The quotes themselves must not
+// end up in the oneof values or the replace arguments. For example the
+// allowed value is `New York`, not `'New York'`.
 //
 //ggen:generate
 type QuotedParts struct {
@@ -334,8 +340,9 @@ func TestQuotedPipeParts(t *testing.T) {
 	}
 }
 
-// islower/isupper VALIDATORS (split from the old bare lower/upper, which are
-// now tolower/toupper mods): reject wrong-case content, caseless runes pass.
+// CaseRules checks the islower and isupper validators. They reject text in the
+// wrong case. Characters that have no case pass. The matching mods that change
+// case are tolower and toupper.
 //
 //ggen:generate
 type CaseRules struct {
@@ -361,12 +368,13 @@ func TestCaseValidators(t *testing.T) {
 	}
 }
 
-// A NON-multierr nested struct returns at its first validation failure —
-// mid-value. The parent's multierr drain used to append that error and keep
-// parsing from the desynced cursor, so the inner object's remaining keys
-// were read as the PARENT's (a bogus `unknown key "b"`) and the parent's own
-// later failures vanished. The drain is now gated on the callee actually
-// consuming the value (i.e. being multierr itself).
+// DrainInner is a non-multierr nested struct. It returns at its first
+// validation failure, in the middle of its object. A multierr parent must not
+// collect that error and keep parsing, because the cursor is no longer at the
+// end of the inner value. The inner object's remaining keys would be read as
+// the parent's keys (a bogus `unknown key "b"`). The parent collects and
+// continues only when the callee is multierr itself, because then the callee
+// consumes its whole value.
 //
 //ggen:generate
 type DrainInner struct {
@@ -390,8 +398,8 @@ type DrainOuter struct {
 
 func TestMultierr_NoCursorDesyncOnSingleErrorCallee(t *testing.T) {
 	t.Parallel()
-	// Single-error callee: its failure stops the parse cleanly. No key of the
-	// INNER object may surface as an unknown key of the OUTER.
+	// A single-error callee stops the parse cleanly on failure. No key of the
+	// inner object may show up as an unknown key of the outer one.
 	_, _, err := DrainOuter{}.DecodeFrom([]byte(`{"i":{"a":"x","b":"bee"},"name":"","tail":99}`))
 	if err == nil {
 		t.Fatal("expected an error")
@@ -404,7 +412,7 @@ func TestMultierr_NoCursorDesyncOnSingleErrorCallee(t *testing.T) {
 		t.Errorf("inner failure not reported: %v", err)
 	}
 
-	// A multierr callee DOES consume the whole value, so the parent still
+	// A multierr callee consumes the whole value, so the parent still
 	// collects its own field failures alongside the inner one.
 	_, _, err = DrainOuter{}.DecodeFrom([]byte(`{"ime":{"a":"x","b":"bee"},"name":"","tail":99}`))
 	errs, ok := err.(ggen.Errors)
@@ -416,10 +424,10 @@ func TestMultierr_NoCursorDesyncOnSingleErrorCallee(t *testing.T) {
 	}
 }
 
-// R10PtrPipeOrder: value steps on a POINTER field run in declared order like
-// on a value field. The deref'd leaf used to run every mod before every
-// validator, so `gte=0 clamp=0|5` clamped -1 into range and `minlen=3 trim`
-// measured the trimmed text.
+// R10PtrPipeOrder checks that pipe steps on a pointer field run in declared
+// order, as they do on a value field. Mods must not all run before the
+// validators. Otherwise `gte=0 clamp=0|5` would clamp -1 into range before
+// the check, and `minlen=3 trim` would measure the trimmed text.
 //
 //ggen:generate
 type R10PtrPipeOrder struct {
@@ -469,9 +477,10 @@ func TestMods_pointerPipeDeclaredOrder(t *testing.T) {
 	}
 }
 
-// R10BPtrPipeOrder: a POINTER field interleaving `@Func` steps with built-in
-// ones runs the whole pipeline in declared order, exactly as the value-typed
-// twin does. `@Func` steps take the field type (`*T`); built-ins the leaf.
+// R10BPtrPipeOrder checks a pointer field that mixes `@Func` steps with
+// built-in ones. The whole pipeline runs in declared order, as it does on the
+// value-typed twin. `@Func` steps take the field type (`*T`). Built-in steps
+// take the value it points to.
 //
 //ggen:generate
 type R10BPtrPipeOrder struct {
@@ -543,7 +552,8 @@ func TestMods_pointerCustomStepDeclaredOrder(t *testing.T) {
 			}
 		}
 	}
-	// multierr collects the ordered verdict rather than short-circuiting.
+	// multierr collects the result of the ordered steps instead of stopping
+	// at the first failure.
 	if _, _, err := (R10BPtrPipeOrderME{}).DecodeFrom([]byte(`{"c":1}`)); err != nil {
 		t.Errorf("multierr: @zpAdd1 must run before gte=2: %v", err)
 	}
@@ -552,9 +562,10 @@ func TestMods_pointerCustomStepDeclaredOrder(t *testing.T) {
 	}
 }
 
-// A numeric bound above float64's exact integer range must be reported as
-// written: the error's Limit/Of/Want carry the field's own kind, so nothing
-// is rounded on the way into the message.
+// R10BBigBounds checks numeric bounds above the range where float64 holds
+// every integer exactly. The bound must be reported as written. The error's
+// Limit, Of and Want carry the field's own kind, so nothing is rounded on the
+// way into the message.
 //
 //ggen:generate
 type R10BBigBounds struct {

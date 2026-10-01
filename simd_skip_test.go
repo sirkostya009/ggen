@@ -11,10 +11,12 @@ import (
 	"time"
 )
 
-// TestSkipValueSIMD_Parity pins the tier skip trees against scalar SkipValue:
-// identical end position and error identity over well-formed values (compact
-// + indented, WS runs at lane seams), truncations at every byte, and
-// randomized malformed mutations.
+// TestSkipValueSIMD_Parity checks the SIMD versions of SkipValue against the
+// plain scalar one. SIMD means handling 16, 32 or 64 bytes with one CPU
+// instruction, and a lane is one byte slot in such a vector. The end position
+// and the exact error must match. Inputs are valid values, both compact and
+// indented, with whitespace runs that cross lane edges. They also include
+// every truncation of each value and random broken mutations.
 func TestSkipValueSIMD_Parity(t *testing.T) {
 	t.Parallel()
 	tiers := []struct {
@@ -35,8 +37,8 @@ func TestSkipValueSIMD_Parity(t *testing.T) {
 	}
 	for _, s := range seeds {
 		cases = append(cases, []byte(s))
-		// Indented variants with varied WS-run widths (1..80) around every
-		// structural boundary.
+		// Indented copies with whitespace runs of 1 to 80 bytes around every
+		// bracket, comma and colon.
 		var v any
 		if json.Unmarshal([]byte(s), &v) == nil {
 			for _, indent := range []string{" ", "  ", "\t", strings.Repeat(" ", 17), strings.Repeat(" ", 80)} {
@@ -46,16 +48,18 @@ func TestSkipValueSIMD_Parity(t *testing.T) {
 				}
 			}
 		}
-		// Truncations.
+		// Every truncation.
 		for cut := range len(s) {
 			cases = append(cases, []byte(s[:cut]))
 		}
 	}
-	// Ctrl bytes inside strings, incl. truncated tails (error-split cases).
+	// Control bytes inside strings, also with the string cut off. These are
+	// cases where different code could report different errors.
 	cases = append(cases,
 		[]byte("\"abc\x01def\""), []byte("\"abc\x01def"), []byte("\"abc\x01de\\n\""),
 		[]byte("\"abc\x01de\\n"), []byte("\"\x1f\""), []byte("\"\x00"),
-		// Final malformations at the end of data vs truncated prefixes.
+		// Broken escapes and literals at the very end of the input, next to
+		// inputs that are only cut short.
 		[]byte(`"\u12"`), []byte(`"ab\uZ"`), []byte(`"\u00`), []byte(`"\ud83d\uDE`),
 		[]byte("\"ab\x01}"), []byte("trux"), []byte("fals"),
 	)
@@ -67,7 +71,7 @@ func TestSkipValueSIMD_Parity(t *testing.T) {
 			cases = append(cases, b)
 		}
 	}
-	// Leading whitespace runs at lane seams.
+	// Leading whitespace runs with lengths near lane edges.
 	for _, n := range []int{1, 15, 16, 17, 31, 32, 33, 63, 64, 65, 200} {
 		cases = append(cases, []byte(strings.Repeat(" \n\t", n)+"42"))
 	}
@@ -82,8 +86,9 @@ func TestSkipValueSIMD_Parity(t *testing.T) {
 	}
 }
 
-// TestSkipSpaceSIMD_Parity pins the tier whitespace skips against scalar
-// SkipSpace at every run length around lane seams and over random mixes.
+// TestSkipSpaceSIMD_Parity checks the SIMD versions of SkipSpace against the
+// scalar one, at every run length up to 130 and with random whitespace
+// mixes.
 func TestSkipSpaceSIMD_Parity(t *testing.T) {
 	t.Parallel()
 	tiers := []struct {
@@ -115,11 +120,12 @@ func TestSkipSpaceSIMD_Parity(t *testing.T) {
 	}
 }
 
-// TestStreamSkipValueSIMD_Parity pins the stream tier skip trees against
-// scalar Stream.SkipValue: identical Offset (the end, or the give-up byte on
-// error) and error identity across compact + indented values, truncations,
-// malformed mutations, and chunked readers forcing refills mid-string /
-// mid-whitespace-run.
+// TestStreamSkipValueSIMD_Parity checks the SIMD versions of
+// Stream.SkipValue against the scalar one. Offset must match: the end of the
+// value, or the byte where it gave up on error. The error must match too.
+// Inputs are compact and indented values, truncations and broken mutations.
+// The readers return small chunks, so the Stream must read more input in the
+// middle of a string or a whitespace run.
 func TestStreamSkipValueSIMD_Parity(t *testing.T) {
 	t.Parallel()
 	tiers := []struct {
@@ -183,8 +189,10 @@ func TestStreamSkipValueSIMD_Parity(t *testing.T) {
 	}
 }
 
-// Tier twin of TestStreamCaptureValue's "live reader" subtest — the fill loop
-// that blocked on a drained live reader was copied into every tier wrapper.
+// SIMD version of the "live reader" subtest of TestStreamCaptureValue. A live
+// reader, like a socket, may have no more data yet. CaptureValue must return
+// a complete value without waiting for more input. Each SIMD version has its
+// own read loop, so each one is checked.
 func TestStreamCaptureValueSIMD_LiveReader(t *testing.T) {
 	t.Parallel()
 	tiers := []struct {
@@ -214,9 +222,11 @@ func TestStreamCaptureValueSIMD_LiveReader(t *testing.T) {
 	}
 }
 
-// Tier twin of TestStreamCaptureValue_MaxDepthDoesNotHang — the purely
-// positional finality test was copied into every tier wrapper, so a bracket run
-// ending at the window edge wedged the goroutine in Read.
+// SIMD version of TestStreamCaptureValue_MaxDepthDoesNotHang. A run of '['
+// deeper than maxDepth must fail with ErrMaxDepth right away. It must not
+// block in Read waiting for more input when the run ends at the edge of the
+// buffered data. Each SIMD version has its own read loop, so each one is
+// checked.
 func TestStreamCaptureValueSIMD_MaxDepthDoesNotHang(t *testing.T) {
 	t.Parallel()
 	for _, tier := range []struct {
@@ -250,8 +260,10 @@ func TestStreamCaptureValueSIMD_MaxDepthDoesNotHang(t *testing.T) {
 	}
 }
 
-// Tier twin of TestStreamString_ErrorPos's skipString row: a refill site that
-// skips the post-compaction rebase leaves Pos past the end of the window.
+// SIMD version of the skipString row in TestStreamString_ErrorPos. When the
+// Stream reads more input, it may move unread bytes to the front of its
+// buffer. Every such read must then adjust Pos. If one does not, Pos ends up
+// past the end of the buffer.
 func TestStreamSkipStringSIMD_ErrorPos(t *testing.T) {
 	t.Parallel()
 	const prefix = `"pre"`
@@ -278,7 +290,8 @@ func TestStreamSkipStringSIMD_ErrorPos(t *testing.T) {
 				if s.Pos > len(s.Bytes()) {
 					t.Errorf("chunk=%d: Pos %d past len(buf) %d", chunk, s.Pos, len(s.Bytes()))
 				}
-				// The control byte's own index, as scalar skipString reports.
+				// The error offset is the control byte's own index, like the scalar
+				// skipString reports.
 				if got := s.Offset(); got != len(in)-2 {
 					t.Errorf("chunk=%d: Offset %d, want %d (the control byte)", chunk, got, len(in)-2)
 				}

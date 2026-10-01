@@ -262,8 +262,8 @@ func compileSwift(t *testing.T, swiftc, dir, module, exe string, extra []string,
 	}
 }
 
-// TestFor decides protocols, access, recursion, headers and external types
-// per package, type, directive and output file.
+// TestFor pins the ...For options that decide protocols, access, recursion,
+// headers and external types per package, type, directive and output file.
 func TestFor(t *testing.T) {
 	t.Parallel()
 	set, err := gen.Load("../testdata/api", "../testdata/other")
@@ -321,8 +321,8 @@ func TestFor(t *testing.T) {
 	}
 }
 
-// compiles the same per-type rendering, with a stand-in for the module the
-// external type comes from.
+// TestForCompiles compiles the same kind of per-type rendering as TestFor,
+// with a stand-in for the module the external type comes from.
 func TestForCompiles(t *testing.T) {
 	t.Parallel()
 	swiftc := os.Getenv("GGEN_SWIFTC")

@@ -8,8 +8,8 @@ import (
 	"unicode"
 )
 
-// LowerCamel turns a Go field name into a lowerCamel property: ID → id,
-// URLPath → urlPath, CreatedAt → createdAt.
+// LowerCamel turns a Go field name into a lowerCamel property name. ID
+// becomes id, URLPath becomes urlPath, and CreatedAt becomes createdAt.
 func LowerCamel(goName string) string {
 	r := []rune(goName)
 	i := 0
@@ -17,7 +17,7 @@ func LowerCamel(goName string) string {
 		i++
 	}
 	if i > 1 && i < len(r) {
-		i-- // the last upper rune starts the next word
+		i-- // the last uppercase letter starts the next word
 	}
 	for j := range i {
 		r[j] = unicode.ToLower(r[j])
@@ -69,7 +69,7 @@ func Ident(s string) bool {
 	return true
 }
 
-// Title upper-cases the first rune.
+// Title upper-cases the first character.
 func Title(s string) string {
 	if s == "" {
 		return s

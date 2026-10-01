@@ -1,16 +1,18 @@
-// EscapeHeavy bench family (escape_test.go).
+// EscapeHeavy benchmark family (escape_test.go).
 
 //go:generate ../ggen $GOFILE
 package bench
 
 import "strings"
 
-// EscapeDoc drives BenchmarkEscapeHeavy_Unmarshal: string fields whose payload
-// values are escape-dense (two-char escapes, \uXXXX, surrogate pairs), so the
-// decode exercises the escape/unescape path (scan.stringSlow, \uXXXX + surrogate
-// assembly) — the arm the asciiLetters-only Mega/Small/Account payloads never
-// touch. ggen's DecodeFrom is not a stdlib interface, so jsonv2/sonic decode the
-// same type via reflection (no easyjson-style method leakage).
+// EscapeDoc is the type for BenchmarkEscapeHeavy_Unmarshal. Its string values
+// are full of escapes: two-char escapes, \uXXXX escapes and surrogate pairs
+// (two \uXXXX escapes that together encode one character above U+FFFF). So
+// the decode runs the unescape path (scan.stringSlow, including \uXXXX and
+// surrogate pair handling). The Mega, Small and Account payloads use only
+// letters and digits and never reach it. ggen's DecodeFrom is not a standard
+// library interface, so jsonv2 and sonic decode the same type through
+// reflection and cannot call ggen's methods by accident.
 //
 //ggen:generate
 type EscapeDoc struct {
@@ -20,12 +22,12 @@ type EscapeDoc struct {
 	D string `json:"d"`
 }
 
-// CopyEscapeDoc is EscapeDoc under -copy (`//ggen:generate copy`) — the
-// ggen_copy row of BenchmarkEscapeHeavy_Unmarshal. On escaped strings copy mode
-// runs ggen.String → stringSlow (owned scratch) then strings.Clone (a second
-// alloc): the escape path already owns its bytes, so the clone is redundant but
-// documented -copy overhead. The row quantifies that double-copy vs the aliasing
-// ggen row.
+// CopyEscapeDoc is EscapeDoc under -copy (`//ggen:generate copy`), for the
+// ggen_copy row of BenchmarkEscapeHeavy_Unmarshal. Copy mode copies a string
+// only when it aliases the input (points into it, no copy), through
+// ggen.Detach. An escaped string is already a new allocation from stringSlow,
+// so it is not copied again. On this payload the row should cost the same as
+// the aliasing ggen row.
 //
 //ggen:generate copy
 type CopyEscapeDoc struct {
@@ -35,30 +37,32 @@ type CopyEscapeDoc struct {
 	D string `json:"d"`
 }
 
-// EscapeHeavyPayload — EscapeDoc with escape-dense string values (~12% of
-// bytes are escapes: \n \" \\ \uXXXX + a surrogate pair). Forces the
-// unescape path on every string field.
+// EscapeHeavyPayload is an EscapeDoc whose strings are full of escapes. About
+// 12% of the bytes are escapes: \n, \", \\, \uXXXX and a surrogate pair. Every
+// string field goes through the unescape path.
 var EscapeHeavyPayload []byte
 
-// EscapeSparsePayload — EscapeDoc with prose-shaped strings: long escape-free
-// runs (~90 B) punctuated by a single escape, the density real documents carry
-// (a quote or newline every sentence or two) as opposed to EscapeHeavy's
-// synthetic ~12%. Both rows are needed: the unescape loop's per-byte and bulk
-// arms are chosen by run LENGTH, so one fixture alone can only show half the
-// tradeoff.
+// EscapeSparsePayload is an EscapeDoc with strings shaped like prose. Runs of
+// about 90 bytes without escapes are separated by single escapes. That is the
+// density real documents have, a quote or newline every sentence or two,
+// unlike EscapeHeavy's artificial 12%. Both payloads are needed, because the
+// unescape loop's cost depends on how long the runs of plain bytes are. A
+// change can speed up one shape and slow down the other.
 var EscapeSparsePayload []byte
 
 func init() {
-	// Escape-dense string — the raw-string backslashes ARE JSON escape sequences:
-	// two-char (\n \" \\), a BMP \uXXXX (é), and a surrogate pair (😀). ~5 escapes
-	// per ~44 bytes → the unescape path (stringSlow, \uXXXX + surrogate assembly)
-	// runs on every field. ~5 KiB/field, cache-resident.
+	// A string full of escapes. The backslashes in this Go string are JSON
+	// escape sequences: two-char ones (\n, \", \\), a single \uXXXX (é), and
+	// a surrogate pair (😀). With about 5 escapes per 44 bytes, every field
+	// goes through the unescape path. Each field is about 5 KiB and stays in
+	// CPU cache.
 	escUnit := "word\\ntext\\\"quo\\\\te\\u00e9x\\ud83d\\ude00yz"
 	esc := strings.Repeat(escUnit, 120)
 	EscapeHeavyPayload = []byte(`{"a":"` + esc + `","b":"` + esc + `","c":"` + esc + `","d":"` + esc + `"}`)
 
-	// ~90 raw bytes per escape (one \" and one \n per sentence pair), ~5 KiB
-	// per field like EscapeHeavy so the two rows are directly comparable.
+	// About 90 plain bytes per escape (one \" and one \n per two sentences).
+	// Each field is about 5 KiB, like EscapeHeavy, so the two rows can be
+	// compared directly.
 	sparseUnit := `The quick brown fox jumps over the lazy dog near the riverbank at dawn, ` +
 		`and it said \"hello\" to nobody in particular.\n`
 	sparse := strings.Repeat(sparseUnit, 42)

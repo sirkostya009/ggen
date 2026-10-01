@@ -1,8 +1,9 @@
 package main
 
-// CLI integration tests, all under TestCLI so the built binary rides on the
-// parent's t.TempDir(). Fixtures in temp dirs outside any module exercise the
-// AST-only path with filename/basename-derived output paths.
+// CLI integration tests. They all run under TestCLI so the binary is built once
+// in the parent's t.TempDir(). Fixtures live in temp dirs outside any module,
+// so they exercise the AST-only path, where output paths come from file and
+// directory names.
 
 import (
 	"bytes"
@@ -28,8 +29,8 @@ func buildCLI(t *testing.T) string {
 	return bin
 }
 
-// runCLI invokes the built ggen binary inside dir and returns combined
-// stdout+stderr plus the run error.
+// runCLI runs the built ggen binary inside dir. It returns stdout and stderr
+// combined, and the run error.
 func runCLI(t *testing.T, bin, dir string, args ...string) (string, error) {
 	t.Helper()
 	cmd := exec.CommandContext(t.Context(), bin, args...)
@@ -52,8 +53,8 @@ func writeFixture(t *testing.T, path, content string) {
 	}
 }
 
-// writeGoMod drops a minimal go.mod into dir — walk-mode tests need module
-// context for packages.Load.
+// writeGoMod writes a minimal go.mod into dir. Walk-mode tests need a module
+// for packages.Load.
 func writeGoMod(t *testing.T, dir, module string) {
 	t.Helper()
 	writeFixture(t, filepath.Join(dir, "go.mod"), "module "+module+"\n\ngo 1.26\n")
@@ -90,10 +91,10 @@ type Msg struct {
 }
 `
 
-// nullZeroBranch matches the null→zero assignment: a consumed `null` literal
-// followed by the zero assignment. The bare assignment also appears in the
-// end-of-decode pass that zeroes omitted fields, so the peek is what tells the
-// two apart.
+// nullZeroBranch matches the code that turns null into the zero value: the
+// consumed `null` literal followed by the zero assignment. The assignment alone
+// also appears where decode zeroes omitted fields, so the `+= 4` before it is
+// what tells the two apart.
 var nullZeroBranch = regexp.MustCompile(`(?:i \+= 4|s\.Pos \+= 4)\n\s*result\.Text = ""`)
 
 func TestCLI(t *testing.T) {
@@ -136,8 +137,8 @@ func TestCLI(t *testing.T) {
 
 	t.Run("InterspersedFlags_FlagAfterPositional", func(t *testing.T) {
 		t.Parallel()
-		// flag.Parse stops at the first positional; main()'s interspersing
-		// loop must still pick up `-o out.go` placed after the file arg.
+		// flag.Parse stops at the first positional. The loop in main() must still
+		// pick up `-o out.go` placed after the file argument.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 		target := filepath.Join(dir, "after.go")
@@ -150,8 +151,8 @@ func TestCLI(t *testing.T) {
 
 	t.Run("InterspersedFlags_FlagBetweenPositionals", func(t *testing.T) {
 		t.Parallel()
-		// A flag wedged between two positionals: both positionals must reach
-		// generateSingleFile in order and the flag must still take effect.
+		// A flag between two positionals. Both positionals must reach
+		// generateSingleFile in order, and the flag must still apply.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
 
@@ -181,7 +182,7 @@ type Skipped struct {
 
 	t.Run("Verbosity_QuietSuppressesInfo", func(t *testing.T) {
 		t.Parallel()
-		// Default level (-v not set) suppresses `wrote <file>` info lines.
+		// Without -v, the `wrote <file>` info lines are not printed.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 		out, err := runCLI(t, bin, dir, "msg.go")
@@ -196,7 +197,7 @@ type Skipped struct {
 
 	t.Run("Verbosity_VShowsInfo", func(t *testing.T) {
 		t.Parallel()
-		// -v lifts the floor to LevelInfo so `wrote <file>` lines appear.
+		// -v raises the level to LevelInfo, so `wrote <file>` lines appear.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 		out, err := runCLI(t, bin, dir, "-v", "msg.go")
@@ -210,8 +211,8 @@ type Skipped struct {
 
 	t.Run("Verbosity_VVShowsDebug", func(t *testing.T) {
 		t.Parallel()
-		// -vv lifts to LevelDebug; the dir-mode `parsing <pkg>` line is the
-		// stable marker.
+		// -vv raises the level to LevelDebug. The directory-mode `parsing <pkg>`
+		// line is the stable marker.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "msg.go"),
 			strings.ReplaceAll(minimalStruct, "fixture", "vv"))
@@ -229,8 +230,8 @@ type Skipped struct {
 
 	t.Run("Verbosity_VVVShowsTrace", func(t *testing.T) {
 		t.Parallel()
-		// -vvv lifts to LevelTrace; an annotation-free dir fires the
-		// `no annotated structs` trace line.
+		// -vvv raises the level to LevelTrace. A directory with no annotations prints
+		// the `no annotated structs` trace line.
 		base := t.TempDir()
 		writeGoMod(t, base, "vvvtrace")
 		sub := filepath.Join(base, "empty")
@@ -249,7 +250,7 @@ type Bare struct {}
 
 	t.Run("Verbosity_PositionedFlagAfterTarget", func(t *testing.T) {
 		t.Parallel()
-		// Verbosity flags placed after a positional must still take effect.
+		// Verbosity flags placed after a positional must still apply.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 		out, err := runCLI(t, bin, dir, "msg.go", "-v")
@@ -263,7 +264,7 @@ type Bare struct {}
 
 	t.Run("InterspersedFlags_BoolFlagAfterPositional", func(t *testing.T) {
 		t.Parallel()
-		// Valueless bool flags after a positional must also be picked up.
+		// Bool flags without a value after a positional must also be picked up.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 		if out, err := runCLI(t, bin, dir, "msg.go", "-marshal"); err != nil {
@@ -277,8 +278,8 @@ type Bare struct {}
 
 	t.Run("SingleFile_NoAnnotation_ErrorsWithHint", func(t *testing.T) {
 		t.Parallel()
-		// No annotation and no name filter must error with a fix hint, not
-		// fall back to all exported structs.
+		// No annotation and no name filter must give an error with a fix hint. It must
+		// not fall back to every exported struct.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
 
@@ -303,7 +304,7 @@ type Msg struct {
 
 	t.Run("SingleFile_ExplicitNameOverridesMissingAnnotation", func(t *testing.T) {
 		t.Parallel()
-		// An explicit positional name processes a struct lacking an annotation.
+		// A struct named on the command line is processed even without an annotation.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
 
@@ -322,8 +323,8 @@ type Msg struct {
 
 	t.Run("SingleFile_OnlyEmitsRequestedFileStructs", func(t *testing.T) {
 		t.Parallel()
-		// Single-file mode restricts output to types declared in the passed
-		// file, even inside a real module where packages.Load sees siblings.
+		// Single-file mode only emits types declared in the given file. This holds
+		// even inside a real module, where packages.Load sees the other files.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "go.mod"), `module sfscope
 
@@ -384,7 +385,7 @@ type SoloB struct {
 		base := t.TempDir()
 		dir := filepath.Join(base, "fixture")
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
-		// Different struct name avoids a duplicate declaration in the package.
+		// A different struct name avoids a duplicate declaration in the package.
 		writeFixture(t, filepath.Join(dir, "msg_test.go"),
 			strings.ReplaceAll(minimalStruct, "Msg", "MsgT"))
 		if out, err := runCLI(t, bin, dir, "."); err != nil {
@@ -393,8 +394,8 @@ type SoloB struct {
 		mustHaveFile(t, filepath.Join(dir, "fixture_ggen.go"))
 		mustHaveFile(t, filepath.Join(dir, "fixture_ggen_test.go"))
 
-		// Msg (msg.go) routes to the library build, MsgT (msg_test.go) to the
-		// test build; neither may bleed into the other's _gen file.
+		// Msg from msg.go goes to the library build and MsgT from msg_test.go to the
+		// test build. Neither may appear in the other's generated file.
 		nonTest := mustReadOutput(t, filepath.Join(dir, "fixture_ggen.go"))
 		test := mustReadOutput(t, filepath.Join(dir, "fixture_ggen_test.go"))
 		if !strings.Contains(nonTest, "Msg) DecodeFrom") {
@@ -428,9 +429,9 @@ type Msg struct{ Text string }
 
 	t.Run("Directory_BuildTag_BucketsIntoSeparateFiles", func(t *testing.T) {
 		t.Parallel()
-		// A struct behind `//go:build foo` must land in a separate
-		// `<dir>_foo_ggen.go` with the matching header, not pollute the
-		// untagged gen file.
+		// A struct behind `//go:build foo` must go to a separate
+		// `<dir>_foo_ggen.go` with the matching header, not into the untagged
+		// generated file.
 		base := t.TempDir()
 		dir := filepath.Join(base, "fixture")
 		writeFixture(t, filepath.Join(dir, "plain.go"), `package fixture
@@ -453,7 +454,7 @@ type Tagged struct {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
 
-		// Untagged bucket: Plain in fixture_ggen.go, no //go:build header.
+		// Untagged bucket: Plain in fixture_ggen.go, with no //go:build header.
 		plain := filepath.Join(dir, "fixture_ggen.go")
 		mustHaveFile(t, plain)
 		plainBody := mustReadOutput(t, plain)
@@ -484,8 +485,8 @@ type Tagged struct {
 
 	t.Run("Directory_BuildTag_MultiTermExpression", func(t *testing.T) {
 		t.Parallel()
-		// Multi-term `//go:build foo && bar` canonicalizes to a `foo_bar`
-		// filename slug; the header keeps the original expression verbatim.
+		// A multi-term `//go:build foo && bar` becomes the `foo_bar` filename slug.
+		// The header keeps the original expression as is.
 		base := t.TempDir()
 		dir := filepath.Join(base, "fixture")
 		writeFixture(t, filepath.Join(dir, "tagged.go"), `//go:build foo && bar
@@ -500,7 +501,7 @@ type Tagged struct {
 		if out, err := runCLI(t, bin, dir, "."); err != nil {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
-		// Slug collapses ` && ` into a single underscore.
+		// The slug turns ` && ` into one underscore.
 		path := filepath.Join(dir, "fixture_foo_bar_ggen.go")
 		mustHaveFile(t, path)
 		body := mustReadOutput(t, path)
@@ -547,10 +548,8 @@ type Tagged struct {
 
 	t.Run("MultipleTargets_AllProcessed", func(t *testing.T) {
 		t.Parallel()
-		// Every positional is its own target in dir/pattern mode (like `go
-		// build ./a ./b`). They used to be silently dropped after the first,
-		// so the repo's own `ggen ./decode/... ./encode/... ./scan/...` regen
-		// line only ever visited decode.
+		// Every positional is its own target in directory and pattern mode, like
+		// `go build ./a ./b`.
 		base := t.TempDir()
 		writeGoMod(t, base, "multitarget")
 		for _, name := range []string{"a", "b", "c"} {
@@ -584,8 +583,8 @@ type Tagged struct {
 
 	t.Run("WalkStopsAtSubModuleBoundary", func(t *testing.T) {
 		t.Parallel()
-		// `ggen ./...` is module-scoped: a subdirectory with its own go.mod
-		// is a separate module and must not be visited by the parent's run.
+		// `ggen ./...` is limited to the current module. A subdirectory with its own
+		// go.mod is a separate module, and the parent's run must not visit it.
 		base := t.TempDir()
 		writeGoMod(t, base, "rootmod")
 		writeFixture(t, filepath.Join(base, "root.go"),
@@ -597,15 +596,15 @@ type Tagged struct {
 		if out, err := runCLI(t, bin, base, "./..."); err != nil {
 			t.Fatalf("ggen ./...: %v\n%s", err, out)
 		}
-		// Root module generated; sub-module skipped.
+		// The root module is generated and the sub-module is skipped.
 		mustHaveFile(t, filepath.Join(base, filepath.Base(base)+"_ggen.go"))
 		mustNotHaveFile(t, filepath.Join(sub, "sub_ggen.go"))
 	})
 
 	t.Run("Dot_DoesNotRecurseIntoSubpackages", func(t *testing.T) {
 		t.Parallel()
-		// `.` is single-package mode: subdirectories must not be touched even
-		// when they hold annotated structs (the `.` vs `./...` divergence).
+		// `.` is single-package mode. Subdirectories must not be touched, even when
+		// they hold annotated structs. This is how `.` differs from `./...`.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "top.go"),
 			strings.ReplaceAll(minimalStruct, "fixture", "root"))
@@ -615,14 +614,14 @@ type Tagged struct {
 		if out, err := runCLI(t, bin, base, "."); err != nil {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
-		// Top-level processed; subdir untouched.
+		// The top level is processed and the subdirectory is untouched.
 		mustHaveFile(t, filepath.Join(base, filepath.Base(base)+"_ggen.go"))
 		mustNotHaveFile(t, filepath.Join(sub, "sub_ggen.go"))
 	})
 
 	t.Run("Walk_RelativeSubtreePattern", func(t *testing.T) {
 		t.Parallel()
-		// `./pkg/...` scopes to a subtree; sibling dirs outside the prefix
+		// `./pkg/...` covers only that subtree. Sibling directories outside the prefix
 		// are not processed.
 		base := t.TempDir()
 		writeGoMod(t, base, "subtree")
@@ -632,7 +631,7 @@ type Tagged struct {
 			strings.ReplaceAll(minimalStruct, "fixture", "pkg"))
 		writeFixture(t, filepath.Join(leaf, "msg.go"),
 			strings.ReplaceAll(strings.ReplaceAll(minimalStruct, "fixture", "leaf"), "Msg", "Leaf"))
-		// Sibling dir outside the prefix — must not be processed.
+		// A sibling directory outside the prefix. It must not be processed.
 		sibling := filepath.Join(base, "other")
 		writeFixture(t, filepath.Join(sibling, "msg.go"),
 			strings.ReplaceAll(strings.ReplaceAll(minimalStruct, "fixture", "other"), "Msg", "Other"))
@@ -646,8 +645,8 @@ type Tagged struct {
 
 	t.Run("SingleFile_GathersErrorsAcrossStructs", func(t *testing.T) {
 		t.Parallel()
-		// Two structs with broken rules: one invocation must surface both
-		// diagnostics, not just the first.
+		// Two structs with broken rules. One run must report both errors, not just the
+		// first.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "multi.go"), `package fixture
 
@@ -675,7 +674,7 @@ type Test2 struct {
 
 	t.Run("SingleFile_GathersErrorsAcrossFields", func(t *testing.T) {
 		t.Parallel()
-		// Each bad field's applicability error must surface.
+		// The applicability error of each bad field must be reported.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "multi.go"), `package fixture
 
@@ -699,8 +698,8 @@ type Multi struct {
 
 	t.Run("SingleFile_GathersValAndModErrorsOnSameField", func(t *testing.T) {
 		t.Parallel()
-		// A field with both a bad val rule and a bad mod must surface both
-		// diagnostics, not short-circuit on the first.
+		// A field with both a bad validation rule and a bad mod must report both
+		// errors, not stop at the first.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "multi.go"), `package fixture
 
@@ -713,14 +712,14 @@ type Bad struct {
 		if err == nil {
 			t.Fatalf("expected non-zero exit, got:\n%s", out)
 		}
-		// Both alphanum (val) and trim (mod) must appear, each with its own
-		// position prefix.
+		// Both alphanum (a validation rule) and trim (a mod) must appear, each with
+		// its own position prefix.
 		for _, want := range []string{"`alphanum`", "`trim`"} {
 			if !strings.Contains(out, want) {
 				t.Errorf("missing diagnostic for %s, got:\n%s", want, out)
 			}
 		}
-		// Two position prefixes — both sub-errors got positions.
+		// Two position prefixes, so both errors got a position.
 		if strings.Count(out, "multi.go:") < 2 {
 			t.Errorf("expected ≥2 position prefixes (val + mod), got:\n%s", out)
 		}
@@ -728,9 +727,9 @@ type Bad struct {
 
 	t.Run("Walk_GathersErrorsAcrossPackages", func(t *testing.T) {
 		t.Parallel()
-		// Walk mode must not bail on the first failing package: two bad dirs
-		// + one clean, all errors surface, the clean dir still writes, exit
-		// is non-zero.
+		// Walk mode must not stop at the first failing package. With two bad
+		// directories and one clean one, all errors are reported, the clean directory
+		// still gets its file, and the exit status is non-zero.
 		base := t.TempDir()
 		writeGoMod(t, base, "walkerrs")
 		writeFixture(t, filepath.Join(base, "a", "msg.go"), `package a
@@ -764,7 +763,8 @@ type C struct {
 		if !strings.Contains(out, "`numeric`") {
 			t.Errorf("package b's numeric error missing, got:\n%s", out)
 		}
-		// The clean package still writes — the walk continued past the broken ones.
+		// The clean package still gets its file, so the walk went on past the
+		// broken ones.
 		if !strings.Contains(out, "wrote") || !strings.Contains(out, "c_ggen.go") {
 			t.Errorf("clean package c should still emit `wrote ./c/c_ggen.go`, got:\n%s", out)
 		}
@@ -772,8 +772,8 @@ type C struct {
 
 	t.Run("Walk_RejectsOutputOverride", func(t *testing.T) {
 		t.Parallel()
-		// `-o` (one file) is incompatible with pattern mode (one per package);
-		// rejected up front, before packages.Load, so no go.mod is needed.
+		// `-o` names one file, and pattern mode writes one file per package. The
+		// combination is rejected before packages.Load runs, so no go.mod is needed.
 		base := t.TempDir()
 		a := filepath.Join(base, "a")
 		writeFixture(t, filepath.Join(a, "msg.go"),
@@ -787,12 +787,12 @@ type C struct {
 		}
 	})
 
-	// --- -dry: parse-only validation, no file emission ---
+	// --- -dry: validation only, no files written ---
 
 	t.Run("Dry_NoFileWritten", func(t *testing.T) {
 		t.Parallel()
-		// Each dispatch mode (single-file, directory, walk) must exit zero on
-		// a clean fixture and leave no _ggen.go on disk.
+		// Each mode (single file, directory, walk) must exit zero on a clean fixture
+		// and leave no _ggen.go on disk.
 		cases := []struct {
 			name  string
 			setup func(t *testing.T) (runDir string, args []string, mustAbsent []string)
@@ -851,9 +851,9 @@ type C struct {
 
 	t.Run("Dry_SurfacesAllErrors", func(t *testing.T) {
 		t.Parallel()
-		// Dry mode must surface every parse-time diagnostic, exit non-zero,
-		// and leave nothing on disk — across both the per-field (single-file)
-		// and per-package (walk) collection paths.
+		// Dry mode must report every parse-time error, exit non-zero, and leave
+		// nothing on disk. This covers both the per-field collection in single-file
+		// mode and the per-package collection in walk mode.
 		cases := []struct {
 			name  string
 			setup func(t *testing.T) (runDir string, args, wantSubs, mustAbsent []string)
@@ -928,7 +928,7 @@ type B struct {
 
 	t.Run("Dry_RejectsOutputOverride", func(t *testing.T) {
 		t.Parallel()
-		// -o and -pkg are dead in dry mode (nothing is written) — reject
+		// -o and -pkg do nothing in dry mode because nothing is written. Reject them
 		// up front.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
@@ -950,7 +950,7 @@ type B struct {
 
 	t.Run("WalkSkipsDotAndUnderscoreDirs", func(t *testing.T) {
 		t.Parallel()
-		// packages.Load inherits `go list`'s dot-/underscore-dir skip.
+		// packages.Load skips directories starting with `.` or `_`, like `go list`.
 		base := t.TempDir()
 		writeGoMod(t, base, "skipdirs")
 		hidden := filepath.Join(base, ".hidden")
@@ -968,7 +968,7 @@ type B struct {
 		mustNotHaveFile(t, filepath.Join(skipped, "_skipped_ggen.go"))
 	})
 
-	// --- flag plumbing into generated output ---
+	// --- flags reaching the generated output ---
 
 	t.Run("PkgOverride", func(t *testing.T) {
 		t.Parallel()
@@ -1020,7 +1020,7 @@ type Validated struct {
 	Name string `+"`"+`json:"name" pipe:"required minlen=1"`+"`"+`
 }
 `)
-		// Default: rules emit typed errors.
+		// By default, rules emit typed errors.
 		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
 			t.Fatalf("ggen default: %v\n%s", err, out)
 		}
@@ -1028,7 +1028,7 @@ type Validated struct {
 		if !strings.Contains(body, "MinLenError") || !strings.Contains(body, "RequiredError") {
 			t.Fatalf("expected MinLenError + RequiredError in default output, got:\n%s", body)
 		}
-		// -novalidate: rules elided.
+		// With -novalidate, the rules are left out.
 		if out, err := runCLI(t, bin, dir, "-novalidate", "msg.go"); err != nil {
 			t.Fatalf("ggen -novalidate: %v\n%s", err, out)
 		}
@@ -1040,14 +1040,14 @@ type Validated struct {
 
 	t.Run("HtmlescapeFlag_OptsIntoEscapeAppender", func(t *testing.T) {
 		t.Parallel()
-		// Default emits AppendStringNoHTML (literal `<`/`>`/`&`); -htmlescape
-		// switches to the escaping AppendString. -simd=off pins the tier so the
-		// assertions hold under an ambient GOEXPERIMENT=simd, which would
-		// otherwise auto-select the AVX-suffixed appenders.
+		// By default the output uses AppendStringNoHTML, which writes `<`, `>` and `&`
+		// as is. -htmlescape switches to AppendString, which escapes them. -simd=off
+		// fixes the tier so the checks hold when GOEXPERIMENT=simd is set in the
+		// environment, which would otherwise pick the AVX appenders.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
 
-		// Default → no-html appender.
+		// By default, the appender that does not escape HTML.
 		if out, err := runCLI(t, bin, dir, "-simd=off", "msg.go"); err != nil {
 			t.Fatalf("ggen default: %v\n%s", err, out)
 		}
@@ -1056,7 +1056,7 @@ type Validated struct {
 			t.Fatalf("expected AppendStringNoHTML by default, got:\n%s", body)
 		}
 
-		// -htmlescape → escaping appender (and not the no-html one).
+		// With -htmlescape, the escaping appender and not the other one.
 		if out, err := runCLI(t, bin, dir, "-htmlescape", "-simd=off", "msg.go"); err != nil {
 			t.Fatalf("ggen -htmlescape: %v\n%s", err, out)
 		}
@@ -1073,7 +1073,7 @@ type Validated struct {
 		t.Parallel()
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
-		// Default: unknown keys produce UnknownKeyError.
+		// By default, unknown keys produce UnknownKeyError.
 		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
 			t.Fatalf("ggen default: %v\n%s", err, out)
 		}
@@ -1081,7 +1081,7 @@ type Validated struct {
 		if !strings.Contains(body, "UnknownKeyError") {
 			t.Fatalf("expected UnknownKeyError in default output, got:\n%s", body)
 		}
-		// -ignoreunknown: error site silently drops unknowns.
+		// With -ignoreunknown, unknown keys are skipped without an error.
 		if out, err := runCLI(t, bin, dir, "-ignoreunknown", "msg.go"); err != nil {
 			t.Fatalf("ggen -ignoreunknown: %v\n%s", err, out)
 		}
@@ -1095,7 +1095,7 @@ type Validated struct {
 		t.Parallel()
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), minimalStruct)
-		// Default: a non-pointer scalar has no null branch (strict-reject).
+		// By default, a non-pointer scalar has no null branch, so null is rejected.
 		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
 			t.Fatalf("ggen default: %v\n%s", err, out)
 		}
@@ -1103,7 +1103,7 @@ type Validated struct {
 		if nullZeroBranch.MatchString(body) {
 			t.Fatalf("did not expect a null→zero branch by default, got:\n%s", body)
 		}
-		// -nullzero: an explicit null sets the field to its zero value.
+		// With -nullzero, an explicit null sets the field to its zero value.
 		if out, err := runCLI(t, bin, dir, "-nullzero", "msg.go"); err != nil {
 			t.Fatalf("ggen -nullzero: %v\n%s", err, out)
 		}
@@ -1158,13 +1158,13 @@ type Skipped struct {
 		}
 	})
 
-	// --- cross-package type-info-driven dispatch ---
+	// --- dispatch to types from other packages, using type info ---
 
 	t.Run("CrossPkgText_StaticDispatch", func(t *testing.T) {
 		t.Parallel()
-		// With a real go.mod, a sibling-package type implementing
-		// TextAppender/TextMarshaler/TextUnmarshaler must route through the
-		// text path (AppendText/UnmarshalText), not json.Marshal.
+		// With a real go.mod, a type from another package that implements
+		// TextAppender, TextMarshaler and TextUnmarshaler must use the text methods
+		// (AppendText and UnmarshalText), not json.Marshal.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "go.mod"), `module crosspkgtest
 
@@ -1217,8 +1217,8 @@ type Msg struct {
 		}
 		body := mustReadOutput(t, filepath.Join(base, "consumer", "consumer_ggen.go"))
 
-		// Field-bound match: the call receiver must be exactly result.Tag /
-		// s.Tag (two UnmarshalText: DecodeFrom + DecodeFromStream).
+		// The call receiver must be exactly result.Tag or s.Tag. There are two
+		// UnmarshalText calls, one in DecodeFrom and one in DecodeFromStream.
 		if got := strings.Count(body, "result.Tag.UnmarshalText("); got != 2 {
 			t.Errorf("expected 2 result.Tag.UnmarshalText calls (DecodeFrom + DecodeFromStream), got %d:\n%s", got, body)
 		}
@@ -1233,9 +1233,9 @@ type Msg struct {
 		}
 	})
 
-	// taggedExtPkg: a TextMarshaler/Unmarshaler type satisfied purely
-	// structurally (no `import "encoding"`). Shared by the third-party and
-	// go.work variants below.
+	// taggedExtPkg is a type that implements TextMarshaler and TextUnmarshaler
+	// only by its methods, without `import "encoding"`. The third-party and
+	// go.work tests below share it.
 	const taggedExtPkg = `package ext
 
 type Tagged struct {
@@ -1259,8 +1259,8 @@ func (t *Tagged) UnmarshalText(b []byte) error {
 	return nil
 }
 `
-	// Consumer source; the `tagged` import alias forces type resolution via
-	// go/types method-set scan, not by name.
+	// The consumer source. The `tagged` import name forces the type to be found
+	// by scanning its method set with go/types, not by its name.
 	const taggedConsumerSrc = `package consumer
 
 import tagged "consumertest/ext"
@@ -1273,8 +1273,8 @@ type Msg struct {
 
 	t.Run("CrossPkgText_RealWorldThirdParty", func(t *testing.T) {
 		t.Parallel()
-		// Type from another package in the same module, satisfying the text
-		// interfaces structurally; detected via types.Implements.
+		// A type from another package in the same module that implements the text
+		// interfaces by its methods. types.Implements finds it.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "go.mod"), `module consumertest
 
@@ -1301,7 +1301,7 @@ go 1.26
 
 	t.Run("CrossPkgText_GoWorkspace", func(t *testing.T) {
 		t.Parallel()
-		// Consumer and ext as separate modules wired via go.work — proves the
+		// The consumer and ext are separate modules joined by go.work. This shows the
 		// loader honors workspace mode.
 		base := t.TempDir()
 		consumerDir := filepath.Join(base, "consumer")
@@ -1341,8 +1341,8 @@ go 1.26
 
 	t.Run("CrossPkgText_FallbackWithoutModule", func(t *testing.T) {
 		t.Parallel()
-		// Without a go.mod, AST-only mode routes the cross-package field type
-		// through the json fallback (degraded-mode contract).
+		// Without a go.mod, AST-only mode sends a field type from another package
+		// through the encoding/json fallback. This is the expected degraded behavior.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "ext", "text.go"), `package ext
 
@@ -1368,7 +1368,7 @@ type Msg struct {
 			t.Fatalf("ggen .: %v\n%s", err, out)
 		}
 		body := mustReadOutput(t, filepath.Join(consumerDir, "consumer_ggen.go"))
-		// Field-bound match: the json fallback must land on result.Tag / s.Tag.
+		// The json fallback must decode into result.Tag and encode s.Tag.
 		if got := strings.Count(body, "json.Unmarshal(data[start:i], &result.Tag)"); got != 1 {
 			t.Errorf("expected 1 json.Unmarshal on &result.Tag in DecodeFrom, got %d:\n%s", got, body)
 		}
@@ -1383,12 +1383,12 @@ type Msg struct {
 		}
 	})
 
-	// --- @Func custom validators / mods ---
+	// --- @Func custom validators and mods ---
 
 	t.Run("CustomFunc_SamePackage_Validator", func(t *testing.T) {
 		t.Parallel()
-		// Same-package `pipe:"@EvenOnly"` resolves to a top-level function;
-		// generated code calls EvenOnly(result.N) directly.
+		// `pipe:"@EvenOnly"` in the same package resolves to a top-level function.
+		// Generated code calls EvenOnly(result.N) directly.
 		base := t.TempDir()
 		dir := filepath.Join(base, "customfunc")
 		writeFixture(t, filepath.Join(base, "go.mod"), `module customfunc
@@ -1425,8 +1425,8 @@ func EvenOnly(n int) error {
 
 	t.Run("CustomFunc_SamePackage_PureMod", func(t *testing.T) {
 		t.Parallel()
-		// Pure mod `func(string) string` emits a direct assignment, no
-		// error-propagation branch.
+		// A mod of type `func(string) string` cannot fail. It emits a plain
+		// assignment with no error branch.
 		base := t.TempDir()
 		dir := filepath.Join(base, "puremod")
 		writeFixture(t, filepath.Join(base, "go.mod"), `module puremod
@@ -1455,8 +1455,8 @@ func Squash(s string) string { return strings.ReplaceAll(s, " ", "") }
 
 	t.Run("CustomFunc_SamePackage_FallibleMod", func(t *testing.T) {
 		t.Parallel()
-		// Fallible mod `func(T) (T, error)`: error-propagation branch,
-		// surfacing as a parse error (early return), not validation.
+		// A mod of type `func(T) (T, error)` can fail. It emits an error branch that
+		// returns a parse error at once, not a validation error.
 		base := t.TempDir()
 		dir := filepath.Join(base, "fallible")
 		writeFixture(t, filepath.Join(base, "go.mod"), `module fallible
@@ -1493,8 +1493,8 @@ func Reject(s string) (string, error) {
 
 	t.Run("CustomFunc_CrossPackage", func(t *testing.T) {
 		t.Parallel()
-		// Cross-package `@ext.Validate`: ggen runs from inside the consumer
-		// dir with `.`, resolving the import via packages.Load up to go.mod.
+		// `@ext.Validate` from another package. ggen runs with `.` inside the consumer
+		// directory and resolves the import through packages.Load, up to go.mod.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "go.mod"), `module customfunc
 
@@ -1535,10 +1535,10 @@ type Msg struct {
 
 	t.Run("CustomFunc_CrossPackage_BlankImport_NameMismatch", func(t *testing.T) {
 		t.Parallel()
-		// Dir `lib` declares `package crunchy`, blank-imported so ggen can
-		// resolve `@crunchy.Validate`. The resolver must follow the
-		// `_`-aliased import and match the tag prefix against the package's
-		// declared Name(), not the directory basename.
+		// Directory `lib` declares `package crunchy` and is imported with `_` so ggen
+		// can resolve `@crunchy.Validate`. The resolver must follow the `_` import and
+		// match the tag prefix against the package's declared name, not the directory
+		// name.
 		base := t.TempDir()
 		writeFixture(t, filepath.Join(base, "go.mod"), `module customfunc
 
@@ -1579,7 +1579,7 @@ type Msg struct {
 
 	t.Run("CustomFunc_SignatureMismatch_Error", func(t *testing.T) {
 		t.Parallel()
-		// Wrong validator signature must be rejected at parse time.
+		// A validator with the wrong signature must be rejected at parse time.
 		base := t.TempDir()
 		dir := filepath.Join(base, "badshape")
 		writeFixture(t, filepath.Join(base, "go.mod"), `module badshape
@@ -1608,8 +1608,9 @@ func WrongShape(s string) (string, int) { return s, 0 }
 
 	t.Run("CustomFunc_ParamMismatch_Error", func(t *testing.T) {
 		t.Parallel()
-		// Param-type mismatch (field int, func takes string) must be rejected
-		// at parse time — the types.Identical check in resolveCustomFunc.
+		// A parameter type mismatch, where the field is int and the func takes
+		// string, must be rejected at parse time by the types.Identical check in
+		// classifyValueFunc.
 		base := t.TempDir()
 		dir := filepath.Join(base, "paramshape")
 		writeFixture(t, filepath.Join(base, "go.mod"), `module paramshape
@@ -1639,7 +1640,7 @@ func WrongParam(s string) error { return nil }
 
 	t.Run("Alias_Primitive_Generates", func(t *testing.T) {
 		t.Parallel()
-		// A primitive alias gets DecodeFrom / AppendJSON on the named type.
+		// A primitive alias gets DecodeFrom and AppendJSON on the named type.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
 
@@ -1669,7 +1670,7 @@ type Count int
 
 	t.Run("Alias_Container_Generates", func(t *testing.T) {
 		t.Parallel()
-		// Slice / map / array aliases generate through the AST-only fallback.
+		// Slice, map and array aliases generate through the AST-only fallback.
 		dir := t.TempDir()
 		writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
 
@@ -1702,8 +1703,8 @@ type Tuple [3]int
 
 	t.Run("Alias_RejectsUnsupported", func(t *testing.T) {
 		t.Parallel()
-		// Interfaces, channels, funcs have no JSON wire shape — reject at
-		// parse time.
+		// Interfaces, channels and funcs have no JSON form. Reject them at parse
+		// time.
 		cases := []struct {
 			name string
 			body string
@@ -1734,7 +1735,7 @@ type Tuple [3]int
 
 	t.Run("CustomFunc_NotFound_Error", func(t *testing.T) {
 		t.Parallel()
-		// `@Missing` references a nonexistent function — reject at parse time.
+		// `@Missing` names a function that does not exist. Reject it at parse time.
 		base := t.TempDir()
 		dir := filepath.Join(base, "missing")
 		writeFixture(t, filepath.Join(base, "go.mod"), `module missing
@@ -1757,7 +1758,7 @@ type Msg struct {
 		}
 	})
 
-	// --- usage / no-args ---
+	// --- usage with no arguments ---
 
 	t.Run("NoArgs_PrintsUsage", func(t *testing.T) {
 		t.Parallel()
@@ -1771,7 +1772,7 @@ type Msg struct {
 		}
 	})
 
-	// --- output formatting (always run through go/format.Source) ---
+	// --- output formatting, always done by go/format.Source ---
 
 	t.Run("DefaultOutputIsGofmtClean", func(t *testing.T) {
 		t.Parallel()
@@ -1781,22 +1782,22 @@ type Msg struct {
 			t.Fatalf("ggen msg.go: %v\n%s", err, out)
 		}
 		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
-		// gofmt-clean signal: `\n\tvar err error\n` is one-tab indented; an
-		// unformatted renderer would leave it flush-left.
+		// A sign of gofmt-clean output: `\n\tvar err error\n` is indented by one tab.
+		// Unformatted output would leave it at column 0.
 		if !strings.Contains(body, "\n\tvar err error\n") {
 			t.Errorf("default output not gofmt-clean (var err error not indented):\n%s", body)
 		}
 	})
 
-	// --- rule applicability / value-shape rejection ---
+	// --- rule applicability and bad rule values ---
 	//
-	// Kind-coupled rules and bad value parameters (`len=abc`, `gt=abc`, …)
-	// must be rejected at parse time with a clear diagnostic.
+	// Rules tied to a kind and bad rule values (`len=abc`, `gt=abc`, …) must be
+	// rejected at parse time with a clear error.
 	t.Run("FieldCollisions", func(t *testing.T) {
 		t.Parallel()
-		// A parent field shadowing an embedded one resolves stdlib-style
-		// (own wins) — it used to emit duplicate seen-flags and switch
-		// cases, a generated file that doesn't compile.
+		// A parent field that shadows an embedded one is resolved like the standard
+		// library does: the parent's own field wins. Duplicate seen flags or switch
+		// cases here would give a generated file that does not compile.
 		t.Run("embedded_shadow_resolves", func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
@@ -1828,10 +1829,10 @@ type Outer struct {
 				t.Errorf("promoted non-shadowed field lost")
 			}
 		})
-		// Promoted fields sharing a Go NAME but not a JSON name: stdlib keeps
-		// both (it addresses by index path); ggen addresses `result.A`, which
-		// is ambiguous, so it must refuse rather than silently drop the pair
-		// (the old behaviour marshalled `{"own":5}`).
+		// Promoted fields that share a Go name but not a JSON name. The standard
+		// library keeps both, because it reaches them by index path. ggen writes
+		// `result.A`, which is ambiguous, so it must reject the struct instead of
+		// dropping the pair.
 		t.Run("promoted_go_name_clash_rejected", func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
@@ -1860,8 +1861,9 @@ type E2 struct {
 				t.Errorf("diagnostic missing:\n%s", out)
 			}
 		})
-		// Same clash between an own field and a promoted one: the own field
-		// wins the selector in Go, but stdlib would still emit both keys.
+		// The same clash between the parent's own field and a promoted one. In Go
+		// the own field wins the selector, but the standard library would still emit
+		// both keys.
 		t.Run("own_vs_promoted_go_name_clash_rejected", func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
@@ -1885,9 +1887,8 @@ type Outer struct {
 				t.Errorf("diagnostic missing:\n%s", out)
 			}
 		})
-		// Two catch-all maps in one struct: jsonv2 refuses, and the emitters
-		// only ever fed the first one (the second was a silent decode no-op
-		// while marshal spliced both).
+		// Two catch-all maps in one struct. jsonv2 rejects this, and the emitters
+		// support only one catch-all map.
 		t.Run("two_embed_maps_rejected", func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
@@ -1908,8 +1909,8 @@ type TwoOwn struct {
 				t.Errorf("diagnostic missing:\n%s", out)
 			}
 		})
-		// An own catch-all dominates a promoted one (jsonv2's rule); the
-		// emitters must see exactly the own field on both paths.
+		// The parent's own catch-all map wins over a promoted one, as in jsonv2. Both
+		// decode paths must use only the own field.
 		t.Run("embed_own_dominates_promoted", func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
@@ -1935,7 +1936,7 @@ type Promoted struct {
 				t.Errorf("own catch-all must dominate the promoted one:\n%s", gen)
 			}
 		})
-		// Two of the parent's OWN fields sharing a JSON name is a hard error.
+		// Two of the parent's own fields with the same JSON name is an error.
 		t.Run("own_duplicate_tags_rejected", func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
@@ -1959,8 +1960,8 @@ type Msg struct {
 
 	t.Run("TypedFixtureRejections", func(t *testing.T) {
 		t.Parallel()
-		// These need go/types (a real module): converter input classification
-		// and named-primitive rule applicability.
+		// These need go/types, so a real module: converter input checks and rule
+		// applicability on named primitives.
 		writeMod := func(t *testing.T, dir string) {
 			t.Helper()
 			writeFixture(t, filepath.Join(dir, "go.mod"), "module fixture\n\ngo 1.26\n")
@@ -1986,8 +1987,8 @@ type Msg struct {
 				t.Errorf("diagnostic missing:\n%s", out)
 			}
 		})
-		// A pointer converter input claims null as well as its pointee's
-		// shape, so it cannot share a decode stage with nullzero.
+		// A pointer converter input claims null as well as the shape of the type it
+		// points to, so it cannot share a decode stage with nullzero.
 		t.Run("converter_pointer_input_null_clash", func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
@@ -2009,8 +2010,8 @@ type Msg struct {
 				t.Errorf("diagnostic missing:\n%s", out)
 			}
 		})
-		// The go/types field extractor (struct aliases) rejects the same
-		// unnameable type literals the AST one does.
+		// The go/types field extractor, used for struct aliases, rejects the same
+		// type literals without a name that the AST extractor does.
 		t.Run("struct_alias_anonymous_field", func(t *testing.T) {
 			t.Parallel()
 			dir := t.TempDir()
@@ -2059,18 +2060,18 @@ type Msg struct {
 		t.Parallel()
 		type bad struct {
 			name     string // subtest name
-			fieldGo  string // Go field declaration (e.g. `N int`)
-			tag      string // full struct-tag content (everything between backticks)
-			wantDiag string // substring expected somewhere in stderr+stdout
+			fieldGo  string // Go field declaration, such as `N int`
+			tag      string // the struct tag, without the backticks
+			wantDiag string // text expected in the combined stdout and stderr
 		}
-		// Each entry runs ggen on a single-file fixture; the CLI must exit
-		// non-zero and the diagnostic must contain wantDiag.
+		// Each entry runs ggen on a single-file fixture. The CLI must exit non-zero
+		// and the error must contain wantDiag.
 		cases := []bad{
-			// ----- unreadable tags (silently dropped every rule before) -----
+			// ----- tags that cannot be parsed -----
 			{"pipe_tag_bad_escape", "S string", `json:"s" pipe:"trim replace='don\'t'|x notempty"`, "tag is present but unreadable"},
 			{"json_tag_bad_escape", "S string", `json:"s\'x"`, "tag is present but unreadable"},
 
-			// ----- json tag grammar (jsonv2 parity) -----
+			// ----- json tag grammar, same as jsonv2 -----
 			{"dash_with_options", "F string", `json:"-,"`, `use json:"-" to ignore the field`},
 			{"unterminated_tag_quote", "F string", `json:"'a,b"`, "unterminated quoted section"},
 
@@ -2079,13 +2080,13 @@ type Msg struct {
 			{"unknown_duration_format", "D time.Duration", `json:"d,format:secs"`, "unknown `format:secs`"},
 			{"format_on_int", "N int", `json:"n,format:base64"`, "not applicable"},
 
-			// ----- length/count bounds are never negative -----
+			// ----- length and count bounds are never negative -----
 			{"maxlen_negative", "S string", `json:"s" pipe:"maxlen=-1"`, "requires a non-negative integer"},
 			{"minrunes_negative", "S string", `json:"s" pipe:"minrunes=-2"`, "requires a non-negative integer"},
 			{"trailing_comma_tag", "F string", `json:"f,"`, "empty option"},
 			{"empty_option_tag", "F string", `json:"f,,omitempty"`, "empty option"},
 
-			// ----- removed string validators are now unknown rules -----
+			// ----- string validators that do not exist are unknown rules -----
 			{"ascii_unknown", "S string", `json:"s" pipe:"ascii"`, "`ascii` is not a known validation rule"},
 			{"email_unknown", "S string", `json:"s" pipe:"email"`, "`email` is not a known validation rule"},
 			{"printable_unknown", "S string", `json:"s" pipe:"printable"`, "`printable` is not a known validation rule"},
@@ -2126,7 +2127,7 @@ type Msg struct {
 			{"multiple_bad_value", "N int", `json:"n" pipe:"multiple=abc"`, `value is not a valid integer`},
 			{"multiple_missing", "N int", `json:"n" pipe:"multiple"`, `requires an integer value`},
 
-			// ----- len/minlen/maxlen/notempty on non-len-able kinds -----
+			// ----- len, minlen, maxlen and notempty on kinds without a length -----
 			{"len_on_int", "N int", `json:"n" pipe:"len=5"`, "`len` is inapplicable to int"},
 			{"len_on_bool", "B bool", `json:"b" pipe:"len=1"`, "`len` is inapplicable to bool"},
 			{"len_on_float", "F float64", `json:"f" pipe:"len=1"`, "`len` is inapplicable to float64"},
@@ -2142,7 +2143,7 @@ type Msg struct {
 			{"runes_bad_value", "S string", `json:"s" pipe:"runes=abc"`, `value is not a valid integer`},
 			{"minrunes_bad_value", "S string", `json:"s" pipe:"minrunes=abc"`, `value is not a valid integer`},
 
-			// ----- eq / neq scope: not bool, not slice, not float-with-text -----
+			// ----- eq and neq: not on bool, slice, or float with a non-number -----
 			{"eq_on_slice", "X []int", `json:"x" pipe:"eq=1"`, "`eq` is inapplicable to []int"},
 			{"neq_on_slice", "X []int", `json:"x" pipe:"neq=1"`, "`neq` is inapplicable to []int"},
 			{"eq_on_bool", "B bool", `json:"b" pipe:"eq=true"`, "`eq` is inapplicable to bool"},
@@ -2150,16 +2151,16 @@ type Msg struct {
 			{"eq_int_bad_value", "N int", `json:"n" pipe:"eq=abc"`, `value is not a valid number`},
 			{"neq_int_bad_value", "N int", `json:"n" pipe:"neq=abc"`, `value is not a valid number`},
 
-			// ----- oneof: must be string/numeric, non-empty, numeric parts numeric -----
+			// ----- oneof: string or numeric only, not empty, parts must parse -----
 			{"oneof_on_bool", "B bool", `json:"b" pipe:"oneof=true|false"`, "`oneof` is inapplicable to bool"},
 			{"oneof_on_slice", "X []int", `json:"x" pipe:"oneof=1|2"`, "`oneof` is inapplicable to []int"},
 			{"oneof_empty", "S string", `json:"s" pipe:"oneof"`, `oneof` + "` requires a "}, // matches "rule `oneof` requires a `|`-separated…"
 			{"oneof_numeric_bad_part", "N int", `json:"n" pipe:"oneof=1|two|3"`, `part "two" is not a valid number`},
 
-			// ----- const-expr array length needs type info (AST-only mode) -----
+			// ----- a constant array length needs type info (AST-only mode) -----
 			{"const_array_len", "A [size]int", `json:"a"`, "fixed-array length must be an integer literal"},
 
-			// ----- hint restricted to slice/map -----
+			// ----- hint only on slice and map -----
 			{"hint_on_int", "N int", `json:"n" hint:"10"`, "`hint` is only valid on slice/map fields"},
 			{"hint_on_string", "S string", `json:"s" hint:"10"`, "`hint` is only valid on slice/map fields"},
 			{"hint_on_bool", "B bool", `json:"b" hint:"10"`, "`hint` is only valid on slice/map fields"},
@@ -2168,7 +2169,7 @@ type Msg struct {
 			{"hint_negative", "X []int", `json:"x" hint:"-1"`, "must be ≥ 0"},
 			{"hint_non_numeric", "X []int", `json:"x" hint:"abc"`, `is not a valid integer`},
 
-			// ----- inner: only on slice/array/map -----
+			// ----- inner: only on slice, array and map -----
 			{"dive_on_string", "S string", `json:"s" pipe:"inner:minlen=1"`, "`inner:` tag prefix is only valid on slice/array/map fields"},
 			{"dive_on_int", "N int", `json:"n" pipe:"inner:gte=0"`, "`inner:` tag prefix is only valid on slice/array/map fields"},
 			{"dive_mod_on_int", "N int", `json:"n" pipe:"inner:trim"`, "`inner:` tag prefix is only valid on slice/array/map fields"},
@@ -2177,28 +2178,28 @@ type Msg struct {
 			{"keys_on_string", "S string", `json:"s" pipe:"keys:minlen=1"`, "`keys:` tag prefix is only valid on map[string]V fields"},
 			{"keys_on_slice", "X []int", `json:"x" pipe:"keys:minlen=1"`, "`keys:` tag prefix is only valid on map[string]V fields"},
 			{"keys_mod_on_string", "S string", `json:"s" pipe:"keys:trim"`, "`keys:` tag prefix is only valid on map[string]V fields"},
-			// keys: rules themselves are typed against KindString — verify
-			// a non-string-applicable rule still gets rejected even though
-			// the parent IS a map.
+			// keys: rules are checked against KindString. A rule that does not apply
+			// to strings is still rejected, even though the field is a map.
 			{"keys_numeric_rule", "M map[string]int", `json:"m" pipe:"keys:gt=1"`, "`gt` is inapplicable to string"},
 
-			// ----- inner: element kind mismatch -----
-			// []int element is int — string rules invalid on the element.
+			// ----- inner: element kind does not fit the rule -----
+			// A []int element is int, so string rules do not apply to it.
 			{"dive_alphanum_on_int_elem", "X []int", `json:"x" pipe:"inner:alphanum"`, "`alphanum` is inapplicable to int"},
 			{"dive_numeric_on_int_elem", "X []int", `json:"x" pipe:"inner:numeric"`, "`numeric` is inapplicable to int"},
 			{"dive_len_on_int_elem", "X []int", `json:"x" pipe:"inner:len=3"`, "`len` is inapplicable to int"},
-			// map[string]int value is int.
+			// A map[string]int value is int.
 			{"dive_alphanum_on_int_mapval", "M map[string]int", `json:"m" pipe:"inner:alphanum"`, "`alphanum` is inapplicable to int"},
-			// []string element is string — numeric rules invalid.
+			// A []string element is a string, so numeric rules do not apply to it.
 			{"dive_gt_on_string_elem", "X []string", `json:"x" pipe:"inner:gt=1"`, "`gt` is inapplicable to string"},
 
-			// ----- mods: string mods on numerics, numeric mods on strings -----
+			// ----- mods: string mods on numbers, numeric mods on strings -----
 			{"trim_on_int", "N int", `json:"n" pipe:"trim"`, "`trim` is inapplicable to int"},
 			{"tolower_mod_on_int", "N int", `json:"n" pipe:"tolower"`, "`tolower` is inapplicable to int"},
 			{"toupper_mod_on_int", "N int", `json:"n" pipe:"toupper"`, "`toupper` is inapplicable to int"},
 			{"islower_on_int", "N int", `json:"n" pipe:"islower"`, "`islower` is inapplicable to int"},
 			{"isupper_on_int", "N int", `json:"n" pipe:"isupper"`, "`isupper` is inapplicable to int"},
-			// bare lower/upper died in the 2026-08 split; the diagnostic points at both successors
+			// `lower` and `upper` are not rules. The error names the two rules
+			// to use instead.
 			{"lower_renamed", "S string", `json:"s" pipe:"lower"`, "split into `tolower` (transform) and `islower` (validator)"},
 			{"upper_renamed", "S string", `json:"s" pipe:"upper"`, "split into `toupper` (transform) and `isupper` (validator)"},
 			{"trimleft_on_int", "N int", `json:"n" pipe:"trimleft=foo"`, "`trimleft` is inapplicable to int"},
@@ -2208,7 +2209,7 @@ type Msg struct {
 			{"clamp_on_bool", "B bool", `json:"b" pipe:"clamp=0|10"`, "`clamp` is inapplicable to bool"},
 			{"clamp_on_slice", "X []int", `json:"x" pipe:"clamp=0|10"`, "`clamp` is inapplicable to []int"},
 
-			// ----- mods: parameter-shape rejection -----
+			// ----- mods: bad parameters -----
 			{"trimleft_empty", "S string", `json:"s" pipe:"trimleft="`, "`trimleft` requires a non-empty value"},
 			{"trimright_empty", "S string", `json:"s" pipe:"trimright="`, "`trimright` requires a non-empty value"},
 			{"replace_missing_pipe", "S string", `json:"s" pipe:"replace=foo"`, "requires `old|new` form"},
@@ -2218,7 +2219,7 @@ type Msg struct {
 			{"clamp_bad_lo", "N int", `json:"n" pipe:"clamp=abc|10"`, "lo \"abc\" is not a valid number"},
 			{"clamp_bad_hi", "N int", `json:"n" pipe:"clamp=0|abc"`, "hi \"abc\" is not a valid number"},
 
-			// ----- emitted-code-would-not-compile class (round-2 audit) -----
+			// ----- shapes whose generated code would not compile -----
 			{"multiple_zero", "N int", `json:"n" pipe:"multiple=0"`, "requires a positive integer"},
 			{"multiple_negative", "N int", `json:"n" pipe:"multiple=-2"`, "requires a positive integer"},
 			{"oneof_dup_string", "S string", `json:"s" pipe:"oneof=a|b|a"`, "is a duplicate"},
@@ -2233,28 +2234,30 @@ type Msg struct {
 			{"inner_depth2_mismatch", "M [][]int", `json:"m" pipe:"inner:(inner:(trim))"`, "is inapplicable to int"},
 			{"inner_deeper_than_type", "X []int", `json:"x" pipe:"inner:(inner:(gte=0))"`, "no element at that depth"},
 
-			// ----- round-10 parse-layer holes -----
-			// a byte slice/array decodes as one base64 string: no element loop
-			// for an inner: step to run in (only [N]byte + format:array keeps one)
+			// ----- more parse-time checks -----
+			// A byte slice or byte array decodes as one base64 string. There is no
+			// element loop for an inner: step to run in. Only [N]byte with format:array
+			// keeps one.
 			{"inner_on_bytes", "B []byte", `json:"b" pipe:"inner:trim"`, "`inner:` tag prefix is only valid on slice/array/map fields"},
 			{"inner_on_byte_array", "B [3]byte", `json:"b" pipe:"inner:gt=1"`, "`inner:` tag prefix is only valid on slice/array/map fields"},
-			// presence is the field's, never an element's or a key's: bare was
-			// a silent no-op, grouped silently re-scoped to the OUTER key
+			// Presence belongs to the field, never to an element or a key. So required
+			// and optional are not allowed under inner: or keys:, on their own or in a
+			// group.
 			{"inner_required", "X []string", `json:"x" pipe:"inner:required"`, "not valid under `inner:`/`keys:`"},
 			{"inner_group_required", "X []string", `json:"x" pipe:"inner:(required minlen=1)"`, "not valid under `inner:`/`keys:`"},
 			{"keys_required", "M map[string]int", `json:"m" pipe:"keys:required keys:optional"`, "not valid under `inner:`/`keys:`"},
-			// a make() capacity the runtime cannot honour panics at decode
+			// A make() capacity the runtime cannot provide panics at decode time.
 			{"hint_huge", "X []int", `json:"x" hint:"9223372036854775807"`, "prealloc ceiling"},
 			{"len_huge_on_slice", "X []int", `json:"x" pipe:"len=4294967296"`, "prealloc ceiling"},
-			// json tag options ggen cannot honour or jsonv2 itself rejects
+			// json tag options that ggen cannot support or that jsonv2 itself rejects.
 			{"json_case_ignore", "S string", `json:"s,case:ignore"`, "`case:` is not supported"},
 			{"json_omitempty_mutant", "S string", `json:"s,omitEmpty"`, "invalid appearance of `omitEmpty` tag option; specify `omitempty` instead"},
 			{"json_option_whitespace", "S string", `json:"s, omitempty"`, "padded with whitespace"},
-			// the catch-all emitters make/index/range the field itself
+			// The catch-all emitters call make on the field and index and range over it.
 			{"embed_on_pointer_map", "Extra *map[string]any", `json:",embed"`, "not a pointer to one"},
-			// field types with no generated shape: an anonymous struct has no
-			// spelling in the output at all, and json.Marshal rejects a func
-			// or a channel for every value, so AppendJSON could never succeed
+			// Field types that have no generated form. An anonymous struct cannot be
+			// written in the output at all, and json.Marshal rejects every func or
+			// channel value, so AppendJSON could never succeed.
 			{"anon_struct_field", "S struct{ A int }", `json:"s"`, "anonymous struct field types are not supported"},
 			{"anon_struct_elem", "L []struct{ Q int }", `json:"l"`, "anonymous struct field types are not supported"},
 			{"anon_struct_map_value", "M map[string]*struct{ Q int }", `json:"m"`, "anonymous struct field types are not supported"},
@@ -2287,10 +2290,9 @@ type Msg struct {
 	})
 }
 
-// `omitempty` on a struct field is refused at generate time: ggen emits a
-// struct as `{}`, so the option could only ever be a silent no-op there.
-// Pointers to a struct, `omitzero`, and every kind carrying a wire shape of
-// its own keep working.
+// `omitempty` on a struct field is rejected at generate time. A struct always
+// encodes as at least `{}`, so the option could never apply. Pointers to a
+// struct, `omitzero`, and every kind with its own JSON form still work.
 func TestOmitEmptyOnStructField(t *testing.T) {
 	t.Parallel()
 	bin := buildCLI(t)
@@ -2405,10 +2407,10 @@ type Msg struct {
 	})
 }
 
-// TestForeignElementCodegen pins the parse-layer element resolution: a foreign
-// element type must be spelled by package NAME, an element type reached only
-// through a container alias must be generated, and a foreign ggen element must
-// decode through its own DecodeFrom at every container position.
+// TestForeignElementCodegen checks how the parser resolves element types. An
+// element type from another package must be written with its package name,
+// and an element type reached only through a container alias must be
+// generated.
 func TestForeignElementCodegen(t *testing.T) {
 	t.Parallel()
 	bin := buildCLI(t)
@@ -2449,8 +2451,8 @@ type SoloInner struct {
 	}
 }
 
-// A foreign ggen-generated element type runs the same ladder as the field
-// level — its DecodeFrom, not the reflective fallback.
+// A ggen-generated element type from another package uses the same order of
+// choices as a field: its DecodeFrom, not the encoding/json fallback.
 func TestForeignGgenElementDecodesDirectly(t *testing.T) {
 	t.Parallel()
 	bin := buildCLI(t)
@@ -2496,8 +2498,8 @@ type Holder struct {
 	}
 }
 
-// fixtureGoMod writes a go.mod that resolves the ggen runtime to this
-// checkout, so a fixture's generated output can be compiled.
+// fixtureGoMod writes a go.mod that points the ggen runtime at this checkout,
+// so a fixture's generated output can be compiled.
 func fixtureGoMod(t *testing.T, dir, module string) {
 	t.Helper()
 	root, err := filepath.Abs("../..")
@@ -2511,7 +2513,8 @@ func fixtureGoMod(t *testing.T, dir, module string) {
 	)
 }
 
-// goBuild compiles the fixture module in dir, failing with the compiler output.
+// goBuild compiles the fixture module in dir. On failure it fails the test
+// with the compiler output.
 func goBuild(t *testing.T, dir string) {
 	t.Helper()
 	cmd := exec.CommandContext(t.Context(), "go", "build", "./...")
@@ -2522,15 +2525,16 @@ func goBuild(t *testing.T, dir string) {
 	}
 }
 
-// TestGeneratedCompiles builds the output for shapes the generator accepted
-// but whose output did not compile — one package per shape, one `go build`.
+// TestGeneratedCompiles generates code for shapes that are easy to get wrong
+// and checks that it compiles. Each shape is its own package, and one
+// `go build` covers them all.
 func TestGeneratedCompiles(t *testing.T) {
 	t.Parallel()
 	bin := buildCLI(t)
 	base := t.TempDir()
 	fixtureGoMod(t, base, "fixture")
-	// A field name ending in a package qualifier (`Uptime` → `time.`) must
-	// not import that package: the scan matches qualifiers, not substrings.
+	// A field name that ends like a package qualifier (`Uptime` contains `time`)
+	// must not import that package. The scan matches qualifiers, not substrings.
 	writeFixture(t, filepath.Join(base, "uptime", "uptime.go"), `package uptime
 
 //ggen:generate
@@ -2544,8 +2548,9 @@ type Host struct {
 	Datetime Status `+"`json:\"datetime\"`"+`
 }
 `)
-	// A user package declared under a name an emitter literal claims binds
-	// under an alias, so its types and the stdlib fallback coexist.
+	// A user package whose name clashes with a package the emitter uses is
+	// imported under another name, so its types and the standard library fallback
+	// can coexist.
 	writeFixture(t, filepath.Join(base, "jsonpkg", "json", "json.go"), `package json
 
 type Val string
@@ -2567,9 +2572,9 @@ type Doc struct {
 //ggen:generate
 type Local json.Obj
 `)
-	// [0]T: the unrolled first element indexed a zero-length array, the map
-	// value emit never named the range var, and a nested `[0][N]T` element
-	// store is not even compilable (gc gives up on the dead index).
+	// Zero-length arrays [0]T. The code must not index into the array, map
+	// values must use the range variable, and a nested `[0][N]T` element must not
+	// be stored to, because gc fails to compile that dead index.
 	writeFixture(t, filepath.Join(base, "zeroarr", "zeroarr.go"), `package zeroarr
 
 //ggen:generate
@@ -2583,9 +2588,9 @@ type Empty struct {
 	Ptrs   map[string]*[0]int   `+"`json:\"ptrs\"`"+`
 }
 `)
-	// [N]byte + omitzero compared an array against nil; a POINTER to one
-	// re-read its leaf kind off the type string and emitted a tuple of
-	// strings (and an unused base64 import).
+	// [N]byte with omitzero must not compare the array against nil. A pointer to
+	// one must still decode as a base64 string, not as a tuple of strings, and
+	// must not leave an unused base64 import.
 	writeFixture(t, filepath.Join(base, "bytearr", "bytearr.go"), `package bytearr
 
 //ggen:generate
@@ -2611,9 +2616,9 @@ type ID struct {
 	goBuild(t, base)
 }
 
-// TestOneofScope_TestFileDistinct pins that the oneof frozen slices of a
-// package's `_ggen.go` and `_ggen_test.go` never share a name — both files
-// belong to one package, and each output restarts the counter.
+// TestOneofScope_TestFileDistinct checks that the oneof slices in a package's
+// `_ggen.go` and `_ggen_test.go` never share a name. Both files belong to one
+// package, and each output starts its counter again.
 func TestOneofScope_TestFileDistinct(t *testing.T) {
 	t.Parallel()
 	bin := buildCLI(t)
@@ -2655,8 +2660,8 @@ func TestOneofScope_TestFileDistinct(t *testing.T) {
 	}
 }
 
-// A failed render leaves the previous output untouched: the file is replaced
-// only once the whole thing has formatted.
+// A failed render leaves the previous output untouched. The file is replaced
+// only after the whole output has been formatted.
 func TestWriteGenerated_KeepsPreviousOnFailure(t *testing.T) {
 	genGlobalsMu.Lock()
 	defer genGlobalsMu.Unlock()
@@ -2691,9 +2696,10 @@ func TestWriteGenerated_KeepsPreviousOnFailure(t *testing.T) {
 	}
 }
 
-// Explicit targets are one post-order walk: `ggen ./b ./a` (b imports a)
-// generates a before b, so b's a.T fields route to a.T's own methods instead
-// of the encoding/json fallback — the same output as `./a ./b` and `./...`.
+// All explicit targets are covered by one walk that visits dependencies first.
+// `ggen ./b ./a`, where b imports a, generates a before b, so b's a.T fields
+// call a.T's own methods instead of the encoding/json fallback. The output is
+// the same as for `./a ./b` and `./...`.
 func TestTargetOrder_CrossPackageRouting(t *testing.T) {
 	t.Parallel()
 	bin := buildCLI(t)
@@ -2726,13 +2732,14 @@ func TestTargetOrder_CrossPackageRouting(t *testing.T) {
 	}
 }
 
-// Numeric bound errors carry Limit/Of/Want as `any`, so the emitted literal
-// has to spell the field's kind: a bare untyped constant above MaxInt64
-// defaults to int (overflow) and a float64 field would round the report.
+// Numeric bound errors hold Limit, Of and Want as `any`, so the emitted
+// literal must carry the field's type. An untyped constant above MaxInt64
+// would default to int and overflow, and a float64 field would round the
+// reported value.
 func TestNumericBoundLiteralsCarryFieldKind(t *testing.T) {
 	gen := func(goType string, kind model.TypeKind, rules ...model.ValidationRule) string {
 		t.Helper()
-		// generate() seeds the globals only when nil — reset between calls.
+		// generate() seeds the globals only when they are nil, so reset them.
 		generatedTypes, namedKinds, cyclicTypes = nil, nil, nil
 		var steps []model.Step
 		for _, r := range rules {

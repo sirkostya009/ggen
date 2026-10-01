@@ -1,12 +1,13 @@
-// Package thirdparty2 holds a ggen-annotated struct in its own package to
-// exercise the cross-package fast path: its generated decoder is picked up via
-// the TryDecodeFast probe from the main package.
+// Package thirdparty2 holds a ggen-annotated struct in its own package. It
+// tests the cross-package fast path: code generated in the main package calls
+// this package's generated methods directly instead of using encoding/json.
 package thirdparty2
 
 //go:generate ../../ggen .
 
-// External2 lives in a different generation pass, so the main package emits the
-// TryDecodeFast probe (not a direct DecodeFrom call) and finds the method.
+// External2 is generated in a separate ggen run. The main package finds its
+// generated methods through type information and calls DecodeFrom and
+// AppendJSON directly.
 //
 //ggen:generate marshal unmarshal
 type External2 struct {
@@ -14,9 +15,10 @@ type External2 struct {
 	Value int    `json:"value" pipe:"gte=0"`
 }
 
-// Wrap validates-then-stores through a hand-written UnmarshalJSON that
-// delegates to the package's generated decoder; it has no DecodeFrom of its
-// own, so a host package reaches it through the UnmarshalJSON rung.
+// Wrap has a hand-written UnmarshalJSON that calls External2's generated
+// decoder, validation included. Wrap has no DecodeFrom of its own, so
+// another package's generated code decodes it through its UnmarshalJSON
+// method.
 type Wrap struct{ In External2 }
 
 func (w *Wrap) UnmarshalJSON(b []byte) error {

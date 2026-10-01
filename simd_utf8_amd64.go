@@ -1,51 +1,69 @@
 //go:build goexperiment.simd
 
-// Vectorized UTF-8 validation (Lemire/simdjson range-lookup algorithm) for
-// the SIMD string tiers' second pass. classifyStructural / the stream cores
-// gate it on the lane-OR high-bit flag, so it only ever runs on spans that
-// actually contain non-ASCII — where the scalar utf8.Valid DFA (~1 B/ns on
-// 2-byte runes) was 97-98% of the decode cost (see utf8cost benches).
+// Vector UTF-8 validation, using the lookup-table algorithm from Lemire and
+// simdjson. SIMD (vector) code processes 16 bytes with one CPU instruction.
+// A lane is one byte slot inside a vector.
 //
-// 16-byte blocks via VPSHUFB/VPALIGNR (AVX1-safe — classifyStructural is
-// shared by all three tiers, so the validator must run on the lowest one).
+// UTF-8 primer. A rune (one Unicode code point) takes 1 to 4 bytes. ASCII
+// bytes are below 0x80 and stand alone. A lead byte (0xC2 to 0xF4) starts a
+// multi-byte rune and its top bits say how many bytes follow. Each following
+// byte is a continuation byte (0x80 to 0xBF). Input is invalid when:
+//   - a lead byte is not followed by enough continuation bytes,
+//   - a continuation byte appears without a lead byte,
+//   - a rune uses more bytes than it needs (an overlong encoding),
+//   - it encodes a surrogate (U+D800 to U+DFFF, reserved for UTF-16),
+//   - or it encodes a value above U+10FFFF.
 //
-// Per block, each byte pair (prev1[i], cur[i]) is classified through three
-// nibble LUTs: sc = lut1[prev1>>4] & lut2[prev1&0xF] & lut3[cur>>4]. Every
-// illegal pair (lead+non-continuation, stray continuation, overlong,
-// surrogate, > U+10FFFF) sets a distinct error bit. The one legal case that
-// also sets a bit is continuation-after-continuation (twoConts = 0x80, needed
-// for 3/4-byte runes), so it is cancelled by XOR against must23_80 — a mask
-// with 0x80 exactly where a 3rd/4th continuation byte is REQUIRED (prev2 ≥
-// 0xE0 or prev3 ≥ 0xF0, detected via saturating sub). Any residue after the
-// XOR accumulates into errAcc.
+// The vector string scanners call this only when they saw a byte >= 0x80, so
+// it only runs on bodies that contain non-ASCII text. On those, the scalar
+// utf8.Valid was almost all of the decode cost.
 //
-// Tail: the last partial block loads zero-padded (zeros classify as ASCII,
-// turning a truncated rune into a lead+non-continuation error). A rune
-// truncated at the very END of a FULL final block has no such successor, so
-// instead of running a whole extra all-zero block through the classify (~19
-// vector ops to check three bytes) the loop exits and one saturating sub
-// against utf8MaxIncomplete tests those three positions directly — simdutf's
-// check_eof. Padded blocks carry zeros there, so it is a no-op for them.
+// It works on 16-byte blocks and uses only AVX instructions, the oldest x86
+// vector set. classifyStructural is shared by all three tiers, so the
+// validator must run on the lowest one.
+//
+// For each byte, the pair (previous byte, current byte) is looked up in three
+// nibble LUTs. A nibble LUT is a 16-entry table indexed by 4 bits of a byte:
+//
+//	sc = lut1[prev1>>4] & lut2[prev1&0xF] & lut3[cur>>4]
+//
+// Every illegal pair sets an error bit in sc. One legal case also sets a bit:
+// a continuation byte after a continuation byte (utf8TwoConts, 0x80). That
+// pair is legal inside 3- and 4-byte runes. must23_80 has 0x80 exactly where
+// a third or fourth continuation byte is required. That is where the byte two
+// back is >= 0xE0 or the byte three back is >= 0xF0, found with a saturating
+// subtract (one that stops at 0 instead of wrapping). XOR with must23_80
+// clears the legal case and flags a missing continuation. Anything left
+// after the XOR is ORed into errAcc.
+//
+// End of input. The last partial block is loaded zero-padded. Zeros count as
+// ASCII, so a rune cut short there shows up as a lead byte followed by a
+// non-continuation byte. A rune cut short at the end of a full final block
+// has no byte after it. Running a whole extra block of zeros through the
+// lookups to test three bytes would waste work. Instead, after the loop, one
+// saturating subtract against utf8MaxIncomplete tests those three positions
+// directly. simdutf calls this check_eof. A padded block has zeros there, so
+// the check does nothing for it.
 
 package ggen
 
 import "simd/archsimd"
 
 const (
-	utf8TooShort     = 1 << 0 // lead followed by non-continuation
-	utf8TooLong      = 1 << 1 // ASCII/continuation followed by continuation
+	utf8TooShort     = 1 << 0 // lead followed by a non-continuation byte
+	utf8TooLong      = 1 << 1 // ASCII or continuation followed by continuation
 	utf8Overlong3    = 1 << 2 // E0 followed by 80..9F
 	utf8TooLarge     = 1 << 3 // F4 followed by 90..BF (> U+10FFFF)
 	utf8Surrogate    = 1 << 4 // ED followed by A0..BF (U+D800..DFFF)
-	utf8Overlong2    = 1 << 5 // C0/C1 lead (< U+0080)
-	utf8TooLarge1000 = 1 << 6 // F5..FF lead / F4 with 2nd byte ≥ 90
-	utf8Overlong4    = 1 << 6 // F0 followed by 80..8F (shares bit — disjoint cases)
-	utf8TwoConts     = 1 << 7 // continuation after continuation (legal iff required)
+	utf8Overlong2    = 1 << 5 // C0 or C1 lead (< U+0080)
+	utf8TooLarge1000 = 1 << 6 // F5..FF lead, never valid
+	utf8Overlong4    = 1 << 6 // F0 followed by 80..8F, same bit, never overlaps
+	utf8TwoConts     = 1 << 7 // continuation after continuation, legal if required
 
 	utf8Carry = utf8TooShort | utf8TooLong | utf8TwoConts
 )
 
-// Indexed by prev1's HIGH nibble.
+// Indexed by the high nibble of the previous byte.
 var utf8Byte1High = [16]uint8{
 	utf8TooLong, utf8TooLong, utf8TooLong, utf8TooLong, // 0..3: ASCII
 	utf8TooLong, utf8TooLong, utf8TooLong, utf8TooLong, // 4..7: ASCII
@@ -56,7 +74,7 @@ var utf8Byte1High = [16]uint8{
 	utf8TooShort | utf8TooLarge | utf8TooLarge1000 | utf8Overlong4, // F: 4-byte lead
 }
 
-// Indexed by prev1's LOW nibble.
+// Indexed by the low nibble of the previous byte.
 var utf8Byte1Low = [16]uint8{
 	utf8Carry | utf8Overlong3 | utf8Overlong2 | utf8Overlong4, // 0: E0/C0/F0
 	utf8Carry | utf8Overlong2,                                 // 1: C1
@@ -75,7 +93,7 @@ var utf8Byte1Low = [16]uint8{
 	utf8Carry | utf8TooLarge | utf8TooLarge1000,                 // F
 }
 
-// Indexed by cur's HIGH nibble.
+// Indexed by the high nibble of the current byte.
 var utf8Byte2High = [16]uint8{
 	utf8TooShort, utf8TooShort, utf8TooShort, utf8TooShort, // 0..3: ASCII
 	utf8TooShort, utf8TooShort, utf8TooShort, utf8TooShort, // 4..7: ASCII
@@ -86,25 +104,27 @@ var utf8Byte2High = [16]uint8{
 	utf8TooShort, utf8TooShort, utf8TooShort, utf8TooShort, // C..F: lead
 }
 
-// utf8MaxIncomplete is the per-lane ceiling a byte may hold without needing a
-// successor byte: only the last three lanes are constrained, to the largest
-// lead that still fits (< 0xF0 three from the end, < 0xE0 two, < 0xC0 one).
-// A saturating sub against it is non-zero exactly when the block ends mid-rune.
+// utf8MaxIncomplete holds, per lane, the largest byte that does not need more
+// bytes after the end of the block. Only the last three lanes have a limit:
+// below 0xF0 three from the end, below 0xE0 two from the end, below 0xC0 at
+// the end. A saturating subtract against it is non-zero exactly when the
+// block ends in the middle of a rune.
 var utf8MaxIncomplete = [16]uint8{
 	0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 	0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
 	0xF0 - 1, 0xE0 - 1, 0xC0 - 1,
 }
 
-// validUTF8x16 reports whether b is well-formed UTF-8 (same accept set as
-// unicode/utf8.Valid — verified by TestValidUTF8SIMD_Parity).
+// validUTF8x16 reports whether b is valid UTF-8. It accepts exactly what
+// unicode/utf8.Valid accepts, which TestValidUTF8SIMD_Parity checks.
 func validUTF8x16(b []byte) bool {
 	lut1 := archsimd.LoadUint8x16(utf8Byte1High[:])
 	lut2 := archsimd.LoadUint8x16(utf8Byte1Low[:])
 	lut3 := archsimd.LoadUint8x16(utf8Byte2High[:])
 	nib := archsimd.BroadcastUint8x16(0x0F)
-	// Saturating-sub thresholds: result has the high bit set iff the byte is
-	// ≥ 0xE0 (3+-byte lead two back) / ≥ 0xF0 (4-byte lead three back).
+	// Saturating subtract thresholds. The result has its high bit set only
+	// when the byte is >= 0xE0 (a 3- or 4-byte lead two back) or >= 0xF0 (a
+	// 4-byte lead three back).
 	sub3 := archsimd.BroadcastUint8x16(0xE0 - 0x80)
 	sub4 := archsimd.BroadcastUint8x16(0xF0 - 0x80)
 	high := archsimd.BroadcastUint8x16(0x80)
@@ -116,7 +136,7 @@ func validUTF8x16(b []byte) bool {
 		if i+16 <= len(b) {
 			c = archsimd.LoadUint8x16(b[i:])
 		} else {
-			c, _ = archsimd.LoadUint8x16Part(b[i:]) // zero-padded tail
+			c, _ = archsimd.LoadUint8x16Part(b[i:]) // zero-padded last block
 		}
 		prev1 := c.ConcatShiftBytesRight(prev, 15)
 		prev1Hi := prev1.ReshapeToUint16s().ShiftAllRight(4).ReshapeToUint8s().And(nib)
@@ -130,8 +150,8 @@ func validUTF8x16(b []byte) bool {
 		errAcc = errAcc.Or(must23_80.Xor(sc))
 		prev = c
 	}
-	// prev is the final block (zero when b is empty): reject a rune left
-	// dangling at end-of-input.
+	// prev is the final block, or zero when b is empty. Reject a rune cut
+	// short at the end of the input.
 	maxInc := archsimd.LoadUint8x16(utf8MaxIncomplete[:])
 	return errAcc.Or(prev.SubSaturated(maxInc)).IsZero()
 }

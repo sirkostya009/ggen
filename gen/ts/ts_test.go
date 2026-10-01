@@ -128,8 +128,8 @@ func TestRuntime(t *testing.T) {
 	}
 }
 
-// TestFor decides headers, declaration style and external types per output
-// file and placed type.
+// TestFor pins the ...For options that decide headers, declaration style
+// and external types per output file and placed type.
 func TestFor(t *testing.T) {
 	t.Parallel()
 	set, err := gen.Load("../testdata/api", "../testdata/other")
@@ -173,9 +173,9 @@ func TestFor(t *testing.T) {
 	}
 }
 
-// tscPath is the tsc the tests type-check with: the one GGEN_NODE_MODULES
-// pins, else whatever is on PATH. It returns "" when there is neither, and
-// every caller skips loudly rather than passing quietly.
+// tscPath returns the tsc the tests type-check with. It prefers the one in
+// GGEN_NODE_MODULES, then whatever is on PATH. It returns "" when there is
+// neither, and every caller then skips loudly rather than passing quietly.
 func tscPath(t *testing.T) string {
 	t.Helper()
 	if modules := os.Getenv("GGEN_NODE_MODULES"); modules != "" {

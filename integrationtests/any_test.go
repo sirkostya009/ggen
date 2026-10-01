@@ -2,7 +2,7 @@ package integrationtests
 
 //go:generate ../ggen $GOFILE
 
-// Coverage for the `any` field kind — default float64 numbers and the
+// Coverage for the `any` field kind, with default float64 numbers and the
 // usenumber opt-in (json.Number).
 
 import (
@@ -16,7 +16,7 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// AnyStruct: bare `any` field, default float64 numbers.
+// AnyStruct has a bare `any` field with default float64 numbers.
 //
 //ggen:generate
 type AnyStruct struct {
@@ -24,7 +24,8 @@ type AnyStruct struct {
 	Body any    `json:"body"`
 }
 
-// AnyNumberStruct: same shape, usenumber → json.Number (exact digits).
+// AnyNumberStruct has the same shape with usenumber, so numbers decode to
+// json.Number and keep their exact digits.
 //
 //ggen:generate usenumber
 type AnyNumberStruct struct {
@@ -86,7 +87,7 @@ func TestAny_MarshalRoundtrip(t *testing.T) {
 
 func TestAnyNumber_Preservesint64Precision(t *testing.T) {
 	t.Parallel()
-	// 9007199254740993 = 2^53 + 1 — loses precision when round-tripped via float64.
+	// 9007199254740993 is 2^53 + 1. It loses precision through float64.
 	in := []byte(`{"name":"x","body":9007199254740993}`)
 	got, _, err := AnyNumberStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -130,9 +131,9 @@ type R10DurationAny struct {
 	V any           `json:"v"`
 }
 
-// A pointer-receiver marshaler (big.Rat / big.Float have only those) is
-// reached for a VALUE held in an any, directly or nested — jsonv2 parity;
-// v1 emitted {} for it.
+// A marshaler with a pointer receiver is reached for a value held in an any,
+// directly or nested. big.Rat and big.Float have only pointer-receiver
+// marshalers. This matches jsonv2. encoding/json v1 emits {} for such a value.
 func TestAny_PointerReceiverValueMarshals(t *testing.T) {
 	t.Parallel()
 	for name, v := range map[string]any{
@@ -150,7 +151,7 @@ func TestAny_PointerReceiverValueMarshals(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: jsonv2: %v", name, err)
 		}
-		// Generated member order differs from jsonv2's; compare parsed.
+		// Generated member order differs from jsonv2's, so compare parsed values.
 		var gv, wv any
 		if err := jsonv2.Unmarshal(got, &gv); err != nil {
 			t.Fatalf("%s: reparse %s: %v", name, got, err)
@@ -164,9 +165,9 @@ func TestAny_PointerReceiverValueMarshals(t *testing.T) {
 	}
 }
 
-// A time.Duration carries the field default (`format:units`) inside an any
-// too, so one document holds one wire shape for the type and the any-path
-// form decodes back into a Duration field.
+// A time.Duration inside an any uses the field default too (`format:units`).
+// So one document has one wire shape for the type, and the any-path form
+// decodes back into a Duration field.
 func TestAny_DurationMatchesFieldWire(t *testing.T) {
 	t.Parallel()
 	out, err := ggen.Marshal(R10DurationAny{D: 90 * time.Second, V: 90 * time.Second})

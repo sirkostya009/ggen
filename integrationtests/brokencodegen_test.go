@@ -1,10 +1,12 @@
 //go:build ggen_brokencodegen
 
-// Pins combinations that produce broken generator output. Behind
-// `-tags ggen_brokencodegen` so the default test run stays green; tagging
-// reproduces the codegen issues and serves as a regression suite once fixed.
-// Covers pointer-to-exotic types, slice/map elements of exotic kinds, and
-// exotic locals emitted without their import.
+// Pins combinations that produce broken generator output. The file sits
+// behind `-tags ggen_brokencodegen` so the default test run stays green.
+// Building with the tag reproduces the codegen issues, and the file serves as
+// a regression suite once they are fixed. "Exotic" here means library types
+// such as big.Int, time.Time or uuid.UUID. The file covers pointers to exotic
+// types, slice and map elements of exotic kinds, and exotic locals emitted
+// without their import.
 
 package integrationtests
 
@@ -144,7 +146,7 @@ func TestPtrExotic_JSONSize_NoRealloc(t *testing.T) {
 
 // --- Slice-of-exotic --------------------------------------------------------
 
-// SliceExoticStruct: slice-element decoding for exotic types.
+// SliceExoticStruct covers slice-element decoding for exotic types.
 //
 //ggen:generate
 type SliceExoticStruct struct {
@@ -227,7 +229,7 @@ func TestSliceExotic_JSONSize_NoRealloc(t *testing.T) {
 
 // --- Map-of-exotic ----------------------------------------------------------
 
-// MapExoticStruct: map-value decoding for exotic types.
+// MapExoticStruct covers map-value decoding for exotic types.
 //
 //ggen:generate
 type MapExoticStruct struct {
@@ -300,7 +302,7 @@ func TestMapExotic_JSONSize_NoRealloc(t *testing.T) {
 
 // --- Fixed-array of exotic --------------------------------------------------
 
-// TupleExoticStruct: strict [N]T tuples of exotic element kinds.
+// TupleExoticStruct holds strict [N]T tuples of exotic element kinds.
 //
 //ggen:generate
 type TupleExoticStruct struct {
@@ -378,7 +380,7 @@ func TestTupleExotic_JSONSize_NoRealloc(t *testing.T) {
 
 // --- Pointer-to-container --------------------------------------------------
 
-// PtrContainerStruct: *[]T / *map[K]V combos.
+// PtrContainerStruct holds *[]T and *map[K]V fields.
 //
 //ggen:generate
 type PtrContainerStruct struct {
@@ -431,7 +433,7 @@ func TestPtrContainer_PopulatedRoundtrip(t *testing.T) {
 
 // --- *T + json:",string" combo ---------------------------------------------
 
-// PtrStringTagStruct: *int with the ,string tag.
+// PtrStringTagStruct holds an *int with the ,string tag.
 //
 //ggen:generate
 type PtrStringTagStruct struct {
@@ -491,7 +493,8 @@ func TestStdCompat_PtrExoticStruct(t *testing.T) {
 	dur := time.Hour
 	addr := netip.MustParseAddr("10.0.0.1")
 	pfx := netip.MustParsePrefix("10.0.0.0/8")
-	// *url.URL diverges from jsonv2; tested in TestPtrExotic_AllPopulated_roundtrip.
+	// *url.URL diverges from jsonv2. TestPtrExotic_AllPopulated_roundtrip
+	// covers it.
 	crossCompat(t, PtrExoticStruct{
 		Big: bigI, Flt: bigF, Rat: bigR, UID: &id, Raw: &raw,
 		Dur: &dur, Adr: &addr, Pfx: &pfx,

@@ -167,8 +167,8 @@ func TestOutputShapes(t *testing.T) {
 	if f := field(t, out, "friends").Type; !f.Nullable || !f.Elem.Nullable {
 		t.Errorf("friends: %+v", f)
 	}
-	// net/http is not loaded, so its constants are not a closed set: an
-	// imported flag type would reject every real value.
+	// net/http is not loaded, so its constants are not a closed set. As one,
+	// an imported flag type would reject real values like combined flags.
 	if st := field(t, out, "state").Type; st.Enum != nil || st.Ref != nil || st.Wire != WireInteger {
 		t.Errorf("state: net/http is not loaded, so no enum: %+v", st)
 	}

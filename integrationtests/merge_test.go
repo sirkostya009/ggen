@@ -13,10 +13,11 @@ import (
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
 )
 
-// Decode-into-receiver tests. The result is what a fresh decode would give —
-// every field the payload omits comes back zeroed — while container capacity
-// and element allocations are recycled out of the receiver. Tests call
-// (T).DecodeFrom directly (ggen.Unmarshal starts fresh).
+// Decode-into-receiver tests. Decoding into an existing value gives the same
+// result as a fresh decode. Every field the payload omits comes back zeroed.
+// The difference is memory: container capacity and element allocations are
+// reused from the receiver. Tests call (T).DecodeFrom directly, because
+// ggen.Unmarshal always starts from a zero value.
 
 func TestMerge_omittedScalarsZeroed(t *testing.T) {
 	t.Parallel()
@@ -32,8 +33,8 @@ func TestMerge_omittedScalarsZeroed(t *testing.T) {
 
 func TestMerge_sliceBackingReused(t *testing.T) {
 	t.Parallel()
-	// A 3-elem decode into a cap-8 receiver must reuse the backing, not make
-	// a fresh one.
+	// A 3-element decode into a cap-8 receiver must reuse the backing array,
+	// not allocate a new one.
 	pre := make([]string, 0, 8)
 	pre = append(pre, "old1", "old2", "old3")
 	receiver := Node{Tags: pre}
@@ -57,8 +58,8 @@ func TestMerge_sliceBackingReused(t *testing.T) {
 
 func TestMerge_nestedSliceBackingReused(t *testing.T) {
 	t.Parallel()
-	// [][]int decode-into-receiver reuses BOTH outer and inner row backings
-	// when the new shape fits the carried caps.
+	// A [][]int decode into a receiver reuses both the outer backing and each
+	// row's backing when the new shape fits the carried capacities.
 	first, _, err := ExtraStruct{}.DecodeFrom([]byte(`{"nestedInts":[[1,2,3],[4,5,6]]}`))
 	if err != nil {
 		t.Fatalf("first decode: %v", err)
@@ -88,7 +89,8 @@ func TestMerge_nestedSliceBackingReused(t *testing.T) {
 
 func TestMerge_sliceDoesNotAppendOverExisting(t *testing.T) {
 	t.Parallel()
-	// Receiver had 5, JSON has 2 → result is exactly 2 (no append-over).
+	// The receiver has 5 elements and the JSON has 2. The result must have
+	// exactly 2, not the new ones appended to the old ones.
 	receiver := Node{Tags: []string{"old1", "old2", "old3", "old4", "old5"}}
 	got, _, err := receiver.DecodeFrom([]byte(`{"tags":["a","b"]}`))
 	if err != nil {
@@ -132,7 +134,8 @@ func TestMerge_sliceEmptyPreservesNonNilBacking(t *testing.T) {
 
 func TestMerge_sliceEmptyOnNilReceiverProducesNonNilEmpty(t *testing.T) {
 	t.Parallel()
-	// stdlib parity: nil receiver + JSON [] → non-nil empty.
+	// Same as encoding/json: a nil receiver slice plus JSON [] gives a
+	// non-nil empty slice.
 	receiver := Node{}
 	got, _, err := receiver.DecodeFrom([]byte(`{"tags":[]}`))
 	if err != nil {
@@ -186,8 +189,8 @@ func TestMerge_nestedStructRecursesIntoExisting(t *testing.T) {
 	if len(got.Children) != 1 {
 		t.Fatalf("len(children)=%d want 1", len(got.Children))
 	}
-	// The element decodes as a fresh Node — "name" is absent from the payload,
-	// so the carried Name="cached" does NOT survive.
+	// The element decodes as a fresh Node. "name" is absent from the payload,
+	// so the carried Name="cached" must not survive.
 	if got.Children[0].Name != "" {
 		t.Errorf("Name=%q — slice elem merged against receiver, expected fresh zero", got.Children[0].Name)
 	}
@@ -196,15 +199,17 @@ func TestMerge_nestedStructRecursesIntoExisting(t *testing.T) {
 	}
 }
 
-// Pointer-field merge (PointerStruct *T, NPtrStruct **T/…, both in
-// pointer_test.go): a PRESENT key decodes into the carried pointee in place
-// (chains reuse their non-nil prefix), an omitted key nils the field, null
-// nils it too, and a parse failure leaves the receiver untouched.
+// Pointer-field merge tests. PointerStruct (*T fields) and NPtrStruct (**T
+// and deeper) are declared in pointer_test.go. The rules:
+//   - a present key decodes into the carried pointee in place. A pointer
+//     chain reuses the levels that are already non-nil.
+//   - an omitted key sets the field to nil. So does a JSON null.
+//   - a parse failure leaves the receiver untouched.
 
 func TestMerge_pointerFieldClearedWhenOmitted(t *testing.T) {
 	t.Parallel()
 	receiver := PointerStruct{Name: new("keep"), Count: new(7)}
-	// "name" omitted → nil, as a fresh decode would give.
+	// "name" is omitted, so it comes back nil, as a fresh decode would give.
 	got, _, err := receiver.DecodeFrom([]byte(`{"count":9,"enabled":true}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -235,7 +240,8 @@ func TestMerge_pointerScalarReusesPointee(t *testing.T) {
 
 func TestMerge_pointerStructPointeeReused(t *testing.T) {
 	t.Parallel()
-	// Non-nil *Address pointee decoded in place — same pointer.
+	// The non-nil *Address pointee is decoded in place, so the pointer stays
+	// the same.
 	orig := &Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
 	receiver := PointerStruct{Addr: orig}
 	got, _, err := receiver.DecodeFrom([]byte(`{"addr":{"street":"Main 2","city":"Kyiv","zipCode":"01001"}}`))
@@ -252,7 +258,7 @@ func TestMerge_pointerStructPointeeReused(t *testing.T) {
 
 func TestMerge_pointerNilReceiverAllocates(t *testing.T) {
 	t.Parallel()
-	// nil receiver fields → fresh pointees allocated.
+	// Nil receiver fields get freshly allocated pointees.
 	got, _, err := PointerStruct{}.DecodeFrom([]byte(`{"count":9,"name":"x"}`))
 	if err != nil {
 		t.Fatalf("decode: %v", err)
@@ -334,8 +340,8 @@ func TestMerge_multiLevelStructLeafReused(t *testing.T) {
 
 func TestMerge_pointerParseFailureLeavesReceiverUntouched(t *testing.T) {
 	t.Parallel()
-	// Leaf parses into a temp first, so a failure leaves the field nil
-	// (no half-allocated chain).
+	// The leaf value parses into a temporary first. A failure leaves the
+	// field nil instead of a half-allocated pointer chain.
 	got, _, err := NPtrStruct{}.DecodeFrom([]byte(`{"pp":"not a number"}`))
 	if err == nil {
 		t.Fatal("expected parse error")
@@ -345,9 +351,10 @@ func TestMerge_pointerParseFailureLeavesReceiverUntouched(t *testing.T) {
 	}
 }
 
-// Array slots decode fresh, never merged — the element decoder zeroes what
-// the payload omits, so `[2]Inner`, `[]Inner`, `[2]*Inner` and `[2]**Inner`
-// all agree with jsonv2. Pinned on both paths.
+// ArrMerge checks that array and slice slots decode fresh and are never
+// merged. The element decoder zeroes what the payload omits, so `[2]Inner`,
+// `[]Inner`, `[2]*Inner` and `[2]**Inner` all agree with jsonv2. Tested on
+// both the bytes path and the stream path.
 //
 //ggen:generate
 type ArrMerge struct {
@@ -414,9 +421,9 @@ func TestMerge_ArraySlotsOverwrite(t *testing.T) {
 	}
 }
 
-// A generated struct element is handed the carried slot instead of a blanked
-// one, so its inner allocations (here the element's own []string) are reused
-// across decodes while the decoded value still comes out fresh.
+// A generated struct element decodes into the carried slot, not a zeroed
+// one. Its inner allocations (here the element's own []string) are reused
+// across decodes, while the decoded value still equals a fresh decode.
 func TestMerge_sliceElementAllocationsReused(t *testing.T) {
 	t.Parallel()
 	payload := []byte(`{"children":[{"name":"a","tags":["t1","t2"]},{"name":"b","tags":["t3"]}]}`)
@@ -446,8 +453,8 @@ func TestMerge_sliceElementAllocationsReused(t *testing.T) {
 	}
 }
 
-// Every field kind the payload omits comes back zeroed; only the container
-// keeps its (emptied) backing.
+// OmitZeroed checks that every field kind the payload omits comes back
+// zeroed. Only a container keeps its backing, emptied.
 //
 //ggen:generate
 type OmitZeroed struct {
@@ -502,8 +509,8 @@ func TestMerge_omittedKeysZeroEveryKind(t *testing.T) {
 	}
 	check(t, sg)
 
-	// Through the Stream API too: a receiver only lends its memory, as its
-	// godoc says — the result equals a fresh decode.
+	// Same through the Stream API. As its godoc says, a receiver only lends
+	// its memory, and the result equals a fresh decode.
 	sv, err := st.Reset(bytes.NewReader([]byte(`{"s":"keep"}`)), make([]byte, 0, 8)).Value(first)
 	if err != nil {
 		t.Fatal(err)
@@ -511,9 +518,10 @@ func TestMerge_omittedKeysZeroEveryKind(t *testing.T) {
 	check(t, sv)
 }
 
-// The hard case for element reuse: a LEANER second payload. Recycled element
-// allocations must carry no data forward — the element's own reset is what
-// makes reusing its slot safe — while the backings themselves are still reused.
+// The hard case for element reuse is a second payload with less data than
+// the first. Reused element allocations must carry no data forward. The
+// element's own reset is what makes reusing its slot safe. The backings
+// themselves must still be reused.
 func TestMerge_leanRedecodeLeavesNoStaleData(t *testing.T) {
 	t.Parallel()
 	fat := []byte(`{"id":42,"name":"hello","active":true,"props":{"k":"v"},` +
@@ -568,7 +576,7 @@ func TestMerge_leanRedecodeLeavesNoStaleData(t *testing.T) {
 	}
 }
 
-// MapReuse carries the two map shapes whose values own an allocation: a
+// MapReuse holds the two map shapes whose values own an allocation: a
 // generated struct with containers, and a slice.
 //
 //ggen:generate
@@ -577,8 +585,8 @@ type MapReuse struct {
 	Lists map[string][]int `json:"lists"`
 }
 
-// A map value's allocations are recycled across decodes, while the entries the
-// payload drops disappear and nothing stale survives in the ones it keeps.
+// A map value's allocations are reused across decodes. Entries the payload
+// drops disappear, and nothing stale survives in the entries it keeps.
 func TestMerge_mapValueAllocationsReused(t *testing.T) {
 	t.Parallel()
 	fat := []byte(`{"nodes":{"a":{"id":1,"name":"x","tags":["t1","t2"]},"b":{"id":2}},` +
@@ -590,7 +598,7 @@ func TestMerge_mapValueAllocationsReused(t *testing.T) {
 	tagsA := unsafe.SliceData(first.Nodes["a"].Tags)
 	listA := unsafe.SliceData(first.Lists["a"])
 
-	// Second payload keeps "a", drops "b", and omits fields "a" had set.
+	// The second payload keeps "a", drops "b", and omits fields "a" had set.
 	lean := []byte(`{"nodes":{"a":{"id":9}},"lists":{"a":[7]}}`)
 	got, _, err := first.DecodeFrom(lean)
 	if err != nil {
@@ -613,8 +621,8 @@ func TestMerge_mapValueAllocationsReused(t *testing.T) {
 	}
 }
 
-// A key repeated inside ONE payload decodes fresh each time; seeding comes
-// from the carried map, never from the map being filled.
+// A key repeated inside one payload decodes fresh each time. Reused values
+// come from the carried map, never from the map being filled.
 func TestMerge_mapRepeatedKeyDecodesFresh(t *testing.T) {
 	t.Parallel()
 	first, _, err := MapReuse{}.DecodeFrom([]byte(`{"nodes":{"a":{"id":1,"name":"carried"}}}`))
@@ -649,9 +657,9 @@ func TestMerge_mapStreamDropsOmittedKeys(t *testing.T) {
 	}
 }
 
-// A map whose values own a backing recycles it: []byte decodes through
-// AppendDecode into the carried buffer, and a pointer value keeps its pointee
-// rather than allocating one per entry.
+// A map whose values own a backing reuses it. A []byte value decodes through
+// AppendDecode into the carried buffer. A pointer value keeps its pointee
+// instead of allocating one per entry.
 func TestMerge_mapByteAndPointerValuesReused(t *testing.T) {
 	t.Parallel()
 	first, _, err := MapVals{}.DecodeFrom([]byte(`{"blobs":{"a":"aGVsbG8=","b":"d29ybGQ="}}`))
@@ -693,8 +701,9 @@ func TestMerge_mapByteAndPointerValuesReused(t *testing.T) {
 	}
 }
 
-// Under -copy a raw span is copied out of the input, so its backing is worth
-// recycling too; without -copy it aliases and there is nothing to reuse.
+// Under -copy a raw JSON value is copied out of the input, so its backing is
+// worth reusing too. Without -copy it aliases the input (points into the
+// caller's bytes, no copy), so there is nothing to reuse.
 func TestMerge_copyModeRawMapValueReused(t *testing.T) {
 	t.Parallel()
 	first, _, err := CopyDoc{}.DecodeFrom([]byte(`{"rawMap":{"a":{"x":1},"b":2}}`))
@@ -745,11 +754,12 @@ func TestMerge_slicePointerChainReused(t *testing.T) {
 	}
 }
 
-// R10CrossPkgFallback holds thirdparty.External — no ggen methods, so every
-// position decodes through encoding/json, which MERGES into the value it is
-// handed. The target is zeroed first at the value field, the pointer (not
-// seeded from the receiver), the swapped map pointee and the fixed-array
-// slot; a key the re-decode omits must not resurrect the old value.
+// R10CrossPkgFallback holds thirdparty.External, which has no ggen methods.
+// Every position decodes through encoding/json, and encoding/json merges into
+// the value it is given. So the generated code zeroes the target first: the
+// value field, the pointer (it is not seeded from the receiver), the map
+// pointee and the fixed-array slot. A key the second decode omits must not
+// bring back the old value.
 //
 //ggen:generate
 type R10CrossPkgFallback struct {
@@ -792,10 +802,11 @@ func TestMerge_crossPkgFallbackDecodesFresh(t *testing.T) {
 	check("stream", sgot)
 }
 
-// A slice or map leaf the receiver carries somewhere other than a top-level
-// field — a pointer map value, a []**T element, a *[N]map or [N][]byte slot —
-// is emptied before it refills, so a smaller payload replaces rather than
-// appends or merges; only the backing is recycled.
+// R10CarriedLeaves holds slices and maps that the receiver carries somewhere
+// other than a top-level field: a pointer map value, a []**T element, a
+// *[N]map slot or a [N][]byte slot. Each one is emptied before it is filled
+// again, so a smaller payload replaces the old content instead of appending
+// or merging. Only the backing is reused.
 //
 //ggen:generate
 type R10CarriedLeaves struct {

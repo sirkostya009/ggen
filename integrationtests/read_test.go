@@ -10,7 +10,8 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// IgnoreUnknownStruct: ignoreunknown silently skips extra JSON keys.
+// IgnoreUnknownStruct uses ignoreunknown, which silently skips JSON keys that
+// match no field.
 //
 //ggen:generate ignoreunknown
 type IgnoreUnknownStruct struct {
@@ -32,7 +33,7 @@ func TestRead_valid(t *testing.T) {
 
 func TestRead_missingRequired(t *testing.T) {
 	t.Parallel()
-	// city omitted — Address.city is `required,notempty`.
+	// city is omitted, and Address.city is `required,notempty`.
 	_, _, err := Address{}.DecodeFrom([]byte(`{"street":"a","zipCode":"12345"}`))
 	if err == nil {
 		t.Fatal("expected missing-required error")
@@ -44,7 +45,7 @@ func TestRead_missingRequired(t *testing.T) {
 
 func TestRead_notempty(t *testing.T) {
 	t.Parallel()
-	// city has notempty; empty string fails.
+	// city has notempty, so an empty string fails.
 	bad := `{"street":"s","city":"","zipCode":"12345"}`
 	_, _, err := Address{}.DecodeFrom([]byte(bad))
 	if err == nil {
@@ -57,7 +58,7 @@ func TestRead_notempty(t *testing.T) {
 
 func TestRead_len(t *testing.T) {
 	t.Parallel()
-	// zipCode len=5 exact; length 6 fails.
+	// zipCode must have exactly 5 characters (len=5), so 6 fails.
 	bad := `{"street":"s","city":"c","zipCode":"123456"}`
 	_, _, err := Address{}.DecodeFrom([]byte(bad))
 	if err == nil {
@@ -112,8 +113,8 @@ func TestRead_notObject(t *testing.T) {
 	}
 }
 
-// Top-level malformed JSON gives a *ParseError carrying the scan sentinel
-// (errors.Is works) but no Field path.
+// Malformed JSON at the top level gives a *ParseError that wraps the scanner's
+// sentinel error, so errors.Is works. It has no field path.
 func TestRead_parseErrorTopLevel(t *testing.T) {
 	t.Parallel()
 	_, _, err := (Address{}).DecodeFrom([]byte(`not-an-object`))
@@ -151,7 +152,7 @@ func TestRead_parseErrorFieldName(t *testing.T) {
 	}
 }
 
-// validation.* errors stay typed, not wrapped in a ParseError.
+// Validation errors keep their own types and are not wrapped in a ParseError.
 func TestRead_validationNotWrapped(t *testing.T) {
 	t.Parallel()
 	_, _, err := (Address{}).DecodeFrom([]byte(`{"street":"","city":"C","zipCode":"12345"}`))
@@ -166,9 +167,10 @@ func TestRead_validationNotWrapped(t *testing.T) {
 	}
 }
 
-// The unknown-key branch must clone the KeyView alias BEFORE ConsumeColon /
-// SkipValue: both compact the stream buffer, shifting the bytes the alias
-// points at, so a lazily-cloned key lands in the error path as garbage.
+// The unknown-key branch must copy the key before it calls ConsumeColon or
+// SkipValue. The key from KeyView aliases the Stream's buffer (points into
+// it, no copy). Both calls can refill the buffer and move its bytes, so a key
+// copied later would show up in the error path as garbage.
 func TestIgnoreUnknown_streamErrorKeepsKeyName(t *testing.T) {
 	t.Parallel()
 	payload := `{"unknownkeyname":[` + strings.Repeat("1,", 400) + `@]}`
@@ -187,9 +189,9 @@ func TestIgnoreUnknown_streamErrorKeepsKeyName(t *testing.T) {
 	}
 }
 
-// UnknownKeyError.Pos is the value head on both paths (the stream used to
-// stamp it before the colon), a key with no colon is the grammar error rather
-// than an unknown key on both, and the multierr aggregate carries the same Pos.
+// UnknownKeyError.Pos is the offset of the value start on both the bytes and
+// the stream path. A key with no colon after it is a grammar error, not an
+// unknown key, on both paths. The multierr aggregate carries the same Pos.
 func TestRead_unknownKey_streamParity(t *testing.T) {
 	t.Parallel()
 	for _, p := range []string{`{"zz":1}`, `{"id":1,"zz":2}`, `{ "zz" : 1 }`} {

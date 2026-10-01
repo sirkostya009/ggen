@@ -43,7 +43,7 @@ func TestAnyIsEmpty(t *testing.T) {
 		if got := AnyIsEmpty(c.v); got != c.want {
 			t.Errorf("AnyIsEmpty(%#v) = %v, want %v", c.v, got, c.want)
 		}
-		// The predicate must agree with what AppendAny writes.
+		// AnyIsEmpty must agree with what AppendAny writes.
 		out, err := AppendAny(nil, c.v)
 		if err != nil {
 			t.Fatalf("AppendAny(%#v): %v", c.v, err)

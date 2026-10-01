@@ -16,21 +16,21 @@ import (
 type Set struct {
 	Packages []*Package // loaded packages, in dependency order
 
-	mu       sync.Mutex           // guards the maps below: lowering fills them lazily
+	mu       sync.Mutex           // guards the maps below, which lowering fills lazily
 	pkgs     map[string]*Package  // every package a type refers to, loaded or not
-	decls    map[string]*TypeDecl // "path.Name" → generated type or enum type
+	decls    map[string]*TypeDecl // generated types and enum types, keyed by "path.Name"
 	consts   map[string][]model.Const
 	enums    []*TypeDecl
-	unloaded map[string]struct{} // ggen-generated types reached in a package no pattern matched
+	unloaded map[string]struct{} // ggen-generated types found in packages no pattern matched
 }
 
 // Package is one Go package. Every named type in the loaded packages points at
-// one shared *Package; a package that was only imported gets one too, with no
+// one shared *Package. A package that was only imported gets one too, with no
 // Types.
 type Package struct {
 	Path, Name string
 	Loaded     bool        // matched by a Load pattern
-	Types      []*TypeDecl // generated types, declaration order; nil unless Loaded
+	Types      []*TypeDecl // generated types in declaration order, nil unless Loaded
 }
 
 // TypeDecl is one Go type ggen generates, or a named string or integer type
@@ -40,8 +40,8 @@ type TypeDecl struct {
 	File       string // declaring source file
 	Name, Doc  string
 	Directives []string // "schema:in" from a `//schema:in` line
-	Enum       *Enum    // set for an enum type; nil for a generated type
-	Annotated  bool     // carries //ggen:generate itself, vs reached from a type that does
+	Enum       *Enum    // set for an enum type, nil for a generated type
+	Annotated  bool     // carries //ggen:generate itself, not only reached from a type that does
 
 	set       *Set
 	fset      *token.FileSet // positions of the load that produced info or named
@@ -69,7 +69,7 @@ func Load(patterns ...string) (*Set, error) {
 		}
 		if p.Types == nil {
 			if len(p.Structs) == 0 {
-				return nil // nothing to generate here; a pattern may match many packages
+				return nil // nothing to generate here, and a pattern may match many packages
 			}
 			return errors.New(dir + ": no type information (is it inside a module?)")
 		}
@@ -113,8 +113,8 @@ func Load(patterns ...string) (*Set, error) {
 			s.decls[p.Path+"."+d.Name] = d
 		}
 	}
-	// A generated named string or integer type with constants is an enum type
-	// too; it stays in Types (not Enums), and its own shape is the closed set.
+	// A generated named string or integer type with constants is also an enum
+	// type. It stays in Types, not Enums, and its own shape is the closed set.
 	for _, p := range s.Packages {
 		for _, d := range p.Types {
 			if d.info.IsAlias {
@@ -125,8 +125,8 @@ func Load(patterns ...string) (*Set, error) {
 			}
 		}
 	}
-	// Lower every type once, both ways, so every enum type any of them
-	// references exists before a script asks for Enums, and recursion is known.
+	// Lower every type once in both directions. This creates every enum type
+	// they reference before a script calls Enums, and finds recursive types.
 	refs := map[*TypeDecl][]*TypeDecl{}
 	for _, p := range s.Packages {
 		for _, d := range p.Types {
@@ -168,7 +168,7 @@ func (s *Set) markUnloaded(key string) {
 
 // Unloaded lists every ggen-generated type a loaded type references whose own
 // package was not loaded, as "import/path.Name". Each is lowered as an
-// external type with no fields; loading its package instead gives the full
+// external type with no fields. Loading its package instead gives the full
 // shape.
 func (s *Set) Unloaded() []string {
 	s.mu.Lock()
@@ -181,10 +181,10 @@ func (s *Set) Unloaded() []string {
 	return out
 }
 
-// enumValues is the closed set of key, a "path.Name": every constant declared
-// in the type's own package, then the exported constants other loaded
-// packages declare for it, each in declaration order. Returns nil when the
-// type has no constants.
+// enumValues returns the closed set of values for key, a "path.Name". It lists
+// every constant declared in the type's own package, then the exported
+// constants other loaded packages declare for it, each in declaration order.
+// It returns nil when the type has no constants.
 func (s *Set) enumValues(key, ownPkg string) *Enum {
 	var own, others []model.Const
 	for _, c := range s.consts[key] {
@@ -205,7 +205,7 @@ func (s *Set) enumValues(key, ownPkg string) *Enum {
 		v := EnumValue{Name: c.Name, Value: c.Value}
 		if strings.HasPrefix(c.Value, `"`) {
 			if err := json.Unmarshal([]byte(c.Value), &v.Text); err != nil {
-				continue // the parser writes JSON; anything else is not a value
+				continue // the parser writes JSON strings, so anything else is not a value
 			}
 		}
 		e.Values = append(e.Values, v)
@@ -258,22 +258,24 @@ func (t *TypeDecl) Has(directive string) bool {
 }
 
 // enumDecl returns the enum type for a named string or integer type with
-// constants, creating it on first use; nil when the type has no constants.
+// constants, creating it on first use. It returns nil when the type has no
+// constants.
 func (s *Set) enumDecl(n *types.Named, fset *token.FileSet) *TypeDecl {
 	obj := n.Obj()
 	if obj.Pkg() == nil {
 		return nil
 	}
 	key := obj.Pkg().Path() + "." + obj.Name()
-	pkg := s.pkg(obj.Pkg()) // before the lock: pkg takes it too
+	pkg := s.pkg(obj.Pkg()) // before locking, because pkg takes the lock too
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if d, ok := s.decls[key]; ok {
 		return d
 	}
-	// Constants of a package no pattern matched are not a closed set: an
-	// imported flag or bitmask type (fs.FileMode) would reject every real
-	// value. A script opts in by loading the package.
+	// Constants of a package no pattern matched are not treated as a closed
+	// set. For an imported flag or bitmask type such as fs.FileMode, that set
+	// would reject real values like combined flags. A script opts in by
+	// loading the package.
 	if !pkg.Loaded {
 		return nil
 	}

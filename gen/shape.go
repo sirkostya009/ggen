@@ -16,8 +16,8 @@ import (
 type Shape struct {
 	Decl      *TypeDecl
 	Mode      Mode
-	Fields    []*Field // a struct's declared keys; nil for an alias or enum type
-	Alias     *Type    // the underlying type of an alias or enum type; nil for a struct
+	Fields    []*Field // a struct's declared keys, nil for an alias or enum type
+	Alias     *Type    // the underlying type of an alias or enum type, nil for a struct
 	Recursive bool     // reaches itself through references
 	Unknown   Unknown
 	Rest      *Type // value type of undeclared keys when Unknown is Collect
@@ -25,8 +25,8 @@ type Shape struct {
 	errs []error // surfaced by File.Place
 }
 
-// Err records a problem with this shape; File.Place surfaces it and Write
-// fails. A script that edits a shape may use it too.
+// Err records a problem with this shape. File.Place surfaces it, and Write
+// then fails. A script that edits a shape may use it too.
 func (s *Shape) Err(err error) { s.errs = append(s.errs, err) }
 
 // Field is one declared key.
@@ -37,35 +37,35 @@ type Field struct {
 	Doc        string
 	Directives []string
 	Type       *Type
-	// Optional: in input, the key may be absent (no `required`); in output,
-	// the encoder may leave it out (omitempty, omitzero).
+	// Optional means the key may be absent in input (no `required`). In
+	// output, it means the encoder may leave it out (omitempty, omitzero).
 	Optional bool
 }
 
 // Type is a value's type: its Go side and its JSON side.
 type Type struct {
 	GoType string   // Go spelling relative to the declaring package: "[]string", "*User", "uuid.UUID"
-	Name   string   // declared name of a named type ("Role", "Time"); empty for an unnamed type
-	Pkg    *Package // package of a named type; nil for an unnamed or predeclared type
+	Name   string   // declared name of a named type ("Role", "Time"), empty for an unnamed type
+	Pkg    *Package // package of a named type, nil for an unnamed or predeclared type
 	File   string   // declaring file of a named type in a loaded package
 
 	Go     GoKind
 	Wire   Wire
 	Format string // one of the Format constants, or ""
 
-	Elem *Type // Slice, Array, Map value, Bytes under format:array
+	Elem *Type // Slice or Array element, Map value, or a byte of Bytes under format:array
 	Key  *Type // Map key
-	Len  int   // Array length; Bytes: fixed decoded length of a [N]byte, 0 for []byte
+	Len  int   // Array length, or for Bytes the decoded length of a [N]byte (0 for []byte)
 
-	Ref      *TypeDecl // a generated type, or an enum type (soft: an emitter may inline Enum instead)
-	External bool      // a named type ggen does not generate; Pkg.Path + "." + Name identifies it
+	Ref      *TypeDecl // a generated type or an enum type. An emitter may inline Enum instead of an enum Ref.
+	External bool      // a named type ggen does not generate, identified by Pkg.Path + "." + Name
 
-	Rules []Rule  // input only, in declared order; apply to non-null values
+	Rules []Rule  // input only, in declared order, applied to non-null values
 	OneOf []*Type // input only: other shapes a converter accepts in place of this one
-	// Converted: a converter turns this JSON shape into the Go value, so
-	// Rules describe the converted value and do not constrain it.
-	Enum *Enum // closed set of values
+	Enum  *Enum   // closed set of values
 
+	// Converted means a converter turns this JSON shape into the Go value, so
+	// Rules describe the converted value and do not constrain this shape.
 	Converted bool
 	Nullable  bool // JSON null is accepted (input) or can be emitted (output)
 	Empty     bool // "" is accepted or can be emitted for a formatted string (IP, Addr, Prefix, URL)
@@ -104,28 +104,28 @@ const (
 
 // Enum is a closed set of values.
 type Enum struct {
-	Decl   *TypeDecl   // the named type whose constants these are; nil for a oneof
+	Decl   *TypeDecl   // the named type whose constants these are, nil for a oneof
 	Values []EnumValue // declaration order
-	// Zero: in output, the Go zero value ("" or 0) can be emitted although it
-	// is not one of Values.
+	// Zero means the Go zero value ("" or 0) can be emitted in output although
+	// it is not one of Values.
 	Zero bool
 }
 
 // EnumValue is one member.
 type EnumValue struct {
-	Name  string // constant name, "RoleAdmin"; empty for a oneof
+	Name  string // constant name, "RoleAdmin", empty for a oneof
 	Value string // JSON literal: `"admin"`, `2`
 	// Text is the decoded value of a string constant, so a target can quote
-	// it its own way; empty for a number.
+	// it its own way. It is empty for a number.
 	Text string
 }
 
-// Rule is one pipe: step.
+// Rule is one step of a `pipe:` tag.
 type Rule struct {
 	Op        Op
 	Args      []string // parsed arguments: ["3"], ["a", "c d"], ["_", "-"]
-	Func      string   // Op Func: the reference as written without "@", "IsAdult" or "pkg.IsAdult"
-	FuncPkg   string   // Op Func: import path of the function's package
+	Func      string   // for Op Func, the reference as written without "@": "IsAdult" or "pkg.IsAdult"
+	FuncPkg   string   // for Op Func, the import path of the function's package
 	Msg       string   // inline message of a bool-form @Func
 	Transform bool     // changes the value instead of checking it
 }
@@ -211,8 +211,8 @@ func (t *TypeDecl) shape(m Mode) *Shape {
 		} else if n, ok := info.Type.(*types.Named); ok {
 			s.Alias = l.typ(n.Underlying(), &fieldCtx{noSteps: true}, -1)
 		}
-		// An annotated named string or integer type with constants is an enum
-		// type too, and its own shape is the closed set.
+		// An annotated named string or integer type with constants is also an
+		// enum type, and its own shape is the closed set.
 		if t.Enum != nil && s.Alias != nil {
 			s.Alias.Enum = &Enum{Decl: t, Values: slices.Clone(t.Enum.Values)}
 			s.Alias.Enum.Zero = m == Out && !hasZero(s.Alias.Enum.Values, s.Alias.Wire)
@@ -347,8 +347,8 @@ func (l *lowerer) field(fi model.FieldInfo) *Type {
 	return t
 }
 
-// typ lowers a go/types type at pipe level lvl: -1 is the field itself, k is
-// the k-th container level below it. Pointers do not open a level.
+// typ lowers a go/types type at pipe level lvl. Level -1 is the field itself,
+// and k is the k-th container level below it. Pointers do not open a level.
 func (l *lowerer) typ(gt types.Type, c *fieldCtx, lvl int) *Type {
 	spelled := types.TypeString(gt, l.qualifier)
 	// An alias keeps its own name and package: json.RawMessage is spelled and
@@ -524,7 +524,7 @@ func (l *lowerer) named(t *Type, n *types.Named, c *fieldCtx, lvl int) (nilable 
 		}
 		switch codec {
 		case codecGgen:
-			// ggen's own methods emit the type's structural shape; the script
+			// ggen's own methods emit the type's structural shape. The script
 			// did not load the package, so its fields stay unknown.
 			t.Wire, t.Format = sub.Wire, sub.Format
 			l.set.markUnloaded(key)
@@ -624,7 +624,7 @@ func (l *lowerer) stdKind(t *Type, key string, c *fieldCtx) (handled, nilable bo
 	return false, false
 }
 
-// refShape records the JSON side of a reference to a generated type; its
+// refShape records the JSON side of a reference to a generated type. Its
 // fields and rules live on the referenced type's own shape.
 func (l *lowerer) refShape(t *Type, n *types.Named) {
 	if d := t.Ref; d != nil && d.info.IsAlias {
@@ -693,8 +693,8 @@ func (l *lowerer) delegatingAlias() *Type {
 	return t
 }
 
-// aliasField is the pseudo-field a top-level alias lowers as: no tag, so no
-// format of its own.
+// aliasField is the pseudo-field a top-level alias lowers as. It has no tag,
+// so it has no format of its own.
 func (l *lowerer) aliasField() model.FieldInfo { return model.FieldInfo{} }
 
 func timeFormat(t *Type, format string) {
@@ -760,8 +760,8 @@ type methodSet struct {
 	encodeGgen, decodeGgen     bool
 }
 
-// codec is how the type handles mode; codecNone when that direction has no
-// method of its own.
+// codec returns how the type handles mode, or codecNone when that direction
+// has no method of its own.
 func (m methodSet) codec(mode Mode) codec {
 	enc, js, text := m.encodeGgen, m.marshalJSON, m.marshalText
 	if mode == In {

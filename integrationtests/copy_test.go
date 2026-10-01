@@ -2,11 +2,13 @@ package integrationtests
 
 //go:generate ../ggen $GOFILE
 
-// -copy mode: the bytes path copies retained strings / map keys+values /
-// slice elements / json.RawMessage / any-embedded strings out of the input
-// instead of aliasing it, so the decoded value survives a later mutation of
-// the source buffer (matching the stream path's lifetime). CopyDoc carries
-// `//ggen:generate copy`; AliasDoc is the default aliasing control.
+// In -copy mode the bytes path copies retained values out of the input
+// instead of aliasing it. An aliased string points into the caller's input
+// bytes, with no copy. The copied values are strings, map keys and values,
+// slice elements, json.RawMessage and strings inside an any. So the decoded
+// value survives a later change to the source buffer, the same lifetime the
+// stream path gives. CopyDoc carries `//ggen:generate copy`. AliasDoc is the
+// default aliasing control.
 
 import (
 	"encoding/json"
@@ -36,25 +38,26 @@ type CopyRef struct {
 	Label string `json:"label"`
 }
 
-// AliasDoc mirrors CopyDoc's leading field without `copy`: its Name aliases the
-// input, so it serves as the negative control proving the scribble is effective.
+// AliasDoc mirrors CopyDoc's leading field without `copy`. Its Name aliases
+// the input, so it is the negative control that proves overwriting the source
+// (the scribble) has a visible effect.
 //
 //ggen:generate
 type AliasDoc struct {
 	Name string `json:"name"`
 }
 
-// TestCopy_AliasVsCopy is the deterministic proof that -copy decouples the
-// decoded value from the input buffer: after the source bytes are scribbled
-// over, the aliasing AliasDoc is corrupted (so the mutation is effective) while
-// every retained CopyDoc value — string, slice elem, map key/value, any, and
-// json.RawMessage — stays intact.
+// TestCopy_AliasVsCopy proves that -copy decouples the decoded value from the
+// input buffer. After the source bytes are overwritten, the aliasing AliasDoc
+// is corrupted, which shows the overwrite works. Every retained CopyDoc value
+// stays intact: string, slice element, map key and value, any, and
+// json.RawMessage.
 func TestCopy_AliasVsCopy(t *testing.T) {
 	t.Parallel()
 	const js = `{"name":"hello world","tags":["alpha","beta"],"props":{"key":"value"},"extra":"xtra","raw":{"a":"b"},"refs":[{"label":"ref-one"}]}`
 
-	// Alias control (Name-only payload): mutating the source MUST corrupt the
-	// decoded string, otherwise the scribble is ineffective and the copy
+	// Alias control on a Name-only payload. Mutating the source must corrupt
+	// the decoded string. Otherwise the scribble has no effect and the copy
 	// assertions prove nothing.
 	a := []byte(`{"name":"hello world"}`)
 	ad, _, err := AliasDoc{}.DecodeFrom(a)
@@ -71,7 +74,7 @@ func TestCopy_AliasVsCopy(t *testing.T) {
 		t.Fatal("aliasing decode survived input mutation — scribble ineffective, copy assertions cannot detect aliasing")
 	}
 
-	// Copy mode: same mutation leaves every retained value intact.
+	// Copy mode: the same mutation leaves every retained value intact.
 	c := []byte(js)
 	cd, _, err := CopyDoc{}.DecodeFrom(c)
 	if err != nil {
@@ -100,11 +103,12 @@ func TestCopy_AliasVsCopy(t *testing.T) {
 	}
 }
 
-// TestCopy_NestedDecouples runs the decouple check over a deep tree, covering
-// every retained-string site at depth: field strings, slice/map string
-// elements, map keys, json.RawMessage spans, any-embedded strings + object
-// keys (ggen.AnyCopy), and pointer-slice element structs. A content
-// fingerprint taken before and after scribbling the source must be identical.
+// TestCopy_NestedDecouples runs the decouple check over a deep tree. It
+// covers every retained-string site at depth: field strings, string elements
+// of slices and maps, map keys, json.RawMessage spans, strings and object
+// keys inside an any (ggen.AnyCopy), and structs behind pointer-slice
+// elements. A content fingerprint taken before and after scribbling the
+// source must be identical.
 func TestCopy_NestedDecouples(t *testing.T) {
 	t.Parallel()
 	const js = `{
@@ -148,14 +152,16 @@ func TestCopy_NestedDecouples(t *testing.T) {
 	}
 }
 
-// TestCopy_EscapedDecouples proves -copy decouples AND correctly unescapes at
-// every retained-string site when the value routes through scan.stringSlow (the
-// escape path — a fresh owned scratch that -copy then redundantly clones). The
-// ASCII-only NestedDecouples payloads never reach stringSlow, so this pins the
-// escape arm: field string, slice elem, map key + value, any-string, pointer
-// leaf — each carries a two-char escape / \uXXXX / surrogate pair, and every
-// decoded value must equal the unescaped Go string both before and after the
-// source is scribbled.
+// TestCopy_EscapedDecouples proves -copy decouples and correctly unescapes at
+// every retained-string site when the value takes the escape path. That path
+// builds the unescaped string in a fresh buffer of its own, so it never
+// aliases the input. The NestedDecouples payloads have no escapes and never
+// take it, so this test pins the escape path for a field string, a slice
+// element, a map key and value, an any string and a pointer leaf. Each one
+// carries a two-char escape, a \uXXXX escape or a surrogate pair, the two
+// \uXXXX escapes that encode one character above U+FFFF. Every decoded value
+// must equal the unescaped Go string both before and after the source is
+// scribbled.
 func TestCopy_EscapedDecouples(t *testing.T) {
 	t.Parallel()
 	const js = `{"name":"a\nb\"c\\dé😀","tags":["té","plain"],"props":{"k\ny":"v\"w"},"extra":"x😀","refs":[{"label":"r\t0"}]}`
@@ -196,9 +202,10 @@ func TestCopy_EscapedDecouples(t *testing.T) {
 	check("after scribble") // any aliased escape-path string shows scribbled bytes here
 }
 
-// copyFingerprint collects the CONTENT of every retained string reachable from
-// d (cloned, independent of the source buffer), sorted. Compared before/after a
-// scribble: any aliased field shows scribbled bytes in the second call.
+// copyFingerprint collects the content of every retained string reachable
+// from d, sorted. Each string is cloned, so the result does not depend on the
+// source buffer. Compare it before and after a scribble. Any aliased field
+// shows scribbled bytes in the second call.
 func copyFingerprint(d *CopyDoc) []string {
 	out := collectDocStrings(d, nil)
 	sort.Strings(out)
@@ -226,9 +233,9 @@ func collectDocStrings(d *CopyDoc, out []string) []string {
 	return out
 }
 
-// collectAnyStrings walks a decoded `any` tree (ggen.AnyCopy output shapes:
-// string / []any / map[string]any / number / bool / nil) and appends the
-// content of every string and object key.
+// collectAnyStrings walks a decoded `any` tree and appends the content of
+// every string and object key. The tree holds the shapes ggen.AnyCopy
+// returns: string, []any, map[string]any, number, bool and nil.
 func collectAnyStrings(v any, out []string) []string {
 	switch t := v.(type) {
 	case string:
@@ -278,9 +285,9 @@ type CopyIPDoc struct {
 	IP net.IP `json:"ip"`
 }
 
-// net.ParseIP copies into a fresh IP, so the VALUE was never at risk — but the
-// failure literal retains the scanned text, and under -copy that must not
-// alias the input either. The stream path already cloned it.
+// net.ParseIP copies into a fresh IP, so the value itself never aliases the
+// input. But the parse error keeps the scanned text, and under -copy that
+// text must not alias the input either. The stream path clones it as well.
 func TestCopy_NetIPErrorTextDecouples(t *testing.T) {
 	t.Parallel()
 	src := []byte(`{"ip":"not-an-ip-at-all"}`)
@@ -289,8 +296,9 @@ func TestCopy_NetIPErrorTextDecouples(t *testing.T) {
 	if !errors.As(err, &pe) {
 		t.Fatalf("got %T %v, want *net.ParseError", err, err)
 	}
-	// Compare against a LITERAL, never against a string read out of pe before
-	// the scribble — that header shares the bytes, so both sides would change.
+	// Compare against a literal, never against a string read out of pe before
+	// the scribble. That string shares the same bytes, so both sides would
+	// change.
 	const want = "not-an-ip-at-all"
 	if pe.Text != want {
 		t.Fatalf("Text = %q, want %q", pe.Text, want)

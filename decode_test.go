@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// intT is a minimal bytes-path Decoder for the walker tests.
+// intT is a minimal Decoder over []byte for the slice walker tests.
 type intT int64
 
 func (intT) DecodeFrom(data []byte) (intT, int, error) {
@@ -15,9 +15,9 @@ func (intT) DecodeFrom(data []byte) (intT, int, error) {
 	return intT(v), n, err
 }
 
-// TestUnmarshalSliceEmptyNonNil pins that [] decodes to a NON-nil empty slice
-// — generated slice fields and jsonv2 agree. The Stream walker's half of this
-// contract lives in scan's TestStreamMethods.
+// TestUnmarshalSliceEmptyNonNil checks that [] decodes to a non-nil empty
+// slice. Generated slice fields and jsonv2 behave the same way. The Stream
+// version of this check is in TestStreamMethods.
 func TestUnmarshalSliceEmptyNonNil(t *testing.T) {
 	t.Parallel()
 	got, err := UnmarshalSlice[intT]([]byte(" [ ] "))
@@ -27,13 +27,12 @@ func TestUnmarshalSliceEmptyNonNil(t *testing.T) {
 	if got == nil || len(got) != 0 {
 		t.Errorf("UnmarshalSlice([]) = %#v, want non-nil empty", got)
 	}
-	// Non-empty arrays are unaffected.
 	if got, err := UnmarshalSlice[intT]([]byte("[1,2]")); err != nil || len(got) != 2 {
 		t.Errorf("UnmarshalSlice([1,2]) = %v, %v", got, err)
 	}
 }
 
-// testElem is a minimal Decoder[T] for walker tests.
+// testElem is a minimal Decoder[T] for the slice walker tests.
 type testElem string
 
 func (testElem) DecodeFrom(data []byte) (testElem, int, error) {
@@ -41,9 +40,9 @@ func (testElem) DecodeFrom(data []byte) (testElem, int, error) {
 	return testElem(v), n, err
 }
 
-// UnmarshalSlice used to accept `[1,2]]]` / `[{}]{"junk":` cleanly with no
-// way for the caller to detect the remainder (jsonv2 whole-input parity),
-// and started from a nil slice ignoring the package's own prealloc.Cap.
+// UnmarshalSlice must reject anything but whitespace after the closing ']'.
+// It consumes the whole input like jsonv2, so the caller has no other way to
+// notice the leftover bytes.
 func TestUnmarshalSlice_TrailingGarbage(t *testing.T) {
 	t.Parallel()
 	for _, in := range []string{`[]x`, `[] ]`, `["a"]]]`, `["a"] {"junk":1}`} {
@@ -130,7 +129,8 @@ func TestNewParseErr_RawErrorWraps(t *testing.T) {
 
 func TestNewParseErr_ChainPrefixesField(t *testing.T) {
 	t.Parallel()
-	// Inner already wrapped; outer prepends its segment onto the Path.
+	// The inner error is already a *ParseError. The outer call prepends its
+	// segment to the Path.
 	inner := &ParseError{Path: []string{"zip"}, Pos: 7, Err: ErrBadNumber}
 	got := NewParseErr("addr", 99, inner)
 	var pe *ParseError
@@ -143,7 +143,7 @@ func TestNewParseErr_ChainPrefixesField(t *testing.T) {
 	if strings.Join(pe.Path, ".") != "addr.zip" {
 		t.Errorf("Path = %v, want [addr zip]", pe.Path)
 	}
-	// Pos stays at the deeper site.
+	// Pos stays at the innermost error site.
 	if pe.Pos != 7 {
 		t.Errorf("Pos = %d, want 7 (deepest site)", pe.Pos)
 	}
@@ -167,8 +167,8 @@ func TestNewParseErr_ChainEmptyInnerField(t *testing.T) {
 	}
 }
 
-// trivial Decoder implementation used to drive UnmarshalSlice without
-// pulling generated code into the decode package.
+// stubElem is a tiny Decoder that accepts only "{...}". It drives
+// UnmarshalSlice without needing generated code.
 type stubElem struct{}
 
 func (stubElem) DecodeFrom(data []byte) (stubElem, int, error) {
@@ -202,8 +202,8 @@ func TestUnmarshalSlice_WrapsBracketError(t *testing.T) {
 
 func TestUnmarshalSlice_ElementErrorCarriesIndex(t *testing.T) {
 	t.Parallel()
-	// Element 0 OK ({}), element 1 errors (stubElem requires '{'). The
-	// failing element's index should appear in Field.
+	// Element 0 decodes. Element 1 fails because stubElem requires '{'. The
+	// failing element's index must appear in Path.
 	_, err := UnmarshalSlice[stubElem]([]byte(`[{},BAD]`))
 	if err == nil {
 		t.Fatal("expected error")
@@ -217,10 +217,10 @@ func TestUnmarshalSlice_ElementErrorCarriesIndex(t *testing.T) {
 	}
 }
 
-// TestMaxDepth pins the nesting cap on every recursive runtime path: SkipValue
-// and the Any families, bytes + stream. Without the cap a few MB of "[[[["
-// is a fatal (unrecoverable) goroutine stack overflow — jsonv2 errors at the
-// same class of limit.
+// TestMaxDepth checks the nesting limit on every recursive runtime path:
+// SkipValue and the Any functions, for both []byte input and Stream. Without
+// the limit, a few MB of "[[[[" overflows the goroutine stack. That is a
+// fatal crash that recover cannot catch. jsonv2 has a similar limit.
 func TestMaxDepth(t *testing.T) {
 	t.Parallel()
 	deep := func(n int) []byte {
@@ -277,11 +277,12 @@ func TestMaxDepth(t *testing.T) {
 	}
 }
 
-// TestBoolEnd_GiveUpPosition pins the literal give-up position: Bool itself
-// reports the literal start (it stays an inlinable probe), BoolEnd derives
-// where the scan stopped — the first breaking byte, or len(data) for a
-// proper prefix — and SkipValue plus every Any* family report that position,
-// as the null arm already does.
+// TestBoolEnd_GiveUpPosition checks the error position for a broken true or
+// false literal. Bool reports the start of the literal, which keeps it small
+// enough to inline. BoolEnd finds where the scan stopped: the first byte that
+// does not match, or len(data) when the input ends mid-literal. SkipValue and
+// every Any function must report that BoolEnd position, the same way they do
+// for a broken null.
 func TestBoolEnd_GiveUpPosition(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -310,7 +311,7 @@ func TestBoolEnd_GiveUpPosition(t *testing.T) {
 			t.Errorf("BoolEnd(%q, %d) = %d, want %d", tc.in, tc.i, got, tc.want)
 		}
 		if tc.i >= len(data) || (data[tc.i] != 't' && data[tc.i] != 'f') {
-			continue // the dispatchers never reach Bool
+			continue // SkipValue and Any never call Bool here
 		}
 		if p, err := SkipValue(data, tc.i); err != ErrBadBool || p != tc.want {
 			t.Errorf("SkipValue(%q, %d) = (%d, %v), want (%d, ErrBadBool)", tc.in, tc.i, p, err, tc.want)

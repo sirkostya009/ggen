@@ -17,8 +17,8 @@ type HookedStruct struct {
 	N    int    `json:"n"    pipe:"gte=0 lte=100"`
 }
 
-// Compile-time interface satisfaction for the []byte-based MarshalJSON/
-// UnmarshalJSON hooks.
+// Compile-time checks that the []byte-based MarshalJSON and UnmarshalJSON
+// hooks satisfy the stdlib interfaces.
 var (
 	_ jsonv1.Marshaler = HookedStruct{}
 	_ jsonv2.Marshaler = HookedStruct{}
@@ -29,11 +29,9 @@ var (
 
 // Validation errors from the hooks surface through both jsonv1.Unmarshal and
 // jsonv2.Unmarshal.
-//
-//ggen:generate are surfaced through both jsonv1.Unmarshal and jsonv2.Unmarshal, i.e.
 func TestHookedValidationPropagates(t *testing.T) {
 	t.Parallel()
-	// N out of range (lte=100) — violates generated validation.
+	// N is out of range (lte=100), so generated validation fails.
 	bad := []byte(`{"name":"ok","n":200}`)
 
 	// jsonv1 path

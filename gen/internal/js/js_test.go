@@ -291,10 +291,10 @@ func TestNumberHelpersMatchGo(t *testing.T) {
 		" 1", "1 ", "0.0", "-0.0", "1e400", "-1e400", "1e-400", "9007199254740993", "18446744073709551616",
 		"9223372036854775807", "-9223372036854775808", "0x1f", "Infinity", "NaN", "1_000", "1e+308",
 	}
-	// The grammars themselves are pinned in situ by the differential lanes,
-	// against what the generated decoder accepts; the range check is what has
-	// a Go answer here. It runs only on what the grammar check already
-	// accepted, so the corpus is the integers among the inputs.
+	// The grammars themselves are pinned by the differential tests against
+	// what the generated decoder accepts. Here only the range check has a Go
+	// answer. It runs only on what the grammar check already accepted, so
+	// the inputs are narrowed to the integers.
 	inputs = slices.DeleteFunc(inputs, func(s string) bool { return !decimal.MatchString(s) })
 	matchGo(t, inputs, "ggenFits(s, -128n, 127n)", func(s string) string {
 		n, ok := new(big.Int).SetString(s, 10)

@@ -2,11 +2,12 @@ package ggen
 
 import "reflect"
 
-// AnyIsEmpty reports whether v encodes as a JSON-empty value — null, "", []
-// or {} — which is what omitempty skips on an `any` field. The common
-// dynamic types are matched directly; anything else consults reflect, so a
-// typed nil pointer, an empty typed slice or an empty []byte (base64 "")
-// count too. Structs never do: their encoding is not inspected.
+// AnyIsEmpty reports whether v encodes as an empty JSON value: null, "", []
+// or {}. Those are the values omitempty skips on an `any` field. Common
+// dynamic types are checked directly. Other types go through reflect, so a
+// typed nil pointer, an empty typed slice and an empty []byte (base64 "")
+// also count as empty. A struct never counts, because its encoding is not
+// inspected.
 func AnyIsEmpty(v any) bool {
 	switch x := v.(type) {
 	case nil:

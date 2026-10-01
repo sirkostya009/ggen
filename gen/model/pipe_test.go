@@ -160,8 +160,8 @@ func TestParsePipeTag(t *testing.T) {
 			},
 		},
 		{
-			// The lift is top-level only: a presence word inside a group is
-			// the group's problem (rejected), not the outer field's marker.
+			// Presence words are taken out only at the top level. One inside
+			// a group is rejected there, and does not mark the outer field.
 			name: "presence lifted around an inner group",
 			tag:  "required inner:(minlen=1)",
 			want: ParsedPipe{
@@ -221,17 +221,18 @@ func TestParseHintTag(t *testing.T) {
 func TestParsePipeTagErrors(t *testing.T) {
 	t.Parallel()
 	bad := []string{
-		"required optional",     // mutually exclusive
+		"required optional",     // cannot have both
 		"foo / / bar ~ x",       // empty variant
-		"@ ~ x",                 // empty @ ref
+		"@ ~ x",                 // empty @ reference
 		"trim / lower",          // slash outside the decode stage
-		"inner:trim ; maxlen=1", // `;` not a valid glyph
-		"inner:(trim maxlen=1",  // unbalanced paren
-		"inner:",                // prefix with nothing following
-		"(trim)",                // stray group
-		// presence belongs to the field's key, never to an element or map
-		// key: bare, spaced and grouped spellings all reject instead of
-		// emitting nothing (bare) or re-scoping to the outer key (grouped)
+		"inner:trim ; maxlen=1", // `;` is not valid
+		"inner:(trim maxlen=1",  // missing closing paren
+		"inner:",                // prefix with nothing after it
+		"(trim)",                // group with no prefix
+		// presence belongs to the field's key, never to an element or a map
+		// key. Bare, spaced and grouped forms are all rejected. Otherwise the
+		// bare form would emit nothing and the grouped form would apply to
+		// the outer key
 		"inner:required",
 		"inner: optional",
 		"inner:(required minlen=1)",
@@ -245,9 +246,9 @@ func TestParsePipeTagErrors(t *testing.T) {
 	}
 }
 
-// A capacity make() cannot honour is a parse error, not a decode-time
-// makeslice panic. The ceiling is the largest int a 32-bit target can hold,
-// so every accepted value is a legal constant on any target.
+// A capacity make() cannot handle is a parse error, not a makeslice panic at
+// decode time. The limit is the largest int a 32-bit target can hold, so
+// every accepted value is a valid constant on any target.
 func TestParseHintTag_Ceiling(t *testing.T) {
 	t.Parallel()
 	for _, tag := range []string{"9223372036854775807", "2147483648", "4 inner:2147483648"} {
@@ -260,9 +261,10 @@ func TestParseHintTag_Ceiling(t *testing.T) {
 	}
 }
 
-// SplitPipeParts: `|` splits outside single quotes only; each part loses one
-// quote layer; \' is a literal quote. Multi-part values reach it raw because
-// parseStep skips the whole-value strip for oneof/replace/clamp.
+// SplitPipeParts splits on `|` only outside single quotes, and each part
+// loses one layer of quotes. \' is a literal quote. Multi-part values reach
+// it with their quotes, because parseStep does not strip quotes from oneof,
+// replace and clamp values.
 func TestSplitPipeParts(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -285,8 +287,8 @@ func TestSplitPipeParts(t *testing.T) {
 	}
 }
 
-// parseStep keeps multi-part values raw (quotes intact for SplitPipeParts)
-// but still strips single-value steps.
+// parseStep keeps the quotes of multi-part values for SplitPipeParts, but
+// still strips them from single-value steps.
 func TestParseStep_MultiPartKeepsQuotes(t *testing.T) {
 	t.Parallel()
 	st, err := parseStep("oneof='a b'|c")
@@ -299,11 +301,11 @@ func TestParseStep_MultiPartKeepsQuotes(t *testing.T) {
 	}
 }
 
-// End-to-end through the TOKENIZER: the unit test above feeds SplitPipeParts
-// its raw input directly, which hid a real break — tokenizePipe used to
-// unescape \' inside the quoted span, so SplitPipeParts then read that bare
-// quote as a delimiter toggle and `oneof='it\'s'|no` collapsed into ONE
-// garbage entry ("'it's'|no") with both intended values silently rejected.
+// The same through the tokenizer. The unit test above gives SplitPipeParts
+// its input directly, so it cannot catch tokenizePipe unescaping \' inside a
+// quoted part. SplitPipeParts would then read that bare quote as the start or
+// end of a quoted part, and `oneof='it\'s'|no` would become one broken entry
+// "'it's'|no", silently rejecting both intended values.
 func TestParsePipeTag_EscapedQuoteInMultiPartValue(t *testing.T) {
 	t.Parallel()
 	pp, err := parsePipeTag(`oneof='it\'s'|no`)

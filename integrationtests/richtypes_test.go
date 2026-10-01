@@ -2,8 +2,8 @@ package integrationtests
 
 //go:generate ../ggen $GOFILE
 
-// Coverage for the rich built-in kinds: json.RawMessage / jsontext.Value,
-// url.URL, math/big, and google/uuid.
+// Coverage for the rich built-in kinds: json.RawMessage, jsontext.Value,
+// url.URL, math/big, and the google and gofrs uuid packages.
 
 import (
 	"bytes"
@@ -22,7 +22,7 @@ import (
 )
 
 // RichTypes mixes every rich kind. ID and GofrsID cover both major UUID
-// libraries, served by the same TextMarshaler/Unmarshaler dispatch.
+// libraries. Both go through the same TextMarshaler and TextUnmarshaler code.
 //
 //ggen:generate
 type RichTypes struct {
@@ -36,8 +36,8 @@ type RichTypes struct {
 	GofrsID gofrs.UUID      `json:"gofrsId"`
 }
 
-// Marshal → unmarshal preserves every field. Big values exceed int64 range to
-// exercise arbitrary-precision paths.
+// Marshal then unmarshal preserves every field. The big values exceed the
+// int64 range to exercise the arbitrary-precision code.
 func TestRich_Roundtrip(t *testing.T) {
 	t.Parallel()
 	hugeInt, _ := new(big.Int).SetString("123456789012345678901234567890", 10)
@@ -63,7 +63,7 @@ func TestRich_Roundtrip(t *testing.T) {
 		t.Fatalf("unmarshal: %v\n%s", err, out)
 	}
 
-	// Raw bytes round-trip byte-equal.
+	// Raw values come back byte for byte.
 	if string(got.Raw1) != string(in.Raw1) {
 		t.Errorf("Raw1 = %s, want %s", got.Raw1, in.Raw1)
 	}
@@ -77,7 +77,8 @@ func TestRich_Roundtrip(t *testing.T) {
 		t.Errorf("Big = %s, want %s", got.Big.String(), in.Big.String())
 	}
 	if got.BigF.Cmp(&in.BigF) != 0 {
-		// big.Float Cmp is precision-sensitive; fall back to wire Text equality.
+		// big.Float Cmp depends on precision, so compare the text form
+		// instead.
 		if got.BigF.Text('g', 20) != in.BigF.Text('g', 20) {
 			t.Errorf("BigF = %s, want %s", got.BigF.Text('g', 20), in.BigF.Text('g', 20))
 		}
@@ -93,8 +94,8 @@ func TestRich_Roundtrip(t *testing.T) {
 	}
 }
 
-// Decode delegates to the lib's UnmarshalText, so hyphen-less and urn-prefixed
-// forms pass; garbage still errors.
+// Decode calls the library's UnmarshalText, so the forms without hyphens and
+// with a urn prefix are accepted. Garbage still fails.
 func TestRich_GofrsUUID_AltForms(t *testing.T) {
 	t.Parallel()
 	cases := [][]byte{
@@ -112,8 +113,8 @@ func TestRich_GofrsUUID_AltForms(t *testing.T) {
 	}
 }
 
-// Raw1 aliases the source buffer: mutating the source post-decode changes the
-// field.
+// Raw1 aliases the source buffer (points into it, no copy). Changing the
+// source after decode changes the field.
 func TestRich_RawJSON_ZeroCopy(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"raw1":"alpha","raw2":null,"site":"http://x","big":0,"bigF":"0","bigR":"0","id":"00000000-0000-0000-0000-000000000000"}`)
@@ -167,8 +168,8 @@ func TestRich_UUIDInvalid(t *testing.T) {
 	}
 }
 
-// encode→decode is DeepEqual for simple-value fields (Raw* skipped — alias vs
-// copy differs).
+// Encode then decode gives DeepEqual simple-value fields. The Raw* fields are
+// skipped because an aliased value and a copied value compare differently.
 func TestRich_RoundtripDeepEqual(t *testing.T) {
 	t.Parallel()
 	id := uuid.MustParse("550e8400-e29b-41d4-a716-446655440000")
@@ -187,16 +188,16 @@ func TestRich_RoundtripDeepEqual(t *testing.T) {
 	}
 }
 
-// RawOnly isolates the raw-span field so the stream decode's allocations are
-// attributable to it alone.
+// RawOnly holds only a raw JSON field, so every allocation of the stream
+// decode comes from that field.
 //
 //ggen:generate
 type RawOnly struct {
 	Raw json.RawMessage `json:"raw"`
 }
 
-// A reused receiver's raw backing is refilled, not reallocated, so a steady
-// stream of same-shaped values settles at zero allocations per decode.
+// A reused receiver's raw backing is refilled, not reallocated. So a steady
+// stream of values with the same shape reaches zero allocations per decode.
 func TestRawJSON_StreamReusesReceiverBacking(t *testing.T) { //nolint:paralleltest // measures allocations
 	payload := []byte(`{"raw":{"nested":[1,2,3],"s":"abcdefghij"}}` + "\n")
 	var s ggen.Stream

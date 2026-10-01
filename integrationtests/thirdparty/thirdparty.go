@@ -6,8 +6,9 @@ import (
 	"strings"
 )
 
-// ValidateUpper enforces all-uppercase ASCII. Used cross-package via
-// `pipe:"@thirdparty.ValidateUpper"` to exercise the @pkg.Func resolver.
+// ValidateUpper rejects strings that contain lowercase ASCII letters. Other
+// packages use it as `pipe:"@thirdparty.ValidateUpper"` to test @pkg.Func
+// references.
 func ValidateUpper(s string) error {
 	for i := range len(s) {
 		c := s[i]
@@ -18,11 +19,11 @@ func ValidateUpper(s string) error {
 	return nil
 }
 
-// PrefixHash is a pure cross-package mod (T → T).
+// PrefixHash is a cross-package mod that cannot fail. It maps T to T.
 func PrefixHash(s string) string { return "#" + s }
 
-// ParseNonEmpty is a fallible cross-package mod (T → (T, error)); empty input
-// is a parse error, not a validation error.
+// ParseNonEmpty is a cross-package mod that can fail. It maps T to (T, error).
+// Empty input is a parse error, not a validation error.
 func ParseNonEmpty(s string) (string, error) {
 	if s == "" {
 		return "", errors.New("empty value")
@@ -30,15 +31,16 @@ func ParseNonEmpty(s string) (string, error) {
 	return s, nil
 }
 
-// External is a plain struct with no generated methods — forces the
-// encoding/json fallback.
+// External is a plain struct with no generated methods, so ggen must fall back
+// to encoding/json for it.
 type External struct {
 	Key   string `json:"key"`
 	Value int    `json:"value"`
 }
 
-// Tagged is text-encoded as `"name#tag"` via TextMarshaler/TextUnmarshaler so
-// the analyzer routes through those instead of json.Marshal/Unmarshal.
+// Tagged encodes as the text `"name#tag"` through TextMarshaler and
+// TextUnmarshaler. So generated code calls those methods instead of
+// json.Marshal and json.Unmarshal.
 type Tagged struct {
 	Name string
 	Tag  string
@@ -59,8 +61,8 @@ func (t *Tagged) UnmarshalText(b []byte) error {
 	return nil
 }
 
-// QuotedText's text form is caller-controlled bytes (may carry `"` / `\`) —
-// exercises the TextAppender marshal arm's escape-on-close.
+// QuotedText's text form is whatever bytes the caller set, and may contain `"`
+// or `\`. It tests that marshal through TextAppender JSON-escapes the text.
 type QuotedText struct {
 	V string
 }

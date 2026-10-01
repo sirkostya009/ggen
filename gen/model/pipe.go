@@ -9,30 +9,31 @@ import (
 	"strings"
 )
 
-// This file owns the `pipe:` and `hint:` struct-tag grammar — the unified
-// decode/transform/validate pipeline. Grammar:
+// This file parses the `pipe:` and `hint:` struct tags. The pipe describes
+// how a field is decoded, changed and validated, in order. Grammar:
 //
 //	pipe        := stage ( "~" stage )*
-//	first stage := variant ( "/" variant )*    // decode: JSON-shape dispatch
-//	later stage := step ( WS step )*            // transform/validate the value
-//	                with inner: / keys: for container levels
+//	first stage := variant ( "/" variant )*    // decode, picked by JSON shape
+//	later stage := step ( WS step )*            // change or validate the value
+//	                with inner: and keys: for container levels
 //
-// `required`/`optional` are lifted out (position-independent). A Step holds
-// either a ValidationRule or a ModRule; mods and validators share ONE ordered
-// list per level.
+// `required` and `optional` are taken out first and may appear anywhere. A
+// Step holds either a ValidationRule or a ModRule. Mods and validators share
+// one ordered list per level.
 
-// Presence is the field-presence axis (the JSON key), independent of the
-// value (pipe steps) and the null shape (the nullzero variant).
+// Presence says whether the field's JSON key must appear. It is separate
+// from the value checks, which are pipe steps, and from null handling, which
+// is the nullzero variant.
 type Presence uint8
 
 const (
-	PresenceDefault  Presence = iota // no marker: absent key → zero value, no error
-	PresenceRequired                 // `required`: key must appear
-	PresenceOptional                 // `optional`: explicit no-op marker (documents intent)
+	PresenceDefault  Presence = iota // no marker: a missing key leaves the zero value, no error
+	PresenceRequired                 // `required`: the key must appear
+	PresenceOptional                 // `optional`: does nothing, it only documents intent
 )
 
-// Step is one ordered pipeline element — a validator or a mod, discriminated
-// by IsMod (exactly one of V/M is meaningful).
+// Step is one element of the pipeline, a validator or a mod. IsMod says
+// which, and only that one of V and M is used.
 type Step struct {
 	IsMod bool
 	V     ValidationRule // when !IsMod
@@ -43,50 +44,50 @@ type Step struct {
 type VariantKind uint8
 
 const (
-	VariantNative   VariantKind = iota // "." — native decode of the field type T
-	VariantNullZero                    // "nullzero" — JSON null → zero(T)
-	VariantConvert                     // "@Conv" — scan input type W, call func(W)(T,...)
+	VariantNative   VariantKind = iota // ".": the normal decode of the field type T
+	VariantNullZero                    // "nullzero": JSON null sets the zero value of T
+	VariantConvert                     // "@Conv": decode input type W, then call func(W) T
 )
 
-// Variant is one decode-stage alternative. ggen peeks the incoming JSON shape
-// and routes to the single variant claiming it.
+// Variant is one decode-stage alternative. ggen looks at the first byte of
+// the incoming JSON value and uses the one variant that claims that shape.
 type Variant struct {
 	Kind VariantKind
 
-	// Convert-variant resolution (VariantConvert only), filled at parse time.
+	// The resolved converter, for VariantConvert only. Filled at parse time.
 	Custom    bool
 	PkgImport string
 	PkgName   string
 	FuncName  string
-	Fallible  bool       // func(W)(T,error) / func(W)(T,bool) — vs infallible func(W)T
-	BoolForm  bool       // func(W)(T,bool) — message-capable failure
-	Msg       string     // inline `:message` (bool-form only)
-	InType    string     // Go type literal of the converter input W (the scanned type)
-	In        types.Type // resolved W; nil in the AST-only degraded mode
-	InKind    TypeKind   // kind of W with every pointer level peeled
-	InPointer bool       // W is `*T`: the scan yields nil on null, so the variant claims 'n' too
+	Fallible  bool       // func(W) (T, error) or func(W) (T, bool), as opposed to func(W) T
+	BoolForm  bool       // func(W) (T, bool), whose failure can carry an inline message
+	Msg       string     // inline `:message`, bool form only
+	InType    string     // Go type of the converter input W, the type decoded from JSON
+	In        types.Type // resolved W, nil in the AST-only fallback mode
+	InKind    TypeKind   // kind of W with all pointer levels removed
+	InPointer bool       // W is `*T`: decoding null gives nil, so the variant also claims 'n'
 }
 
-// ParsedPipe is the structured result of parsePipeTag, before it is stitched
-// onto a FieldInfo.
+// ParsedPipe is the result of parsePipeTag, before it is copied onto a
+// FieldInfo.
 type ParsedPipe struct {
 	Presence Presence
-	Variants []Variant // decode stage; nil/empty => implicit single native variant
-	Outer    []Step    // value steps on the field / whole container (after decode)
-	Keys     []Step    // map-key steps (`keys:`)
-	Levels   [][]Step  // inner levels: Levels[0] per-element, Levels[1] one deeper, …
+	Variants []Variant // decode stage. Empty means one implicit native variant
+	Outer    []Step    // value steps on the field or whole container, after decode
+	Keys     []Step    // map key steps from `keys:`
+	Levels   [][]Step  // nested levels: Levels[0] per element, Levels[1] one deeper, and so on
 }
 
-// pipe token kinds emitted by the tokenizer.
+// ptokKind is the kind of a token produced by tokenizePipe.
 type ptokKind uint8
 
 const (
-	ptWord   ptokKind = iota // a step / variant text (may carry inner:/keys: prefix)
-	ptSlash                  // "/" variant separator
-	ptTilde                  // "~" stage separator
-	ptLParen                 // "(" inner:/keys: group open
-	ptRParen                 // ")" group close
-	ptSemi                   // ";" — retired (errors with guidance)
+	ptWord   ptokKind = iota // text of a step or variant, may start with inner: or keys:
+	ptSlash                  // "/" between variants
+	ptTilde                  // "~" between stages
+	ptLParen                 // "(" opens an inner: or keys: group
+	ptRParen                 // ")" closes a group
+	ptSemi                   // ";" is not valid, it is a token only to give a helpful error
 )
 
 type ptok struct {
@@ -94,12 +95,12 @@ type ptok struct {
 	text string // for ptWord
 }
 
-// tokenizePipe splits a `pipe:` tag into a flat token stream. Words are
-// whitespace-separated; the structural glyphs `/ ~ ( )` terminate a word and
-// emit their own token even without surrounding spaces (so `./@F` and `. / @F`
-// lex identically). A single-quoted span inside a word is read literally —
-// whitespace and glyphs within it are not terminators — with `\'` for a
-// literal quote.
+// tokenizePipe splits a `pipe:` tag into a flat list of tokens. Words are
+// separated by whitespace. The characters `/`, `~`, `(` and `)` end a word
+// and become their own token even without spaces around them, so `./@F` and
+// `. / @F` give the same tokens. A single-quoted part inside a word is read
+// as is: whitespace and those characters do not end the word there. `\'` is
+// a literal quote.
 func tokenizePipe(tag string) ([]ptok, error) {
 	var toks []ptok
 	i := 0
@@ -133,12 +134,12 @@ func tokenizePipe(tag string) ([]ptok, error) {
 					break
 				}
 				if ch == '\'' {
-					// Quoted span: copy literally to the closing quote, KEEPING
-					// the `\'` escape intact. Unescaping here would hand
-					// SplitPipeParts (multi-part values) a bare quote it reads
-					// as a real delimiter, so `oneof='it\'s'|no` collapsed into
-					// one garbage entry. stripQuotes / SplitPipeParts do the
-					// unescaping downstream, after the part split.
+					// Quoted part: copy it as is up to the closing quote, and
+					// keep the `\'` escape. Unescaping here would hand
+					// SplitPipeParts a bare quote that it reads as a real
+					// delimiter, and `oneof='it\'s'|no` would become one broken
+					// entry. stripQuotes and SplitPipeParts unescape later,
+					// after splitting the parts.
 					sb.WriteByte('\'')
 					i++
 					closed := false
@@ -157,8 +158,8 @@ func tokenizePipe(tag string) ([]ptok, error) {
 						i++
 					}
 					if !closed {
-						// Auto-closing would silently change the rule's
-						// semantics (`oneof='New York|LA` reads as one part).
+						// Closing it implicitly would silently change the
+						// rule: `oneof='New York|LA` would read as one part.
 						return nil, errors.New("unterminated ' quote in pipe tag")
 					}
 					sb.WriteByte('\'')
@@ -173,11 +174,11 @@ func tokenizePipe(tag string) ([]ptok, error) {
 	return toks, nil
 }
 
-// SplitPipeParts splits a multi-part rule value (oneof/replace/clamp) on `|`
-// outside single-quoted regions, stripping one quote layer per part — so
-// `oneof='New York'|LA` quotes spaces and `replace='a|b'|c` a literal pipe.
-// parseStep leaves multi-part values raw (no whole-value strip) so the quote
-// positions survive to this split.
+// SplitPipeParts splits a multi-part rule value, as used by oneof, replace
+// and clamp, on `|` outside single-quoted parts. It removes one layer of
+// quotes from each part. So `oneof='New York'|LA` quotes a space, and
+// `replace='a|b'|c` quotes a literal `|`. parseStep leaves multi-part values
+// with their quotes, so the quote positions are still there for this split.
 func SplitPipeParts(s string) []string {
 	var parts []string
 	start, quoted := 0, false
@@ -199,8 +200,8 @@ func SplitPipeParts(s string) []string {
 	return append(parts, stripQuotes(s[start:]))
 }
 
-// stripQuotes removes a single layer of surrounding single quotes from s and
-// unescapes \' → '. Unquoted input is returned unchanged.
+// stripQuotes removes one layer of surrounding single quotes from s and
+// turns \' into '. Input without quotes is returned unchanged.
 func stripQuotes(s string) string {
 	if len(s) >= 2 && s[0] == '\'' && s[len(s)-1] == '\'' {
 		s = s[1 : len(s)-1]
@@ -209,9 +210,10 @@ func stripQuotes(s string) string {
 	return s
 }
 
-// parsePipeTag parses a `pipe:"..."` tag value into a ParsedPipe. It does NOT
-// resolve @-func signatures or check applicability — those run later with type
-// info (resolveCustomRules / checkRuleApplicability).
+// parsePipeTag parses a `pipe:"..."` tag value into a ParsedPipe. It does not
+// resolve `@Func` signatures or check that rules fit the field type. Those
+// steps run later with type information, in resolvePipeCustoms and
+// checkRuleApplicability.
 func parsePipeTag(tag string) (ParsedPipe, error) {
 	var out ParsedPipe
 	if strings.TrimSpace(tag) == "" {
@@ -222,12 +224,12 @@ func parsePipeTag(tag string) (ParsedPipe, error) {
 		return out, err
 	}
 
-	// Pass 1: lift presence markers (`required`/`optional`) out of the
-	// top-level stream. Inside an `inner:(…)`/`keys:(…)` group, or right
-	// after a bare prefix word, they stay put for parseStep to reject —
-	// presence belongs to the field's key, and an element or map key has
-	// none, so a lift from there would silently re-scope the marker to the
-	// outer field.
+	// First pass: take the presence markers `required` and `optional` out
+	// of the top-level tokens. Inside an `inner:(…)` or `keys:(…)` group, or
+	// right after a bare prefix word, they stay in place so parseStep rejects
+	// them. Presence belongs to the field's key. An element or a map key has
+	// no presence, so taking the marker out there would silently apply it to
+	// the outer field.
 	filtered := toks[:0:0]
 	depth := 0
 	for i, t := range toks {
@@ -260,11 +262,11 @@ func parsePipeTag(tag string) (ParsedPipe, error) {
 	}
 	toks = filtered
 
-	// Decide where the decode stage ends. An explicit `~` splits decode |
-	// value. Without `~`, the decode stage is the leading run of variant
-	// keywords (`.`, `nullzero`, or a `/`-joined converter list); a lone
-	// leading `@Func` stays a value step (a converter needs `/`, `~`, or `.`
-	// adjacency to read as a decode variant).
+	// Find where the decode stage ends. An explicit `~` separates the decode
+	// stage from the value stage. Without `~`, the decode stage is the run of
+	// variant words at the start: `.`, `nullzero`, or converters joined by
+	// `/`. A lone `@Func` at the start stays a value step. A converter is only
+	// read as a decode variant next to `/`, `~` or `.`.
 	tildeAt := -1
 	for j, t := range toks {
 		if t.kind == ptTilde {
@@ -295,17 +297,17 @@ func parsePipeTag(tag string) (ParsedPipe, error) {
 	return out, nil
 }
 
-// isBarePrefix reports whether t is an `inner:`/`keys:` word whose step
-// follows as the next token.
+// isBarePrefix reports whether t is a bare `inner:` or `keys:` word, whose
+// step is the next token.
 func isBarePrefix(t ptok) bool {
 	return t.kind == ptWord && (t.text == "inner:" || t.text == "keys:")
 }
 
-// leadingDecodeExtent returns how many leading tokens (including `/`
-// separators) form an implicit decode stage when there is no explicit `~`. The
-// stage starts only when the first token is `.`/`nullzero`, or a `@Func`
-// immediately followed by `/`, then consumes the `/`-separated variant run.
-// Returns 0 when the whole pipe is value steps.
+// leadingDecodeExtent returns how many tokens at the start, `/` separators
+// included, form an implicit decode stage when there is no `~`. The stage
+// starts only when the first token is `.` or `nullzero`, or a `@Func`
+// directly followed by `/`. It then takes the run of variants joined by `/`.
+// It returns 0 when the whole pipe is value steps.
 func leadingDecodeExtent(toks []ptok) int {
 	isVariantWord := func(t ptok) bool {
 		return t.kind == ptWord && (t.text == "." || t.text == "nullzero" || strings.HasPrefix(t.text, "@"))
@@ -331,8 +333,8 @@ func leadingDecodeExtent(toks []ptok) int {
 	return i
 }
 
-// parseVariants turns the decode-stage tokens into a variant list. Variants are
-// `/`-separated and each is a single word (`.`, `nullzero`, or `@Conv`).
+// parseVariants turns the decode-stage tokens into a variant list. Variants
+// are separated by `/`, and each is one word: `.`, `nullzero` or `@Conv`.
 func parseVariants(toks []ptok) ([]Variant, error) {
 	var vars []Variant
 	expectWord := true
@@ -380,17 +382,19 @@ func parseOneVariant(word string) (Variant, error) {
 	return Variant{}, fmt.Errorf("decode variant %q must be `.`, `nullzero`, or `@Converter`", word)
 }
 
-// parseValueSteps parses the value-region tokens into out.Outer/Keys/Levels.
-// `inner:` / `keys:` scope the next inner level / map keys: a bare prefix takes
-// exactly ONE following step (`inner:trim`), parentheses group several
-// (`inner:(trim maxlen=20)`), and inner groups nest (`inner:(a inner:(b))`).
+// parseValueSteps parses the value-stage tokens into out.Outer, out.Keys and
+// out.Levels. `inner:` applies steps to the next nested level and `keys:` to
+// map keys. A bare prefix takes exactly one step, as in `inner:trim`.
+// Parentheses group several, as in `inner:(trim maxlen=20)`, and inner groups
+// can nest, as in `inner:(a inner:(b))`.
 func parseValueSteps(toks []ptok, out *ParsedPipe) error {
 	return parseScope(toks, 0, out)
 }
 
-// parseScope parses one container level's tokens. lvl 0 → out.Outer; lvl n →
-// out.Levels[n-1] (grown on demand). `inner:` recurses at lvl+1; `keys:` routes
-// to out.Keys and is only valid at the top level.
+// parseScope parses the tokens of one container level. Level 0 goes to
+// out.Outer and level n to out.Levels[n-1], which grows as needed. `inner:`
+// recurses with lvl+1. `keys:` goes to out.Keys and is only valid at the top
+// level.
 func parseScope(toks []ptok, lvl int, out *ParsedPipe) error {
 	add := func(s Step) {
 		if lvl == 0 {
@@ -407,7 +411,7 @@ func parseScope(toks []ptok, lvl int, out *ParsedPipe) error {
 		t := toks[i]
 		switch t.kind {
 		case ptTilde:
-			i++ // cosmetic separator
+			i++ // a separator with no meaning here
 		case ptSlash:
 			return errors.New("`/` is only valid in the decode stage")
 		case ptSemi:
@@ -442,11 +446,11 @@ func parseScope(toks []ptok, lvl int, out *ParsedPipe) error {
 	return nil
 }
 
-// parsePrefixEntry handles an `inner:`/`keys:` entry at toks[idx]. rest is the
-// text after the prefix on the same word. Returns the index just past the
-// entry. A non-empty rest is the single step (`inner:trim`); an empty rest
-// looks at the next token — `(` opens a group, otherwise the next word is the
-// single step.
+// parsePrefixEntry handles an `inner:` or `keys:` entry at toks[idx]. rest is
+// the text after the prefix in the same word. It returns the index just after
+// the entry. A non-empty rest is the single step, as in `inner:trim`. With an
+// empty rest it looks at the next token. `(` opens a group, and any other
+// word is the single step.
 func parsePrefixEntry(toks []ptok, idx int, rest string, lvl int, isKeys bool, out *ParsedPipe) (int, error) {
 	label := "inner:"
 	if isKeys {
@@ -487,7 +491,8 @@ func parsePrefixEntry(toks []ptok, idx int, rest string, lvl int, isKeys bool, o
 			return 0, fmt.Errorf("empty `%s(…)` group", label)
 		}
 		if isKeys {
-			// keys are strings — no further nesting; parse flat into out.Keys.
+			// Keys are strings and cannot nest. Parse the group flat into
+			// out.Keys.
 			tmp := &ParsedPipe{}
 			if err := parseScope(group, 0, tmp); err != nil {
 				return 0, err
@@ -536,16 +541,17 @@ func parenText(k ptokKind) string {
 	return ")"
 }
 
-// parseStep parses one value-stage step word into a Step. Custom funcs
-// (`@Func`, `@pkg.Func`, optional `:message`) are parked as validator-shaped
-// placeholders here; mod-vs-validator is decided later from the signature.
+// parseStep parses one value-stage word into a Step. A custom func such as
+// `@Func` or `@pkg.Func`, with an optional `:message`, is stored as a
+// validator placeholder. Whether it is a mod or a validator is decided later
+// from its signature.
 func parseStep(word string) (Step, error) {
 	switch word {
 	case "":
 		return Step{}, errors.New("empty pipe step")
 	case "required", "optional":
-		// parsePipeTag lifts every top-level presence word before the scope
-		// walk, so one reaching a step sits under `inner:`/`keys:`.
+		// parsePipeTag takes out every top-level presence word first, so one
+		// that gets here is under `inner:` or `keys:`.
 		return Step{}, fmt.Errorf("`%s` marks the field's own presence and is not valid under `inner:`/`keys:` — an element or map key is never absent", word)
 	}
 	if strings.HasPrefix(word, "@") {
@@ -553,13 +559,13 @@ func parseStep(word string) (Step, error) {
 		if ref == "" {
 			return Step{}, errors.New("empty `@` reference")
 		}
-		// Name keeps the leading `@` for resolver lookup.
+		// Name keeps the leading `@`, which the resolver looks for.
 		return Step{V: ValidationRule{Name: "@" + ref, Msg: msg}}, nil
 	}
 	name, value, _ := strings.Cut(word, "=")
 	if !isMultiPartName(name) {
-		// Multi-part values keep their quotes for SplitPipeParts; everything
-		// else strips the single layer here.
+		// Multi-part values keep their quotes for SplitPipeParts. All other
+		// values lose one layer of quotes here.
 		value = stripQuotes(value)
 	}
 	if isModName(name) {
@@ -568,9 +574,9 @@ func parseStep(word string) (Step, error) {
 	return Step{V: ValidationRule{Name: name, Value: value}}, nil
 }
 
-// isMultiPartName reports whether a rule's value is a `|`-separated list,
-// split later by SplitPipeParts. Keep in sync with the split sites in
-// applicability.go / generate.go.
+// isMultiPartName reports whether a rule's value is a list separated by `|`,
+// which SplitPipeParts splits later. Keep it in sync with the callers of
+// SplitPipeParts in applicability.go and cmd/ggen/generate.go.
 func isMultiPartName(name string) bool {
 	switch name {
 	case "oneof", "replace", "clamp":
@@ -579,8 +585,9 @@ func isMultiPartName(name string) bool {
 	return false
 }
 
-// isModName reports whether a builtin step name is a mod (transform) rather
-// than a validator. Keep in sync with the mod vocabulary in applicability.go.
+// isModName reports whether a built-in step name is a mod, which changes the
+// value, rather than a validator. Keep it in sync with the mod names in
+// applicability.go.
 func isModName(name string) bool {
 	switch name {
 	case "trim", "tolower", "toupper", "trimleft", "trimright", "replace", "clamp":
@@ -589,9 +596,10 @@ func isModName(name string) bool {
 	return false
 }
 
-// splitFuncMsg splits a custom-func reference from its optional inline message.
-// `Even:'must be even'` → ("Even", "must be even"); `pkg.Even` → ("pkg.Even", "").
-// The message is everything after the first `:`; quotes are stripped.
+// splitFuncMsg splits a custom func reference from its optional inline
+// message. `Even:'must be even'` gives ("Even", "must be even"), and
+// `pkg.Even` gives ("pkg.Even", ""). The message is everything after the
+// first `:`, with its quotes removed.
 func splitFuncMsg(s string) (ref, msg string) {
 	ref, msg, found := strings.Cut(s, ":")
 	if found {
@@ -600,8 +608,9 @@ func splitFuncMsg(s string) (ref, msg string) {
 	return ref, msg
 }
 
-// StepsFromLegacy builds an ordered step list from the split buckets — mods
-// first, then validators. Used for synthetic fields that set only buckets.
+// StepsFromLegacy builds an ordered step list from separate mod and rule
+// lists, mods first, then validators. It is used for synthetic fields that
+// set only those lists.
 func StepsFromLegacy(mods []ModRule, vals []ValidationRule) []Step {
 	if len(mods) == 0 && len(vals) == 0 {
 		return nil
@@ -616,9 +625,10 @@ func StepsFromLegacy(mods []ModRule, vals []ValidationRule) []Step {
 	return steps
 }
 
-// SplitCustomSteps partitions an ordered step list into built-in and `@Func`
-// steps, each keeping its declared order — the pointer-field split, where
-// built-ins run on the deref'd leaf and customs on the pointer.
+// SplitCustomSteps splits an ordered step list into built-in and `@Func`
+// steps. Each list keeps the declared order. Pointer fields need this split:
+// built-in steps run on the value the pointer points to, and `@Func` steps
+// on the pointer itself.
 func SplitCustomSteps(steps []Step) (builtin, custom []Step) {
 	for _, st := range steps {
 		if StepIsCustom(st) {
@@ -638,9 +648,10 @@ func StepIsCustom(st Step) bool {
 	return st.V.Custom
 }
 
-// splitSteps partitions an ordered step list into separate validator/mod
-// buckets (order within each preserved). These feed the order-independent
-// consumers; the ordered Pipe stays source of truth for outer/key emit order.
+// splitSteps splits an ordered step list into a validator list and a mod
+// list, each in its original order. Code that does not care about order
+// reads these. The ordered Pipe stays the source of truth for the order of
+// outer and key steps.
 func splitSteps(steps []Step) (vs []ValidationRule, ms []ModRule) {
 	for _, s := range steps {
 		if s.IsMod {
@@ -652,9 +663,9 @@ func splitSteps(steps []Step) (vs []ValidationRule, ms []ModRule) {
 	return vs, ms
 }
 
-// deriveBuckets (re)populates the split buckets on fi from its unified
-// Pipe/KeyPipe/Levels. Called for pipe-tagged fields after parse and again
-// after custom-func classification stamps the steps.
+// deriveBuckets fills fi's separate rule and mod lists from Pipe, KeyPipe
+// and Levels. It runs after parsing, and again after custom funcs are
+// classified and written into the steps.
 func deriveBuckets(fi *FieldInfo) {
 	fi.Validation, fi.Mods = splitSteps(fi.Pipe)
 	fi.KeyValidation, fi.KeyMods = splitSteps(fi.KeyPipe)
@@ -670,10 +681,11 @@ func deriveBuckets(fi *FieldInfo) {
 	}
 }
 
-// applyPipeTags reads the `pipe:`/`hint:` tags off a field and populates the
-// unified pipe model on fi. An absent tag yields an empty pipe. Decode-stage
-// variants: nullzero → fi.NullZero, native is implicit, converters are
-// resolved later. Custom @-steps stay unclassified for resolvePipeCustoms.
+// applyPipeTags reads the `pipe:` and `hint:` tags of a field and fills the
+// pipe fields of fi. A missing tag gives an empty pipe. For the decode
+// variants, nullzero sets fi.NullZero, native needs nothing, and converters
+// are resolved later. Custom `@` steps stay unclassified until
+// resolvePipeCustoms.
 func applyPipeTags(fi *FieldInfo, tag reflect.StructTag, goName string) error {
 	pp, err := parsePipeTag(tag.Get("pipe"))
 	if err != nil {
@@ -696,7 +708,7 @@ func applyPipeTags(fi *FieldInfo, tag reflect.StructTag, goName string) error {
 		case VariantNullZero:
 			fi.NullZero = true
 		case VariantConvert:
-			// resolved + shape-checked later (resolvePipeCustoms)
+			// resolved and shape-checked later in resolvePipeCustoms
 		}
 	}
 	deriveBuckets(fi)
@@ -720,15 +732,16 @@ func glyph(k ptokKind) string {
 	return "?"
 }
 
-// HintTag is the parsed `hint:"N inner:M ..."` prealloc-capacity tag.
+// HintTag is the parsed `hint:"N inner:M ..."` tag, which sets prealloc
+// capacities.
 type HintTag struct {
-	Outer  int   // -1 = unset
-	Levels []int // per-inner-level capacity; entry -1 = unset
+	Outer  int   // -1 means unset
+	Levels []int // capacity per nested level, -1 means unset
 }
 
-// parseHintTag parses the `hint:` tag — prealloc capacities only, one int per
-// level. `hint:"32 inner:8"` → Outer 32, Levels[0] 8; nest with
-// `hint:"8 inner:(4 inner:2)"`.
+// parseHintTag parses the `hint:` tag. It holds only prealloc capacities, one
+// integer per level. `hint:"32 inner:8"` gives Outer 32 and Levels[0] 8.
+// Levels nest as in `hint:"8 inner:(4 inner:2)"`.
 func parseHintTag(tag string) (HintTag, error) {
 	out := HintTag{Outer: -1}
 	if strings.TrimSpace(tag) == "" {
@@ -741,8 +754,9 @@ func parseHintTag(tag string) (HintTag, error) {
 	return out, parseHintScope(toks, 0, &out)
 }
 
-// parseHintScope parses one hint level's tokens. lvl 0 → Outer; lvl n →
-// Levels[n-1]. `inner:` takes a single capacity (`inner:8`) or a `(…)` group.
+// parseHintScope parses the tokens of one hint level. Level 0 sets Outer and
+// level n sets Levels[n-1]. `inner:` takes one capacity, as in `inner:8`, or
+// a `(…)` group.
 func parseHintScope(toks []ptok, lvl int, out *HintTag) error {
 	setN := func(word string) error {
 		n, err := strconv.Atoi(word)

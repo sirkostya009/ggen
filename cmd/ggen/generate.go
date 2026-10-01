@@ -16,9 +16,9 @@ import (
 	"github.com/sirkostya009/ggen/gen/model"
 )
 
-// smallPool recycles bytes.Buffer for the per-renderer temp buffers.
-// bytes.Buffer.String() copies, so reusing the buf after Put can't corrupt
-// prior callers' returned strings.
+// smallPool recycles the bytes.Buffer values that renderers use as scratch
+// space. bytes.Buffer.String copies, so reusing a buffer after Put cannot
+// corrupt a string an earlier caller already got back.
 var smallPool = sync.Pool{New: func() any {
 	b := new(bytes.Buffer)
 	b.Grow(512)
@@ -33,22 +33,23 @@ func getSmall() *bytes.Buffer {
 
 func putSmall(b *bytes.Buffer) { smallPool.Put(b) }
 
-// generateTo renders the full set of structs into Go source and writes it to w.
-// cyclicTypes marks generated structs that sit on a type-graph cycle
-// (directly or mutually self-referential). Their decode methods get a
-// depth-guarded core + thin public shim so payload nesting is bounded by
-// maxDepth (10000) instead of the goroutine stack (a few MB of `{"kids":[…`
-// is otherwise a fatal, unrecoverable stack overflow). Seeded by the caller
-// alongside generatedTypes; computed from the bucket as a fallback.
+// cyclicTypes marks generated structs that sit on a cycle in the type graph,
+// that is, structs that refer to themselves directly or through other types.
+// Their decode methods get a depth-guarded core plus a thin public wrapper.
+// This caps payload nesting at maxDepth (10000). Without the cap, a few MB of
+// `{"kids":[…` would overflow the goroutine stack, which is a fatal error
+// that recover cannot catch. The caller seeds it together with
+// generatedTypes. If it is unset, it is computed from the bucket.
 var cyclicTypes map[string]struct{}
 
-// multiErrTypes marks generated structs whose decoders ACCUMULATE validation
-// failures (multierr) and therefore always consume the whole value before
-// returning. A parent's multierr drain may only continue past a nested
-// decode's validation error when the callee is in this set — a single-error
-// callee returns mid-value, so continuing would parse from a desynced cursor
-// (bogus ErrBadArray/ErrBadObject masking the real failure, or silently
-// swallowed trailing fields). Seeded alongside generatedTypes.
+// multiErrTypes marks generated structs whose decoders collect validation
+// failures (multierr) and so always consume the whole value before they
+// return. A parent's multierr drain may continue past a nested decode's
+// validation error only when the callee is in this set. A single-error callee
+// returns in the middle of the value. Continuing would then parse from the
+// wrong position, which either reports a bogus ErrBadArray or ErrBadObject
+// that hides the real failure, or silently drops the trailing fields. Seeded
+// together with generatedTypes.
 var multiErrTypes map[string]struct{}
 
 // seedMultiErrTypes fills multiErrTypes from the pass's structs.
@@ -67,9 +68,9 @@ func isCyclic(typeName string) bool {
 	return ok
 }
 
-// decodeCallFor renders the bytes-path nested-decode call for a generated
-// callee: cyclic types go through the depth core (uniform `depth+1` — every
-// decoder has `depth` in scope, a const 0 in acyclic ones).
+// decodeCallFor renders the bytes-path call that decodes a nested generated
+// struct. A cyclic callee goes through its depth core with `depth+1`. Every
+// decoder has `depth` in scope. In an acyclic decoder it is a constant 0.
 func decodeCallFor(typeName string) string {
 	if isCyclic(typeName) {
 		return "decodeFromDepth(data[%[2]s:], depth+1)"
@@ -85,12 +86,14 @@ func streamDecodeCallFor(typeName string) string {
 	return "DecodeFromStream(s)"
 }
 
+// generateTo renders the full set of structs into Go source and writes it to w.
 func generateTo(w io.Writer, pkg, scope string, structs []model.StructInfo) error {
 	resetOneofRegistry(scope)
 	resetCapRegistry()
-	// generatedTypes is seeded by the caller with every struct in the same Go
-	// package across ALL build-tag buckets, so a cross-bucket nested-struct
-	// reference still routes to a direct DecodeFrom. Per-bucket fallback when unseeded.
+	// The caller seeds generatedTypes with every struct of the Go package
+	// across all build-tag buckets. A nested struct from another bucket then
+	// still gets a direct DecodeFrom call. Unseeded, it falls back to this
+	// bucket only.
 	if generatedTypes == nil {
 		generatedTypes = make(map[string]struct{}, len(structs))
 		namedKinds = make(map[string]model.TypeKind)
@@ -109,7 +112,8 @@ func generateTo(w io.Writer, pkg, scope string, structs []model.StructInfo) erro
 		cyclicTypes = model.CyclicTypes(structs)
 	}
 	// Sort fields alphabetically by JSON name (opt out with nosortkeys).
-	// Embedded fallback fields stay at the end so comma emission stays tidy.
+	// Embed catch-all fields stay at the end, which keeps comma handling
+	// simple.
 	for i := range structs {
 		if structs[i].NoSort {
 			continue
@@ -139,7 +143,8 @@ func generateTo(w io.Writer, pkg, scope string, structs []model.StructInfo) erro
 
 	count := 0
 	buf := &bytes.Buffer{}
-	// Render each struct into its own buffer; bodies concatenate after the prelude.
+	// Render each struct into its own buffer. The bodies are joined after the
+	// prelude.
 	bodies := make([][]byte, len(structs))
 	for i := range structs {
 		renderStructMethods(buf, structs[i])
@@ -148,9 +153,10 @@ func generateTo(w io.Writer, pkg, scope string, structs []model.StructInfo) erro
 		buf.Reset()
 	}
 
-	// The cap/oneof preamble decls spell element TYPES (`unsafe.Sizeof(*new(
-	// json.RawMessage))`) the method bodies may never name — scan them too or
-	// their imports go missing.
+	// The cap and oneof declarations at the top of the file can name element
+	// types that no method body names, as in
+	// `unsafe.Sizeof(*new(json.RawMessage))`. Scan them too, or their imports
+	// go missing.
 	scanBufs := bodies
 	for _, decl := range capRegistry.decls {
 		scanBufs = append(scanBufs, []byte(decl))
@@ -160,8 +166,8 @@ func generateTo(w io.Writer, pkg, scope string, structs []model.StructInfo) erro
 	}
 	stdlib, third := collectImports(structs, scanBufs)
 
-	// format.Source needs the whole file in one []byte. Pre-grow to the body
-	// sum so the concat loop avoids a geometric grow.
+	// format.Source needs the whole file in one []byte. Grow the buffer by the
+	// total body size up front so the copy loop does not regrow it many times.
 	writePrelude(buf, pkg, tag, stdlib, third)
 	for _, decl := range capRegistry.decls {
 		buf.WriteString(decl)
@@ -183,9 +189,9 @@ func generateTo(w io.Writer, pkg, scope string, structs []model.StructInfo) erro
 	return err
 }
 
-// seedGeneratedFields maps every object-shaped generated struct to its
-// fields. Aliases stay out: their method set delegates, so an entry here means
-// "encodes as an object with exactly these fields".
+// seedGeneratedFields maps every generated struct that encodes as a JSON
+// object to its fields. Aliases are left out because their methods delegate.
+// An entry here means "encodes as an object with exactly these fields".
 func seedGeneratedFields(structs []model.StructInfo) map[string][]model.FieldInfo {
 	out := make(map[string][]model.FieldInfo, len(structs))
 	for _, s := range structs {
@@ -196,15 +202,15 @@ func seedGeneratedFields(structs []model.StructInfo) map[string][]model.FieldInf
 	return out
 }
 
-// importSpec is one import-block line: the path, plus the explicit name when
-// the qualifier is not the package's declared name (see qualifierFor).
+// importSpec is one line of the import block. Alias is set only when the
+// qualifier differs from the package's declared name (see qualifierFor).
 type importSpec struct {
 	Path  string
 	Alias string
 }
 
-// writePrelude emits the file header (build-tag, generated marker,
-// package decl, import block) into buf.
+// writePrelude writes the file header into buf: the generated-code marker,
+// the build tag, the package clause and the import block.
 func writePrelude(buf *bytes.Buffer, pkg, buildTag string, stdlib, third []importSpec) {
 	buf.WriteString("// Code generated by ggen; DO NOT EDIT.\n\n")
 	if buildTag != "" {
@@ -242,12 +248,12 @@ func writePrelude(buf *bytes.Buffer, pkg, buildTag string, stdlib, third []impor
 	buf.WriteString(")\n\n")
 }
 
-// renderStructMethods writes the full method set for a single struct:
-// DecodeFrom + DecodeFromStream + JSONSize + AppendJSON, plus optional
-// MarshalJSON / UnmarshalJSON hooks.
+// renderStructMethods writes the full method set for one struct: DecodeFrom,
+// DecodeFromStream, JSONSize and AppendJSON, plus the optional MarshalJSON
+// and UnmarshalJSON hooks.
 func renderStructMethods(buf *bytes.Buffer, s model.StructInfo) {
-	// Cap-const names carry the struct they were registered under
-	// (ggenCap_<Struct>_<Field>_<elemType>) — see capName.
+	// Cap constant names include the struct they were registered under, as in
+	// ggenCap_<Struct>_<Field>_<elemType>. See capName.
 	currentStructName = s.Name
 	renderDecode(buf, s)
 
@@ -270,10 +276,11 @@ func renderStructMethods(buf *bytes.Buffer, s model.StructInfo) {
 	}
 }
 
-// collectImports walks structs and returns the sorted set of imports the
-// generated file will reference, driven off StructInfo features plus a body-scan.
+// collectImports returns the sorted imports the generated file uses. It
+// combines a walk over the StructInfo features with a scan of the rendered
+// bodies.
 func collectImports(structs []model.StructInfo, bodies [][]byte) ([]importSpec, []importSpec) {
-	// import path → explicit qualifier ("" binds the declared name).
+	// Maps import path to explicit qualifier. "" uses the declared name.
 	need := map[string]string{
 		// The ggen runtime package is named by every generated method.
 		"github.com/sirkostya009/ggen": "",
@@ -296,11 +303,11 @@ func collectImports(structs []model.StructInfo, bodies [][]byte) ([]importSpec, 
 			add(ti.Path)
 		}
 	}
-	// Candidate foreign packages by qualifier, narrowed to the ones a
-	// rendered body actually names — see scanBodiesForForeignImports.
+	// Candidate foreign packages keyed by qualifier. Only the ones a rendered
+	// body actually names are imported. See scanBodiesForForeignImports.
 	foreign := map[string]model.TypeImport{}
 
-	// Per-feature walk: each match flips on its imports.
+	// Walk the features. Each feature found turns on its imports.
 	walkCustomV := func(rules []model.ValidationRule) {
 		for _, r := range rules {
 			if r.Custom {
@@ -316,12 +323,13 @@ func collectImports(structs []model.StructInfo, bodies [][]byte) ([]importSpec, 
 		}
 	}
 	for _, s := range structs {
-		// Struct alias delegating to a foreign-package underlying
-		// (e.g. `type Local uuid.UUID`) needs that package's import.
+		// A struct alias over a type from another package, such as
+		// `type Local uuid.UUID`, needs that package's import.
 		if s.IsAlias && s.AliasKind == model.KindStruct {
 			addImport(s.AliasUnderlyingImport)
 		}
-		// streamUnknownKey clones the KeyView alias in every mode.
+		// streamUnknownKey always clones the key that KeyView returns,
+		// because that key aliases the Stream's buffer.
 		if !s.IsAlias {
 			add("strings")
 		}
@@ -355,9 +363,9 @@ func collectImports(structs []model.StructInfo, bodies [][]byte) ([]importSpec, 
 			}
 		}
 	}
-	// Stdlib-helper imports are emission-driven: scanning the rendered bodies
-	// for the import-qualified token is exact and avoids a per-kind walk over
-	// arbitrarily-nested container types.
+	// Stdlib helper imports come from what was emitted. Scanning the rendered
+	// bodies for the qualified token is exact, and it avoids a per-kind walk
+	// over containers nested to any depth.
 	scanBodiesForStdImports(bodies, add)
 	scanBodiesForForeignImports(bodies, foreign, addImport)
 	out := make([]importSpec, 0, len(need))
@@ -376,10 +384,10 @@ func collectImports(structs []model.StructInfo, bodies [][]byte) ([]importSpec, 
 	return out, third
 }
 
-// namesQualifier reports whether body spells the package qualifier tok
-// (`time.`) at an identifier boundary. A plain substring test also matched
-// the tail of a field name — `result.Uptime.DecodeFrom(…)` contains `time.`
-// — and imported a package the file never uses.
+// namesQualifier reports whether body contains the package qualifier tok,
+// such as `time.`, at an identifier boundary. A plain substring test would
+// also match the end of a field name. For example `result.Uptime.DecodeFrom(…)`
+// contains `time.`, and the file would import a package it never uses.
 func namesQualifier(body, tok []byte) bool {
 	for {
 		i := bytes.Index(body, tok)
@@ -397,9 +405,9 @@ func isIdentByte(c byte) bool {
 	return c == '_' || c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
 
-// scanBodiesForStdImports inspects the rendered per-struct bodies for
-// stdlib-qualified token prefixes and adds the matching import via add.
-// Each token is dropped from the search set after the first match.
+// scanBodiesForStdImports searches the rendered struct bodies for stdlib
+// qualifiers and calls add with the matching import path. A token is dropped
+// from the search after its first match.
 func scanBodiesForStdImports(bodies [][]byte, add func(string)) {
 	table := []struct {
 		token []byte
@@ -416,9 +424,9 @@ func scanBodiesForStdImports(bodies [][]byte, add func(string)) {
 		{[]byte("bytes."), "bytes"},
 		{[]byte("fmt."), "fmt"},
 		{[]byte("time."), "time"},
-		// Element-type spellings (prealloc consts, elem temps) name these
-		// even when no method body does; test-file structs parse AST-only,
-		// so the TypeImports channel can't cover them.
+		// Element type names in prealloc constants and element temps can
+		// name these even when no method body does. Structs in test files
+		// are parsed from the AST only, so TypeImports cannot cover them.
 		{[]byte("jsontext."), "encoding/json/jsontext"},
 		{[]byte("json."), "encoding/json"},
 		{[]byte("big."), "math/big"},
@@ -437,13 +445,13 @@ func scanBodiesForStdImports(bodies [][]byte, add func(string)) {
 }
 
 // scanBodiesForForeignImports adds the foreign packages whose qualifier a
-// rendered body actually names. A cross-package type reaches the generated
-// file in two very different ways: spelled out in a declaration
-// (`var v leaf.Leaf`, `make(map[string]leaf.Leaf)`, `append(x, leaf.Leaf{})`
-// — every container, pointer and map-value position), or never named at all
-// (a plain value field only ever writes `result.X` and calls methods on it).
-// Importing unconditionally would break the second case with "imported and not
-// used", so the candidate set is filtered the same way the stdlib helpers are.
+// rendered body actually names. A type from another package shows up in the
+// generated file in one of two ways. It can be named in a declaration, such as
+// `var v leaf.Leaf`, `make(map[string]leaf.Leaf)` or `append(x, leaf.Leaf{})`.
+// This covers every container, pointer and map value position. Or it is never
+// named at all: a plain value field only writes `result.X` and calls methods
+// on it. An unconditional import would fail the second case with "imported
+// and not used". So the candidates are filtered like the stdlib helpers.
 func scanBodiesForForeignImports(bodies [][]byte, cands map[string]model.TypeImport, add func(model.TypeImport)) {
 	for name, ti := range cands {
 		tok := []byte(name + ".")
@@ -493,21 +501,22 @@ func collectFieldImports(f model.FieldInfo, addImport func(model.TypeImport)) {
 	for _, inner := range f.InnerMods {
 		walkMods(inner)
 	}
-	// crossPkgStruct flags non-generated KindStruct fields: those go
-	// through the json.Unmarshal / json.Marshal fallback when no
-	// ggen/Text/JSON method is detected.
+	// crossPkgStruct handles KindStruct fields that this pass does not
+	// generate. They fall back to json.Unmarshal and json.Marshal when no
+	// ggen, text or JSON method is found.
 	crossPkgStruct := func(typ string, iface model.FieldInterfaces) {
 		if isGenerated(typ) {
 			return
 		}
-		// Named primitive decoded/encoded inline — never reaches encoding/json.
+		// A named primitive is decoded and encoded inline. It never reaches
+		// encoding/json.
 		if _, _, ok := inlineNamedPrim(model.FieldInfo{
 			GoType: typ, Kind: model.KindStruct, HTMLEscape: f.HTMLEscape, Copy: f.Copy,
 			AllowInvalidUTF8: f.AllowInvalidUTF8, NoValidate: f.NoValidate,
 		}); ok {
 			return
 		}
-		// Resolved + a known method → uses that method, no json.
+		// A resolved type with a known method uses that method, not json.
 		if iface.Resolved &&
 			(iface.ByteDecoder || iface.JSONUnmarshaler || iface.TextUnmarshaler ||
 				iface.AppendJSON || iface.JSONMarshaler || iface.TextAppender ||
@@ -538,8 +547,8 @@ func collectFieldImports(f model.FieldInfo, addImport func(model.TypeImport)) {
 	case model.KindSQLNull:
 		add("database/sql")
 		if f.SQLNullInner != nil {
-			// Foreign-package imports for the type literals, plus the inner
-			// type's own imports via recursion.
+			// Add the foreign packages named in the type, then recurse for
+			// the inner type's own imports.
 			for _, imp := range f.SQLNullImports {
 				addImport(imp)
 			}
@@ -551,15 +560,15 @@ func collectFieldImports(f model.FieldInfo, addImport func(model.TypeImport)) {
 			}
 		}
 	case model.KindStruct:
-		// For *T fields f.GoType is "*T" but isGenerated matches bare names —
-		// use PointeeType so the cross-file struct-by-name check resolves.
+		// For a *T field f.GoType is "*T", but isGenerated matches bare
+		// names. Use PointeeType so the lookup by struct name works.
 		typ := f.GoType
 		if f.Pointer {
 			typ = f.PointeeType
 		}
 		if f.Pointer && len(typ) > 0 && typ[0] == '*' {
-			// Multi-level pointer (`**T`, …): only the LEAF kind drives imports,
-			// so recurse on a synthetic leaf field.
+			// For a multi-level pointer such as `**T`, only the leaf kind
+			// decides the imports. Recurse on a synthetic leaf field.
 			leaf := f
 			leaf.Pointer = false
 			leaf.PointeeType = ""
@@ -570,8 +579,9 @@ func collectFieldImports(f model.FieldInfo, addImport func(model.TypeImport)) {
 			crossPkgStruct(typ, f.Iface)
 		}
 	case model.KindSlice, model.KindArray, model.KindMap:
-		// Pointer elements / map values: only the LEAF kind drives imports
-		// (as above). Non-pointer cross-pkg struct elems keep the json fallback.
+		// For pointer elements and pointer map values, only the leaf kind
+		// decides the imports, as above. Non-pointer struct elements from
+		// another package keep the json fallback.
 		if et, eDepth := elemPtrType(f); eDepth > 0 {
 			leaf := elemPtrField(f, f.JSONName)
 			leaf.Pointer = false
@@ -584,12 +594,13 @@ func collectFieldImports(f model.FieldInfo, addImport func(model.TypeImport)) {
 			//exhaustive:ignore not every kind applies here
 			switch f.ElemKind {
 			case model.KindSlice, model.KindArray:
-				// Nested container: the deep element's kind drives imports.
+				// Nested container. The innermost element kind decides the
+				// imports.
 				collectFieldImports(peelSliceField(f), addImport)
 			case model.KindTime, model.KindDuration, model.KindBytes, model.KindRawJSON, model.KindNetIP, model.KindNetipAddr,
 				model.KindNetipPrefix, model.KindURL, model.KindBigInt, model.KindBigFloat, model.KindBigRat, model.KindSQLNull, model.KindAny, model.KindMap:
-				// Dedicated-kind element delegates to the field emitters —
-				// same imports as a field of that kind.
+				// An element with a dedicated kind uses the field emitters, so
+				// it needs the same imports as a field of that kind.
 				collectFieldImports(sliceElemField(f), addImport)
 			}
 		}
@@ -603,9 +614,11 @@ func isThirdParty(p string) bool {
 	return strings.ContainsRune(seg, '.')
 }
 
-// preregisterOneOfs walks all rules to populate the OneOf frozen-slice
-// registry before render, so render-time lookups are pure map reads
-// (required for safe parallel rendering). Dedup makes it order-independent.
+// preregisterOneOfs walks all rules and fills the oneof registry before
+// rendering starts. The registry holds one package-level slice per unique
+// allowed set. Lookups during rendering are then plain map reads, which keeps
+// parallel rendering safe. Deduplication makes the result independent of
+// order.
 func preregisterOneOfs(structs []model.StructInfo) {
 	walk := func(rules []model.ValidationRule) {
 		for _, v := range rules {
@@ -626,15 +639,20 @@ func preregisterOneOfs(structs []model.StructInfo) {
 	}
 }
 
-// scalarCountable reports whether a flat container of element kind k admits
-// exact-cap sizing by counting delimiters in the bytes-path buffer. True only
-// for numeric / bool elements (their textual form carries no `,`/`]`/`:`/`}`).
+// scalarCountable reports whether a flat container with element kind k can be
+// sized exactly by counting delimiters in the bytes-path input. This holds
+// only for number and bool elements, because their text never contains `,`,
+// `]`, `:` or `}`.
 func scalarCountable(k model.TypeKind) bool { return model.IsNumeric(k) || k == model.KindBool }
 
-// renderOneMod emits one mod (transform) against ref. posVar selects the
-// return shape for a fallible mod ("" = stream 2-tuple, else bytes 3-tuple). A
-// custom mod is pure (`func(T)T`), error-form (`func(T)(T,error)`, parse error),
-// or bool-form (`func(T)(T,bool)`, false → ggen.ModError parse error).
+// renderOneMod emits one mod, a value transform, against ref. posVar picks the
+// return shape for a mod that can fail. "" means the stream path, which
+// returns two values. Anything else means the bytes path, which returns
+// three. A custom mod has one of three forms:
+//   - pure, `func(T) T`
+//   - error form, `func(T) (T, error)`, where an error becomes a parse error
+//   - bool form, `func(T) (T, bool)`, where false becomes a ggen.ModError
+//     parse error
 func renderOneMod(b *bytes.Buffer, m model.ModRule, field, ref, goType string, kind model.TypeKind, posVar string) {
 	kind = effectiveKind(goType, kind)
 	prim := kindPrimitiveName(kind)
@@ -666,8 +684,9 @@ func renderOneMod(b *bytes.Buffer, m model.ModRule, field, ref, goType string, k
 					return "return result, " + errExpr
 				}
 				if m.BoolForm {
-					// ModError is a parse error — wrap so it carries the field
-					// path like every other decode failure (mod_error.go doc).
+					// ModError is a parse error. Wrap it so it carries the
+					// field path like every other decode failure, as
+					// mod_error.go documents.
 					pos := posVar
 					if pos == "" {
 						pos = "s.Offset()"
@@ -677,9 +696,9 @@ func renderOneMod(b *bytes.Buffer, m model.ModRule, field, ref, goType string, k
 					fmt.Fprintf(b, "if v, ok := %s(%s); !ok {\n\t%s\n} else {\n\t%s = v\n}\n",
 						call, ref, ret(modErr), ref)
 				} else {
-					// The mod's own error is foreign: wrap it so it carries
-					// the field path and offset, like every other decode
-					// failure (errors.As still reaches the mod's error).
+					// The mod's own error is not a ggen error. Wrap it so it
+					// carries the field path and offset, like every other
+					// decode failure. errors.As still reaches the mod's error.
 					pos := posVar
 					if pos == "" {
 						pos = "s.Offset()"
@@ -711,8 +730,9 @@ func renderOneMod(b *bytes.Buffer, m model.ModRule, field, ref, goType string, k
 					wrap(fmt.Sprintf("strings.ReplaceAll(%s, %s, %s)", asPrim(ref), strconv.Quote(parts[0]), strconv.Quote(parts[1]))))
 			}
 		case "clamp":
-			// clamp=lo|hi — bound the value into [lo, hi]. Constants cast to
-			// the field's type so `<`/`>` are comparable on aliased numerics.
+			// clamp=lo|hi limits the value to [lo, hi]. The constants are
+			// converted to the field's type so `<` and `>` compile for named
+			// number types.
 			cparts := model.SplitPipeParts(m.Value)
 			if len(cparts) != 2 {
 				return
@@ -729,17 +749,11 @@ func renderOneMod(b *bytes.Buffer, m model.ModRule, field, ref, goType string, k
 	}
 }
 
-// effectiveKind resolves a named type whose underlying type is a primitive to
-// that primitive's kind. Both `//ggen:generate type Priority string` (which
-// gets a full method surface, so its FIELDS report KindStruct) and a plain
-// `type Priority string` the user never annotated land in namedKinds. Every
-// rule emitter must go through this: without it a named string reaches
-// `if kind == KindString` as KindStruct, and the rule either emits a raw token
-// (`case low:`) or, for eq/neq, nothing at all.
-// seedNamedKinds fills namedKinds from both sources: the pass's own primitive
-// aliases (`//ggen:generate type Count int`) and the named primitives the
-// parse layer resolved from go/types on each field's type (which also covers
-// types the user never annotated, and foreign ones like `leaf.Name`).
+// seedNamedKinds fills namedKinds from two sources. The first is this pass's
+// own primitive aliases, such as `//ggen:generate type Count int`. The second
+// is the named primitives the parser resolved from go/types on each field's
+// type. That also covers types the user never annotated, and types from other
+// packages such as `leaf.Name`.
 func seedNamedKinds(structs []model.StructInfo) {
 	aliasFlags = map[string]aliasCodegen{}
 	for _, s := range structs {
@@ -759,24 +773,24 @@ func seedNamedKinds(structs []model.StructInfo) {
 }
 
 // inlineNamedPrim reports whether a field of a named primitive type should be
-// decoded/encoded INLINE — scan the underlying primitive, convert at the assign
-// — instead of calling the type's own generated methods (or, when it has none,
-// falling through to encoding/json).
+// decoded and encoded inline. Inline means: scan the underlying primitive and
+// convert at the assignment. The other choice is to call the type's own
+// generated methods, or encoding/json when it has none.
 //
-// `type B S; type S string` resolves straight to `string`: go/types' Underlying
-// walks the whole chain, so alias depth costs nothing here.
+// `type B S; type S string` resolves straight to `string`. go/types'
+// Underlying walks the whole chain, so a chain of named types costs nothing.
 //
-// The gate is behavioural, not structural. An ANNOTATED alias may carry flags
-// of its own — `//ggen:generate htmlescape type HtmlString string` is the
-// documented way to escape one type and not the rest, and `copy` /
-// `allowinvalidutf8` / `novalidate` likewise change what its body emits.
-// Inlining with the PARENT's flags would silently swap that behaviour, so those
-// keep the call. A flag set globally on the CLI lands on both sides equally and
-// so never blocks inlining.
+// The check is about behaviour, not structure. An annotated alias can carry
+// its own flags. `//ggen:generate htmlescape type HtmlString string` is the
+// documented way to escape one type and not the rest. `copy`,
+// `allowinvalidutf8` and `novalidate` also change what its body emits.
+// Inlining with the parent's flags would silently change that behaviour, so
+// such aliases keep the call. A flag set on the command line applies to both
+// sides equally, so it never blocks inlining.
 func inlineNamedPrim(f model.FieldInfo) (prim string, kind model.TypeKind, ok bool) {
-	// KindStruct is the generator's "named type I have no special handling
-	// for". Anything else (KindDuration, KindTime, KindBytes, …) owns its wire
-	// shape and keeps its own emitter, named primitive underneath or not.
+	// KindStruct means "a named type with no special handling". Any other
+	// kind, such as KindDuration, KindTime or KindBytes, has its own wire
+	// shape and its own emitter, even if a primitive is underneath.
 	if f.Kind != model.KindStruct {
 		return "", 0, false
 	}
@@ -784,10 +798,11 @@ func inlineNamedPrim(f model.FieldInfo) (prim string, kind model.TypeKind, ok bo
 	if !isNamed {
 		return "", 0, false
 	}
-	// A type generated in ANOTHER pass keeps its own methods. Its flags are not
-	// visible here (aliasFlags only covers this pass), so inlining would apply
-	// the PARENT's — silently dropping, say, an `htmlescape` the other package
-	// generated it with. Its DecodeFrom/AppendJSON already encode its choices.
+	// A type generated in another pass keeps its own methods. Its flags are
+	// not visible here, since aliasFlags only covers this pass. Inlining would
+	// apply the parent's flags and could silently drop, for example, an
+	// `htmlescape` the other package was generated with. Its DecodeFrom and
+	// AppendJSON already apply its own choices.
 	if !isGenerated(f.GoType) && f.Iface.Resolved && (f.Iface.ByteDecoder || f.Iface.AppendJSON) {
 		return "", 0, false
 	}
@@ -804,10 +819,10 @@ func inlineNamedPrim(f model.FieldInfo) (prim string, kind model.TypeKind, ok bo
 	return prim, k, true
 }
 
-// namedPrimInner reshapes f into the underlying primitive for the inline scan.
-// The value steps stay on the OUTER field so they run against the named type
-// (their `oneof`/`eq`/… resolve through effectiveKind); the inner render only
-// produces the raw value.
+// namedPrimInner turns f into a field of the underlying primitive for the
+// inline scan. The value steps stay on the outer field so they run against
+// the named type. Rules like `oneof` and `eq` resolve its kind through
+// effectiveKind. The inner render only produces the raw value.
 func namedPrimInner(f model.FieldInfo, prim string, kind model.TypeKind) model.FieldInfo {
 	inner := f
 	inner.GoType = prim
@@ -822,6 +837,13 @@ func namedPrimInner(f model.FieldInfo, prim string, kind model.TypeKind) model.F
 	return inner
 }
 
+// effectiveKind maps a named type over a primitive to that primitive's kind.
+// Both an annotated `//ggen:generate type Priority string` and a plain
+// `type Priority string` the user never annotated are in namedKinds. Fields
+// of the annotated one report KindStruct, because it gets a full method set.
+// Every rule emitter must call this. Without it a named string reaches
+// `if kind == KindString` as KindStruct. The rule then emits a raw token such
+// as `case low:`, or for eq and neq it emits nothing at all.
 func effectiveKind(goType string, kind model.TypeKind) model.TypeKind {
 	if k, ok := namedKinds[goType]; ok {
 		return k
@@ -830,11 +852,11 @@ func effectiveKind(goType string, kind model.TypeKind) model.TypeKind {
 }
 
 // primCast converts ref to its underlying primitive when goType is a named
-// type — needed wherever the emitted code hands the value to a string-typed
-// API (`utf8.RuneCountInString`, `strings.HasPrefix`, `ggen.IsURL`) or
-// stores it in a string-typed error field. Comparisons against untyped
-// constants (len/gte/eq/oneof) need no cast, so callers only wrap where the
-// destination type is concrete.
+// type. The emitted code needs this wherever it passes the value to an API
+// that takes a string, such as `utf8.RuneCountInString`, `strings.HasPrefix`
+// or `ggen.IsURL`, or stores it in an error field of type string. Comparisons
+// against untyped constants, as in len, gte, eq and oneof, need no
+// conversion. So callers wrap only where the target type is concrete.
 func primCast(goType string, kind model.TypeKind, ref string) string {
 	prim := kindPrimitiveName(kind)
 	if goType == "" || prim == "" || goType == prim {
@@ -880,10 +902,10 @@ func kindPrimitiveName(k model.TypeKind) string {
 	return ""
 }
 
-// numBound spells a numeric rule's bound for an `any`-typed error field: the
-// untyped literal carries the field's own kind, so a bound above MaxInt64
-// keeps its value instead of defaulting to int (overflow) or float64
-// (rounded report).
+// numBound writes a numeric rule's bound for an error field of type `any`.
+// The literal is converted to the field's own kind. An untyped literal would
+// default to int, which overflows above MaxInt64, or to float64, which
+// reports a rounded value.
 func numBound(kind model.TypeKind, value string) string {
 	prim := kindPrimitiveName(kind)
 	if prim == "" {
@@ -892,9 +914,10 @@ func numBound(kind model.TypeKind, value string) string {
 	return prim + "(" + value + ")"
 }
 
-// posLit builds the Pos field for a validation error literal — the byte offset
-// of the failure relative to the full payload. posVar is the bytes-path cursor;
-// "" selects the stream path (s.Offset(), accounts for compaction).
+// posLit builds the Pos field for a validation error literal. Pos is the byte
+// offset of the failure from the start of the whole payload. posVar is the
+// bytes-path cursor. "" selects the stream path, which uses s.Offset() because
+// s.Pos shifts when the Stream drops consumed bytes from its buffer.
 func posLit(posVar string) string {
 	if posVar == "" {
 		return "Pos: s.Offset(), "
@@ -909,11 +932,10 @@ func withPos(errExpr, posVar string) string {
 	return errExpr[:k+1] + posLit(posVar) + errExpr[k+1:]
 }
 
-// arrayLenErr builds a typed *ggen.LenError literal for the strict
-// fixed-array element-count check.
-// byteArrayLen returns N for a `[N]byte` field folded onto the KindBytes
-// (base64) path, else 0. jsonv2 base64s byte ARRAYS and rejects the v1
-// number-array form; the decoded length must be exactly N.
+// byteArrayLen returns N for a `[N]byte` field that is encoded as base64
+// through the KindBytes path, and 0 otherwise. jsonv2 encodes byte arrays as
+// base64 and rejects the v1 form, an array of numbers. The decoded length
+// must be exactly N.
 func byteArrayLen(f model.FieldInfo) int {
 	if f.Kind == model.KindBytes && f.ArrayLen > 0 {
 		return f.ArrayLen
@@ -921,9 +943,9 @@ func byteArrayLen(f model.FieldInfo) int {
 	return 0
 }
 
-// leafKind is the kind of a pointer field's pointee. `[N]byte` reads as a
-// plain array in the type string — only Kind + ArrayLen carry the base64
-// fold — so a byte-array pointee keeps the field's own kind.
+// leafKind is the kind of a pointer field's pointee. In the type string
+// `[N]byte` reads as a plain array. Only Kind and ArrayLen record that it is
+// encoded as base64. So a byte-array pointee keeps KindBytes.
 func leafKind(f model.FieldInfo, leafType string) model.TypeKind {
 	if byteArrayLen(f) > 0 {
 		return model.KindBytes
@@ -931,12 +953,14 @@ func leafKind(f model.FieldInfo, leafType string) model.TypeKind {
 	return model.ResolveKind(leafType)
 }
 
+// arrayLenErr builds a typed *ggen.LenError literal for the strict element
+// count check of a fixed-length array.
 func arrayLenErr(field string, want int, gotExpr, posVar string) string {
 	return withPos(fmt.Sprintf("&ggen.LenError{Path: []string{%q}, Want: %d, Got: %s}", field, want, gotExpr), posVar)
 }
 
-// tupleOverflowErr is the LenError for a tuple that bails at its first element
-// past want: the true length is only known to be at least want+1.
+// tupleOverflowErr is the LenError for a tuple that stops at its first element
+// past want. The true length is only known to be at least want+1.
 func tupleOverflowErr(field string, want int, posVar string) string {
 	return withPos(fmt.Sprintf("&ggen.LenError{Path: []string{%q}, Want: %d, Got: %d, AtLeast: true}", field, want, want+1), posVar)
 }
@@ -946,16 +970,18 @@ func requiredErr(field string) string {
 	return fmt.Sprintf("&ggen.RequiredError{Path: []string{%q}}", field)
 }
 
-// oneofRegistry collects unique allowed-string sets emitted as package-level
-// frozen slices, so OneOfError construction never allocates the slice.
+// oneofRegistry collects the unique sets of allowed strings. Each set is
+// emitted once as a package-level slice that is never modified, so building a
+// OneOfError never allocates the slice.
 var oneofRegistry struct {
-	names map[string]string // joined "a|b|c" → var name
+	names map[string]string // parts joined by "\x00", mapped to the var name
 	decls []string
-	// prefix keeps the frozen slices unique across output FILES of one Go
-	// package. Single-file mode (`ggen $GOFILE`, one generated file per source)
-	// restarts the counter per file, so two sources in the same package that
-	// both use `oneof` used to declare ggenOneof0 twice — a redeclaration.
-	// Derived from the struct set being emitted, so it is stable across runs.
+	// prefix keeps the slice names unique across the output files of one Go
+	// package. Single-file mode (`ggen $GOFILE`, one generated file per
+	// source) restarts the counter for each file. Without the prefix, two
+	// sources in one package that both use `oneof` would declare the same
+	// name. It comes from the output file name (see emitScope), so it is
+	// stable across runs.
 	prefix string
 }
 
@@ -965,11 +991,10 @@ func resetOneofRegistry(scope string) {
 	oneofRegistry.prefix = emitScope(scope)
 }
 
-// emitScope derives the registry-name prefix from the OUTPUT FILENAME —
-// stable across struct additions/removals (the old struct-name-set hash
-// rehashed every ggenCap/ggenOneof on any set change). Only the `_ggen`
-// marker is noise: `p_ggen.go` and `p_ggen_test.go` are two files of one
-// package, so the test half keeps its `_test` (`p` vs `p_test`).
+// emitScope derives the registry name prefix from the output file name, so
+// adding or removing structs never renames anything. Only the `_ggen` marker
+// is dropped. `p_ggen.go` and `p_ggen_test.go` are two files of one package,
+// so the test file keeps its `_test` and the scopes are `p` and `p_test`.
 func emitScope(scope string) string {
 	base := strings.TrimSuffix(filepath.Base(scope), ".go")
 	if stem, ok := strings.CutSuffix(base, "_ggen_test"); ok {
@@ -980,10 +1005,11 @@ func emitScope(scope string) string {
 	return sanitizeIdent(base)
 }
 
-// sanitizeIdent maps an arbitrary type/file string onto identifier chars:
-// alnum kept, `*` spelled Ptr, every other rune becomes exactly one `_` —
-// no collapsing, so distinct keys stay distinct (`[]int` → `_entryConsumedt` vs
-// `int`; a collision would redeclare the const, loud at compile time).
+// sanitizeIdent maps a type or file name onto identifier characters. Letters
+// and digits are kept, `*` becomes Ptr, and every other rune becomes exactly
+// one `_`. Runs of `_` are not collapsed, so distinct inputs stay distinct:
+// `[]int` becomes `__int`, not `int`. A collision would redeclare a constant,
+// which fails loudly at compile time.
 func sanitizeIdent(s string) string {
 	var b strings.Builder
 	for _, r := range s {
@@ -1016,8 +1042,9 @@ func registerOneOf(parts []string) string {
 }
 
 // renderValidationOn emits validation checks against ref. jsonName appears in
-// errors; kind selects type-appropriate comparisons; multiErr appends instead
-// of returning. posVar selects the return shape ("" 2-tuple, else 3-tuple).
+// the errors. kind selects comparisons that fit the type. With multiErr set, a
+// failure is appended to errs instead of returned. posVar picks the return
+// shape: "" returns two values, anything else returns three.
 func renderValidationOn(b *bytes.Buffer, rules []model.ValidationRule, ref, jsonName, goType string, kind model.TypeKind, multiErr bool, posVar string) {
 	onErr := func(errExpr string) string {
 		errExpr = withPos(errExpr, posVar)
@@ -1038,8 +1065,10 @@ func isRuneRule(name string) bool {
 }
 
 // asciiImplyingRule reports whether passing this validator guarantees the
-// value is pure ASCII — so one byte per rune, i.e. utf8.RuneCountInString ==
-// len. Lets a rune rule that FOLLOWS one of these in the same run drop the walk.
+// value is pure ASCII. A rune is one Unicode character. In UTF-8 it takes 1 to
+// 4 bytes, and an ASCII rune takes exactly 1. So for ASCII text
+// utf8.RuneCountInString equals len. A rune rule that comes after one of
+// these rules in the same run can skip counting.
 func asciiImplyingRule(name string) bool {
 	switch name {
 	case "alphanum", "numeric", "hexadecimal":
@@ -1048,12 +1077,14 @@ func asciiImplyingRule(name string) bool {
 	return false
 }
 
-// emitValRun emits a contiguous run of validators against an unchanged ref
-// (callers split runs at mods, which mutate ref). Rune-count rules
-// (runes/minrunes/maxrunes) emit through emitRuneRule, which avoids the O(len)
-// utf8.RuneCountInString walk via byte-length gating. If an ASCII-implying rule
-// already passed earlier in this run AND we're not in multierr mode, the count
-// is exactly len and the walk is dropped entirely.
+// emitValRun emits a run of validators against a ref that does not change.
+// Callers split runs at mods, because mods change ref. The rune count rules
+// runes, minrunes and maxrunes go through emitRuneRule. It checks the byte
+// length first to avoid the O(len) utf8.RuneCountInString walk where it can.
+// If a rule that implies ASCII already passed earlier in this run, and
+// multierr is off, the count is exactly len and the walk is dropped. Under
+// multierr a failed earlier rule does not stop the run, so the value may not
+// be ASCII.
 func emitValRun(b *bytes.Buffer, run []model.ValidationRule, ref, jsonName, goType string, kind model.TypeKind, multiErr bool, onErr func(string) string) {
 	kind = effectiveKind(goType, kind)
 	asciiSeen := false
@@ -1069,10 +1100,12 @@ func emitValRun(b *bytes.Buffer, run []model.ValidationRule, ref, jsonName, goTy
 	}
 }
 
-// emitRuneRule emits a single rune-count rule (runes/minrunes/maxrunes).
-// useLen drops the walk entirely (count is len). Otherwise byte-length gates
-// resolve the fail-free and pass-free cases in O(1); only the ambiguous band
-// walks. The failure literal's Got reports the real rune count.
+// emitRuneRule emits one rune count rule: runes, minrunes or maxrunes. With
+// useLen the count is len and no walk is emitted. Otherwise byte length
+// checks decide the cases that surely pass or surely fail in O(1). A string
+// of B bytes holds between B/4 and B runes, so only lengths in the band
+// between those bounds need the walk. The Got field of the failure literal
+// reports the real rune count.
 func emitRuneRule(b *bytes.Buffer, v model.ValidationRule, ref, jsonName, goType string, kind model.TypeKind, onErr func(string) string, useLen bool) {
 	errLit := func(got string) string {
 		switch v.Name {
@@ -1084,10 +1117,10 @@ func emitRuneRule(b *bytes.Buffer, v model.ValidationRule, ref, jsonName, goType
 			return fmt.Sprintf("&ggen.MaxRunesError{Path: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, got)
 		}
 	}
-	// utf8 takes a real string; a named string type needs the conversion.
+	// utf8 takes a plain string, so a named string type needs a conversion.
 	walk := fmt.Sprintf("utf8.RuneCountInString(%s)", primCast(goType, kind, ref))
 
-	// Every byte is a rune, so the count is len(ref) — no walk.
+	// Every byte is a rune, so the count is len(ref) and no walk is needed.
 	if useLen {
 		l := fmt.Sprintf("len(%s)", ref)
 		op := map[string]string{"runes": "!=", "minrunes": "<", "maxrunes": ">"}[v.Name]
@@ -1095,8 +1128,8 @@ func emitRuneRule(b *bytes.Buffer, v model.ValidationRule, ref, jsonName, goType
 		return
 	}
 
-	// Byte-length gate. On the off chance the value doesn't parse as an
-	// integer, fall back to an unconditional walk.
+	// Byte length checks. If the bound does not parse as an integer, fall back
+	// to always walking.
 	n, err := strconv.Atoi(v.Value)
 	if err != nil {
 		op := map[string]string{"runes": "!=", "minrunes": "<", "maxrunes": ">"}[v.Name]
@@ -1105,40 +1138,44 @@ func emitRuneRule(b *bytes.Buffer, v model.ValidationRule, ref, jsonName, goType
 	}
 	switch v.Name {
 	case "minrunes":
-		// R >= n. Fail-free below len n, pass-free at/above 4n-3; walk the band.
+		// Rule: runes >= n. Fails for sure below length n. Passes for sure
+		// at length 4n-3 and above. Walk only in between.
 		fmt.Fprintf(b, "if len(%s) < %d {\n\t%s\n}", ref, n, onErr(errLit(walk)))
 		if 4*n-3 > n {
 			fmt.Fprintf(b, " else if len(%s) < %d {\n\tif rc := %s; rc < %d {\n\t\t%s\n\t}\n}", ref, 4*n-3, walk, n, onErr(errLit("rc")))
 		}
 		b.WriteString("\n")
 	case "maxrunes":
-		// R <= n. Pass-free at/below len n, fail-free above 4n; walk the band.
+		// Rule: runes <= n. Passes for sure at length n and below. Fails for
+		// sure above length 4n. Walk only in between.
 		fmt.Fprintf(b, "if len(%s) > %d {\n\t%s\n}", ref, 4*n, onErr(errLit(walk)))
 		if n >= 1 {
 			fmt.Fprintf(b, " else if len(%s) > %d {\n\tif rc := %s; rc > %d {\n\t\t%s\n\t}\n}", ref, n, walk, n, onErr(errLit("rc")))
 		}
 		b.WriteString("\n")
 	case "runes":
-		// R == n. Fail-free outside [n, 4n]; walk the band.
+		// Rule: runes == n. Fails for sure outside lengths [n, 4n]. Walk
+		// inside that band.
 		fmt.Fprintf(b, "if len(%s) < %d || len(%s) > %d {\n\t%s\n} else if rc := %s; rc != %d {\n\t%s\n}\n",
 			ref, n, ref, 4*n, onErr(errLit(walk)), walk, n, onErr(errLit("rc")))
 	}
 }
 
-// renderOneVal emits one validation check against ref. onErr wraps a typed
-// error literal into the right failure action. Builtin validators dispatch by
-// name; a custom (`@Func`) validator calls the user func — error form wraps
-// CustomError, bool form (BoolForm) emits PredicateError on a false return.
-// Rune-count rules (runes/minrunes/maxrunes) are NOT handled here — emitValRun
-// routes them to emitRuneRule (byte-length gating).
+// renderOneVal emits one validation check against ref. onErr turns a typed
+// error literal into the right failure action. Built-in validators are
+// chosen by name. A custom `@Func` validator calls the user's function. Its
+// error form wraps the error in CustomError. Its bool form (BoolForm) emits a
+// PredicateError when the function returns false. The rune count rules
+// runes, minrunes and maxrunes are not handled here. emitValRun sends them to
+// emitRuneRule.
 func renderOneVal(b *bytes.Buffer, v model.ValidationRule, ref, jsonName, goType string, kind model.TypeKind, onErr func(string) string) {
 	kind = effectiveKind(goType, kind)
-	// str is ref converted to a plain string — for the checks and error fields
-	// that are string-typed rather than untyped-constant comparisons.
+	// str is ref converted to a plain string. It is used by the checks and
+	// error fields that need a string, not an untyped constant comparison.
 	str := primCast(goType, kind, ref)
 	switch v.Name {
 	case "required", "optional":
-		// required handled separately; optional is a no-op marker
+		// required is handled elsewhere. optional is only a marker.
 
 	case "notempty":
 		fmt.Fprintf(b, "if len(%s) == 0 {\n\t%s\n}\n", ref,
@@ -1233,7 +1270,7 @@ func renderOneVal(b *bytes.Buffer, v model.ValidationRule, ref, jsonName, goType
 			onErr(fmt.Sprintf("&ggen.MultipleError{Path: []string{%q}, Of: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
 
 	default:
-		// `@FuncName` — user-defined validator resolved at parse time.
+		// `@FuncName` is a user-defined validator, resolved at parse time.
 		if v.Custom {
 			call := v.FuncName
 			if v.PkgName != "" {
@@ -1284,8 +1321,9 @@ func renderOneofCases(kind model.TypeKind, raw string) string {
 	return strings.Join(out, ", ")
 }
 
-// fieldIsConditional reports whether the field's marshal emission depends on
-// a runtime check (omitempty/omitzero).
+// fieldIsConditional reports whether marshaling the field depends on a runtime
+// check: an omitempty or omitzero guard, or the entries of an embed catch-all
+// map.
 func fieldIsConditional(f model.FieldInfo) bool {
 	if f.Embed {
 		return true
@@ -1297,17 +1335,18 @@ func fieldIsConditional(f model.FieldInfo) bool {
 }
 
 // fieldSkipExpr returns a Go boolean expression that is true when the field
-// should be EMITTED (omitempty: skip if JSON-empty; omitzero: skip if Go zero).
-// Empty string means "always emit".
+// should be written. omitempty skips a value that encodes as empty JSON.
+// omitzero skips a Go zero value. An empty string means "always write".
 func fieldSkipExpr(f model.FieldInfo, ref string) string {
 	var emitConds []string
-	// A named primitive reports KindStruct at its use sites; unresolved, the
-	// omitzero KindStruct arm emitted `ref != (Score{})` (does not compile)
-	// and omitempty had no arm at all (option silently dropped).
+	// A named primitive reports KindStruct where it is used. Without resolving
+	// it, omitzero would emit `ref != (Score{})`, which does not compile, and
+	// omitempty would have no case and silently drop the option.
 	kind := effectiveKind(f.GoType, f.Kind)
 	if f.OmitEmpty {
 		if f.Pointer {
-			// nil encodes null; a pointee that encodes empty is omitted too.
+			// nil encodes as null. A pointee that encodes as empty is
+			// omitted too.
 			emitConds = append(emitConds, ref+" != nil")
 			depth, leafType := model.PointerDepth(f.GoType)
 			leaf := f
@@ -1337,10 +1376,12 @@ func fieldSkipExpr(f model.FieldInfo, ref string) string {
 				model.KindFloat32, model.KindFloat64:
 				emitConds = append(emitConds, ref+" != 0")
 			case model.KindSlice, model.KindMap, model.KindRawJSON:
-				// Go-zero is nil; `make([]T, 0)` is non-nil and must be emitted.
+				// The Go zero value is nil. `make([]T, 0)` is not nil and must
+				// be written.
 				emitConds = append(emitConds, ref+" != nil")
 			case model.KindBytes:
-				// A [N]byte rides the base64 path but is an array, not a nillable slice.
+				// A [N]byte uses the base64 path, but it is an array and can
+				// never be nil.
 				if byteArrayLen(f) > 0 {
 					emitConds = append(emitConds, zeroCompare(f, ref))
 				} else {
@@ -1363,7 +1404,8 @@ func fieldSkipExpr(f model.FieldInfo, ref string) string {
 			case model.KindURL:
 				emitConds = append(emitConds, fmt.Sprintf("%s != (%s{})", ref, f.GoType))
 			case model.KindBigInt, model.KindBigFloat, model.KindBigRat:
-				// big.X isn't comparable (unexported slices); Sign()==0 for zero.
+				// big types are not comparable because they hold unexported
+				// slices. Sign() is 0 for the zero value.
 				emitConds = append(emitConds, ref+".Sign() != 0")
 			case model.KindArray:
 				emitConds = append(emitConds, zeroCompare(f, ref))
@@ -1377,17 +1419,19 @@ func fieldSkipExpr(f model.FieldInfo, ref string) string {
 }
 
 // omitEmptyCond is the omitempty half of fieldSkipExpr for a non-pointer
-// field: true when ref encodes as something other than null / "" / [] / {},
-// "" when the kind can never encode empty. Numbers, bools, times, durations
-// and big.* always carry a value (a zero big.Int is `0`, not JSON-empty), so
-// they never get a guard.
+// field. It returns an expression that is true when ref encodes as something
+// other than null, "", [] or {}. It returns "" when the kind can never encode
+// as empty, and "false" for a `[0]T`, which always encodes as []. Numbers,
+// bools, times, durations and big types always carry a value, so they never
+// get a guard. A zero big.Int encodes as `0`, which is not empty.
 func omitEmptyCond(f model.FieldInfo, ref string) string {
 	//exhaustive:ignore not every kind applies here
 	switch effectiveKind(f.GoType, f.Kind) {
 	case model.KindString:
 		return ref + " != \"\""
 	case model.KindBytes:
-		// nil → null, empty → ""; a [N]byte is N base64 bytes, never empty.
+		// nil encodes as null and empty as "". A [N]byte is N base64 bytes,
+		// so it is never empty.
 		if byteArrayLen(f) > 0 {
 			return ""
 		}
@@ -1407,15 +1451,15 @@ func omitEmptyCond(f model.FieldInfo, ref string) string {
 	case model.KindAny:
 		return fmt.Sprintf("!ggen.AnyIsEmpty(%s)", ref)
 	case model.KindSQLNull:
-		// !Valid marshals as `null`.
+		// A value with Valid false marshals as `null`.
 		return ref + ".Valid"
 	}
 	return ""
 }
 
-// zeroCompare emits the omitzero is-nonzero test: `ref != (T{})` when the
-// type is comparable, else a reflect deep-zero probe — `!= (T{})` on a struct
-// carrying a slice/map field does not compile.
+// zeroCompare emits the omitzero "is not zero" test. A comparable type gets
+// `ref != (T{})`. Other types use reflect's IsZero, because `!= (T{})` does
+// not compile for a struct that holds a slice or map field.
 func zeroCompare(f model.FieldInfo, ref string) string {
 	if f.NotComparable {
 		return fmt.Sprintf("!reflect.ValueOf(%s).IsZero()", ref)
@@ -1430,17 +1474,17 @@ func renderAppendJSON(b *bytes.Buffer, s model.StructInfo) {
 		b.WriteString("}\n\n")
 		return
 	}
-	// coalesceConstAppends folds adjacent constant-byte appends post-emit.
+	// coalesceConstAppends merges adjacent constant appends after rendering.
 	var body bytes.Buffer
 	renderAppendJSONBody(&body, s)
 	b.WriteString(coalesceConstAppends(body.String()))
 	b.WriteString("}\n\n")
 }
 
-// coalesceConstAppends merges adjacent constant-byte append lines into a
-// single append. Recognizes both `dst = append(dst, ...)` and the
-// terminating `return append(dst, ...), nil` form. Single-byte payloads
-// emit as a char literal, multi-byte as a string spread.
+// coalesceConstAppends merges adjacent append lines that add constant bytes
+// into one append. It recognizes both `dst = append(dst, ...)` and the final
+// `return append(dst, ...), nil`. One byte is written as a rune literal, more
+// bytes as a spread string literal.
 func coalesceConstAppends(src string) string {
 	lines := strings.Split(src, "\n")
 	var out []string
@@ -1478,8 +1522,8 @@ func coalesceConstAppends(src string) string {
 	return strings.Join(out, "\n")
 }
 
-// formatAppendArgs renders the bytes as the `args` of an append call.
-// Single byte → char literal; multi-byte → string spread.
+// formatAppendArgs renders the bytes as the arguments of an append call. One
+// byte becomes a rune literal, more bytes become a spread string literal.
 func formatAppendArgs(p []byte) string {
 	if len(p) == 1 {
 		return strconv.QuoteRune(rune(p[0]))
@@ -1487,9 +1531,9 @@ func formatAppendArgs(p []byte) string {
 	return fmt.Sprintf("%q...", string(p))
 }
 
-// parseConstAppend recognizes `dst = append(dst, X)` where X is one of
-// `"…"...`, `'a'`, or `'a', 'b', …` (all compile-time constant bytes).
-// Returns the literal bytes; anything non-constant returns false.
+// parseConstAppend recognizes `dst = append(dst, X)` where X is `"…"...`,
+// `'a'` or `'a', 'b', …`, all constant bytes. It returns those bytes, or
+// false when X is not constant.
 func parseConstAppend(line string) ([]byte, bool) {
 	const prefix = "dst = append(dst,"
 	if !strings.HasPrefix(line, prefix) || !strings.HasSuffix(line, ")") {
@@ -1498,8 +1542,8 @@ func parseConstAppend(line string) ([]byte, bool) {
 	return parseConstAppendArgs(line[len(prefix) : len(line)-1])
 }
 
-// parseConstReturnAppend is the trailing-return variant: matches
-// `return append(dst, X), nil` and extracts X's bytes if constant.
+// parseConstReturnAppend is the variant for the final return. It matches
+// `return append(dst, X), nil` and returns X's bytes when X is constant.
 func parseConstReturnAppend(line string) ([]byte, bool) {
 	const prefix = "return append(dst,"
 	const suffix = "), nil"
@@ -1522,8 +1566,9 @@ func parseConstAppendArgs(args string) ([]byte, bool) {
 		}
 		return []byte(unq), true
 	}
-	// `'a', 'b', '\n'` — can't split on `,` (the literal may BE a comma);
-	// walk char literals manually, respecting `\X` escapes.
+	// A list like `'a', 'b', '\n'` cannot be split on `,`, because a literal
+	// may itself be a comma. Walk the rune literals by hand and honor `\X`
+	// escapes.
 	var out []byte
 	for len(rest) > 0 {
 		if rest[0] != '\'' {
@@ -1566,12 +1611,12 @@ func renderAppendJSONBody(b *bytes.Buffer, s model.StructInfo) {
 		return
 	}
 
-	// err declared up front so emitters share one slot; `_ = err` covers the
-	// pure-primitive case where nothing fallible uses it.
+	// err is declared once up front so all emitters share it. `_ = err`
+	// covers structs of plain primitives, where nothing can fail.
 	b.WriteString("var err error\n_ = err\n")
 
-	// No conditional fields → hard-code `{` into the first field's prefix
-	// and prepend commas before the rest.
+	// With no conditional fields, `{` goes into the first field's constant
+	// prefix and the other fields get a leading comma.
 	anyConditional := slices.ContainsFunc(s.Fields, fieldIsConditional)
 
 	if !anyConditional {
@@ -1594,7 +1639,8 @@ func renderAppendJSONBody(b *bytes.Buffer, s model.StructInfo) {
 		return
 	}
 
-	// Conditional path: track emissions via len(dst) vs start.
+	// With conditional fields, compare len(dst) with start to know whether a
+	// field was already written and a comma is needed.
 	b.WriteString("dst = append(dst, '{')\nstart := len(dst)\n")
 	for _, f := range s.Fields {
 		ref := "s." + f.GoName
@@ -1610,8 +1656,9 @@ dst = append(dst, ':')
 			continue
 		}
 		emit := fieldSkipExpr(f, ref)
-		// Pointer field guarded by its nil-check: peel one level so
-		// renderAppendValue doesn't emit a dead `if ref == nil` rung inside it.
+		// The guard of a pointer field already checks for nil. Remove one
+		// pointer level so renderAppendValue does not emit a dead
+		// `if ref == nil` branch inside it.
 		av, aref := f, ref
 		if emit != "" && f.Pointer {
 			av.GoType = strings.TrimPrefix(av.GoType, "*")
@@ -1641,9 +1688,10 @@ dst = append(dst, ':')
 	b.WriteString("return append(dst, '}'), nil")
 }
 
-// inlineValueEmit returns the embedded-fallback marshal code for one map
-// entry's value (loop var `v`). Specializes a few elem kinds to skip the
-// `any` boxing; everything else goes through AppendAny.
+// inlineValueEmit returns the marshal code for the value of one entry of an
+// embed catch-all map. The loop variable is `v`. A few element kinds get
+// their own code to avoid converting the value to `any`. Everything else goes
+// through AppendAny.
 func inlineValueEmit(f model.FieldInfo) string {
 	//exhaustive:ignore not every kind applies here
 	switch f.ElemKind {
@@ -1654,9 +1702,9 @@ func inlineValueEmit(f model.FieldInfo) string {
 			return "if dst, err = v.AppendJSON(dst); err != nil { return dst, err }\n"
 		}
 	case model.KindRawJSON:
-		// jsontext.Value / json.RawMessage: passthrough; empty → `null`
-		// (appending nothing would corrupt the object — field-level raw
-		// emit and AppendAny both null empties).
+		// jsontext.Value and json.RawMessage are copied as is. An empty
+		// value becomes `null`, because appending nothing would produce
+		// invalid JSON. The field-level raw emitter and AppendAny do the same.
 		return "if len(v) == 0 { dst = append(dst, \"null\"...) } else { dst = append(dst, v...) }\n"
 	}
 	if f.ElemType == "jsontext.Value" {
@@ -1666,18 +1714,21 @@ func inlineValueEmit(f model.FieldInfo) string {
 }
 
 func renderAppendValue(b *bytes.Buffer, f model.FieldInfo, ref string) {
-	// Named primitive: append the underlying directly (`AppendStringNoHTML(dst,
-	// string(s.X))`) instead of calling the alias's AppendJSON. Frees the
-	// `"key":"` quote fold (opt #16) for string-underlying aliases, and gets an
-	// UNANNOTATED named type off the json.Marshal fallback. Gated so an alias
-	// generated with its own htmlescape/copy flags keeps its own method.
+	// A named primitive appends the underlying value directly, as in
+	// `AppendStringNoHTML(dst, string(s.X))`, instead of calling the alias's
+	// AppendJSON. This lets a string alias fold its opening quote into the
+	// `"key":"` constant (see opt #16 in cmd/ggen/CLAUDE.md). It also keeps an
+	// unannotated named type off the json.Marshal fallback. inlineNamedPrim
+	// makes sure an alias generated with its own htmlescape or copy flags
+	// keeps its own method.
 	if prim, kind, ok := inlineNamedPrim(f); ok && !f.Pointer && !f.String {
 		renderAppendValue(b, namedPrimInner(f, prim, kind), primCast(f.GoType, kind, ref))
 		return
 	}
 	if f.Pointer {
-		// nil at any level → `null` (flat else-if ladder, one rung per level);
-		// only a full chain reaches the leaf.
+		// A nil at any pointer level writes `null`. The code is a flat
+		// else-if chain with one branch per level. Only a fully non-nil chain
+		// reaches the leaf.
 		depth, leafType := model.PointerDepth(f.GoType)
 		leaf := f
 		leaf.Pointer = false
@@ -1700,7 +1751,8 @@ func renderAppendValue(b *bytes.Buffer, f model.FieldInfo, ref string) {
 		//exhaustive:ignore not every kind applies here
 		switch f.Kind {
 		case model.KindBool:
-			// jsonv2 dropped `,string` for bool — stays bare; fall through.
+			// jsonv2 does not quote a bool for `,string`. It stays bare and
+			// falls through to the plain emit.
 		case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32:
 			fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = strconv.AppendInt(dst, int64(%s), 10)\ndst = append(dst, '\"')\n", ref)
 			return
@@ -1728,7 +1780,7 @@ func renderAppendValue(b *bytes.Buffer, f model.FieldInfo, ref string) {
 			)
 			return
 		}
-		// unknown/invalid combo — fall through to default
+		// Any other kind falls through to the plain emit below.
 	}
 	switch f.Kind {
 	case model.KindString:
@@ -1764,17 +1816,19 @@ func renderAppendValue(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	case model.KindDuration:
 		renderAppendDuration(b, f, ref)
 	case model.KindNetIP, model.KindNetipPrefix:
-		// Both implement encoding.TextAppender (Go 1.24+); their text can
-		// never carry escape-needing bytes (no zone — PrefixFrom strips it).
+		// Both implement encoding.TextAppender (Go 1.24+). Their text never
+		// holds bytes that need escaping. It has no IPv6 zone, because
+		// PrefixFrom strips the zone from a prefix.
 		fmt.Fprintf(b, `dst = append(dst, '"')
 if dst, err = %s.AppendText(dst); err != nil { return dst, err }
 dst = append(dst, '"')
 `, ref)
 	case model.KindNetipAddr:
-		// Zoned text may need escaping — ggen.AppendNetipAddr handles it.
+		// An address with an IPv6 zone may need escaping.
+		// ggen.AppendNetipAddr handles it.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s(dst, %s)\n", appendNetipAddrFn(f.HTMLEscape), ref)
 	case model.KindRawJSON:
-		// Emit raw bytes verbatim (or "null" if empty/nil).
+		// Write the raw bytes as is, or "null" when empty or nil.
 		fmt.Fprintf(b, `if len(%s) == 0 {
 	dst = append(dst, 'n', 'u', 'l', 'l')
 } else {
@@ -1786,10 +1840,11 @@ dst = append(dst, '"')
 	case model.KindBigInt:
 		fmt.Fprintf(b, "dst = (&%s).Append(dst, 10)\n", ref)
 	case model.KindBigFloat:
-		// big.Float as JSON string — jsonv2 wire format.
+		// big.Float is a JSON string, as in jsonv2.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = (&%s).Append(dst, 'g', -1)\ndst = append(dst, '\"')\n", ref)
 	case model.KindBigRat:
-		// JSON string "num/denom" (or "n" when whole), via AppendText.
+		// A JSON string "num/denom", or "n" for a whole number, written by
+		// AppendText.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\nif dst, err = (&%s).AppendText(dst); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
 	case model.KindSQLNull:
 		if f.SQLNullInner != nil {
@@ -1812,13 +1867,14 @@ dst = append(dst, '"')
 	}
 }
 
-// renderAppendBytes emits marshal code for a []byte field based on format.
+// renderAppendBytes emits marshal code for a []byte field in its format.
 func renderAppendBytes(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	if byteArrayLen(f) > 0 {
 		renderAppendBytesValue(b, f, ref)
 		return
 	}
-	// nil []byte → null (stdlib v1 parity; decode accepts null → nil).
+	// A nil []byte writes null, as stdlib v1 does. Decode turns null back
+	// into nil.
 	fmt.Fprintf(b, "if %s == nil {\ndst = append(dst, \"null\"...)\n} else {\n", ref)
 	renderAppendBytesValue(b, f, ref)
 	b.WriteString("}\n")
@@ -1848,18 +1904,20 @@ for i, b := range %s {
 dst = append(dst, ']')
 `, ref)
 	default:
-		// Unknown format: fall back to base64.
+		// An unknown format falls back to base64.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =base64.StdEncoding.AppendEncode(dst, %s)\ndst =append(dst, '\"')\n", ref)
 	}
 }
 
-// timeFormatSize returns the JSONSize byte budget for a `time.Time` field,
-// including surrounding quotes (none for numeric `unix*` variants). Unknown /
-// custom layouts fall back to len(format)+6.
+// timeFormatSize returns the JSONSize byte budget for a `time.Time` field. It
+// includes the surrounding quotes. The numeric `unix*` formats have none. A
+// custom layout gets len(format)+6, plus 5 more for each layout byte that
+// needs escaping.
 func timeFormatSize(format string) int {
 	switch format {
 	case "unix":
-		// sign + 19-digit seconds + `.` + 9-digit nanos = 30, plus slack.
+		// Sign, 19 digits of seconds, `.` and 9 digits of nanoseconds make
+		// 30 bytes. The rest is slack.
 		return 32
 	case "unixmilli", "unixmicro", "unixnano":
 		return sizeInt // int64 digits, no quotes
@@ -1902,9 +1960,9 @@ func timeFormatSize(format string) int {
 	case "Layout":
 		return 26 + 2
 	}
-	// Custom layout: its literal characters land in the output verbatim and
-	// are then JSON-escaped, so budget the worst-case expansion (a control
-	// byte becomes \uXXXX, 6 bytes) for the ones that need it.
+	// A custom layout's literal characters are copied to the output and then
+	// JSON-escaped. Budget the worst case for each byte that needs it: a
+	// control byte becomes \uXXXX, which is 6 bytes.
 	n := len(format) + 6
 	for i := range len(format) {
 		if c := format[i]; c == '"' || c == '\\' || c < 0x20 {
@@ -1915,8 +1973,8 @@ func timeFormatSize(format string) int {
 }
 
 // durationFormatSize returns the JSONSize byte budget for a `time.Duration`
-// field. Numeric formats emit an int (no quotes); default `units` is a quoted
-// "NhNmNs" string.
+// field. Numeric formats write an integer with no quotes. The default
+// `units` format writes a quoted "NhNmNs" string.
 func durationFormatSize(format string) int {
 	switch format {
 	case "sec", "milli", "micro", "nano":
@@ -1925,9 +1983,10 @@ func durationFormatSize(format string) int {
 	return 25 + 2 // "<NhNmNs>" worst case
 }
 
-// timeLayoutExpr returns the Go layout expression for a time.Time format
-// (e.g. "RFC3339" → time.RFC3339, custom → quoted literal) and, for the unix
-// family, the numeric encoding name.
+// timeLayoutExpr returns the Go layout expression for a time.Time format. For
+// example "RFC3339" gives time.RFC3339, and a custom layout gives a quoted
+// string literal. For the unix formats it instead returns the name of the
+// time.Time method that gives the number.
 func timeLayoutExpr(format string) (layout string, numeric string) {
 	switch format {
 	case "":
@@ -1955,11 +2014,11 @@ func timeLayoutExpr(format string) (layout string, numeric string) {
 func renderAppendTime(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	layout, numeric := timeLayoutExpr(f.Format)
 	if numeric != "" {
-		// `format:unix` emits a fractional decimal so sub-second nanos
-		// round-trip (jsonv2 parity). AppendUnixSeconds works from
-		// Unix()+Nanosecond(), never float64(UnixNano()) — that overflowed
-		// outside the int64-nano range and lost sub-100ns precision. The
-		// other unix* units are integer-granular.
+		// `format:unix` writes a decimal with a fraction so that nanoseconds
+		// survive a round trip, as in jsonv2. AppendUnixSeconds works from
+		// Unix() and Nanosecond(). float64(UnixNano()) would overflow outside
+		// the int64 nanosecond range and lose precision below 100ns. The
+		// other unix* formats are whole integers.
 		if numeric == "Unix" {
 			fmt.Fprintf(b, "dst = ggen.AppendUnixSeconds(dst, %s)\n", ref)
 			return
@@ -1967,25 +2026,24 @@ func renderAppendTime(b *bytes.Buffer, f model.FieldInfo, ref string) {
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s.%s(), 10)\n", ref, numeric)
 		return
 	}
-	// A CUSTOM layout's non-token characters are copied verbatim by
-	// AppendFormat, so a layout carrying `"` or `\` (or a control byte)
-	// produced invalid — or silently corrupted — JSON when appended raw
-	// between quotes. Close through the same escape-on-dirty helper the
-	// TextAppender sites use. Named time.X constants are fixed, ASCII-safe
-	// text and keep the raw fast path.
+	// AppendFormat copies the non-token characters of a custom layout as is.
+	// A layout with `"`, `\` or a control byte would then give invalid or
+	// silently wrong JSON between the quotes. So close the string through the
+	// same helper the TextAppender sites use, which escapes only when needed.
+	// Named time.X constants are fixed ASCII text and keep the fast path.
 	if isCustomTimeLayout(f.Format) {
-		// Field-suffixed temp: two custom-layout fields share the struct
-		// body's scope (same reason renderAppendMap suffixes its first-entry
-		// flag).
+		// The temp name carries the field name, because two custom-layout
+		// fields share the scope of the struct body. renderAppendMap names its
+		// first-entry flag the same way.
 		tmp := "tf" + sanitizeIdent(f.GoName)
 		fmt.Fprintf(b, "dst = append(dst, '\"')\n%s := len(dst)\ndst = %s.AppendFormat(dst, %s)\ndst = %s(dst, %s)\n",
 			tmp, ref, layout, closeStrFn(f.HTMLEscape), tmp)
 		return
 	}
 	if isRFC3339Layout(f.Format) {
-		// RFC 3339 cannot spell every time.Time (year outside [0,9999], zone
-		// hour ≥ 24); the helper refuses those instead of writing a string
-		// ParseRFC3339 would reject.
+		// RFC 3339 cannot express every time.Time, for example a year outside
+		// [0,9999] or a zone hour of 24 or more. The helper returns an error
+		// for those instead of writing a string ParseRFC3339 would reject.
 		fmt.Fprintf(
 			b,
 			"dst = append(dst, '\"')\nif dst, err = ggen.AppendRFC3339(dst, %s, %s); err != nil { return dst, err }\ndst = append(dst, '\"')\n",
@@ -1997,8 +2055,9 @@ func renderAppendTime(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s.AppendFormat(dst, %s)\ndst = append(dst, '\"')\n", ref, layout)
 }
 
-// isRFC3339Layout reports whether format is the RFC 3339 family (the default
-// wire shape), which encodes and decodes through the strict ggen helpers.
+// isRFC3339Layout reports whether format is one of the RFC 3339 layouts,
+// which include the default. These encode and decode through the strict ggen
+// helpers.
 func isRFC3339Layout(format string) bool {
 	return format == "" || format == "RFC3339" || format == "RFC3339Nano"
 }
@@ -2011,9 +2070,9 @@ func timeParseExpr(format, layout, src string) string {
 	return fmt.Sprintf("time.Parse(%s, %s)", layout, src)
 }
 
-// isCustomTimeLayout reports whether format is a user-supplied layout string
-// rather than one of the named time.X constants / numeric forms — i.e. the
-// text lands in the output verbatim and may need JSON escaping.
+// isCustomTimeLayout reports whether format is a layout string written by the
+// user, not a named time.X constant or a numeric format. Its text is copied
+// to the output and may need JSON escaping.
 func isCustomTimeLayout(format string) bool {
 	layout, numeric := timeLayoutExpr(format)
 	return numeric == "" && !strings.HasPrefix(layout, "time.")
@@ -2022,7 +2081,8 @@ func isCustomTimeLayout(format string) bool {
 func renderAppendDuration(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	switch f.Format {
 	case "sec":
-		// Seconds() is always finite — the error arm is dead but uniform.
+		// Seconds() is always finite. The error branch never runs but keeps
+		// the code uniform.
 		fmt.Fprintf(b, "if dst, err = ggen.AppendFloat(dst, %s.Seconds(), 64); err != nil { return dst, err }\n", ref)
 	case "milli":
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s.Milliseconds(), 10)\n", ref)
@@ -2031,14 +2091,15 @@ func renderAppendDuration(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	case "nano":
 		fmt.Fprintf(b, "dst = strconv.AppendInt(dst, %s.Nanoseconds(), 10)\n", ref)
 	default:
-		// "" (bare field) and "units"; unknown formats fall back to units too.
+		// "" (no format) and "units". Unknown formats also use units.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst =%s(dst, %s.String())\n", appendStrFn(f.HTMLEscape), ref)
 	}
 }
 
-// structHasAppendFormatTime reports whether any field emits via
-// time.Time.AppendFormat (non-numeric time format) — renderSize reserves
-// 64-byte headroom for the stdlib's internal slices.Grow.
+// structHasAppendFormatTime reports whether any field is written through
+// time.Time.AppendFormat, that is, a time field with a non-numeric format.
+// renderSize then reserves 64 extra bytes for the slices.Grow call inside the
+// stdlib.
 func structHasAppendFormatTime(s model.StructInfo) bool {
 	for _, f := range s.Fields {
 		if f.Kind != model.KindTime {
@@ -2052,10 +2113,11 @@ func structHasAppendFormatTime(s model.StructInfo) bool {
 	return false
 }
 
-// renderSize emits the body of a JSONSize method: sums the worst-case byte
-// count to serialize the struct. Per-field contributions split into a
-// compile-time constant (folded into `size := N`) and runtime code; runtime
-// adds collect into a sibling builder during the constant pass and flush after.
+// renderSize emits a JSONSize method. It sums the worst-case number of bytes
+// needed to serialize the struct. Each field's share splits into a constant,
+// known at generate time and folded into `size := N`, and runtime code. The
+// runtime code is collected in a separate buffer during the loop and written
+// after the constant.
 func renderSize(b *bytes.Buffer, s model.StructInfo) {
 	fmt.Fprintf(b, "func (s %s) JSONSize() int {\n", s.Name)
 	if s.IsAlias {
@@ -2063,11 +2125,12 @@ func renderSize(b *bytes.Buffer, s model.StructInfo) {
 		b.WriteString("}\n\n")
 		return
 	}
-	// Fixed overhead: braces + per-field key bytes + commas. omitempty/omitzero
-	// fields move their key+value out of the constant into a runtime guard.
+	// The fixed part is the braces, each field's key bytes and the commas.
+	// For omitempty and omitzero fields the key and value move out of the
+	// constant into a runtime guard.
 	fixed := 2 // { and }
-	// time.AppendFormat calls slices.Grow(b, max(layout, 64)) per invocation;
-	// reserve one shared 64-byte tail to keep the single-alloc Marshal contract.
+	// time.AppendFormat calls slices.Grow(b, max(layout, 64)) on each call.
+	// Reserve one shared 64-byte tail so Marshal still allocates only once.
 	if structHasAppendFormatTime(s) {
 		fixed += 64
 	}
@@ -2075,7 +2138,8 @@ func renderSize(b *bytes.Buffer, s model.StructInfo) {
 	var runtime bytes.Buffer
 	for _, f := range s.Fields {
 		if f.Embed {
-			// Embedded fallback: name/colon/comma budgeted per-entry in sizeMapContrib.
+			// Embed catch-all map. sizeMapContrib budgets the key, colon and
+			// comma of each entry.
 			ref := "s." + f.GoName
 			_, code := sizeContrib(f, ref)
 			runtime.WriteString(code)
@@ -2083,8 +2147,9 @@ func renderSize(b *bytes.Buffer, s model.StructInfo) {
 		}
 		ref := "s." + f.GoName
 		emit := fieldSkipExpr(f, ref)
-		// Pointer field guarded by its nil-check: pass the deref'd inner so
-		// sizeContrib doesn't emit a redundant `if ref == nil` inside the guard.
+		// The guard of a pointer field already checks for nil. Pass the
+		// dereferenced value so sizeContrib does not emit a second
+		// `if ref == nil` inside the guard.
 		sizeField, sizeRef := f, ref
 		if emit != "" && f.Pointer {
 			sizeField.Pointer = false
@@ -2104,7 +2169,8 @@ func renderSize(b *bytes.Buffer, s model.StructInfo) {
 			runtime.WriteString(code)
 			continue
 		}
-		// Omit-eligible field: worst-case includes a leading comma.
+		// A field that may be omitted. The worst case includes a leading
+		// comma.
 		fmt.Fprintf(&runtime, "if %s {\nsize += %d\n", emit, len(escapeJSONName(f.JSONName, f.HTMLEscape))+4+n)
 		runtime.WriteString(code)
 		runtime.WriteString("}\n")
@@ -2114,10 +2180,11 @@ func renderSize(b *bytes.Buffer, s model.StructInfo) {
 	b.WriteString("return size\n}\n\n")
 }
 
-// escapeJSONName JSON-escapes a field name once at generate time for embedding
-// into the constant `"name":` wire prefix (quote/backslash/control bytes;
-// htmlEscape also escapes <>& — jsonv2 escapes names like values). Without it
-// a tag-grammar name carrying `"` emitted invalid JSON with a nil error.
+// escapeJSONName JSON-escapes a field name once, at generate time, for the
+// constant `"name":` prefix. It escapes quotes, backslashes and control
+// bytes. With htmlEscape it also escapes <, > and &, because jsonv2 escapes
+// names the same way as values. Without this, a tag name holding `"` would
+// produce invalid JSON with a nil error.
 func escapeJSONName(name string, htmlEscape bool) string {
 	var b strings.Builder
 	for i := range len(name) {
@@ -2151,10 +2218,10 @@ func escapeJSONName(name string, htmlEscape bool) string {
 	return b.String()
 }
 
-// appendStrFn returns the encode-pkg helper for emitting a JSON string body +
-// closing `"`. Default emits `<`/`>`/`&` literally (jsonv2 shape); htmlescape
-// switches to the HTML-safe escaper (encoding/json v1). The CALLER must have
-// already written the opening `"`.
+// appendStrFn returns the runtime helper that writes a JSON string body and
+// the closing `"`. By default `<`, `>` and `&` are written as is, as jsonv2
+// does. htmlescape switches to the HTML-safe escaper, as encoding/json v1
+// does. The caller must already have written the opening `"`.
 func appendStrFn(htmlEscape bool) string {
 	if htmlEscape {
 		return "ggen.AppendString" + simdSuffix
@@ -2162,8 +2229,9 @@ func appendStrFn(htmlEscape bool) string {
 	return "ggen.AppendStringNoHTML" + simdSuffix
 }
 
-// closeStrFn returns the encode-pkg closer for raw text appended between
-// quotes (TextAppender output): closes the string, re-escaping iff dirty.
+// closeStrFn returns the runtime helper that closes a JSON string after raw
+// text, such as TextAppender output, was appended after the opening quote. It
+// escapes the text again only if it holds bytes that need escaping.
 func closeStrFn(htmlEscape bool) string {
 	if htmlEscape {
 		return "ggen.CloseJSONStringHTML"
@@ -2171,8 +2239,8 @@ func closeStrFn(htmlEscape bool) string {
 	return "ggen.CloseJSONString"
 }
 
-// appendURLFn / appendNetipAddrFn pick the escape-set variant of the raw-text
-// closers (htmlescape parity with every other string emitter).
+// appendURLFn and appendNetipAddrFn pick the helper variant for the escape
+// mode, so htmlescape works here as it does for every other string.
 func appendURLFn(htmlEscape bool) string {
 	if htmlEscape {
 		return "ggen.AppendURLHTML"
@@ -2187,8 +2255,9 @@ func appendNetipAddrFn(htmlEscape bool) string {
 	return "ggen.AppendNetipAddr"
 }
 
-// emitNoCloseAfterComma emits the bytes-path guard inside an element loop's
-// comma branch: a container close (or EOF) right after a comma is invalid JSON.
+// emitNoCloseAfterComma emits the bytes-path guard in the comma branch of an
+// element loop. A closing bracket or brace, or the end of input, right after a
+// comma is invalid JSON.
 func emitNoCloseAfterComma(b *bytes.Buffer, field, posVar string, closer byte) {
 	sentinel := "ggen.ErrBadArray"
 	if closer == '}' {
@@ -2204,9 +2273,10 @@ func emitNoCloseAfterComma(b *bytes.Buffer, field, posVar string, closer byte) {
 	)
 }
 
-// streamNoCloseAfterComma is emitNoCloseAfterComma's stream twin. The
-// `s.Pos >= len(...)` half also catches EOF right after the comma (SkipSpace
-// returns nil at EOF, and the loop top would otherwise index out of range).
+// streamNoCloseAfterComma is the stream version of emitNoCloseAfterComma. The
+// `s.Pos >= len(...)` check also catches the end of input right after the
+// comma. SkipSpace returns nil at the end of input, and the top of the loop
+// would otherwise index out of range.
 func streamNoCloseAfterComma(field string, closer byte) string {
 	sentinel := "ggen.ErrBadArray"
 	if closer == '}' {
@@ -2220,9 +2290,9 @@ func streamNoCloseAfterComma(field string, closer byte) string {
 	)
 }
 
-// appendAnyFn mirrors appendStrFn for `any` values — htmlescape structs
-// route their any-walk through the HTML-safe variant so nested strings
-// escape consistently with sibling string fields.
+// appendAnyFn is appendStrFn for `any` values. An htmlescape struct writes its
+// `any` values through the HTML-safe variant, so nested strings are escaped
+// the same way as its string fields.
 func appendAnyFn(htmlEscape bool) string {
 	if htmlEscape {
 		return "ggen.AppendAnyHTML"
@@ -2230,7 +2300,7 @@ func appendAnyFn(htmlEscape bool) string {
 	return "ggen.AppendAny"
 }
 
-// anySizeFn is the JSONSize twin of appendAnyFn.
+// anySizeFn is the JSONSize counterpart of appendAnyFn.
 func anySizeFn(htmlEscape bool) string {
 	if htmlEscape {
 		return "ggen.AnySizeHTML"
@@ -2238,9 +2308,9 @@ func anySizeFn(htmlEscape bool) string {
 	return "ggen.AnySize"
 }
 
-// foldLeadingQuote checks whether the field's value emit begins with a JSON
-// `"`. If so, it returns the prefix with `"` appended and the value-emit code
-// with the opening quote elided — saves one byte-append op per field.
+// foldLeadingQuote checks whether the field's value code starts by writing a
+// `"`. If so, it returns the prefix with `"` added and the value code without
+// its opening quote. This saves one append per field.
 func foldLeadingQuote(f model.FieldInfo, ref, prefix string) (newPrefix, code string, ok bool) {
 	if f.Pointer {
 		return prefix, "", false // pointer may emit "null"
@@ -2254,13 +2324,14 @@ func foldLeadingQuote(f model.FieldInfo, ref, prefix string) (newPrefix, code st
 dst = append(dst, '"')
 `, ref), true
 	case model.KindNetipAddr:
-		// Zoned text may need escaping — ggen.AppendNetipAddr handles it.
+		// An address with an IPv6 zone may need escaping.
+		// ggen.AppendNetipAddr handles it.
 		return prefix + `"`, fmt.Sprintf("dst = %s(dst, %s)\n", appendNetipAddrFn(f.HTMLEscape), ref), true
 	case model.KindBytes:
-		// No fold: a nil []byte emits `null` (no opening quote).
+		// No fold. A nil []byte writes `null`, which has no opening quote.
 	case model.KindURL:
-		// AppendURL writes body + closing quote, escaping when RawQuery/
-		// Opaque/Host smuggled bytes a JSON string can't hold raw.
+		// AppendURL writes the body and the closing quote. It escapes when
+		// RawQuery, Opaque or Host hold bytes a JSON string cannot hold raw.
 		return prefix + `"`, fmt.Sprintf("dst = %s(dst, %s)\n", appendURLFn(f.HTMLEscape), ref), true
 	case model.KindBigRat:
 		return prefix + `"`, fmt.Sprintf("if dst, err = (&%s).AppendText(dst); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref), true
@@ -2275,11 +2346,12 @@ const (
 	sizeBool  = 5  // "false"
 	sizeInt   = 20 // "-9223372036854775808"
 	sizeUint  = 20 // "18446744073709551615"
-	sizeFloat = 25 // IEEE-754 shortest round-trip, 'f' form: sign + "0." + 5 zeros + 17 digits
-	// sizeStrMult: 2× covers short escapes (\n, \", \\). Control chars expand
-	// 6× but are rejected by the decoder, so the bound is tight for legal JSON.
+	sizeFloat = 25 // shortest round-trip 'f' form: sign, "0.", 5 zeros, 17 digits
+	// sizeStrMult covers the short escapes \n, \" and \\, which double a
+	// byte. Control bytes grow 6 times, but the decoder rejects them, so the
+	// bound is tight for valid JSON.
 	sizeStrMult     = 2
-	sizeStrMultHTML = 6 // htmlescape expands <, >, & to \uXXXX (6×)
+	sizeStrMultHTML = 6 // htmlescape writes <, > and & as \uXXXX, 6 bytes
 	sizeStrPad      = 2 // surrounding quotes
 )
 
@@ -2292,14 +2364,14 @@ func strMult(htmlEscape bool) int {
 	return sizeStrMult
 }
 
-// sizeContrib returns (constN, runtimeCode) — the constant byte count
-// known at codegen time, and the runtime statements that compute the
-// variable contribution. constN is folded into the initial `size := N`
-// at the top level; runtimeCode is emitted as-is.
+// sizeContrib returns the byte count known at generate time and the runtime
+// statements that add the variable part. At the top level the constant is
+// folded into the initial `size := N`. The runtime code is emitted as is.
 func sizeContrib(f model.FieldInfo, ref string) (int, string) {
 	if f.Pointer {
-		// nil at any level budgets `null` (4 bytes); a full chain budgets the
-		// leaf. Flat else-if ladder, one rung per level.
+		// A nil at any level budgets `null`, 4 bytes. A fully non-nil chain
+		// budgets the leaf. The code is a flat else-if chain with one branch
+		// per level.
 		depth, leafType := model.PointerDepth(f.GoType)
 		leaf := f
 		leaf.Pointer = false
@@ -2324,8 +2396,9 @@ func sizeContrib(f model.FieldInfo, ref string) (int, string) {
 		b.WriteString("}\n")
 		return 0, b.String()
 	}
-	// json:",string" adds two quote bytes the inner Kind budget omits.
-	// KindBool excluded (jsonv2 emits bare bool even with `,string`).
+	// json:",string" adds two quote bytes that the kind's budget leaves out.
+	// KindBool is excluded, because jsonv2 writes a bare bool even with
+	// `,string`.
 	if f.String {
 		//exhaustive:ignore not every kind applies here
 		switch f.Kind {
@@ -2352,8 +2425,9 @@ func sizeContribKind(f model.FieldInfo, ref string) (int, string) {
 	case model.KindFloat32, model.KindFloat64:
 		return sizeFloat, ""
 	case model.KindStruct:
-		// Named primitive: budget the underlying, not a JSONSize() call — the
-		// value emitter writes the primitive inline (see renderAppendValue).
+		// A named primitive budgets the underlying type instead of calling
+		// JSONSize(), because the value emitter writes the primitive inline
+		// (see renderAppendValue).
 		if prim, kind, ok := inlineNamedPrim(f); ok {
 			return sizeContribKind(namedPrimInner(f, prim, kind), primCast(f.GoType, kind, ref))
 		}
@@ -2366,42 +2440,45 @@ func sizeContribKind(f model.FieldInfo, ref string) (int, string) {
 	case model.KindMap:
 		return sizeMapContrib(f, ref)
 	case model.KindBytes:
-		// 4-byte const covers brackets/quotes AND the nil-as-null case.
+		// The constant 4 covers the brackets or quotes, and also a nil value
+		// written as null.
 		switch f.Format {
 		case "array":
-			// each byte → ≤3 digits + comma; upper-bound *4.
+			// Each byte is at most 3 digits plus a comma, so 4 bytes.
 			return 4, fmt.Sprintf("size += len(%s)*4\n", ref)
 		case "base16", "hex":
 			return 4, fmt.Sprintf("size += len(%s)*2\n", ref)
 		case "base32", "base32hex":
 			return 4, fmt.Sprintf("size += ((len(%s)+4)/5)*8\n", ref)
 		}
-		// base64 (default) / base64url
+		// base64, the default, and base64url.
 		return 4, fmt.Sprintf("size += ((len(%s)+2)/3)*4\n", ref)
 	case model.KindTime:
 		return timeFormatSize(f.Format), ""
 	case model.KindDuration:
 		return durationFormatSize(f.Format), ""
 	case model.KindNetIP:
-		// ParseIP returns 16 bytes even for IPv4; To4() is non-nil only for
-		// addresses that fit in 4 octets.
+		// ParseIP returns 16 bytes even for IPv4. To4() is non-nil only for
+		// addresses that fit in 4 bytes.
 		return 2, fmt.Sprintf("if %s.To4() != nil { size += 15 } else if len(%s) != 0 { size += 39 } else { size += 2 }\n", ref, ref)
 	case model.KindNetipAddr:
-		// Zone: '%' separator + worst-case short escapes (×2 / ×6 html);
-		// raw ctrl bytes overshoot like the string budget's documented corner.
+		// An IPv6 zone adds the '%' separator plus the zone text, budgeted
+		// with the string multiplier (2, or 6 with htmlescape). A raw control
+		// byte can exceed that, the same known gap as in the string budget.
 		return 2, fmt.Sprintf(
 			"if %[1]s.Is4() { size += 15 } else { size += 39 }\nif z := len(%[1]s.Zone()); z > 0 { size += 1 + z*%[2]d }\n",
 			ref,
 			strMult(f.HTMLEscape),
 		)
 	case model.KindNetipPrefix:
-		// Addr + /N: +4 for "/128" worst case.
+		// The address plus /N. The worst case "/128" adds 4.
 		return 2, fmt.Sprintf("if %s.Addr().Is4() { size += 19 } else { size += 43 }\n", ref)
 	case model.KindRawJSON:
 		return 0, fmt.Sprintf("if n := len(%s); n > 0 { size += n } else { size += 4 }\n", ref)
 	case model.KindURL:
-		// Component sum, not a flat 256. +8 covers `"`+`://`+`?`+`#`+closing
-		// `"`. Decoded fields (Path/Fragment/userinfo) ×3 for percent-escape.
+		// Sum of the components. The constant 8 covers the quotes, `://`, `?`
+		// and `#`. Decoded parts such as Path, Fragment and the user info are
+		// multiplied by 3 for percent-escaping.
 		return 8, fmt.Sprintf(
 			"size += len(%s.Scheme) + len(%s.Host)*3 + len(%s.Path)*3 + len(%s.RawQuery)*2 + len(%s.Fragment)*3 + len(%s.Opaque)*2\nif %s.User != nil { pw, _ := %s.User.Password(); size += (len(%s.User.Username()) + len(pw))*3 + 2 }\n",
 			ref,
@@ -2415,13 +2492,15 @@ func sizeContribKind(f model.FieldInfo, ref string) (int, string) {
 			ref,
 		)
 	case model.KindBigInt:
-		// log10(2^bits) ≈ bits/3, plus sign/safety.
+		// log10(2^bits) is about bits/3. The constant covers the sign and some
+		// slack.
 		return 4, fmt.Sprintf("size += %s.BitLen()/3\n", ref)
 	case model.KindBigFloat:
-		// 'g' -1 digit count scales with the value's mantissa precision
-		// (user-settable via SetPrec): ≈ Prec()×log10(2) ≤ Prec()/3. A flat
-		// const under-reserved raised-precision values, breaking the
-		// single-alloc Marshal contract. +24: sign, '.', "e-123456789", quotes.
+		// With 'g' and -1 the digit count grows with the mantissa precision,
+		// which the user can raise with SetPrec. It is about
+		// Prec()*log10(2), which is at most Prec()/3. A flat constant would be
+		// too small for high precision and Marshal would allocate twice. The
+		// constant 24 covers the sign, '.', "e-123456789" and the quotes.
 		return 24, fmt.Sprintf("size += int(%s.Prec())/3\n", ref)
 	case model.KindBigRat:
 		return 8, fmt.Sprintf("size += (%s.Num().BitLen() + %s.Denom().BitLen())/3\n", ref, ref)
@@ -2429,7 +2508,7 @@ func sizeContribKind(f model.FieldInfo, ref string) (int, string) {
 		if f.SQLNullInner != nil {
 			inner := sqlNullInnerField(f)
 			innerN, code := sizeContrib(inner, ref+".V")
-			return max(innerN, 4), code // widen for !Valid → "null"
+			return max(innerN, 4), code // room for "null" when !Valid
 		}
 		spec, ok := model.SQLNullSpec(f.GoType)
 		if !ok {
@@ -2437,7 +2516,8 @@ func sizeContribKind(f model.FieldInfo, ref string) (int, string) {
 		}
 		innerField := model.FieldInfo{Kind: spec.Inner, GoType: spec.Type, Format: f.Format}
 		innerN, code := sizeContrib(innerField, ref+"."+spec.Field)
-		// widen for !Valid → "null" (4); inner budgets <4 under-reserve otherwise.
+		// Leave room for "null" (4 bytes) when !Valid. An inner budget below
+		// 4 would be too small otherwise.
 		return max(innerN, 4), code
 	case model.KindAny:
 		return 0, fmt.Sprintf("size += %s(%s)\n", anySizeFn(f.HTMLEscape), ref)
@@ -2445,24 +2525,25 @@ func sizeContribKind(f model.FieldInfo, ref string) (int, string) {
 	return 0, ""
 }
 
-// sizeSliceContrib emits the size contribution for a slice/array field.
-// The 2-byte brackets are returned as a constant for the caller to fold;
-// per-element accounting goes into the runtime code. Nested slices recurse
-// with a depth-suffixed loop variable to avoid name collisions.
+// sizeSliceContrib emits the size contribution for a slice or array field.
+// The brackets are returned as a constant for the caller to fold. The
+// per-element sizes go into the runtime code. Nested slices recurse with a
+// loop variable named after the depth, so names do not collide.
 func sizeSliceContrib(f model.FieldInfo, ref string, depth int) (int, string) {
 	ivar := fmt.Sprintf("i%d", depth)
 	b := getSmall()
 	defer putSmall(b)
 	fmt.Fprintf(b, "if n := len(%s); n > 0 { size += n - 1 }\n", ref)
-	// A named-primitive element is emitted as its underlying (see
-	// renderAppendSlice), so budget the underlying, not a JSONSize() call.
+	// A named-primitive element is written as its underlying type (see
+	// renderAppendSlice). Budget the underlying type instead of calling
+	// JSONSize().
 	if _, kind, ok := inlineNamedPrim(elemAsField(f)); ok && !f.ElemPointer {
 		f.ElemKind = kind
 	}
 	switch {
 	case f.ElemPointer:
-		// Pointer element (any depth): sizeContrib's ladder budgets `null`
-		// per nil level and the deref'd leaf otherwise.
+		// Pointer element at any depth. sizeContrib budgets `null` for a nil
+		// at any level and the dereferenced leaf otherwise.
 		leafN, leafCode := sizeContrib(elemPtrField(f, f.JSONName+"[]"), fmt.Sprintf("%s[%s]", ref, ivar))
 		fmt.Fprintf(b, "for %s := range %s {\n", ivar, ref)
 		if leafN > 0 {
@@ -2501,7 +2582,8 @@ func sizeSliceContrib(f model.FieldInfo, ref string, depth int) (int, string) {
 		b.WriteString(innerCode)
 		b.WriteString("}\n")
 	default:
-		// Dedicated-kind element — same per-kind budget the field level uses.
+		// An element with a dedicated kind uses the same budget as a field
+		// of that kind.
 		elemN, elemCode := sizeContrib(sliceElemField(f), fmt.Sprintf("%s[%s]", ref, ivar))
 		if elemCode == "" {
 			fmt.Fprintf(b, "size += len(%s) * %d\n", ref, elemN)
@@ -2514,8 +2596,9 @@ func sizeSliceContrib(f model.FieldInfo, ref string, depth int) (int, string) {
 			b.WriteString("}\n")
 		}
 	}
-	// nil slice → "null" (4 bytes) is wider than `[]` (2); reserve the max.
-	// Arrays can't be nil, so they keep the 2-byte bracket budget.
+	// A nil slice writes "null", 4 bytes, which is wider than `[]`. Reserve
+	// the larger one. Arrays cannot be nil, so they keep 2 bytes for the
+	// brackets.
 	if f.Kind == model.KindArray {
 		return 2, b.String()
 	}
@@ -2523,26 +2606,27 @@ func sizeSliceContrib(f model.FieldInfo, ref string, depth int) (int, string) {
 }
 
 // sizeMapContrib emits the size contribution for a `map[string]V` field.
-// Per-entry overhead is `"k":v,` = 4 fixed bytes (a comma overcounted on the
-// last entry, still an upper bound) + 2*len(k) for the key + value budget.
+// Each entry `"k":v,` costs 4 fixed bytes, plus the key length times the
+// string multiplier, plus the value budget. The comma is counted for the last
+// entry too, which keeps it an upper bound.
 func sizeMapContrib(f model.FieldInfo, ref string) (int, string) {
 	b := getSmall()
 	defer putSmall(b)
 	const perEntryFixed = 4
 
 	mult := strMult(f.HTMLEscape)
-	// Lift the value out of the loop for a constant per-entry size — leaves
-	// a keys-only loop.
+	// When the value has a constant size, move it out of the loop. The loop
+	// then only walks the keys.
 	_, eDepth := elemPtrType(f)
 	if v, ok := constSizePerEntry(f.ElemKind, f.Format); ok && eDepth == 0 {
 		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, perEntryFixed+v)
 		fmt.Fprintf(b, "for k := range %s { size += len(k) * %d }\n", ref, mult)
-		return 4, b.String() // nil-map → "null" (4) > `{}` (2)
+		return 4, b.String() // a nil map writes "null", wider than `{}`
 	}
 
 	if eDepth > 0 {
-		// Pointer value (any depth): the Pointer ladder budgets `null` per nil
-		// level and the deref'd leaf otherwise.
+		// Pointer value at any depth. sizeContrib budgets `null` for a nil at
+		// any level and the dereferenced leaf otherwise.
 		leafN, leafCode := sizeContrib(elemPtrField(f, f.JSONName+".value"), "v")
 		fmt.Fprintf(b, "size += len(%s) * %d\n", ref, perEntryFixed)
 		fmt.Fprintf(b, "for k, v := range %s {\n", ref)
@@ -2555,10 +2639,10 @@ func sizeMapContrib(f model.FieldInfo, ref string) (int, string) {
 		return 4, b.String()
 	}
 
-	// Per-entry value budget via the canonical per-kind machinery — the same
-	// sizeContrib fields and slice elements use (named prims resolve inside
-	// it). A constant-only budget keeps the keys-only loop so `v` is never
-	// declared-and-unused.
+	// The value budget comes from sizeContrib, the same function fields and
+	// slice elements use. Named primitives resolve inside it. A budget that is
+	// only a constant keeps the keys-only loop, so `v` is never declared and
+	// left unused.
 	vf := sliceElemField(f)
 	vf.JSONName = f.JSONName + ".value"
 	vN, vCode := sizeContrib(vf, "v")
@@ -2575,13 +2659,14 @@ func sizeMapContrib(f model.FieldInfo, ref string) (int, string) {
 	}
 	b.WriteString(vCode)
 	b.WriteString("}\n")
-	return 4, b.String() // nil-map → "null" (4)
+	return 4, b.String() // a nil map writes "null"
 }
 
-// constSizePerEntry reports whether a value of the given kind has a known
-// fixed upper-bound size, and returns it. format is honored for KindTime /
-// KindDuration so the budget tracks the actual layout. Kinds sized at runtime
-// (KindAny, KindBigFloat) report false, leaving the per-entry sizeContrib loop.
+// constSizePerEntry reports whether a value of the given kind has a fixed
+// upper bound on its size, and returns it. format is used for KindTime and
+// KindDuration so the budget matches the actual layout. Kinds sized at
+// runtime, such as KindAny and KindBigFloat, report false and take the
+// per-entry sizeContrib loop.
 func constSizePerEntry(kind model.TypeKind, format string) (int, bool) {
 	//exhaustive:ignore not every kind applies here
 	switch kind {
@@ -2601,11 +2686,11 @@ func constSizePerEntry(kind model.TypeKind, format string) (int, bool) {
 	return 0, false
 }
 
-// constEmptyElem reports whether a container's element/value marshals as the
-// constant `[]` — a `[0]T`, whose emit never mentions the loop variable, so
-// the loop must not bind one. Read from the element TYPE, the same source
-// sliceElemField derives the element's ArrayLen from: map values carry no
-// ElemArrayLen.
+// constEmptyElem reports whether a container's element or value is a `[0]T`,
+// which always marshals as the constant `[]`. Its code never uses the loop
+// variable, so the loop must not declare one. The check reads the element
+// type, which is where sliceElemField gets the element's ArrayLen from. Map
+// values have no ElemArrayLen.
 func constEmptyElem(f model.FieldInfo) bool {
 	return f.ElemKind == model.KindArray && !f.ElemPointer && model.ArrayLenFromType(f.ElemType) == 0
 }
@@ -2614,12 +2699,14 @@ func renderAppendSlice(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	emitAppendSlice(b, f, ref, 0)
 }
 
-// emitAppendSlice is the recursive marshal counterpart to emitByteSliceRead.
-// Nested slices peel one [] off per level; loop vars carry a depth suffix.
-// nil slice → `null`, empty non-nil → `[]` (stdlib v1/v2); arrays skip the check.
+// emitAppendSlice is the recursive marshal counterpart of emitByteSliceRead.
+// Each nesting level removes one [] and names its loop variables after the
+// depth. A nil slice writes `null` and an empty non-nil slice writes `[]`, as
+// in stdlib v1 and v2. Arrays skip the nil check.
 func emitAppendSlice(b *bytes.Buffer, f model.FieldInfo, ref string, depth int) {
 	if f.Kind == model.KindArray && f.ArrayLen == 0 {
-		// `[0]T`: the unrolled first element would index a zero-length array.
+		// `[0]T`. Writing the first element separately would index a
+		// zero-length array.
 		b.WriteString("dst = append(dst, \"[]\"...)\n")
 		return
 	}
@@ -2628,12 +2715,12 @@ func emitAppendSlice(b *bytes.Buffer, f model.FieldInfo, ref string, depth int) 
 		fmt.Fprintf(b, "if %s == nil {\ndst = append(dst, \"null\"...)\n} else {\n", ref)
 	}
 	fmt.Fprintf(b, "dst = append(dst, '[')\nif len(%s) > 0 {\n", ref)
-	// First element: no leading comma; iterating ref[1:] lifts the `if i > 0`
-	// out of the loop.
+	// The first element gets no leading comma. Looping over ref[1:] keeps an
+	// `if i > 0` check out of the loop.
 	emitSliceElement(b, f, ref+"[0]", depth)
 	if constEmptyElem(f) {
-		// `[][0]T`: every element is the constant `[]`; a named loop var
-		// would go unused.
+		// `[][0]T`. Every element is the constant `[]`, so a named loop
+		// variable would be unused.
 		fmt.Fprintf(b, "for range %s[1:] {\ndst = append(dst, \",[]\"...)\n", ref)
 	} else {
 		fmt.Fprintf(b, "for _, %s := range %s[1:] {\ndst = append(dst, ',')\n", vvar, ref)
@@ -2645,10 +2732,11 @@ func emitAppendSlice(b *bytes.Buffer, f model.FieldInfo, ref string, depth int) 
 	}
 }
 
-// emitSliceElement emits the marshal code for one slice element. Shared
-// between the first-element and loop-body emits in emitAppendSlice.
+// emitSliceElement emits the marshal code for one slice element.
+// emitAppendSlice uses it for the first element and for the loop body.
 func emitSliceElement(b *bytes.Buffer, f model.FieldInfo, vref string, depth int) {
-	// Named-primitive element: append the underlying, converting at the read.
+	// A named-primitive element appends the underlying value, converted
+	// where it is read.
 	if prim, kind, ok := inlineNamedPrim(elemAsField(f)); ok && !f.ElemPointer {
 		nf := f
 		nf.ElemType, nf.ElemKind = prim, kind
@@ -2656,8 +2744,8 @@ func emitSliceElement(b *bytes.Buffer, f model.FieldInfo, vref string, depth int
 		return
 	}
 	if f.ElemPointer {
-		// nil at any pointer level → null; flat else-if ladder, then recurse
-		// on the deref'd leaf.
+		// A nil at any pointer level writes null. Emit a flat else-if chain,
+		// then recurse on the dereferenced leaf.
 		_, ptrDepth := elemPtrType(f)
 		for k := range ptrDepth {
 			kw := "if"
@@ -2680,7 +2768,8 @@ func emitSliceElement(b *bytes.Buffer, f model.FieldInfo, vref string, depth int
 	}
 	switch f.ElemKind {
 	case model.KindString:
-		// Two lines so the coalescer folds the `'"'` with the preceding const.
+		// Two lines, so coalesceConstAppends merges the `'"'` with the
+		// constant before it.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s(dst, %s)\n", appendStrFn(f.HTMLEscape), vref)
 	case model.KindBool:
 		fmt.Fprintf(b, "dst = strconv.AppendBool(dst, %s)\n", vref)
@@ -2700,28 +2789,31 @@ func emitSliceElement(b *bytes.Buffer, f model.FieldInfo, vref string, depth int
 		if isGenerated(f.ElemType) {
 			fmt.Fprintf(b, "if dst, err = %s.AppendJSON(dst); err != nil { return dst, err }\n", vref)
 		} else {
-			// Same ladder as the field level (AppendJSON → MarshalJSON →
-			// AppendText → MarshalText → encoding/json), so a foreign ggen
-			// element marshals the way it decodes. Braced: the temp-declaring
-			// arms emit once for the first element and once in the loop.
+			// Use the same fallback order as the field level: AppendJSON,
+			// MarshalJSON, AppendText, MarshalText, then encoding/json. So an
+			// element generated by ggen in another package marshals the way
+			// it decodes. The braces matter: the branches that declare temps
+			// are emitted once for the first element and once in the loop.
 			fmt.Fprintf(b, "{\n%s}\n", renderCrossPkgStructAppend(sliceElemField(f), vref))
 		}
 	case model.KindSlice, model.KindArray:
 		emitAppendSlice(b, peelSliceField(f), vref, depth+1)
 	default:
-		// Dedicated-kind element — same value emitter the field level uses.
-		// Used to fall through and emit NOTHING (unused range var, no value).
+		// An element with a dedicated kind uses the same value emitter as a
+		// field of that kind.
 		renderAppendValue(b, sliceElemField(f), vref)
 	}
 }
 
-// renderAppendMap emits marshal code for a map[string]V field. Iteration order
-// is Go's randomized map order (wire output not stable). nil map → null,
-// empty non-nil → {}. The first-entry flag is field-suffixed to avoid collisions.
+// renderAppendMap emits marshal code for a map[string]V field. Entries come in
+// Go's random map order, so the output order is not stable. A nil map writes
+// null and an empty non-nil map writes {}. The first-entry flag is named after
+// the field so names do not collide.
 func renderAppendMap(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	appendStr := appendStrFn(f.HTMLEscape)
 	first := "first" + strings.ReplaceAll(f.GoName, ".", "")
-	// `map[string][0]T`: every value is the constant `[]`, so bind keys only.
+	// `map[string][0]T`. Every value is the constant `[]`, so the loop takes
+	// only the keys.
 	iter := "k, v"
 	if constEmptyElem(f) {
 		iter = "k"
@@ -2738,13 +2830,14 @@ dst = %[2]s(dst, k)
 dst = append(dst, ':')
 `, ref, appendStr, first, iter)
 	if _, eDepth := elemPtrType(f); eDepth > 0 {
-		// Pointer value (any depth): renderAppendValue's ladder handles nil/leaf.
+		// Pointer value at any depth. renderAppendValue handles nil and the
+		// leaf.
 		renderAppendValue(b, elemPtrField(f, f.JSONName+".value"), "v")
 		b.WriteString("}\ndst = append(dst, '}')\n}\n")
 		return
 	}
-	// Named-primitive value: append the underlying (the range var `v` carries
-	// the named type, so convert at the use site).
+	// A named-primitive value appends the underlying value. The loop variable
+	// `v` has the named type, so it is converted where it is used.
 	vref := "v"
 	if prim, kind, ok := inlineNamedPrim(elemAsField(f)); ok {
 		vref = primCast(f.ElemType, kind, "v")
@@ -2752,7 +2845,8 @@ dst = append(dst, ':')
 	}
 	switch f.ElemKind {
 	case model.KindString:
-		// Two lines so coalesce merges the `'"'` with the preceding `':'`.
+		// Two lines, so coalesceConstAppends merges the `'"'` with the `':'`
+		// before it.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\ndst = %s(dst, %s)\n", appendStr, vref)
 	case model.KindBool:
 		fmt.Fprintf(b, "dst = strconv.AppendBool(dst, %s)\n", vref)
@@ -2772,15 +2866,16 @@ dst = append(dst, ':')
 		if isGenerated(f.ElemType) {
 			b.WriteString("if dst, err = v.AppendJSON(dst); err != nil { return dst, err }\n")
 		} else {
-			// Loop-scoped — no wrapper needed. Same ladder as the field level,
-			// so a foreign ggen value marshals the way it decodes.
+			// The loop body is its own scope, so no braces are needed. The
+			// fallback order matches the field level, so a value generated by
+			// ggen in another package marshals the way it decodes.
 			b.WriteString(renderCrossPkgStructAppend(sliceElemField(f), vref))
 		}
 	case model.KindAny:
 		fmt.Fprintf(b, "if dst, err = %s(dst, v); err != nil { return dst, err }\n", appendAnyFn(f.HTMLEscape))
 	default:
-		// Dedicated-kind value — same value emitter the field level uses.
-		// Used to fall through and emit `"k":` with no value (unused `v`).
+		// A value with a dedicated kind uses the same value emitter as a
+		// field of that kind.
 		vf := sliceElemField(f)
 		vf.JSONName = f.JSONName + ".value"
 		renderAppendValue(b, vf, vref)
@@ -2788,12 +2883,12 @@ dst = append(dst, ':')
 	b.WriteString("}\ndst = append(dst, '}')\n}\n")
 }
 
-// userPreallocHint extracts an explicit sizing hint from the hintlen / len /
-// minlen ladder, in that order. Every one of them outranks the width-derived
-// default in preallocCap: the tag states what the payload actually holds,
-// which always beats a guess from the element's size. Returns -1 for "unset"
-// so callers distinguish hintlen=0 (opt-out) from no hint. `maxlen` is NOT
-// used — it's a bound, not an expected size, and only ever clamps DOWN.
+// userPreallocHint returns an explicit sizing hint, taken from hint:, len or
+// minlen, in that order. Each of them beats the width-based default in
+// preallocCap. The tag states what the payload holds, which is better than a
+// guess from the element size. It returns -1 when there is no hint, so callers
+// can tell a hint of 0 (opt out) from no hint. `maxlen` is not used here. It
+// is a bound, not an expected size.
 func userPreallocHint(f model.FieldInfo) int {
 	if f.HintLen >= 0 {
 		return f.HintLen
@@ -2811,9 +2906,10 @@ func userPreallocHint(f model.FieldInfo) int {
 	return -1
 }
 
-// mapPreallocCap returns the cap for `make(map[K]V, cap)` from the user's
-// sizing hints, or 0 with no hint — maps get no kind-based default (makemap
-// lazy-allocates below 8, and a bigger default over-allocates the common case).
+// mapPreallocCap returns the size for `make(map[K]V, cap)` from the user's
+// sizing hints, or 0 when there is none. Maps get no default by kind. makemap
+// already delays allocation below 8 entries, and a bigger default would
+// over-allocate in the common case.
 func mapPreallocCap(f model.FieldInfo) int {
 	if n := userPreallocHint(f); n >= 0 {
 		return n
@@ -2821,10 +2917,10 @@ func mapPreallocCap(f model.FieldInfo) int {
 	return 0
 }
 
-// ownsAllocations reports whether decoding into a carried value of the named
-// generated struct recycles anything. A struct of plain scalars owns nothing —
-// its decode overwrites every field either way — so reading the old value back
-// would buy nothing while still costing the map swap.
+// ownsAllocations reports whether decoding into an existing value of the
+// named generated struct reuses any memory. A struct of plain scalars owns
+// nothing, because its decode overwrites every field anyway. Reading the old
+// value back would then gain nothing and still cost the map swap.
 func ownsAllocations(typeName string, seen map[string]struct{}) bool {
 	fields, ok := generatedFields[typeName]
 	if !ok {
@@ -2854,25 +2950,26 @@ func ownsAllocations(typeName string, seen map[string]struct{}) bool {
 	return false
 }
 
-// reusesMapValues reports whether f's map decode should read each entry's
-// previous value back as the decode target. The decode fills a NEW map while
-// reading the carried one, which is what drops the keys the payload omitted
-// without tracking which keys it saw — paid for by one map allocation, so it
-// only makes sense when the values actually own something to recycle.
+// reusesMapValues reports whether f's map decode should decode each entry
+// into that entry's previous value. The decode reads the existing map and
+// fills a new one. That drops the keys the payload left out without tracking
+// which keys it saw. The cost is one map allocation, so it only pays when the
+// values own memory worth reusing.
 //
-// Struct values must be ggen-generated: their decoder resets what it is handed
-// (opt #74), while a value reaching encoding/json or an UnmarshalJSON rung
-// would MERGE into it. Slice and map values carry their own backing and are
-// reset at the seed site.
+// Struct values must be generated by ggen. Their decoder resets the value it
+// is given (see opt #74 in cmd/ggen/CLAUDE.md). A value decoded by
+// encoding/json or an UnmarshalJSON method would merge into it instead. Slice
+// and map values keep their own backing array and are reset where they are
+// seeded.
 func reusesMapValues(f model.FieldInfo) bool {
-	// The catch-all map is filled by unknownKey, not renderMap, so no swap is
-	// emitted for it and its entry clear() has to stand.
+	// unknownKey fills the catch-all map, not renderMap. No swap is emitted
+	// for it, so its clear() at entry must stay.
 	if f.Kind != model.KindMap || f.Embed {
 		return false
 	}
-	// A pointer value recycles its pointee: the cascade decodes into the
-	// carried chain instead of allocating a new one per entry — unless the
-	// leaf would merge into it rather than reset.
+	// A pointer value reuses its pointee. The decode walks the existing
+	// pointer chain instead of allocating a new one per entry. The exception
+	// is a leaf that would merge into the old value instead of resetting it.
 	if _, d := elemPtrType(f); d > 0 {
 		return elemPtrReusable(f)
 	}
@@ -2881,8 +2978,9 @@ func reusesMapValues(f model.FieldInfo) bool {
 	case model.KindSlice, model.KindMap, model.KindBytes:
 		return true
 	case model.KindRawJSON:
-		// A raw span ALIASES the input unless -copy is on, so without it the
-		// value owns nothing and the swap would be pure cost.
+		// A raw span aliases the input unless -copy is on. Aliasing means the
+		// value points into the caller's input bytes with no copy. Then the
+		// value owns nothing and the swap would only cost time.
 		return f.Copy
 	case model.KindStruct:
 		return isGenerated(f.ElemType) && ownsAllocations(f.ElemType, nil)
@@ -2890,37 +2988,31 @@ func reusesMapValues(f model.FieldInfo) bool {
 	return false
 }
 
-// preallocCap returns the initial caps for a slice field's two backing
-// allocations, as Go EXPRESSIONS: the field's own slice
-// (`make([]E,0,slice)`; "0" means no prealloc) and, for `[]*T`, the contiguous
-// slab (`make([]T,0,slab)`, ignored otherwise). Explicit hints
-// (hintlen/len/minlen) apply to both and still outrank everything.
+// preallocCap returns the initial capacities for a slice field's two backing
+// allocations, as Go expressions. The first is for the field's own slice,
+// `make([]E, 0, slice)`, where "0" means no prealloc. The second is for the
+// contiguous slab of a `[]*T`, `make([]T, 0, slab)`, and is ignored otherwise.
+// An explicit hint (hint:, len or minlen) applies to both and beats
+// everything else.
 //
-// With no hint the cap comes from the ELEMENT WIDTH rather than its kind:
-// `prealloc.Cap(unsafe.Sizeof(*new(E)))`, which folds to a literal at
-// compile time (verified in asm — `MOVL $4`). See internal/prealloc for the
-// ladder; the short version is "as many elements as fit under 80 bytes, else
-// under 512, else 1". That replaced a flat 4 for primitives and, more
-// importantly, a cap of ZERO for struct elements — those used to walk the
-// 1→2→4→8 chain because "sizeof(T) is unbounded", which stopped being true the
-// moment the cap became an expression the compiler evaluates.
+// With no hint the capacity comes from the element's width, not its kind. It
+// is a package-level constant computed from `unsafe.Sizeof(*new(E))` (see
+// capForSize), so the compiler folds it to a literal. The rule, which
+// internal/prealloc documents and tests, is: as many elements as fit in 80
+// bytes, else in 512 bytes, else 1.
 //
-// `maxlen` is still NOT a generous hint — it's a bound, so it only ever clamps
-// the width guess DOWN.
+// `maxlen` is a bound, not a size hint. It only takes over when that many
+// elements fit in the 512-byte budget (see capFor).
 func preallocCap(f model.FieldInfo) (slice, slab string) {
 	if n := userPreallocHint(f); n >= 0 {
 		return strconv.Itoa(n), strconv.Itoa(n)
 	}
-	// Default cap comes from the ELEMENT WIDTH, not the element kind:
-	// `prealloc.Cap(unsafe.Sizeof(*new(T)))`. Both operands are
-	// compile-time constants, so gc folds the call and its branches to a
-	// literal — the emitted code carries `make([]T, 0, 4)`, not a call.
-	// `*new(T)` (rather than `T{}`) spells a zero value of ANY type, and
-	// unsafe.Sizeof never evaluates its operand.
-	// `maxlen=N` is the EXACT upper bound on the element count, so when N
-	// elements still fit the span budget it beats the width guess outright —
-	// the slice can never outgrow it, and never over-allocates past what the
-	// payload is allowed to contain.
+	// `*new(T)` is a zero value of any type, unlike `T{}`, and unsafe.Sizeof
+	// never evaluates its operand.
+	// `maxlen=N` is an exact upper bound on the element count. When N
+	// elements fit the span budget, it beats the width guess. The slice can
+	// never outgrow it, and it never allocates more than the payload may
+	// hold.
 	maxlen := -1
 	if v, ok := f.HasRule("maxlen"); ok {
 		if n, err := strconv.Atoi(v); err == nil && n > 0 {
@@ -2930,45 +3022,26 @@ func preallocCap(f model.FieldInfo) (slice, slab string) {
 	scope := capScope(f)
 	elem := capFor(scope, f.ElemType, maxlen)
 	if f.ElemPointer {
-		// `[]*T`: the slice holds pointers, the slab holds T values.
+		// `[]*T`. The slice holds pointers and the slab holds T values.
 		return capFor(scope, "*"+f.ElemType, maxlen), elem
 	}
 	//exhaustive:ignore not every kind applies here
 	switch f.ElemKind {
 	case model.KindSlice, model.KindMap:
-		// Element is a slice header / map handle; the slab is unused.
+		// The element is a slice header or a map handle. The slab is unused.
 		return elem, "0"
 	case model.KindStruct, model.KindArray:
-		// Was cap 0 ("sizeof(T) unbounded; start nil, grow") — the width is
-		// known at compile time, so a wide element now gets a real, bounded cap
-		// instead of the 1→2→4→8 chain.
+		// The width is known at compile time, so even a wide element gets a
+		// real, bounded capacity.
 		return elem, "0"
 	}
 	return elem, "0"
 }
 
-// capForSize returns the name of a package-level constant holding the
-// width-driven default capacity for elemType, registering it on first use.
-//
-// It has to be a CONSTANT EXPRESSION, not a call to prealloc.Cap:
-// measured on the bench module, gc inlines that helper only into small
-// functions — 30 of 34 emitted sites kept a real `CALL` because the enclosing
-// generated DecodeFrom is far past the inliner's budget. A constant folds in
-// the frontend, where the inliner never gets a vote.
-//
-// The expression is prealloc.Cap's ladder written branchlessly, with
-// `sel` as the 0/1 selector for "at least 2 elements fit under 80 bytes":
-//
-//	S   = max(sizeof(E), 1)          // 1 keeps a zero-width element from dividing by zero
-//	A   = 79 / S                     // fits strictly under 80
-//	B   = 512 / S                    // fits within one 512-byte span
-//	sel = min(A, 2) / 2              // 1 when A >= 2, else 0
-//	cap = sel*A + (1-sel)*max(B, 1)
-//
-// capScope names the cap consts a field registers: the struct being rendered
-// plus the field's Go name (empty for top-level container aliases, whose
-// struct part IS the alias name). Struct names are package-unique, so the
-// names can't collide across files without any hashing.
+// capScope names the cap constants a field registers. The name is the struct
+// being rendered plus the field's Go name. A top-level container alias has no
+// field name, and its struct part is the alias name. Struct names are unique
+// in a package, so the names cannot collide across files.
 func capScope(f model.FieldInfo) string {
 	if f.GoName == "" {
 		return currentStructName
@@ -2978,10 +3051,13 @@ func capScope(f model.FieldInfo) string {
 
 var currentStructName string
 
+// capFor returns the cap constant for elemType. With a usable maxlen it
+// registers a constant that picks maxlen when that many elements fit the span
+// budget, and the width default otherwise.
 func capFor(scope, elemType string, maxlen int) string {
 	base := capForSize(scope, elemType)
-	// Past the budget the const below would multiply an unbounded maxlen
-	// into a typed int, which overflows the build for wide elements.
+	// Above the budget, the constant below would multiply a huge maxlen into
+	// a typed int. That overflows at compile time for wide elements.
 	if maxlen < 0 || maxlen > spanBudgetMax {
 		return base
 	}
@@ -2991,7 +3067,7 @@ func capFor(scope, elemType string, maxlen int) string {
 	}
 	name := capName(scope, fmt.Sprintf("%s_%d", elemType, maxlen))
 	capRegistry.names[key] = name
-	// fits = 1 when maxlen elements stay within the 512-byte span budget.
+	// fits is 1 when maxlen elements stay within the 512-byte span budget.
 	fits := fmt.Sprintf("(1 - min((%d*%s)/(%s+1), 1))", maxlen, sizeExpr(elemType), spanBudgetExpr)
 	capRegistry.decls = append(capRegistry.decls, fmt.Sprintf(
 		"// %s: prealloc cap for []%s — its maxlen=%d bound when that many\n"+
@@ -3000,6 +3076,24 @@ func capFor(scope, elemType string, maxlen int) string {
 	return name
 }
 
+// capForSize returns the name of a package-level constant that holds the
+// default capacity for elemType, based on its width. It registers the
+// constant on first use.
+//
+// It must be a constant expression, not a call to prealloc.Cap. Measured on
+// the bench module, gc inlines that helper only into small functions. Most
+// emitted sites kept a real call, because the generated DecodeFrom is far over
+// the inliner's size budget. A constant expression is folded by the compiler
+// before inlining is even considered.
+//
+// The expression is prealloc.Cap's rule written without branches. sel is 1
+// when at least 2 elements fit in 80 bytes, and 0 otherwise:
+//
+//	S   = max(sizeof(E), 1)          // 1 keeps a zero-width element from dividing by zero
+//	A   = 80 / S                     // elements that fit in 80 bytes
+//	B   = spanBudget / S             // elements that fit in one span budget
+//	sel = min(A, 2) / 2              // 1 when A >= 2, else 0
+//	cap = sel*A + (1-sel)*max(B, 1)
 func capForSize(scope, elemType string) string {
 	key := scope + "\x00" + elemType
 	if name, ok := capRegistry.names[key]; ok {
@@ -3017,26 +3111,24 @@ func capForSize(scope, elemType string) string {
 	return name
 }
 
-// fastAllocMax mirrors internal/prealloc — the emitted constants have to spell
-// the same ladder the runtime helper documents and tests.
-// fastAllocMax is go1.27's size-specialized-malloc cutoff; inert on go1.26.
-// INCLUSIVE — verified against master: the tables are [specializedMallocMax+1]
-// and both gates admit exactly 80 (see prealloc.Cap). So the tier divides
-// by 80, not 79; the earlier 79 dropped one element for every width dividing 80
-// and pushed a 40-byte element into the span tier (12 elements) where 2 fit the
-// fast one exactly.
+// fastAllocMax matches internal/prealloc. The emitted constants must follow
+// the same rule that the helper documents and tests. It is go1.27's cutoff
+// for the size-specialized malloc paths, and has no effect on go1.26. The
+// cutoff is inclusive: an 80-byte allocation still takes the fast path (see
+// prealloc.Cap). So the tier divides by 80. A 40-byte element then gets 2
+// elements in the fast tier.
 const fastAllocMax = 80
 
-// spanBudgetExpr is the runtime's own boundary, spelled so the GENERATED code
-// computes it for ITS target rather than inheriting this host's: the value is
-// `goarch.PtrSize * goarch.PtrBits` = 8 × PtrSize² (512 on 64-bit, 128 on
-// 32-bit). Hardcoding 512 would over-budget a 32-bit target by 4×. See
-// internal/prealloc for what staying under it actually buys — the headline is
-// "no malloc header", not the GC.
+// spanBudgetExpr is the Go runtime's own size boundary, written so the
+// generated code computes it for its own target instead of using this host's
+// value. The value is `goarch.PtrSize * goarch.PtrBits`, which is 8 times
+// PtrSize squared: 512 on 64-bit and 128 on 32-bit. A hardcoded 512 would
+// over-budget a 32-bit target 4 times. The main gain of staying under it is
+// that the allocation needs no malloc header. See internal/prealloc.
 const spanBudgetExpr = "(8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))"
 
-// spanBudgetMax is spanBudgetExpr's 64-bit value, the widest any target
-// computes: a maxlen past it cannot fit at any element width.
+// spanBudgetMax is spanBudgetExpr's 64-bit value, the largest on any target.
+// A maxlen above it cannot fit at any element width.
 const spanBudgetMax = 512
 
 func sizeExpr(elemType string) string {
@@ -3047,9 +3139,9 @@ func capName(scope, key string) string {
 	return fmt.Sprintf("ggenCap_%s_%s", scope, sanitizeIdent(key))
 }
 
-// capRegistry collects the per-element-type prealloc constants emitted at the
-// top of the file, deduped by element type. Shares oneofRegistry's per-file
-// prefix so two sources in one package can't collide.
+// capRegistry collects the prealloc constants emitted at the top of the file,
+// deduplicated by scope and element type. The names carry the struct and
+// field (see capScope), so two sources in one package cannot collide.
 var capRegistry struct {
 	names map[string]string
 	decls []string
@@ -3060,17 +3152,18 @@ func resetCapRegistry() {
 	capRegistry.decls = nil
 }
 
-// fieldLit returns the JSON name of f as a Go string literal — the `field`
-// argument embedded into ggen.NewParseErr at every error-return site.
+// fieldLit returns the JSON name of f as a Go string literal. It is the
+// `field` argument passed to ggen.NewParseErr at every error return.
 func fieldLit(f model.FieldInfo) string { return strconv.Quote(f.JSONName) }
 
 // inlineSkipWS emits an inline whitespace-skipping loop that mutates posVar
 // directly, avoiding the ggen.SkipSpace call overhead.
 func inlineSkipWS(b *bytes.Buffer, posVar string) {
-	// SIMD tier: consume one whitespace byte inline (compact JSON exits on
-	// one compare, a single separator space stays call-free), then hand a
-	// 2+ run to the vector tier — pretty-printed indent runs skip a lane at
-	// a time instead of byte-stepping.
+	// SIMD tier. SIMD means vector instructions that process 16, 32 or 64
+	// bytes with one CPU instruction. Consume one whitespace byte inline.
+	// Compact JSON exits after one compare, and a single space between tokens
+	// needs no call. A run of 2 or more bytes goes to the vector skipper, so
+	// pretty-printed indentation is skipped many bytes at a time.
 	if simdSuffix != "" {
 		fmt.Fprintf(
 			b,
@@ -3080,17 +3173,18 @@ func inlineSkipWS(b *bytes.Buffer, posVar string) {
 		)
 		return
 	}
-	// `data[i] <= ' '` gates the 4-way test so compact JSON exits on one
-	// compare. Boolean-identical accept set (every whitespace char is <= ' ').
+	// `data[i] <= ' '` runs before the 4-way test, so compact JSON exits after
+	// one compare. The accepted set is the same, because every JSON whitespace
+	// byte is <= ' '.
 	fmt.Fprintf(b,
 		"for %s < len(data) && data[%s] <= ' ' && (data[%s] == ' ' || data[%s] == '\\t' || data[%s] == '\\n' || data[%s] == '\\r') { %s++ }\n",
 		posVar, posVar, posVar, posVar, posVar, posVar, posVar)
 }
 
-// inlineNullPeek emits an inline `null` check on posVar, advancing it 4 bytes
-// on a match. Leaves the `if` body open for the caller's null-branch + `} else`.
-// An `n` that does not spell `null` is ErrBadLiteral — the sentinel the stream
-// path's literal walk and the pipe variants report for the same bytes.
+// inlineNullPeek emits an inline `null` check at posVar that advances it 4
+// bytes on a match. It leaves the `if` body open for the caller's null branch
+// and `} else`. An `n` that does not start `null` is ErrBadLiteral. The stream
+// path and the pipe variants report the same error for the same bytes.
 func inlineNullPeek(b *bytes.Buffer, posVar, field string) {
 	fmt.Fprintf(
 		b,
@@ -3100,14 +3194,12 @@ func inlineNullPeek(b *bytes.Buffer, posVar, field string) {
 	)
 }
 
-// zeroLit returns the zero-value expression for an elem type, the pre-grow
-// placeholder for in-place decode. Slice/map use `nil` (overwritten before
-// observed); arrays/structs need the `T{}` composite literal.
-// zeroAssign resets ref before a merging fallback rung. A plain field zeroes
-// through its own struct's zero value, naming no field type: the type may be a
-// foreign import this file never mentions, or have no spelling at all (an
-// anonymous interface). Element and pointer-leaf targets name the pointer-peeled
-// type, which is already spelled where they are declared.
+// zeroAssign resets ref before a fallback decoder that merges into its
+// target. A plain field is zeroed through its struct's zero value, so the
+// code never names the field's type. That type may come from a package this
+// file never imports, or have no name at all, such as an anonymous interface.
+// Element and pointer-leaf targets use the type with pointers removed, which
+// is already named where they are declared.
 func zeroAssign(f model.FieldInfo, ref string) string {
 	if f.StructName != "" && ref == "result."+f.GoName {
 		return fmt.Sprintf("%s = (%s{}).%s\n", ref, f.StructName, f.GoName)
@@ -3116,15 +3208,19 @@ func zeroAssign(f model.FieldInfo, ref string) string {
 	return fmt.Sprintf("%s = *new(%s)\n", ref, leaf)
 }
 
+// zeroLit returns the zero-value expression for an element type. It is the
+// placeholder appended before an element is decoded in place. Slices and maps
+// use `nil`, which is overwritten before anyone reads it. Arrays and structs
+// need a `T{}` composite literal.
 func zeroLit(elemType string, kind model.TypeKind) string {
-	// Pointer types carry the POINTEE's kind (KindInt for `*int`), so the
-	// conversion below would emit `*int(0)`. Every pointer zeroes to nil.
+	// Pointer types carry the pointee's kind, such as KindInt for `*int`, so
+	// the conversion below would emit `*int(0)`. Every pointer zeroes to nil.
 	if strings.HasPrefix(elemType, "*") {
 		return "nil"
 	}
-	// A named primitive (`type Priority string`) reports KindStruct at its use
-	// sites, and `Priority{}` is not a valid literal for it — resolve to the
-	// underlying kind and convert the primitive zero instead.
+	// A named primitive such as `type Priority string` reports KindStruct
+	// where it is used, and `Priority{}` is not a valid literal for it.
+	// Resolve the underlying kind and convert the primitive zero instead.
 	kind = effectiveKind(elemType, kind)
 	var zero string
 	switch kind {
@@ -3139,11 +3235,12 @@ func zeroLit(elemType string, kind model.TypeKind) string {
 	case model.KindSlice, model.KindMap:
 		return "nil"
 	case model.KindAny, model.KindBytes, model.KindRawJSON, model.KindNetIP:
-		// `any{}` / composite literals over slice-backed kinds are invalid
-		// or wasteful — their zero is nil.
+		// `any{}` and composite literals of slice-based kinds are invalid or
+		// wasteful. Their zero is nil.
 		return "nil"
 	case model.KindDuration:
-		// time.Duration is a named int64 — `time.Duration{}` doesn't compile.
+		// time.Duration is a named int64, so `time.Duration{}` does not
+		// compile.
 		return "0"
 	default:
 		return elemType + "{}"
@@ -3154,16 +3251,8 @@ func zeroLit(elemType string, kind model.TypeKind) string {
 	return zero
 }
 
-// inlineScanInt64 emits an inline signed-int scanner that assigns into dst
-// (via castFn if non-empty) and advances posVar, with overflow detection.
-// field is the JSON-path expression for ggen.NewParseErr (a quoted literal,
-// `""` for boundaries, or a runtime expr like `key` for unknown-key handlers).
-// narrowIntBounds returns the (min, max) literal bounds a fixed-width integer
-// type narrower than 64-bit imposes — the types a bare Go conversion silently
-// truncates. ok=false for int/int64/uint/uint64 (64-bit on target platforms, so
-// the MaxInt64/MaxUint64 scan bound already covers them).
-// kindNarrowName maps a narrow integer kind to its builtin spelling for
-// narrowIntGuard — f.GoType may be a named type whose bounds these are.
+// kindNarrowName maps a narrow integer kind to its builtin type name for
+// narrowIntGuard. f.GoType may be a named type with the same bounds.
 func kindNarrowName(k model.TypeKind) string {
 	//exhaustive:ignore not every kind applies here
 	switch k {
@@ -3183,6 +3272,11 @@ func kindNarrowName(k model.TypeKind) string {
 	return ""
 }
 
+// narrowIntBounds returns the min and max bounds, as literals, of an integer
+// type narrower than 64 bits. A plain Go conversion to such a type silently
+// truncates. ok is false for int, int64, uint and uint64. Those are 64-bit on
+// the target platforms, so the scanner's MaxInt64 or MaxUint64 bound already
+// covers them.
 func narrowIntBounds(typ string) (lo, hi string, ok bool) {
 	switch typ {
 	case "int8":
@@ -3201,12 +3295,13 @@ func narrowIntBounds(typ string) (lo, hi string, ok bool) {
 	return "", "", false
 }
 
-// narrowIntGuard emits an in-range check before the truncating cast to a narrow
-// integer target: an out-of-range value returns ErrNumberOverflow instead of
-// silently wrapping (`uint8` ← 300 = 44), matching encoding/json v1 + jsonv2
-// which both reject. wideVar holds the scanned int64/uint64; errRet is the
-// caller's overflow return. Empty for non-narrow types (one predicted compare
-// on the happy path).
+// narrowIntGuard emits a range check before the truncating conversion to a
+// narrow integer type. An out-of-range value returns ErrNumberOverflow instead
+// of silently wrapping, as when 300 stored in a uint8 becomes 44. Both
+// encoding/json v1 and jsonv2 reject such values too. wideVar holds the
+// scanned int64 or uint64. errRet is the caller's overflow return. The result
+// is empty for types that are not narrow. On valid input the check costs one
+// well-predicted compare.
 func narrowIntGuard(wideVar, typ, errRet string) string {
 	lo, hi, ok := narrowIntBounds(typ)
 	if !ok {
@@ -3218,10 +3313,11 @@ func narrowIntGuard(wideVar, typ, errRet string) string {
 	return fmt.Sprintf("if %s < %s || %s > %s { %s }\n", wideVar, lo, wideVar, hi, errRet)
 }
 
-// floatScanFn names the runtime scanner for a float kind. float32 gets its
-// own (ggen.Float32 / Stream.Float32) rather than a narrowed float64 scan:
-// narrowing rounds the decimal twice, which lands one ulp off on float32
-// rounding midpoints and rejects an in-range value next to MaxFloat32.
+// floatScanFn names the runtime scanner for a float kind. float32 has its own
+// scanner, ggen.Float32 or Stream.Float32, instead of a float64 scan that is
+// then converted. The conversion would round the decimal twice. That can be
+// off by one in the last bit when the value lies halfway between two float32
+// values, and it rejects some valid values close to MaxFloat32.
 func floatScanFn(k model.TypeKind) string {
 	if k == model.KindFloat32 {
 		return "Float32"
@@ -3229,12 +3325,13 @@ func floatScanFn(k model.TypeKind) string {
 	return "Float64"
 }
 
-// foldTailAssign inlines a write-once temp: when body ends with `tmp = EXPR`
-// and tmp appears nowhere else in it, the trailing assign is dropped and EXPR
-// returned for the caller to place directly at the single consumer (composite
-// literal / cast site) — kills the `var nv T; …; nv = float32(fv); {V: nv}`
-// chains. Multi-assign tails (`tmp, i, err = …`) and branching writers
-// (inline string scans) don't match and keep their temp.
+// foldTailAssign removes a temp that is written once. When body ends with
+// `tmp = EXPR` and tmp appears nowhere else in it, the final assignment is
+// dropped. EXPR is returned so the caller can place it directly where the
+// value is used, such as in a composite literal or a conversion. This removes
+// chains like `var nv T; …; nv = float32(fv); {V: nv}`. A multi-value
+// assignment at the end (`tmp, i, err = …`) or a writer with branches, such
+// as an inline string scan, does not match and keeps its temp.
 func foldTailAssign(body, tmp string) (rest, expr string, ok bool) {
 	trimmed := strings.TrimRight(body, "\n")
 	nl := strings.LastIndexByte(trimmed, '\n')
@@ -3249,6 +3346,11 @@ func foldTailAssign(body, tmp string) (rest, expr string, ok bool) {
 	return rest, strings.TrimPrefix(last, tmp+" = "), true
 }
 
+// inlineScanInt64 emits an inline signed-integer scanner that assigns to dst,
+// through castFn when it is not empty, and advances posVar. It detects
+// overflow. field is the JSON path expression for ggen.NewParseErr: a quoted
+// literal, `""` at a boundary, or a runtime expression such as `key` in the
+// unknown-key handlers.
 func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	assign := ""
 	switch {
@@ -3261,9 +3363,10 @@ func inlineScanInt64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	inlineScanInt64Stmt(b, posVar, field, assign)
 }
 
-// inlineScanInt64Stmt emits the inline signed-int scan, then `stmt` with the
-// parsed value in `n` (int64). Brace-less: `neg`/`limit`/`u`/`n` land in the
-// caller's scope (one numeric scan per scope).
+// inlineScanInt64Stmt emits the inline signed-integer scan, then `stmt`, with
+// the parsed value in `n` (int64). It adds no braces, so `neg`, `limit`, `u`
+// and `n` are declared in the caller's scope. Only one number scan fits in a
+// scope.
 func inlineScanInt64Stmt(b *bytes.Buffer, posVar, field, stmt string) {
 	fmt.Fprintf(b, `neg := false
 if %[1]s < len(data) && data[%[1]s] == '-' { neg = true; %[1]s++ }
@@ -3313,9 +3416,9 @@ func inlineScanUint64(b *bytes.Buffer, posVar, dst, castFn, field string) {
 	inlineScanUint64Stmt(b, posVar, field, assign)
 }
 
-// inlineScanUint64Stmt is the unsigned counterpart of inlineScanInt64Stmt:
-// the parsed value lands in `n` (uint64) before `stmt` runs. Brace-less —
-// see inlineScanInt64Stmt.
+// inlineScanUint64Stmt is the unsigned counterpart of inlineScanInt64Stmt.
+// The parsed value is in `n` (uint64) when `stmt` runs. Like
+// inlineScanInt64Stmt it adds no braces.
 func inlineScanUint64Stmt(b *bytes.Buffer, posVar, field, stmt string) {
 	fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] < '0' || data[%[1]s] > '9' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadNumber) }
 if data[%[1]s] == '0' && %[1]s+1 < len(data) && data[%[1]s+1] >= '0' && data[%[1]s+1] <= '9' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadNumber) }
@@ -3342,28 +3445,16 @@ if %[1]s < len(data) {
 `, posVar, field, stmt)
 }
 
-// inlineScanString emits a string reader that assigns into dst and advances
-// posOut past the closing quote. The hot path aliases via unsafe.String (or
-// copies via string(...) when cp is set — the -copy mode, so the result no
-// longer references data); escapes fall back to ggen.String (already an owned
-// copy). The loop also stops on any control byte (<0x20), which RFC 8259 /
-// jsonv2 reject, and on any non-ASCII byte (>=0x80) — the inline fast paths
-// alias without validating, so non-ASCII spans hand off to ggen.String*, which
-// UTF-8-validates (ErrInvalidUTF8, jsonv2 parity). Pure-ASCII short strings —
-// the dominant population — stay inline. Brace-less: `ke` lands in the caller's scope (renderMap's
-// value scan uses inlineScanStringVar to avoid colliding with the key scan's
-// `ke`). cp is set only at sites whose string is RETAINED past the scan (field
-// value, map key/value, slice/array elem); transient parse-feeds (time, url,
-// netip, big*) stay aliasing regardless — their conversion owns its output.
-// scalarStringWindow bounds the scalar-tier inline string byte-scan: a span
-// that runs past this many bytes (or hits an escape/ctrl) hands off to
-// ggen.String's SIMD IndexByte locate instead of walking the whole body one
-// byte at a time. Sized so keys and short values stay inline while long
-// strings (bios, URLs, descriptions) take the vectorized path.
+// scalarStringWindow limits the inline byte loop of the scalar-tier string
+// scan. A string that runs past this many bytes, or hits an escape or a
+// control byte, is handed to ggen.String. Its bytes.IndexByte search uses
+// vector instructions, which beats walking a long body one byte at a time.
+// The size keeps keys and short values inline while long strings such as
+// bios, URLs and descriptions take the vector path.
 const scalarStringWindow = 32
 
-// vArg renders the validate literal for string-scan calls: "false" when the
-// struct opted out via allowinvalidutf8, else "true".
+// vArg renders the validate argument for string scan calls. It is "false"
+// when the struct opted out with allowinvalidutf8, and "true" otherwise.
 func vArg(f model.FieldInfo) string {
 	if f.AllowInvalidUTF8 {
 		return "false"
@@ -3371,7 +3462,7 @@ func vArg(f model.FieldInfo) string {
 	return "true"
 }
 
-// vArgS is vArg at struct level (dispatch-key scans).
+// vArgS is vArg for a whole struct, used by the dispatch key scans.
 func vArgS(s model.StructInfo) string {
 	if s.AllowInvalidUTF8 {
 		return "false"
@@ -3379,12 +3470,33 @@ func vArgS(s model.StructInfo) string {
 	return "true"
 }
 
+// inlineScanString emits a string reader that assigns to dst and moves posOut
+// past the closing quote. The fast path aliases the input with unsafe.String:
+// the string points into the caller's bytes and nothing is copied. With cp
+// set (-copy mode) it copies with string(...) instead, so the result no
+// longer refers to data. Escapes fall back to ggen.String, and under cp the
+// result goes through ggen.Detach, which copies only if it still aliases
+// data.
+//
+// The loop also stops on a control byte (below 0x20), which RFC 8259 and
+// jsonv2 reject. With validation on, it stops on any non-ASCII byte (0x80 or
+// above) too. The inline path does not check UTF-8, so such strings go to
+// ggen.String, which does and returns ErrInvalidUTF8 as jsonv2 would. Short
+// ASCII strings, the common case, stay inline.
+//
+// No braces are emitted, so `ke` is declared in the caller's scope.
+// renderMap's value scan uses inlineScanStringVar so it does not collide with
+// the key scan's `ke`. cp is set only where the string is kept after the
+// scan: field values, map keys and values, and slice or array elements.
+// Strings that only feed a parser, such as time, url, netip and big values,
+// keep aliasing, because the parser's result owns its memory.
 func inlineScanString(b *bytes.Buffer, posIn, dst, posOut, field string, cp bool, validate bool) {
 	inlineScanStringVar(b, posIn, dst, posOut, field, "ke", cp, validate)
 }
 
-// maxJSONNameLen returns the longest declared JSON key name on s (0 when no
-// named fields — embedded fallbacks carry arbitrary keys and are excluded).
+// maxJSONNameLen returns the length of the longest declared JSON key on s, or
+// 0 when it has no named fields. Embed catch-all maps hold arbitrary keys and
+// are left out.
 func maxJSONNameLen(s model.StructInfo) int {
 	n := 0
 	for _, f := range s.Fields {
@@ -3396,43 +3508,54 @@ func maxJSONNameLen(s model.StructInfo) int {
 	return n
 }
 
-// inlineScanStringVar is inlineScanString with a caller-chosen name for the
-// closing-quote cursor local.
+// inlineScanStringVar is inlineScanString with a name chosen by the caller
+// for the local that holds the closing quote position.
 func inlineScanStringVar(b *bytes.Buffer, posIn, dst, posOut, field, ke string, cp bool, validate bool) {
 	inlineScanStringWin(b, posIn, dst, posOut, field, ke, cp, validate, 0)
 }
 
-// inlineScanStringWin is inlineScanStringVar with a scalar-window override for
-// the SIMD tier: window > 0 swaps the inline vector classify for a bounded
-// scalar loop over the first `window` bytes — used by the key-dispatch scan
-// when every declared key is short enough that the vector dependency chain
-// loses to a handful of predictable scalar iterations. window == 0 emits the
-// vector shape. Ignored on the scalar tier.
+// inlineScanStringWin is inlineScanStringVar with control over the scalar
+// byte window.
+//
+// On the SIMD tier, window > 0 replaces the inline vector test with a bounded
+// scalar loop over the first `window` bytes. The dispatch key scan uses this
+// when every declared key is short, because a few predictable scalar steps
+// beat the chain of dependent vector instructions. Any other window emits the
+// vector form.
+//
+// On the scalar tier, window < 0 emits an unbounded loop, window == 0 uses
+// scalarStringWindow, and window > 0 uses that many bytes.
 func inlineScanStringWin(b *bytes.Buffer, posIn, dst, posOut, field, ke string, cp bool, validate bool, window int) {
-	// allowinvalidutf8: permissive shapes are byte-identical to the
-	// pre-validation emitter - no <0x80 window bail, Min-Equal ctrl-only
-	// vector classify, validate=false at the runtime calls.
+	// With allowinvalidutf8 the code skips UTF-8 checks: the loops do not
+	// stop at bytes >= 0x80, the vector test only looks for control bytes,
+	// and the runtime calls get validate=false.
 	vLit, win80 := "true", " && data[%[5]s] < 0x80"
 	if !validate {
 		vLit, win80 = "false", ""
 	}
-	// SIMD tier: an inline fused vector classify (no call) handles any string
-	// shorter than one lane — one load + Equal/Equal/range classify → ToBits
-	// → TrailingZeros finds the first structural byte ('"', '\', ctrl, or
-	// non-ASCII: (v-0x20) >= 0x60 folds ctrl AND >=0x80 into one Sub+Max+Equal,
-	// same op count as the old Min-Equal ctrl term alone). Quote hit → inline
-	// alias/copy; anything else (escape, ctrl, non-ASCII needing UTF-8
-	// validation, span ≥ lane, string near the payload end where a full-lane
-	// load would overread) falls through to the fused ggen.StringAVX* call, which
-	// restarts at posIn — error identity byte-identical. Full-lane loads
-	// only: Load*Part is a real CALL, not an intrinsic. Broadcasts are
-	// emitted per site; gc CSEs them across sites and hoists them out of
-	// loops. In cp mode the happy path copies inline (string(data[…])); the
-	// escape/long-span fall calls the SAME aliasing tier func and detaches via
-	// ggen.Detach — one clone only when the result aliases data (a stringSlow
-	// escape result is already owned, so Detach skips the clone, killing the
-	// escape double-copy). Reuses the tier StringAVX* directly — no per-tier
-	// StringCopy variant.
+	// SIMD tier. An inline vector test, with no call, handles any string
+	// shorter than one vector. A lane is one byte slot inside a vector. The
+	// code loads the bytes, compares every lane at once and gets a bitmask:
+	// one bit per byte, set where the test matched. TrailingZeros of the mask
+	// gives the first byte that is '"', '\', a control byte or non-ASCII.
+	// The test (v-0x20) >= 0x60 catches both control bytes and bytes >= 0x80
+	// in one step.
+	//
+	// If that byte is the closing quote, the string is aliased or copied
+	// inline. Anything else falls to the ggen.StringAVX* call: an escape, a
+	// control byte, non-ASCII that needs UTF-8 checks, a string as long as the
+	// vector, or a string so close to the end of input that a full vector
+	// load would read past it. The call restarts at posIn, so the errors are
+	// exactly the same.
+	//
+	// Only full-vector loads are emitted, because Load*Part is a real call,
+	// not a single instruction. Broadcast constants are emitted at each site.
+	// The compiler merges them across sites and moves them out of loops.
+	//
+	// In cp mode the fast path copies inline with string(data[…]). The
+	// fallback calls the same aliasing ggen.StringAVX* function and then
+	// ggen.Detach, which copies only when the result aliases data. An escaped
+	// string is already a fresh copy, so it is not copied twice.
 	if scanStringFn != "ggen.String" {
 		lane, vecT, tzFn := 32, "Uint8x32", "TrailingZeros32"
 		if scanStringFn == "ggen.StringAVX" {
@@ -3463,8 +3586,8 @@ if %[5]s < len(data) && data[%[5]s] == '"' {
 		classify := `%[5]sD := %[5]sV.Sub(archsimd.Broadcast%[7]s(0x20))
 	%[5]sM := %[5]sV.Equal(archsimd.Broadcast%[7]s('"')).Or(%[5]sV.Equal(archsimd.Broadcast%[7]s('\\'))).Or(%[5]sD.Max(archsimd.Broadcast%[7]s(0x60)).Equal(%[5]sD)).ToBits()`
 		if !validate {
-			// Permissive: old Min-Equal ctrl-only classify (high bytes stay
-			// inline — no validation to route to).
+			// Without validation, test for control bytes only. Bytes >= 0x80
+			// stay on the inline path, since nothing needs to check them.
 			classify = `%[5]sM := %[5]sV.Equal(archsimd.Broadcast%[7]s('"')).Or(%[5]sV.Equal(archsimd.Broadcast%[7]s('\\'))).Or(%[5]sV.Min(archsimd.Broadcast%[7]s(0x1F)).Equal(%[5]sV)).ToBits()`
 		}
 		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrExpectString) }
@@ -3485,23 +3608,25 @@ if %[5]s < len(data) && data[%[5]s] == '"' {
 `, posIn, field, dst, posOut, ke, lane, vecT, tzFn)
 		return
 	}
-	// Scalar tier. window < 0 = unbounded original loop (dispatch keys: short,
-	// matched against known field names, so a window bound is pure per-key setup
-	// with no long span to hand off — it regressed tiny structs). window >= 0 =
-	// bound the inline byte loop and hand any string that runs past it (or hits
-	// an escape/ctrl byte) to ggen.String, whose bytes.IndexByte locate is
-	// SIMD/AVX2 and crushes the per-byte loop on long spans (bios, URLs). ggen.String
-	// is the error-identity source of truth (ErrUnterminated/ErrBadString); the
-	// bounded loop only fast-paths a clean quote-terminated span. Same shape as
-	// the SIMD window>0 template above.
+	// Scalar tier. window < 0 emits an unbounded loop. That is for dispatch
+	// keys, which are short and matched against known names. A bound would
+	// only add setup per key with no long string to hand off, and it measured
+	// slower on tiny structs. window >= 0 bounds the inline byte loop. A
+	// string that runs past it, or hits an escape or control byte, goes to
+	// ggen.String. Its bytes.IndexByte search uses vector instructions and is
+	// much faster on long strings. ggen.String decides the errors
+	// (ErrUnterminated, ErrBadString). The bounded loop only handles a clean
+	// string that ends in a quote. It has the same shape as the SIMD
+	// window > 0 template above.
 	hot := "unsafe.String(unsafe.SliceData(data[%[1]s+1:]), %[5]s-%[1]s-1)"
 	if cp {
 		hot = "string(data[%[1]s+1:%[5]s])"
 	}
-	// Everything that is not a clean closing quote (run off the end, ctrl
-	// byte, escape, high byte) falls to ggen.String — the error-identity AND
-	// error-position source of truth. Early-bailing here reported the opening
-	// quote's offset and diverged from the SIMD tier, which always falls.
+	// Anything other than a clean closing quote falls to ggen.String: the end
+	// of input, a control byte, an escape or a byte >= 0x80. ggen.String
+	// decides both the error and its position. Returning early here would
+	// report the opening quote's offset, unlike the SIMD tier, which always
+	// falls back.
 	if window < 0 {
 		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '"' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrExpectString) }
 %[5]s := %[1]s + 1
@@ -3539,12 +3664,13 @@ if %[5]s < len(data) && data[%[5]s] == '"' {
 `, posIn, field, dst, posOut, ke, win)
 }
 
-// emitReceiverReset emits the per-container reset at the top of DecodeFrom /
-// DecodeFromStream. The decoder is decode-into-receiver, so containers MUST be
-// reset (slices/[]byte/inline-map → `[:0]`/`clear`, backing reused) before the
-// decoder appends over carried-in data. Deliberately UNCONDITIONAL — a blank
-// payload yields a blank slate while keeping capacity. Arrays (strict-length)
-// and pointer fields (handled in renderField) are skipped.
+// emitReceiverReset emits the container resets at the top of DecodeFrom and
+// DecodeFromStream. The decoder decodes into its receiver, so containers must
+// be reset before it appends to them, or it would append after the old data.
+// Slices and []byte get `[:0]` and maps get `clear`, which keeps the backing
+// memory. The reset always runs, so an empty payload gives an empty result
+// that still has its capacity. Fixed arrays and pointer fields are skipped.
+// emitPointerSeed handles pointer fields.
 func emitReceiverReset(b *bytes.Buffer, s model.StructInfo, bytesPath bool) {
 	for _, f := range s.Fields {
 		if f.Pointer {
@@ -3560,9 +3686,9 @@ func emitReceiverReset(b *bytes.Buffer, s model.StructInfo, bytesPath bool) {
 			fmt.Fprintf(b, "if %[1]s != nil { %[1]s = %[1]s[:0] }\n", ref)
 		case model.KindMap:
 			if bytesPath && reusesMapValues(f) {
-				// The bytes decode reads this map while filling a new one,
-				// so clearing here would destroy the values it reuses. The
-				// stream path does not swap, so it still needs the clear.
+				// The bytes decode reads this map while it fills a new one,
+				// so clearing it here would destroy the values it reuses.
+				// The stream path does not swap maps, so it still clears.
 				continue
 			}
 			fmt.Fprintf(b, "if %[1]s != nil { clear(%[1]s) }\n", ref)
@@ -3571,30 +3697,32 @@ func emitReceiverReset(b *bytes.Buffer, s model.StructInfo, bytesPath bool) {
 }
 
 // leafResets reports whether a pointer leaf of kind k and type t can decode
-// into memory the receiver carried: a primitive is fully overwritten by its
-// scan and a generated struct resets itself (opt #74), so neither carries
-// data forward; anything reaching encoding/json or an UnmarshalJSON rung
-// would MERGE into the carried value instead.
+// into memory the receiver already holds. A primitive is fully overwritten by
+// its scan, and a generated struct resets itself (see opt #74 in
+// cmd/ggen/CLAUDE.md), so neither keeps old data. A value decoded by
+// encoding/json or an UnmarshalJSON method would merge into the old value
+// instead.
 func leafResets(k model.TypeKind, t string) bool {
 	return k != model.KindStruct || isGenerated(t)
 }
 
-// elemPtrReusable reports whether a multi-level pointer ELEMENT can decode
-// into the chain the receiver carried in that slot.
+// elemPtrReusable reports whether a multi-level pointer element can decode
+// into the pointer chain the receiver already holds in that slot.
 func elemPtrReusable(f model.FieldInfo) bool {
-	// A multi-level element reports KindStruct with the remaining pointer
-	// levels still in ElemType, so resolve the LEAF before judging it.
+	// A multi-level element reports KindStruct and keeps the remaining
+	// pointer levels in ElemType. Resolve the leaf before checking it.
 	et, _ := elemPtrType(f)
 	_, leaf := model.PointerDepth(et)
 	return leafResets(model.ResolveKind(leaf), leaf)
 }
 
-// emitArraySlotBlank empties a fixed-array slot before its element decodes
-// into it. A generated struct resets itself and a slice row is [:0]'d by the
-// nested reader; every element that MERGES into what it is handed —
-// encoding/json structs, maps, []byte's AppendDecode — is blanked here so the
-// slot decodes fresh. A bytes-path map whose values are swapped (opt #76)
-// reads the carried entries and is handed over intact.
+// emitArraySlotBlank empties a fixed-array slot before its element is decoded
+// into it. A generated struct resets itself, and the nested reader resets a
+// slice row with [:0]. Every element that merges into what it is given is
+// blanked here so the slot decodes fresh. That covers structs decoded by
+// encoding/json, maps, and []byte, whose AppendDecode appends. A bytes-path
+// map whose values are swapped (see opt #76 in cmd/ggen/CLAUDE.md) reads the
+// old entries, so it is handed over as is.
 func emitArraySlotBlank(b *bytes.Buffer, f model.FieldInfo, slot string, bytesPath bool) {
 	//exhaustive:ignore not every kind applies here
 	switch f.ElemKind {
@@ -3613,10 +3741,10 @@ func emitArraySlotBlank(b *bytes.Buffer, f model.FieldInfo, slot string, bytesPa
 	}
 }
 
-// emitElemGrow pre-grows dst by one slot for in-place element decode. A
-// generated struct element resets itself on decode, so a within-cap grow hands
-// it the carried element and its inner allocations get reused; every other
-// element kind is pre-grown with a zero value.
+// emitElemGrow grows dst by one slot so the element can be decoded in place.
+// A generated struct element resets itself on decode. So when there is spare
+// capacity, the grow hands it the old element and its inner allocations are
+// reused. Every other element kind is grown with a zero value.
 func emitElemGrow(b *bytes.Buffer, dst string, f model.FieldInfo, directStruct bool) {
 	if directStruct {
 		fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, %[2]s) }\n",
@@ -3626,14 +3754,14 @@ func emitElemGrow(b *bytes.Buffer, dst string, f model.FieldInfo, directStruct b
 	fmt.Fprintf(b, "%s = append(%s, %s)\n", dst, dst, zeroLit(f.ElemType, f.ElemKind))
 }
 
-// fieldZeroLit is the zero-value expression for a whole FIELD. zeroLit is
-// elem-oriented and maps every slice-backed kind to nil, which a `[N]byte`
-// field cannot use.
+// fieldZeroLit is the zero-value expression for a whole field. zeroLit is
+// meant for elements and maps every slice-based kind to nil, which a
+// `[N]byte` field cannot use.
 //
-// A type spelled with a package qualifier is written as the zero struct's own
-// field (`(T{}).X`) instead: the qualifier may not be imported by the
-// generated file (a value field otherwise only ever writes `result.X`), and a
-// foreign named primitive or interface takes no composite literal anyway.
+// A type named with a package qualifier is written as the field of a zero
+// struct instead, `(T{}).X`. The generated file may not import that package,
+// because a value field otherwise only writes `result.X`. Also, a named
+// primitive or interface from another package has no composite literal.
 func fieldZeroLit(s model.StructInfo, f model.FieldInfo) string {
 	if f.Pointer {
 		return "nil"
@@ -3642,8 +3770,8 @@ func fieldZeroLit(s model.StructInfo, f model.FieldInfo) string {
 	if f.Kind == model.KindBytes && byteArrayLen(f) > 0 {
 		lit = f.GoType + "{}"
 	}
-	// A named slice or map reads as KindStruct too, and `Tags{}` is an empty
-	// non-nil value, not its zero.
+	// A named slice or map also reads as KindStruct, and `Tags{}` is an
+	// empty non-nil value, not its zero.
 	if strings.Contains(lit, ".") || (lit == f.GoType+"{}" && f.Kind == model.KindStruct && !f.UnderlyingStruct) {
 		return "(" + s.Name + "{})." + f.GoName
 	}
@@ -3651,8 +3779,8 @@ func fieldZeroLit(s model.StructInfo, f model.FieldInfo) string {
 }
 
 // needsOmittedZero reports whether f must be zeroed when its key never
-// appeared. Containers are excluded: they are already emptied by
-// emitReceiverReset and keep their capacity for reuse.
+// appeared. Containers are excluded. emitReceiverReset already emptied them,
+// and they keep their capacity for reuse.
 func needsOmittedZero(f model.FieldInfo) bool {
 	if f.Embed || !needsSeen(f) {
 		return false
@@ -3665,23 +3793,24 @@ func needsOmittedZero(f model.FieldInfo) bool {
 	case model.KindSlice, model.KindMap:
 		return false
 	case model.KindBytes:
-		// `[]byte` is a container; `[N]byte` is a value with no entry reset.
+		// `[]byte` is a container. `[N]byte` is a value that is not reset at
+		// entry.
 		return byteArrayLen(f) > 0
 	}
 	return true
 }
 
 // emitOmittedZero zeroes every field the payload did not set, at the end of a
-// successful decode. Decode-into-receiver yields what a fresh decode would
-// give — only container capacity and element allocations are recycled.
-// Pointers are cleared HERE rather than at entry so a PRESENT key can still
-// reuse the carried pointee chain.
+// successful decode. Decoding into a receiver gives the same result as a
+// fresh decode. Only container capacity and element allocations are reused.
+// Pointers are cleared here instead of at entry, so a key that is present can
+// still reuse the old pointer chain.
 func emitOmittedZero(b *bytes.Buffer, s model.StructInfo, bytesPath bool) {
 	for _, f := range s.Fields {
-		// A map the bytes decode SWAPS has no entry clear() — the swap is what
-		// empties it, and it only runs when the key is present. An omitted key
-		// therefore has to be emptied here, or the carried entries survive a
-		// payload that never mentioned them.
+		// A map that the bytes decode swaps is not cleared at entry. The swap
+		// empties it, but the swap only runs when the key is present. So an
+		// omitted key must empty it here, or the old entries would survive a
+		// payload that never named them.
 		if bytesPath && !f.Pointer && f.Kind == model.KindMap && reusesMapValues(f) {
 			fmt.Fprintf(b, "if %s { clear(result.%s) }\n", seenNotAccess(s, f), f.GoName)
 			continue
@@ -3693,13 +3822,14 @@ func emitOmittedZero(b *bytes.Buffer, s model.StructInfo, bytesPath bool) {
 	}
 }
 
-// renderDecode emits the body of DecodeFrom: a loop reading each JSON key,
-// dispatching to per-field scan code, handling ',' / '}'. Zero-copy and
-// zero-alloc on the happy path; whitespace skipping inlined at each hot site.
+// renderDecode emits DecodeFrom: a loop that reads each JSON key, jumps to
+// that field's scan code and handles ',' and '}'. On valid input it does not
+// copy or allocate. Whitespace skipping is inlined at each hot site.
 func renderDecode(bOut *bytes.Buffer, s model.StructInfo) {
-	// Rendered into a temp buffer so the SIMD tier can rewrite the
-	// ggen.SkipValue callee post-emit (unique token, no collision risk) —
-	// the tier skip tree vector-skips whitespace runs + fuses skipString.
+	// Render into a temp buffer so the SIMD tier can then replace the
+	// ggen.SkipValue call. The token is unique, so the rewrite cannot hit
+	// anything else. The SIMD skipper skips whitespace runs with vector
+	// instructions and scans strings in the same pass.
 	var scratch bytes.Buffer
 	b := bOut
 	if simdSuffix != "" {
@@ -3710,13 +3840,14 @@ func renderDecode(bOut *bytes.Buffer, s model.StructInfo) {
 			bOut.WriteString(strings.ReplaceAll(scratch.String(), "ggen.SkipValue(", "ggen.SkipValue"+simdSuffix+"("))
 		}
 	}()
-	// Named results home the values in the caller's return slot, so every
-	// `return result, …` is register-set + RET with no struct copy; the
-	// `result = recv` prologue seeds the merge source.
+	// Named results live in the caller's return slot, so every
+	// `return result, …` just sets registers and returns, with no struct
+	// copy. The `result = recv` line starts from the receiver's value.
 	if isCyclic(s.Name) {
-		// Self-referential type: bound payload nesting at maxDepth (10000) via a
-		// depth-threaded core; the public method is a thin seed-0 shim so the
-		// surface (and acyclic callers) stay unchanged.
+		// A self-referential type caps payload nesting at maxDepth (10000)
+		// with a core that takes the depth. The public method is a thin
+		// wrapper that starts at depth 0, so the API and acyclic callers do
+		// not change.
 		fmt.Fprintf(b, "func (recv %s) DecodeFrom(data []byte) (%s, int, error) {\n\treturn recv.decodeFromDepth(data, 0)\n}\n\n", s.Name, s.Name)
 		fmt.Fprintf(b, "func (recv %s) decodeFromDepth(data []byte, depth int) (result %s, i int, err error) {\n", s.Name, s.Name)
 		b.WriteString("result = recv\n")
@@ -3730,9 +3861,9 @@ func renderDecode(bOut *bytes.Buffer, s model.StructInfo) {
 		renderDecodeBody(b, s)
 		return
 	}
-	// Only structs that actually call into a cyclic nested type need `depth`
-	// in scope (decodeCallFor emits `depth+1` there) — render first and gate
-	// on that, so the common acyclic-package struct doesn't carry a dead const.
+	// Only structs that call into a cyclic nested type need `depth` in scope,
+	// because decodeCallFor emits `depth+1` there. Render first and check, so
+	// the common acyclic struct does not carry an unused constant.
 	var rest bytes.Buffer
 	renderDecodeBody(&rest, s)
 	if strings.Contains(rest.String(), "depth+1") {
@@ -3741,9 +3872,10 @@ func renderDecode(bOut *bytes.Buffer, s model.StructInfo) {
 	b.Write(rest.Bytes())
 }
 
-// renderDecodeBody emits everything after the DecodeFrom prologue
-// (result = recv [; depth check]) — the alias delegation or the full
-// object-scan loop, shared by both the cyclic and acyclic prologues above.
+// renderDecodeBody emits everything after the start of DecodeFrom, which is
+// `result = recv` plus the depth check for cyclic types. That is either the
+// alias delegation or the full object loop. The cyclic and acyclic forms
+// above share it.
 func renderDecodeBody(b *bytes.Buffer, s model.StructInfo) {
 	if s.IsAlias {
 		renderAliasDecode(b, s)
@@ -3755,9 +3887,9 @@ func renderDecodeBody(b *bytes.Buffer, s model.StructInfo) {
 		b.WriteString("var errs ggen.Errors\n")
 	}
 
-	// Per-field "seen" tracking: required-field post-loop checks + duplicate-key
-	// guard. Narrow structs use per-field bools; wide structs (>threshold) a
-	// packed bitmask to cut stack/cache pressure.
+	// "Seen" tracking per field, for the required-field checks after the loop
+	// and the duplicate-key guard. Narrow structs use one bool per field. Wide
+	// structs use a packed bitmask to save stack space and cache.
 	if useSeenBitmask(s) {
 		b.WriteString(seenDecl(s))
 	} else {
@@ -3779,18 +3911,20 @@ i++
 	b.WriteString("if i < len(data) && data[i] == '}' {\ni++\n")
 	renderPostLoop(b, s)
 	b.WriteString("return result, i, nil\n}\nfor {\nvar key string\n")
-	// The dispatch key is transient (matched + discarded). Copy-mode retention
-	// is handled where the key is stored: embedded fallback map + UnknownKeyError.
-	// SIMD tier, all-short-keys struct: the vector classify's dependency chain
-	// (~load+3 compares+movemask+tzcnt) loses to a ≤5-iteration predictable
-	// scalar loop, so key scans get a bounded scalar window sized to the
-	// longest declared key instead (unknown longer keys fall to the tier call).
+	// The dispatch key is only matched and then dropped. In copy mode the key
+	// is copied where it is stored: the embed catch-all map and
+	// UnknownKeyError.
+	// On the SIMD tier, when every key is 5 bytes or shorter, a predictable
+	// scalar loop of at most 5 steps beats the chain of dependent vector
+	// instructions. So the key scan gets a bounded scalar window sized to the
+	// longest declared key. Longer unknown keys fall to the tier call.
 	if maxKey := maxJSONNameLen(s); scanStringFn != "ggen.String" && maxKey <= 5 {
 		inlineScanStringWin(b, "i", "key", "i", `""`, "ke", false, !s.AllowInvalidUTF8, maxKey+1)
 	} else {
-		// Dispatch keys are short (matched against known field names): scan
-		// unbounded (window -1) so tiny structs don't pay per-key window setup.
-		// On the SIMD tier this still routes to the inline vector classify.
+		// Dispatch keys are short and matched against known names. Scan
+		// without a bound (window -1) so tiny structs do not pay for window
+		// setup on each key. On the SIMD tier this still uses the inline
+		// vector test.
 		inlineScanStringWin(b, "i", "key", "i", `""`, "ke", false, !s.AllowInvalidUTF8, -1)
 	}
 	inlineSkipWS(b, "i")
@@ -3812,15 +3946,17 @@ return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
 	b.WriteString("}\n\n")
 }
 
-// renderPostLoop emits end-of-parse bookkeeping: required-field checks
-// (when validation is on) and the multierr flush (when MultiErr is on).
-// Called at every success exit inside DecodeFrom / DecodeFromStream.
+// renderPostLoop emits the work done at the end of a parse: zeroing omitted
+// fields, the required-field checks when validation is on, and returning the
+// collected errors when MultiErr is on. It runs at every successful exit of
+// DecodeFrom.
 func renderPostLoop(b *bytes.Buffer, s model.StructInfo) {
 	renderPostLoopShape(b, s, false)
 }
 
-// renderStreamPostLoop is the stream-path counterpart — same checks, but
-// emits `return result, X` (no position arg, since Stream owns s.Pos).
+// renderStreamPostLoop is the stream-path counterpart for DecodeFromStream.
+// It emits the same checks but returns `return result, X`, with no position,
+// because the Stream owns s.Pos.
 func renderStreamPostLoop(b *bytes.Buffer, s model.StructInfo) {
 	renderPostLoopShape(b, s, true)
 }
@@ -3854,12 +3990,13 @@ func renderPostLoopShape(b *bytes.Buffer, s model.StructInfo, stream bool) {
 	}
 }
 
-// renderDispatch emits a flat string switch on key (the compiler lowers it to
-// length-grouped binary search / jump tables).
+// renderDispatch emits a flat string switch on key. The compiler turns it into
+// a binary search grouped by length, or jump tables.
 func renderDispatch(b *bytes.Buffer, s model.StructInfo) {
-	// emitField wraps per-field parse code with seen-tracking + dup handling.
-	// The seen-branch differs by mode: AllowDups skips (first-wins), MultiErr
-	// logs DuplicateKeyError and skips, default errors immediately.
+	// emitField wraps a field's parse code with seen tracking and duplicate
+	// handling. What happens on a duplicate depends on the mode. AllowDups
+	// skips it, so the first value wins. MultiErr records a DuplicateKeyError
+	// and skips. The default returns the error at once.
 	emitField := func(b *bytes.Buffer, f model.FieldInfo) {
 		f.AtDispatch = true
 		if f.Embed || !needsSeen(f) {
@@ -3906,8 +4043,9 @@ func renderDispatch(b *bytes.Buffer, s model.StructInfo) {
 	b.WriteString("}\n")
 }
 
-// keyValidateAndMod emits mods + validation on the map key (keyRef) from the
-// `keys:` tag bucket, bytes path (3-tuple return).
+// keyValidateAndMod emits the mods and validators from the `keys:` tag
+// section against the map key keyRef. It is for the bytes path, which
+// returns three values.
 func keyValidateAndMod(b *bytes.Buffer, f model.FieldInfo, keyRef string) {
 	if f.NoValidate {
 		return
@@ -3916,7 +4054,7 @@ func keyValidateAndMod(b *bytes.Buffer, f model.FieldInfo, keyRef string) {
 }
 
 // keyValidateAndModStream is the stream-path counterpart of
-// keyValidateAndMod. Emits 2-tuple `return result, err` shapes.
+// keyValidateAndMod. It emits the two-value `return result, err` form.
 func keyValidateAndModStream(b *bytes.Buffer, f model.FieldInfo, keyRef string) {
 	if f.NoValidate {
 		return
@@ -3924,21 +4062,15 @@ func keyValidateAndModStream(b *bytes.Buffer, f model.FieldInfo, keyRef string) 
 	renderPipe(b, fieldKeyPipe(f), keyRef, f.JSONName+".key", "string", model.KindString, f.MultiErr, "")
 }
 
-// renderMap emits map[string]V decode for the byte path. `null` → nil,
-// empty `{}` → non-nil empty (stdlib parity). emitReceiverReset already
-// cleared a non-nil map, so allocation only happens when ref is nil. Maps
-// can't expose interior pointers (`&m[k]` illegal), so struct elems decode
-// into a temp and assign.
-// mapNest tracks how deeply renderMap/renderStreamMap are nested so each level
-// names its own key/value locals. A map VALUE that is itself a map re-enters
-// through renderField, and without the suffix the inner level shadowed `mk`/`mv`
-// and its store resolved to `mv[mk]` on its own value — uncompilable output for
-// map[string]map[string]V.
+// mapNest tracks how deeply renderMap and renderStreamMap are nested, so each
+// level names its own key and value locals. A map value that is itself a map
+// comes back in through renderField. Without a suffix the inner level would
+// shadow `mk` and `mv`, and its store would become `mv[mk]` on its own value.
+// The output for map[string]map[string]V would then not compile.
 var mapNest int
 
-// mapLocals returns this nesting level's key, value, carried-map and reuse-flag
-// names. The outermost level keeps the bare names so the common single-level
-// output is unchanged.
+// mapLocals returns this nesting level's names for the key, the value, the old
+// map and the reuse flag. The outermost level uses the bare names.
 func mapLocals() (mk, mv, carried, reuse string) {
 	suffix := ""
 	if mapNest > 1 {
@@ -3947,6 +4079,12 @@ func mapLocals() (mk, mv, carried, reuse string) {
 	return "mk" + suffix, "mv" + suffix, "carried" + suffix, "reuse" + suffix
 }
 
+// renderMap emits the bytes-path decode of a map[string]V. `null` gives nil
+// and an empty `{}` gives a non-nil empty map, as in stdlib. Unless the
+// values are reused, emitReceiverReset already cleared a non-nil map, so a
+// new map is made only when ref is nil. A map has no addressable entries
+// (`&m[k]` is illegal), so struct values decode into a temp that is then
+// stored.
 func renderMap(b *bytes.Buffer, f model.FieldInfo, ref, posVar string, topLevel bool) {
 	mapNest++
 	defer func() { mapNest-- }()
@@ -3956,19 +4094,20 @@ func renderMap(b *bytes.Buffer, f model.FieldInfo, ref, posVar string, topLevel 
 	if hint := mapPreallocCap(f); hint > 0 {
 		makeExpr = fmt.Sprintf("make(%s, %d)", f.GoType, hint)
 	}
-	// At dispatch level the null branch breaks to the comma handling rather
-	// than nesting the object read in an else.
+	// At dispatch level the null branch breaks out to the comma handling
+	// instead of nesting the object read in an else.
 	flat := nullBreakOK(f)
-	// No leading WS skip — the value-entry already skipped it (the alias path
-	// adds an explicit skip before calling).
+	// No leading whitespace skip. The caller already skipped it, and the
+	// alias path adds an explicit skip before calling.
 	inlineNullPeek(b, posVar, field)
 	fmt.Fprintf(b, "%s = nil\n", ref)
 	switch {
 	case flat:
 		b.WriteString("break\n}\n")
 	case topLevel:
-		// Whole-value alias: null → return directly; no else (the non-null path
-		// also returns at the object close).
+		// The alias is the whole value, so null returns at once. No else is
+		// needed, because the non-null path also returns at the closing
+		// brace.
 		fmt.Fprintf(b, "return result, %s, nil\n}\n", posVar)
 	default:
 		b.WriteString("} else {\n")
@@ -3977,21 +4116,21 @@ func renderMap(b *bytes.Buffer, f model.FieldInfo, ref, posVar string, topLevel 
 	%[1]s++
 `, posVar, field)
 	inlineSkipWS(b, posVar)
-	// Allocate only when nil; a cleared map reuses its buckets. No `:`-count
-	// prealloc for maps — a colon-laden key would inflate the count (footgun
-	// on well-formed input, unlike the slice comma-count).
+	// Allocate only when nil. A cleared map reuses its buckets. Maps are not
+	// sized by counting `:` in the input, because a key full of colons would
+	// inflate the count even in valid JSON. Slices can count commas safely.
 	if reusesMapValues(f) {
-		// Read the carried map, fill a fresh one: each entry's previous value
-		// becomes its decode target, and a key the payload omits is simply
-		// never carried across — no seen-set needed to drop it. The map is
-		// always freshly made here, so the nil guards below are unnecessary.
+		// Read the old map and fill a new one. Each entry decodes into its
+		// previous value, and a key the payload leaves out is never copied
+		// over, so no seen-set is needed to drop it. The map is always new
+		// here, so the nil checks below are not needed.
 		size := "len(" + carriedVar + ")"
 		if hint := mapPreallocCap(f); hint > 0 {
 			size = fmt.Sprintf("max(len(%s), %d)", carriedVar, hint)
 		}
-		// `reuse` hoists the decision out of the entry loop: a fresh receiver
-		// carries no map, and a per-entry lookup against a nil one is a real
-		// runtime call, so the common zero-value decode must not pay it.
+		// `reuse` moves the decision out of the entry loop. A fresh receiver
+		// has no map, and a lookup in a nil map is still a real runtime call.
+		// The common decode into a zero value must not pay it per entry.
 		fmt.Fprintf(b, `	%[4]s := %[1]s
 	%[5]s := len(%[4]s) != 0
 	%[1]s = make(%[2]s, %[3]s)
@@ -4018,14 +4157,14 @@ func renderMap(b *bytes.Buffer, f model.FieldInfo, ref, posVar string, topLevel 
 
 	mapTarget := fmt.Sprintf("%s[%s]", ref, mkVar)
 	if _, eDepth := elemPtrType(f); eDepth > 0 {
-		// Pointer value (any depth): the parse-first cascade decoded into the
-		// map slot. TargetNil keeps the emit assignment-only, so the
-		// unaddressable index is fine.
+		// Pointer value at any depth. The pointer code parses the leaf first,
+		// then assigns into the map slot. With TargetNil it only assigns, so a
+		// map index, which is not addressable, works as the target.
 		pf := elemPtrField(f, f.JSONName+".value")
 		if reusesMapValues(f) {
-			// Decode through an addressable local seeded from the carried map,
-			// so the cascade reuses that entry's pointer chain; a map index is
-			// not addressable, which is what TargetNil works around below.
+			// Decode through an addressable local seeded from the old map, so
+			// the pointer code reuses that entry's pointer chain. A map index
+			// is not addressable, which TargetNil works around below.
 			et, _ := elemPtrType(f)
 			fmt.Fprintf(b, "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s] }\n", mvVar, et, reuseVar, carriedVar, mkVar)
 			renderField(b, pf, mvVar, posVar)
@@ -4049,12 +4188,13 @@ func renderMap(b *bytes.Buffer, f model.FieldInfo, ref, posVar string, topLevel 
 			fmt.Fprintf(b, "return result, %s, nil\n", posVar)
 		}
 		if !flat && !topLevel {
-			b.WriteString("}\n") // close else (null-check)
+			b.WriteString("}\n") // close the else of the null check
 		}
 		return
 	}
-	// Named-primitive VALUE (`map[string]Priority`): scan the underlying into a
-	// temp and convert into the slot — see renderField.
+	// A named-primitive value, as in `map[string]Priority`, scans the
+	// underlying type into a temp and converts it into the slot. See
+	// renderField.
 	valCast, valTarget := "", ""
 	savedElemType, savedElemKind := f.ElemType, f.ElemKind
 	if prim, kind, ok := inlineNamedPrim(elemAsField(f)); ok {
@@ -4065,7 +4205,8 @@ func renderMap(b *bytes.Buffer, f model.FieldInfo, ref, posVar string, topLevel 
 	}
 	switch f.ElemKind {
 	case model.KindString:
-		// Straight into the slot; end-var `ve` since the key scan owns `ke`.
+		// Scan straight into the slot. The end variable is `ve`, because the
+		// key scan already declared `ke`.
 		inlineScanStringVar(b, posVar, mapTarget, posVar, field, "ve", f.Copy, !f.AllowInvalidUTF8)
 	case model.KindBool:
 		fmt.Fprintf(b, `%[2]s, %[1]s, err = ggen.Bool(data, %[1]s)
@@ -4089,10 +4230,10 @@ if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 `, posVar, mapTarget, field, floatScanFn(f.ElemKind))
 	case model.KindStruct:
 		if isGenerated(f.ElemType) {
-			// `mv` is the value-receiver source and stored value; `consumed`
-			// (bytes consumed) advances posVar. When the carried map is being
-			// read, seed from IT rather than the map being filled, so repeated
-			// keys in one payload each decode fresh.
+			// `mv` is both the receiver of the decode and the stored value.
+			// `consumed`, the number of bytes read, advances posVar. When the
+			// old map is being read, seed from it and not from the map being
+			// filled, so a key repeated in one payload decodes fresh each time.
 			decl := "var " + mvVar + " " + f.ElemType + "\n"
 			if reusesMapValues(f) {
 				decl += "if " + reuseVar + " { " + mvVar + " = " + carriedVar + "[" + mkVar + "] }\n"
@@ -4103,35 +4244,34 @@ if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 %[4]s%[3]s = %[5]s
 `, f.ElemType, posVar, mapTarget, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "consumed"), mvVar)
 		} else {
-			// Cross-package value: run the ladder (its own DecodeFrom /
-			// UnmarshalJSON / UnmarshalText, encoding/json only as the last
-			// rung) instead of always reflecting over the captured span.
+			// A value type from another package uses the fallback order: its
+			// own DecodeFrom, UnmarshalJSON or UnmarshalText, and encoding/json
+			// only as the last choice.
 			fmt.Fprintf(b, "var %s %s\n", mvVar, f.ElemType)
 			b.WriteString(renderCrossPkgStructDecode(elemAsField(f), mvVar, posVar))
 			fmt.Fprintf(b, "%s = %s\n", mapTarget, mvVar)
 		}
 	default:
-		// Dedicated-kind value (time/any/bytes/raw/slice/…): decode into a
-		// fresh temp via the field-level emitter, then store. The old arm
-		// skipped the span without storing — `mk` went unused, so the file
-		// didn't even compile. Braced: the key scan owns `ke` in this scope
-		// and the delegated emitters declare their own.
+		// A value with a dedicated kind, such as time, any, bytes, raw or a
+		// slice, decodes into a fresh temp through the field-level emitter
+		// and is then stored. The braces matter: the key scan declared `ke` in
+		// this scope, and the field emitters declare their own locals.
 		vf := sliceElemField(f)
 		vf.JSONName = f.JSONName + ".value"
-		// A container value carries its own backing, so seed it from the
-		// carried map and empty it — the delegated emitter fills it from
-		// there, and only allocates when it came back nil.
+		// A container value has its own backing memory. Seed it from the old
+		// map and empty it. The field emitter fills it from there and
+		// allocates only when it is nil.
 		switch {
 		case reusesMapValues(f) && (f.ElemKind == model.KindSlice || f.ElemKind == model.KindBytes):
-			// []byte decodes with AppendDecode, so the seed must be emptied or
-			// the decoded bytes land after the carried ones.
+			// []byte decodes with AppendDecode, so the seed must be emptied,
+			// or the decoded bytes would land after the old ones.
 			fmt.Fprintf(b, "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s][:0] }\n", mvVar, f.ElemType, reuseVar, carriedVar, mkVar)
 		case reusesMapValues(f) && f.ElemKind == model.KindRawJSON:
-			// renderRawJSON appends over mv[:0] itself under -copy.
+			// Under -copy, renderRawJSON itself appends to mv[:0].
 			fmt.Fprintf(b, "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s] }\n", mvVar, f.ElemType, reuseVar, carriedVar, mkVar)
 		case reusesMapValues(f) && f.ElemKind == model.KindMap:
-			// An inner level that swaps reads the seed's live entries to
-			// recycle their values; only an in-place fill needs it emptied.
+			// An inner level that swaps reads the seed's entries to reuse
+			// their values. Only a fill in place needs the seed emptied.
 			seed := "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s]; clear(%[1]s) }\n"
 			if reusesMapValues(vf) {
 				seed = "{\nvar %[1]s %[2]s\nif %[3]s { %[1]s = %[4]s[%[5]s] }\n"
@@ -4147,7 +4287,7 @@ if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 		fmt.Fprintf(b, "%s = %s(%s)\n", valTarget, valCast, mapTarget)
 		mapTarget, f.ElemType, f.ElemKind = valTarget, savedElemType, savedElemKind
 	}
-	// inner value steps (mods + validators in declared order).
+	// The value's own steps: mods and validators in declared order.
 	renderPipe(b, elemSteps(f), mapTarget, f.JSONName+".value", f.ElemType, f.ElemKind, f.MultiErr, "i")
 	inlineSkipWS(b, posVar)
 	fmt.Fprintf(b, `		if %[1]s < len(data) && data[%[1]s] == ',' { %[1]s++; `, posVar)
@@ -4164,16 +4304,16 @@ if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
 		fmt.Fprintf(b, "return result, %s, nil\n", posVar)
 	}
 	if !flat && !topLevel {
-		b.WriteString("}\n") // close else (null-check)
+		b.WriteString("}\n") // close the else of the null check
 	}
 }
 
-// renderBytes emits bytes decode (base64/hex/array). JSON `null` → nil out
-// the field (stdlib v1/v2 parity).
+// renderBytes emits the decode of a []byte field in base64, hex or array
+// form. JSON `null` sets the field to nil, as in stdlib v1 and v2.
 func renderBytes(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	if byteArrayLen(f) > 0 {
-		// A fixed array is never nil, so it has no `null` form (same rule as
-		// every other [N]T).
+		// A fixed array is never nil, so it has no `null` form, like every
+		// other [N]T.
 		renderBytesValue(b, f, ref, posVar)
 		return
 	}
@@ -4189,10 +4329,10 @@ func renderBytes(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	b.WriteString("}\n")
 }
 
-// emitEmptyBytesNonNil keeps an empty wire value ("" / []) decoding to an
-// empty NON-nil slice on a nil receiver, like every other container — the
-// decoders return nil for it (AppendDecode(nil, "") is nil; an immediate ']'
-// appends nothing), which would re-marshal as null.
+// emitEmptyBytesNonNil makes an empty JSON value ("" or []) decode to an
+// empty non-nil slice on a nil receiver, like every other container. The
+// decoders alone would return nil: AppendDecode(nil, "") is nil, and an
+// immediate ']' appends nothing. A nil slice would marshal back as null.
 func emitEmptyBytesNonNil(b *bytes.Buffer, ref string) {
 	fmt.Fprintf(b, "if %[1]s == nil { %[1]s = []byte{} }\n", ref)
 }
@@ -4200,7 +4340,8 @@ func emitEmptyBytesNonNil(b *bytes.Buffer, ref string) {
 func renderBytesValue(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	if f.Format == "array" {
-		// `u` not `v`: a pointer-leaf caller declares `var v []byte` here.
+		// The temp is `u`, not `v`, because a pointer-leaf caller declares
+		// `var v []byte` in this scope.
 		inlineSkipWS(b, posVar)
 		fmt.Fprintf(b, `if %[1]s >= len(data) || data[%[1]s] != '[' { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrBadArray) }
 %[1]s++
@@ -4226,8 +4367,8 @@ if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, ggen.NewPars
 		emitEmptyBytesNonNil(b, ref)
 		return
 	}
-	// AppendDecode skips the `[]byte(s)` copy DecodeString makes; pre-size
-	// dst via DecodedLen so the single allocation is exact.
+	// AppendDecode avoids the `[]byte(s)` copy that DecodeString makes. dst is
+	// sized up front with DecodedLen, so the one allocation is exact.
 	enc := "base64.StdEncoding"
 	dlen := "base64.StdEncoding.DecodedLen"
 	switch f.Format {
@@ -4241,12 +4382,12 @@ if %[1]s >= len(data) || data[%[1]s] != ']' { return result, %[1]s, ggen.NewPars
 		enc = "base32.HexEncoding"
 		dlen = "base32.HexEncoding.DecodedLen"
 	case "base16", "hex":
-		enc = "" // hex doesn't share the Encoding API
+		enc = "" // hex does not have the Encoding API
 	}
 	if n := byteArrayLen(f); n > 0 {
-		// Fixed array: decode into a same-sized scratch (a longer payload
-		// reallocates past its cap and trips the length check) and require
-		// EXACTLY N bytes, the array analogue of the tuple's strict count.
+		// Fixed array. Decode into a scratch array of the same size and
+		// require exactly N bytes, like the strict count of a tuple. A longer
+		// payload grows past the scratch capacity and fails the length check.
 		dec := enc + ".AppendDecode"
 		if enc == "" {
 			dec = "hex.AppendDecode"
@@ -4265,7 +4406,8 @@ copy(%[7]s[:], %[1]sd)
 		return
 	}
 	if enc == "" {
-		// hex path. ref was pre-reset to [:0]; realloc only when cap is short.
+		// Hex. ref was already reset to [:0]. Allocate only when its capacity
+		// is too small.
 		b.WriteString("var s string\n")
 		inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
 		fmt.Fprintf(b, `if cap(%[1]s) < hex.DecodedLen(len(s)) { %[1]s = make([]byte, 0, hex.DecodedLen(len(s))) }
@@ -4289,8 +4431,9 @@ func renderTime(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	layout, numeric := timeLayoutExpr(f.Format)
 	if numeric != "" {
-		// `format:unix` reads a (possibly fractional) number, split into
-		// (sec, nsec) for round-trip safety. Other unix* are integer-granular.
+		// `format:unix` reads a number that may have a fraction and splits it
+		// into seconds and nanoseconds, so the value round-trips. The other
+		// unix* formats are whole integers.
 		if numeric == "Unix" {
 			fmt.Fprintf(b, `var f float64
 f, %[1]s, err = ggen.Float64(data, %[1]s)
@@ -4325,7 +4468,8 @@ func renderDuration(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	switch f.Format {
 	case "sec":
-		// `f` not `v`: a pointer-leaf caller declares `var v time.Duration` here.
+		// The temp is `f`, not `v`, because a pointer-leaf caller declares
+		// `var v time.Duration` in this scope.
 		fmt.Fprintf(b, `var f float64
 f, %[1]s, err = ggen.Float64(data, %[1]s)
 if err != nil { return result, %[1]s, ggen.NewParseErr(%[3]s, %[1]s, err) }
@@ -4352,10 +4496,10 @@ if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
 }
 
-// renderNetIP / renderNetipAddr / renderNetipPrefix take "" as the zero
-// value — the form a zero address marshals to, and what the types' own
-// UnmarshalText accept — so a never-set field round-trips. net.IP is a byte
-// slice: null → nil, like []byte.
+// renderNetIP, renderNetipAddr and renderNetipPrefix read "" as the zero
+// value. That is what a zero address marshals to, and what the types' own
+// UnmarshalText accept, so a field that was never set round-trips. net.IP is a
+// byte slice, so null gives nil, like []byte.
 func renderNetIP(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	inlineNullPeek(b, posVar, field)
@@ -4368,9 +4512,9 @@ func renderNetIP(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	}
 	b.WriteString("var s string\n")
 	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
-	// net.ParseIP copies into a fresh IP, so the scan feed stays aliasing; the
-	// error literal RETAINS the string, so under -copy it detaches (the stream
-	// mirror clones for the same reason).
+	// net.ParseIP copies into a new IP, so the scanned string can alias the
+	// input. The error literal keeps the string, so under -copy it is
+	// detached. The stream version clones it for the same reason.
 	text := "s"
 	if f.Copy {
 		text = "ggen.Detach(s, data)"
@@ -4407,9 +4551,10 @@ if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
 }
 
-// elemAsField reshapes f so its ELEMENT looks like the field itself — the view
-// the cross-package ladder needs when a slice/array/map element carries the
-// foreign type. Element-level pipes stay behind; the caller emits those.
+// elemAsField reshapes f so its element looks like the field itself. The
+// fallback code for types from other packages needs this view when a slice,
+// array or map element has such a type. Element-level pipes are left out,
+// because the caller emits them.
 func elemAsField(f model.FieldInfo) model.FieldInfo {
 	ef := f
 	ef.GoType = f.ElemType
@@ -4422,12 +4567,13 @@ func elemAsField(f model.FieldInfo) model.FieldInfo {
 	return ef
 }
 
-// sliceElemField adapts elemAsField for FULL field-emitter delegation
-// (dedicated-kind elements: time/duration/bytes/raw/netip/url/big/sqlnull/
-// any/map). Element value rules run separately via elemSteps after the value
-// decode, and the element sits inside a loop — never at dispatch — so the
-// outer field's rule buckets and dispatch flags must not leak in. Map
-// elements get their value shape back (elemAsField zeroes it).
+// sliceElemField adapts elemAsField so an element can go through the full
+// field emitters. This is for elements with a dedicated kind: time, duration,
+// bytes, raw, netip, url, big, sql.Null, any and map. The element's value
+// rules run separately through elemSteps after the decode. The element sits
+// inside a loop and never at dispatch level. So the outer field's rules and
+// dispatch flags must not carry over. Map and container elements get their
+// own element shape back, which elemAsField cleared.
 func sliceElemField(f model.FieldInfo) model.FieldInfo {
 	ef := elemAsField(f)
 	ef.JSONName = f.JSONName + "[]"
@@ -4443,19 +4589,20 @@ func sliceElemField(f model.FieldInfo) model.FieldInfo {
 	ef.Levels, ef.HintLevels = nil, nil
 	ef.HintLen = -1
 	ef.ElemPointer = false
-	// The outer [N] must not leak: a `[N][]byte` element decoded as `[N]byte`.
+	// The outer [N] must not carry over, or the element of a `[N][]byte`
+	// would decode as a `[N]byte`.
 	ef.ArrayLen, ef.ElemArrayLen = 0, 0
 	ef.NullDone = false
 	//exhaustive:ignore not every kind applies here
 	switch ef.Kind {
 	case model.KindMap:
-		// Mirror the parse layer: stars stay on ElemType (pointer values
-		// route through elemPtrType inside renderMap).
+		// Do what the parser does: pointer stars stay on ElemType. renderMap
+		// routes pointer values through elemPtrType.
 		ef.ElemType = strings.TrimPrefix(ef.GoType, "map[string]")
 		ef.ElemKind = model.ResolveKind(ef.ElemType)
 	case model.KindSlice, model.KindArray:
-		// Re-derive the container's own element shape (elemAsField zeroed
-		// it); mirror peelSliceField's pointer peel.
+		// Rebuild the container's own element shape, which elemAsField
+		// cleared. Remove a pointer the same way peelSliceField does.
 		inner, kind, n := model.StripOneContainer(ef.GoType)
 		if strings.HasPrefix(inner, "*") {
 			ef.ElemPointer = true
@@ -4473,28 +4620,31 @@ func sliceElemField(f model.FieldInfo) model.FieldInfo {
 	return ef
 }
 
-// renderCrossPkgStructDecode emits the decode body for a cross-package /
-// unannotated struct field. Resolved f.Iface → a static branch on the type's
-// implemented interface (zero runtime probes); unresolved (AST-only) → the
-// encoding/json fallback.
+// renderCrossPkgStructDecode emits the decode code for a struct field whose
+// type comes from another package or is not annotated. When f.Iface is
+// resolved, the code calls the method the type implements, chosen at
+// generate time with no runtime checks. When it is unresolved (AST-only
+// mode), it falls back to encoding/json.
 func renderCrossPkgStructDecode(f model.FieldInfo, ref, posVar string) string {
 	chk := bytesErrCheck(fieldLit(f), posVar)
-	// Every non-ggen rung MERGES into what it is handed, so the target is
-	// zeroed first: decode-into-receiver yields what a fresh decode would.
+	// Every decoder other than ggen's merges into its target, so the target
+	// is zeroed first. Decoding into a receiver must give what a fresh decode
+	// would.
 	zero := zeroAssign(f, ref)
 	if f.Iface.Resolved {
 		switch {
 		case f.Iface.ByteDecoder:
-			// ggen-generated in another package — call DecodeFrom directly.
+			// Generated by ggen in another package. Call DecodeFrom directly.
 			return fmt.Sprintf(`var consumed int
 %[1]s, consumed, err = %[1]s.DecodeFrom(data[%[2]s:])
 %[2]s += consumed
 %[3]s`, ref, posVar, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "consumed"))
 
 		case f.Iface.JSONUnmarshaler:
-			// The callee sees a sub-slice, so a positional error it returns
-			// (a wrapper delegating to another package's ggen decoder) is
-			// rebased onto the payload like every nested-decode site.
+			// The callee sees a sub-slice. A positional error it returns, for
+			// example from a wrapper that calls another package's ggen
+			// decoder, is shifted to a payload offset like every nested
+			// decode.
 			return fmt.Sprintf(`start := %[1]s
 %[1]s, err = ggen.SkipValue(data, start)
 %[3]s%[4]serr = %[2]s.UnmarshalJSON(data[start:%[1]s])
@@ -4508,19 +4658,20 @@ ts, %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(f)+`)
 %[3]s`, posVar, ref, chk, zero)
 		}
 	}
-	// Unresolved (AST-only) or no known method — plain encoding/json fallback.
+	// Unresolved (AST-only) or no known method. Fall back to encoding/json.
 	return fmt.Sprintf(`start := %[1]s
 %[1]s, err = ggen.SkipValue(data, start)
 %[3]s%[4]serr = json.Unmarshal(data[start:%[1]s], &%[2]s)
 %[3]s`, posVar, ref, chk, zero)
 }
 
-// renderCrossPkgStructAppend is the marshal counterpart for cross-package
-// struct fields. Resolved → static branch on what the type implements.
-// Unresolved → runtime cascade.
+// renderCrossPkgStructAppend is the marshal counterpart for struct fields
+// from other packages. When resolved, the code calls the method the type
+// implements, chosen at generate time. When unresolved, it uses
+// encoding/json.
 func renderCrossPkgStructAppend(f model.FieldInfo, ref string) string {
-	// Field-suffixed temp — fields emit at function scope, so two cross-pkg
-	// fields would collide on a shared name.
+	// The temp name carries the field name. Fields are emitted in the scope
+	// of the function, so two such fields would collide on a shared name.
 	tmp := "b" + strings.ReplaceAll(f.GoName, ".", "")
 	if f.Iface.Resolved {
 		switch {
@@ -4528,8 +4679,8 @@ func renderCrossPkgStructAppend(f model.FieldInfo, ref string) string {
 			return fmt.Sprintf("if dst, err = %s.AppendJSON(dst); err != nil { return dst, err }\n", ref)
 
 		case f.Iface.JSONMarshaler:
-			// Empty result errors (stdlib parity): a bare append would emit
-			// `"k":` with a nil error.
+			// An empty result is an error, as in stdlib. A plain append would
+			// write `"k":` with no value and a nil error.
 			return fmt.Sprintf(`var %[1]s []byte
 %[1]s, err = %[2]s.MarshalJSON()
 if err != nil { return dst, err }
@@ -4538,8 +4689,9 @@ dst = append(dst, %[1]s...)
 `, tmp, ref)
 
 		case f.Iface.TextAppender:
-			// AppendText (Go 1.24+) preferred over MarshalText — no alloc.
-			// Close via the escape checker: the text may carry `"`/`\`/ctrl.
+			// AppendText (Go 1.24+) is preferred over MarshalText because it
+			// does not allocate. Close through the escape checker, because the
+			// text may hold `"`, `\` or control bytes.
 			ta := "ta" + strings.ReplaceAll(f.GoName, ".", "")
 			return fmt.Sprintf(`dst = append(dst, '"')
 %[1]s := len(dst)
@@ -4563,7 +4715,7 @@ dst = append(dst, %[1]s...)
 `, tmp, ref)
 		}
 	}
-	// Unresolved (AST-only) — plain encoding/json fallback.
+	// Unresolved (AST-only). Fall back to encoding/json.
 	return fmt.Sprintf(`var %[1]s []byte
 %[1]s, err = json.Marshal(%[2]s)
 if err != nil { return dst, err }
@@ -4571,8 +4723,8 @@ dst = append(dst, %[1]s...)
 `, tmp, ref)
 }
 
-// renderCrossPkgStructStreamDecode is the streaming counterpart of
-// renderCrossPkgStructDecode. Same static-vs-runtime branching.
+// renderCrossPkgStructStreamDecode is the stream counterpart of
+// renderCrossPkgStructDecode, with the same choice of method.
 func renderCrossPkgStructStreamDecode(f model.FieldInfo, ref, posVar string) string {
 	_ = posVar
 	chk := streamErrCheck(fieldLit(f))
@@ -4584,38 +4736,42 @@ func renderCrossPkgStructStreamDecode(f model.FieldInfo, ref, posVar string) str
 %[2]s`, ref, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, false, ""))
 
 		case f.Iface.JSONUnmarshaler:
-			// The captured span is a sub-slice starting at Offset()-len(span),
-			// so the callee's positions rebase like the bytes rung's.
+			// The captured span is a sub-slice that starts at
+			// Offset()-len(span), so the callee's positions are shifted the
+			// same way as on the bytes path.
 			return fmt.Sprintf(`span, err := s.CaptureValue()
 %[2]s%[3]serr = %[1]s.UnmarshalJSON(span)
 if err != nil { return result, ggen.NewParseErrShift(%[4]s, s.Offset(), len(span), err) }
 `, ref, chk, zero, fieldLit(f))
 
 		case f.Iface.TextUnmarshaler:
-			// StringView: UnmarshalText must not retain its arg (encoding
-			// contract), and the bytes path already passes an aliased slice
-			// here — see Stream.StringView.
+			// StringView returns a string that aliases the Stream's buffer.
+			// That is safe here: by the encoding contract UnmarshalText must
+			// not keep its argument, and the bytes path passes an aliased
+			// slice too. See Stream.StringView.
 			return fmt.Sprintf(`var ts string
 ts, err = s.StringView(`+vArg(f)+`)
 %[2]s%[3]serr = %[1]s.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 %[2]s`, ref, chk, zero)
 		}
 	}
-	// Unresolved (AST-only) or no known method — plain encoding/json fallback.
+	// Unresolved (AST-only) or no known method. Fall back to encoding/json.
 	return fmt.Sprintf(`span, err := s.CaptureValue()
 %[2]s%[3]serr = json.Unmarshal(span, &%[1]s)
 %[2]s`, ref, chk, zero)
 }
 
-// renderRawJSON captures the value's raw span. Default aliases data[start:end]
-// into the field — zero copy. Under -copy it copies the span into the field's
-// own (reused) backing so the value survives a later mutation of data. Works
-// for json.RawMessage and jsontext.Value (both underlying []byte).
+// renderRawJSON captures the raw bytes of the value. By default the field
+// aliases data[start:end], with no copy. Under -copy the bytes are copied
+// into the field's own backing array, which is reused, so the value survives
+// later changes to data. It works for json.RawMessage and jsontext.Value,
+// which are both []byte underneath.
 func renderRawJSON(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	chk := bytesErrCheck(fieldLit(f), posVar)
 	span := "data[start:%[1]s]"
 	if f.Copy {
-		// append over the existing backing (reused across decodes; nil → fresh).
+		// Append to the existing backing array, reused across decodes. A nil
+		// field gets a new one.
 		span = "append(%[2]s[:0], data[start:%[1]s]...)"
 	}
 	check := "err = ggen.CheckUTF8(data[start:%[1]s])\n%[3]s"
@@ -4628,10 +4784,10 @@ func renderRawJSON(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 `, posVar, ref, chk)
 }
 
-// renderURL parses a JSON string via url.Parse. The dereference is
-// safe because Parse returns a non-nil *URL on success. The scan honours
-// f.Copy: url.Parse SLICES its input into Host/Path/RawQuery/Fragment, so an
-// aliasing scan would leave the stored URL pointing at the caller's buffer.
+// renderURL parses a JSON string with url.Parse. The dereference is safe
+// because Parse returns a non-nil *URL on success. The scan honors f.Copy.
+// url.Parse slices its input into Host, Path, RawQuery and Fragment, so an
+// aliasing scan would leave the stored URL pointing into the caller's buffer.
 func renderURL(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
@@ -4643,9 +4799,10 @@ if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
 }
 
-// renderBigInt reads a bare JSON number into big.Int.SetString (no overflow,
-// arbitrary length). The literal is aliased via unsafe.String; SetString
-// copies the digits into its own storage, so the alias is short-lived.
+// renderBigInt reads a bare JSON number with big.Int.SetString, which has no
+// overflow and no length limit. The digits are aliased with unsafe.String.
+// SetString copies them into its own storage, so the alias does not outlive
+// the call.
 func renderBigInt(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	fmt.Fprintf(b, `start := %[1]s
@@ -4657,9 +4814,9 @@ if _, ok := (&%[2]s).SetString(unsafe.String(unsafe.SliceData(data[start:]), %[1
 `, posVar, ref, field)
 }
 
-// renderBigFloat reads a JSON-string-wrapped numeric literal into big.Float
-// at the default precision. Wrapping matches jsonv2's wire format for
-// big.Float; bare numbers are not accepted (use big.Int or float64 for those).
+// renderBigFloat reads a number written inside a JSON string into a
+// big.Float at the default precision. The quotes match jsonv2's format for
+// big.Float. Bare numbers are not accepted. Use big.Int or float64 for those.
 func renderBigFloat(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
@@ -4670,8 +4827,8 @@ func renderBigFloat(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 `, ref, posVar, field)
 }
 
-// renderBigRat reads a JSON string of the form "num" or "num/denom"
-// and feeds it to big.Rat.SetString. Lossless — fractions stay exact.
+// renderBigRat reads a JSON string of the form "num" or "num/denom" and passes
+// it to big.Rat.SetString. Nothing is lost: fractions stay exact.
 func renderBigRat(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
 	b.WriteString("var s string\n")
@@ -4682,9 +4839,10 @@ func renderBigRat(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 `, ref, posVar, field)
 }
 
-// sqlNullInnerField returns a render-ready copy of a generic sql.Null[T]'s
-// inner FieldInfo — the synthetic V field with the parent's struct flags
-// applied (the inner is built at parse time, before flag propagation).
+// sqlNullInnerField returns a copy of a generic sql.Null[T]'s inner
+// FieldInfo, ready to render. That is the synthetic V field with the parent's
+// struct flags applied. The parser builds the inner field before the flags
+// are propagated, so they are applied here.
 func sqlNullInnerField(f model.FieldInfo) model.FieldInfo {
 	inner := *f.SQLNullInner
 	inner.JSONName = f.JSONName
@@ -4698,12 +4856,12 @@ func sqlNullInnerField(f model.FieldInfo) model.FieldInfo {
 	return inner
 }
 
-// renderSQLNull emits decode for a database/sql.NullX field: probe `null`
-// first, else parse the inner value and set Valid=true.
+// renderSQLNull emits the decode of a database/sql.NullX field. It checks for
+// `null` first. Otherwise it parses the inner value and sets Valid to true.
 func renderSQLNull(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	if f.SQLNullInner != nil {
-		// Generic sql.Null[T]: null → zero; else decode V into a temp and
-		// publish the {V, Valid:true} literal.
+		// Generic sql.Null[T]. null gives the zero value. Otherwise decode V
+		// into a temp and store the {V, Valid: true} literal.
 		inner := sqlNullInnerField(f)
 		var dec bytes.Buffer
 		renderField(&dec, inner, "nv", posVar)
@@ -4793,9 +4951,9 @@ func sqlTypeName(goType string) string {
 	return goType
 }
 
-// renderAny decodes into a reflective any via ggen.Any / ggen.AnyNumber. Under
-// -copy the Copy variants clone every nested string (values + object keys) so
-// the tree survives a later mutation of data.
+// renderAny decodes into an `any` with ggen.Any or ggen.AnyNumber. Under
+// -copy the Copy variants clone every nested string, both values and object
+// keys, so the result survives later changes to data.
 func renderAny(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	fn := "ggen.Any"
 	if f.UseNumber {
@@ -4809,19 +4967,20 @@ func renderAny(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 %[4]s`, ref, posVar, fn, chk, vArg(f))
 }
 
-// needsSeen reports whether a seen<Field> flag is required for f (always
-// except embedded fallback maps). Used for dup-key guard / first-wins skip /
-// required-field post-loop check.
+// needsSeen reports whether f needs a seen<Field> flag. Every field does
+// except an embed catch-all map. The flag drives the duplicate-key guard, the
+// first-wins skip and the required-field check after the loop.
 func needsSeen(f model.FieldInfo) bool {
 	return !f.Embed
 }
 
-// seenBitmaskThreshold is the field count above which codegen swaps per-field
-// `bool` locals for a packed bitmask (cheaper stack/cache on wide structs).
+// seenBitmaskThreshold is the field count above which the generated code uses
+// a packed bitmask instead of one `bool` local per field. It saves stack and
+// cache on wide structs.
 const seenBitmaskThreshold = 32
 
-// useSeenBitmask reports whether struct s should use the packed-bitmask
-// shape for its seen-tracking instead of per-field bools.
+// useSeenBitmask reports whether struct s should track seen fields in a
+// packed bitmask instead of one bool per field.
 func useSeenBitmask(s model.StructInfo) bool {
 	if len(s.Fields) <= seenBitmaskThreshold {
 		return false
@@ -4834,8 +4993,8 @@ func useSeenBitmask(s model.StructInfo) bool {
 	return false
 }
 
-// seenBitIndex assigns a stable bit index to f from its position in s.Fields.
-// Embedded fallback fields still occupy an index (simpler addressing).
+// seenBitIndex gives f a stable bit index, its position in s.Fields. An embed
+// catch-all field still takes an index, which keeps the indexing simple.
 func seenBitIndex(s model.StructInfo, f model.FieldInfo) int {
 	for i, ff := range s.Fields {
 		if ff.GoName == f.GoName {
@@ -4849,8 +5008,8 @@ func seenWordCount(s model.StructInfo) int {
 	return (len(s.Fields) + 63) / 64
 }
 
-// seenDecl emits the declaration line(s) for the bitmask, or the empty
-// string when bools-mode is in use (caller emits per-field bools).
+// seenDecl returns the declaration of the bitmask. It returns an empty string
+// when one bool per field is used, and the caller then declares the bools.
 func seenDecl(s model.StructInfo) string {
 	if !useSeenBitmask(s) {
 		return ""
@@ -4861,8 +5020,8 @@ func seenDecl(s model.StructInfo) string {
 	return fmt.Sprintf("var seen [%d]uint64\n", seenWordCount(s))
 }
 
-// seenAccess returns the read expression for f's seen bit (bool local or
-// bitmask test).
+// seenAccess returns the expression that reads f's seen flag: the bool local
+// or a bitmask test.
 func seenAccess(s model.StructInfo, f model.FieldInfo) string {
 	if !useSeenBitmask(s) {
 		return "seen" + f.GoName
@@ -4874,8 +5033,8 @@ func seenAccess(s model.StructInfo, f model.FieldInfo) string {
 	return fmt.Sprintf("seen[%d]&(1<<%d) != 0", bit/64, bit%64)
 }
 
-// seenNotAccess is the negated counterpart of seenAccess — true when the
-// bit is unset.
+// seenNotAccess is the negation of seenAccess. It is true when the flag is not
+// set.
 func seenNotAccess(s model.StructInfo, f model.FieldInfo) string {
 	if !useSeenBitmask(s) {
 		return "!seen" + f.GoName
@@ -4887,8 +5046,8 @@ func seenNotAccess(s model.StructInfo, f model.FieldInfo) string {
 	return fmt.Sprintf("seen[%d]&(1<<%d) == 0", bit/64, bit%64)
 }
 
-// seenSet emits a statement that marks f's seen bit. Trailing newline
-// is intentional so callers can concatenate freely.
+// seenSet returns a statement that sets f's seen flag. It ends with a newline
+// so callers can concatenate it freely.
 func seenSet(s model.StructInfo, f model.FieldInfo) string {
 	if !useSeenBitmask(s) {
 		return "seen" + f.GoName + " = true\n"
@@ -4900,13 +5059,14 @@ func seenSet(s model.StructInfo, f model.FieldInfo) string {
 	return fmt.Sprintf("seen[%d] |= 1<<%d\n", bit/64, bit%64)
 }
 
-// unknownKey emits the default branch of the key switch, in precedence order:
-// embedded fallback map → absorb; s.IgnoreUnknown → SkipValue; else
-// UnknownKeyError. The bytes-path `key` aliases data and stays valid for the
-// whole function, so by default it embeds directly into the stored map key /
-// ggen.NewParseErr (no clone). Under -copy every retained `key` is cloned
-// (keyExpr) and inline-map string/any VALUES are copied too, so the absorbed
-// entries survive a later mutation of data — matching the stream path.
+// unknownKey emits the default branch of the key switch. In order of
+// precedence: an embed catch-all map stores the entry, IgnoreUnknown skips the
+// value, and otherwise it is an UnknownKeyError. On the bytes path `key`
+// aliases data and stays valid for the whole function. So by default it goes
+// straight into the stored map key or ggen.NewParseErr, with no clone. Under
+// -copy every kept `key` is cloned (keyExpr), and string and `any` values of
+// the catch-all map are copied too. The stored entries then survive later
+// changes to data, as on the stream path.
 func unknownKey(s model.StructInfo, posVar string) string {
 	keyExpr := "key"
 	if s.Copy {
@@ -4930,9 +5090,10 @@ func unknownKey(s model.StructInfo, posVar string) string {
 %[4]s`, embedded.GoName, posVar, anyFn, chk, keyExpr, vArg(embedded))
 		case model.KindString:
 			if s.Copy {
-				// tier func + ggen.Detach: reuse the tier locate, clone the value
-				// only when it aliases data (an owned stringSlow escape result
-				// skips the clone — no double-copy). Key stays cloned (keyExpr).
+				// Call the tier scanner, then ggen.Detach, which clones the
+				// value only when it aliases data. An escaped string is already
+				// a fresh copy, so it is not copied twice. The key is cloned
+				// through keyExpr.
 				return initMap + fmt.Sprintf(`var strVal string
 strVal, %[1]s, err = `+scanStringFn+`(data, %[1]s, `+vArg(embedded)+`)
 %[3]sresult.%[2]s[%[4]s] = ggen.Detach(strVal, data)
@@ -4969,9 +5130,9 @@ result.%[3]s[%[5]s] = entry
 	return fmt.Sprintf("return result, %[1]s, &ggen.UnknownKeyError{Pos: %[1]s, Path: []string{%[2]s}}\n", posVar, keyExpr)
 }
 
-// renderPipe emits an ordered value-stage step list (mods and validators
-// interleaved in declared order) against ref. posVar selects the return shape
-// ("i" bytes path, "" stream path).
+// renderPipe emits an ordered list of value steps against ref: mods and
+// validators mixed, in declared order. posVar picks the return shape: "i" for
+// the bytes path and "" for the stream path.
 func renderPipe(b *bytes.Buffer, steps []model.Step, ref, jsonName, goType string, kind model.TypeKind, multiErr bool, posVar string) {
 	if len(steps) == 0 {
 		return
@@ -4992,7 +5153,7 @@ func renderPipe(b *bytes.Buffer, steps []model.Step, ref, jsonName, goType strin
 			p++
 			continue
 		}
-		// maximal run of validators against the current (unmutated) ref
+		// The longest run of validators against the current, unchanged ref.
 		q := p
 		run := make([]model.ValidationRule, 0, len(steps)-p)
 		for q < len(steps) && !steps[q].IsMod {
@@ -5004,8 +5165,9 @@ func renderPipe(b *bytes.Buffer, steps []model.Step, ref, jsonName, goType strin
 	}
 }
 
-// fieldPipe returns the ordered value steps for a field — f.Pipe when set,
-// else derived from the legacy split buckets (covers synthetic pointer-leaf fields).
+// fieldPipe returns the ordered value steps for a field. It is f.Pipe when
+// set. Otherwise it is built from the separate Mods and Validation lists,
+// which covers synthetic pointer-leaf fields.
 func fieldPipe(f model.FieldInfo) []model.Step {
 	if f.Pipe != nil {
 		return f.Pipe
@@ -5024,12 +5186,13 @@ func validateAndMod(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	renderPipe(b, fieldPipe(f), ref, f.JSONName, f.GoType, f.Kind, f.MultiErr, "i")
 }
 
-// emitPointerPipe emits a pointer field's value steps as ONE ordered pass:
-// each `@Func` step takes the field's own `*T`, each built-in step the deref'd
-// leaf, at its declared position. posVar is "" on the stream path. guardNil
-// wraps the built-in groups in a nil test, for callers that reach here with
-// the pointer possibly still nil (the converter dispatch); the plain pointer
-// path emits after its assign cascade, where every level is non-nil.
+// emitPointerPipe emits a pointer field's value steps as one ordered pass.
+// Each `@Func` step takes the field's own `*T`. Each built-in step takes the
+// dereferenced leaf. Every step stays at its declared position. posVar is ""
+// on the stream path. guardNil wraps the built-in groups in a nil check. The
+// converter dispatch needs that, because the pointer may still be nil there.
+// The plain pointer path emits after the pointer chain is assigned, where
+// every level is non-nil.
 func emitPointerPipe(b *bytes.Buffer, f model.FieldInfo, ref string, depth int, leafType string, leafK model.TypeKind, posVar string, guardNil bool) {
 	steps := fieldPipe(f)
 	deref := derefStr(ref, depth)
@@ -5055,7 +5218,7 @@ func emitPointerPipe(b *bytes.Buffer, f model.FieldInfo, ref string, depth int, 
 }
 
 // ptrNonNilCond is the condition under which derefStr(ref, depth) is safe:
-// every level of the chain non-nil.
+// every level of the chain is non-nil.
 func ptrNonNilCond(ref string, depth int) string {
 	conds := make([]string, 0, depth)
 	for k := range depth {
@@ -5064,8 +5227,8 @@ func ptrNonNilCond(ref string, depth int) string {
 	return strings.Join(conds, " && ")
 }
 
-// emitFieldPipe runs a field's value stage: a pointer field splits its steps
-// between the pointer and its leaf, every other field runs them on ref.
+// emitFieldPipe runs a field's value steps. A pointer field splits its steps
+// between the pointer and its leaf. Every other field runs them on ref.
 func emitFieldPipe(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	if !f.Pointer {
 		renderPipe(b, fieldPipe(f), ref, f.JSONName, f.GoType, f.Kind, f.MultiErr, posVar)
@@ -5075,20 +5238,22 @@ func emitFieldPipe(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	emitPointerPipe(b, f, ref, depth, leafType, leafKind(f, leafType), posVar, true)
 }
 
-// validateAndModStream is the stream-path counterpart of validateAndMod.
-// Emits 2-tuple `return result, err` shape (Stream owns s.Pos).
+// validateAndModStream is the stream-path counterpart of validateAndMod. It
+// emits the two-value `return result, err` form, because the Stream owns
+// s.Pos.
 func validateAndModStream(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	renderPipe(b, fieldPipe(f), ref, f.JSONName, f.GoType, f.Kind, f.MultiErr, "")
 }
 
-// renderStringTag handles json:",string" — reads a quoted JSON string and
-// parses its contents into the field's numeric / bool type.
+// renderStringTag handles json:",string". It reads a quoted JSON string and
+// parses its content into the field's number or bool type.
 func renderStringTag(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	field := fieldLit(f)
-	// Brace-less: `sv` / `qn` / `qe` land in the caller's scope.
+	// No braces, so `sv`, `qn` and `qe` are declared in the caller's scope.
 	b.WriteString("var sv string\n")
-	// Only the KindString case retains sv (ref = sv); numeric `,string` parses
-	// it into an independent value, so the copy is needed for strings only.
+	// Only a string field would keep sv, and the parser rejects `,string` on
+	// a string field. Numbers and bools parse sv into a separate value, so no
+	// copy is needed for them.
 	inlineScanString(b, posVar, "sv", posVar, field, f.Copy && f.Kind == model.KindString, !f.AllowInvalidUTF8)
 	if f.Kind == model.KindBool {
 		fmt.Fprintf(b, `switch sv {
@@ -5102,12 +5267,13 @@ default: return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, ggen.ErrBadBool)
 	renderQuotedNumber(b, f, ref, fmt.Sprintf("return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ", posVar, field))
 }
 
-// renderQuotedNumber parses the unquoted `,string` text in sv through the
-// bytes-path scanners, so the quoted form takes exactly the bare form's
-// grammar, range and narrowing checks. strconv also took Go-literal
-// spellings (NaN, Infinity, +1, 01, 1_0), none of which jsonv2 admits, and a
-// NaN or Inf let in that way could not be marshaled back. retPrefix opens
-// the caller's error return up to the wrapped error.
+// renderQuotedNumber parses the `,string` text in sv, without its quotes,
+// with the bytes-path scanners. So the quoted form gets exactly the same
+// grammar, range and narrowing checks as a bare number. strconv would accept
+// Go literal forms such as NaN, Infinity, +1, 01 and 1_0. jsonv2 accepts none
+// of them, and a NaN or Inf read that way could not be marshaled back.
+// retPrefix is the start of the caller's error return, up to the wrapped
+// error.
 func renderQuotedNumber(b *bytes.Buffer, f model.FieldInfo, ref, retPrefix string) {
 	var scan, wide string
 	switch f.Kind {
@@ -5132,9 +5298,10 @@ if err != nil { %[3]serr) }
 	}
 }
 
-// elemPtrType returns the full element type including every pointer level,
-// plus the total pointer depth (0 = not a pointer). The parse layer unwraps
-// one `*` into ElemPointer for slices/arrays; map/nested keep their stars on ElemType.
+// elemPtrType returns the full element type with every pointer level, and the
+// total pointer depth, where 0 means not a pointer. For slices and arrays the
+// parser moves one `*` into ElemPointer. Map values and nested elements keep
+// their stars on ElemType.
 func elemPtrType(f model.FieldInfo) (string, int) {
 	et := f.ElemType
 	if f.ElemPointer {
@@ -5144,9 +5311,10 @@ func elemPtrType(f model.FieldInfo) (string, int) {
 	return et, depth
 }
 
-// elemPtrField synthesizes the FieldInfo a pointer-typed element decodes
-// through — the parse-first cascade scalar pointer fields use. Elem-level
-// rules ride along. jsonName is the validation-path suffix ("x[]" / "x.value").
+// elemPtrField builds the FieldInfo that a pointer element decodes through.
+// It uses the same code as a pointer field: parse the leaf first, then assign
+// the pointer chain. Element rules come along. jsonName is the path used in
+// errors, such as "x[]" or "x.value".
 func elemPtrField(f model.FieldInfo, jsonName string) model.FieldInfo {
 	et, _ := elemPtrType(f)
 	_, leafType := model.PointerDepth(et)
@@ -5168,8 +5336,8 @@ func elemPtrField(f model.FieldInfo, jsonName string) model.FieldInfo {
 		Mods:             f.ElemMods,
 		Iface:            f.ElemIface,
 	}
-	// A container leaf needs its own Elem* populated — the parse layer only
-	// fills these for the outermost container.
+	// A container leaf needs its own Elem* fields set. The parser fills them
+	// only for the outermost container.
 	//exhaustive:ignore not every kind applies here
 	switch pf.Kind {
 	case model.KindSlice, model.KindArray:
@@ -5191,8 +5359,8 @@ func elemPtrField(f model.FieldInfo, jsonName string) model.FieldInfo {
 	return pf
 }
 
-// derefStr returns ref dereferenced k times, parenthesized:
-// derefStr("x",0)=="x", derefStr("x",1)=="(*x)", derefStr("x",2)=="(*(*x))".
+// derefStr returns ref dereferenced k times, with parentheses. For example
+// derefStr("x",0)=="x", derefStr("x",1)=="(*x)" and derefStr("x",2)=="(*(*x))".
 func derefStr(ref string, k int) string {
 	for ; k > 0; k-- {
 		ref = "(*" + ref + ")"
@@ -5200,16 +5368,18 @@ func derefStr(ref string, k int) string {
 	return ref
 }
 
-// newChain returns `new(new(…expr))` with n `new(` calls — wraps expr in n
-// pointer levels via the Go 1.26 `new(expr)` form. n==1 → `new(expr)`.
+// newChain returns `new(new(…expr))` with n `new(` calls. It wraps expr in n
+// pointer levels with the Go 1.26 `new(expr)` form. For n==1 it returns
+// `new(expr)`.
 func newChain(expr string, n int) string {
 	return strings.Repeat("new(", n) + expr + strings.Repeat(")", n)
 }
 
-// widenedLeafCast maps a narrow numeric leaf kind to the wide type its scanner
-// produces (int64/uint64/float64) plus the cast back. The pointer decode scans
-// into a wide temp and casts at the assign site. Returns ("",0,"") when no
-// widening is needed.
+// widenedLeafCast maps a narrow integer leaf kind to the wide type its scanner
+// produces, int64 or uint64, plus the conversion back. The pointer decode
+// scans into a wide temp and converts where it assigns. It returns ("",0,"")
+// when no widening is needed. Floats are not widened, because float32 has its
+// own scanner.
 func widenedLeafCast(k model.TypeKind, leafGoType string) (wideType string, wideKind model.TypeKind, cast string) {
 	//exhaustive:ignore not every kind applies here
 	switch k {
@@ -5221,9 +5391,9 @@ func widenedLeafCast(k model.TypeKind, leafGoType string) (wideType string, wide
 	return "", 0, ""
 }
 
-// leafMerges reports whether a pointer leaf benefits from being seeded with
-// the receiver's carried-in value before decode (struct/slice/map merge;
-// primitives just overwrite).
+// leafMerges reports whether a pointer leaf gains from being seeded with the
+// receiver's existing value before the decode. Structs, slices, arrays and
+// maps can reuse memory. Primitives are simply overwritten.
 func leafMerges(k model.TypeKind) bool {
 	//exhaustive:ignore not every kind applies here
 	switch k {
@@ -5234,17 +5404,18 @@ func leafMerges(k model.TypeKind) bool {
 }
 
 // nullBreakOK reports whether a field's `null` branch can `break` out of the
-// key-dispatch switch instead of nesting the whole value decode in an else.
-// Requires the emit site to sit directly inside the dispatch switch
-// (AtDispatch) and no post-value field rules — a break would skip the
-// validateAndMod / custom @Func calls that follow the value block.
+// key switch instead of nesting the whole value decode in an else. The code
+// must sit directly inside the key switch (AtDispatch), and the field must
+// have no rules that run after the value. A break would skip the
+// validateAndMod and custom @Func calls that follow the value code.
 func nullBreakOK(f model.FieldInfo) bool {
 	return f.AtDispatch && (f.NoValidate || (len(f.Validation) == 0 && len(f.Mods) == 0))
 }
 
-// nullZeroApplies reports whether the `nullzero` opt-in adds a null→zero
-// branch. Only dispatch-level non-pointer value kinds that would otherwise
-// hard-error on `null` qualify; already-null-aware kinds are no-ops.
+// nullZeroApplies reports whether the `nullzero` option adds a branch that
+// turns null into the zero value. Only non-pointer fields at dispatch level
+// whose kind would otherwise reject `null` qualify. For kinds that already
+// accept null it does nothing.
 func nullZeroApplies(f model.FieldInfo) bool {
 	if !f.NullZero || f.Pointer || !f.AtDispatch {
 		return false
@@ -5258,9 +5429,11 @@ func nullZeroApplies(f model.FieldInfo) bool {
 }
 
 // emitStreamNullZero is the stream-path counterpart of the bytes-path
-// inlineNullPeek + zero assign used for `nullzero`. It emits the buffered
-// `null` literal check (ReadMore-guarded, like the stream pointer branch),
-// sets ref to its Go zero on a match, then breaks (flat) or opens an else.
+// inlineNullPeek plus zero assignment used for `nullzero`. It emits the
+// `null` check over the Stream's window, the part of the reader's data
+// currently in its buffer. Like the stream pointer branch, it calls ReadMore
+// to refill when bytes are missing. On a match it sets ref to its Go zero,
+// then either breaks (flat) or opens an else.
 func emitStreamNullZero(b *bytes.Buffer, ref, zero, field string, flat bool, sentinel string) {
 	rm := streamReadMore(field, "0", false, sentinel)
 	rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
@@ -5279,14 +5452,14 @@ func emitStreamNullZero(b *bytes.Buffer, ref, zero, field string, flat bool, sen
 }
 
 // emitPointerSeed hands the receiver's existing leaf to the decode temp `v`
-// when the whole pointer chain is already allocated, so the leaf decode
-// recycles its allocations. A struct resets itself and an array blanks its
-// slots, but a slice or map leaf is emptied HERE: the container emitters
-// append into / fill whatever they are given, and the entry reset covers
-// only plain top-level fields. A bytes-path map whose values are swapped
-// (opt #76) is handed over intact — the swap reads the carried entries.
-// No-op for primitive leaves and for one that would merge stale data
-// instead of resetting (leafResets).
+// when the whole pointer chain is already allocated, so the leaf decode reuses
+// its memory. A struct resets itself and an array blanks its slots. A slice or
+// map leaf is emptied here, because the container emitters append to or fill
+// whatever they get, and the reset at entry covers only plain top-level
+// fields. A bytes-path map whose values are swapped (see opt #76 in
+// cmd/ggen/CLAUDE.md) is handed over as is, because the swap reads the old
+// entries. It does nothing for primitive leaves, or for a leaf that would
+// merge old data instead of resetting (see leafResets).
 func emitPointerSeed(b *bytes.Buffer, ref string, depth int, leaf model.FieldInfo, bytesPath bool) {
 	if !leafMerges(leaf.Kind) || !leafResets(leaf.Kind, leaf.GoType) {
 		return
@@ -5306,10 +5479,10 @@ func emitPointerSeed(b *bytes.Buffer, ref string, depth int, leaf model.FieldInf
 	b.WriteString("}\n")
 }
 
-// emitPointerAssign writes the post-parse assign cascade for a depth-level
-// pointer field (leaf already decoded into `v`). REUSES the non-nil prefix of
-// the chain, allocating `new(…)` only from the first nil level down. valExpr is
-// `v` or a width cast like `int(v)`.
+// emitPointerAssign writes the assignments that follow the parse of a pointer
+// field with depth levels. The leaf is already decoded into `v`. It reuses
+// the non-nil start of the chain and allocates with `new(…)` only from the
+// first nil level down. valExpr is `v` or a conversion such as `int(v)`.
 func emitPointerAssign(b *bytes.Buffer, ref string, depth int, valExpr string) {
 	for k := range depth {
 		dk := derefStr(ref, k)
@@ -5323,8 +5496,9 @@ func emitPointerAssign(b *bytes.Buffer, ref string, depth int, valExpr string) {
 }
 
 func renderField(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
-	// Converter variant: peek the JSON shape and route (handles null/native/
-	// convert itself); the outer value stage runs after.
+	// Converter variant. Look at the JSON shape and pick a branch. The
+	// dispatch handles null, the native decode and the converter itself. The
+	// field's value steps run after it.
 	if model.FieldHasConverter(f) {
 		renderVariantDispatch(b, f, ref, posVar)
 		if !f.NoValidate {
@@ -5332,16 +5506,18 @@ func renderField(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 		}
 		return
 	}
-	// Named primitive (`type B S; type S string`): scan the UNDERLYING into a
-	// temp and convert at the assign. Delegating to the alias's own DecodeFrom
-	// costs a `ggen.String` call per field — it forfeits the inline window scan
-	// (opt #47) — and an UNANNOTATED named type had no methods to call at all,
-	// so it fell through to SkipValue + encoding/json. The conversion itself is
-	// free: identical underlying type, so gc emits no instruction for it.
-	// Runs AFTER the pointer peel, so `*Named` reaches it via the leaf recursion.
+	// A named primitive, as in `type B S; type S string`, scans the
+	// underlying type into a temp and converts where it assigns. Calling the
+	// alias's own DecodeFrom would cost a `ggen.String` call per field and lose
+	// the inline window scan (see opt #47 in cmd/ggen/CLAUDE.md). An
+	// unannotated named type has no methods to call at all, so it would fall
+	// to SkipValue and encoding/json. The conversion is free: the underlying
+	// type is identical, so the compiler emits no instruction for it. This
+	// runs for the leaf after the pointer is removed, so `*Named` reaches it
+	// through the leaf recursion.
 	if prim, kind, ok := inlineNamedPrim(f); ok && !f.Pointer && !f.String {
-		// `nullzero` stays on the OUTER field: it is gated on AtDispatch, which
-		// only the outer carries, and its zero literal is the named type's.
+		// `nullzero` stays on the outer field. It depends on AtDispatch, which
+		// only the outer field has, and its zero literal uses the named type.
 		nz := nullZeroApplies(f)
 		flat := nz && nullBreakOK(f)
 		if nz {
@@ -5357,7 +5533,7 @@ func renderField(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 		var nb bytes.Buffer
 		renderField(&nb, namedPrimInner(f, prim, kind), tmp, posVar)
 		if rest, expr, ok := foldTailAssign(nb.String(), tmp); ok {
-			// Write-once temp folds straight into the conversion.
+			// A temp written once folds straight into the conversion.
 			b.WriteString(rest)
 			fmt.Fprintf(b, "%s = %s(%s)\n", ref, f.GoType, expr)
 		} else {
@@ -5373,23 +5549,25 @@ func renderField(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 		}
 		return
 	}
-	// Pointer FIRST: a `*T` field with json:",string" must decode into T then
-	// take its address (the string-tag branch on `*T` would emit broken code).
-	// The pointer block recurses with inner.GoType=T.
+	// Pointers come first. A `*T` field with json:",string" must decode into T
+	// and then take its address. The string-tag branch on `*T` would emit
+	// broken code. The pointer block recurses with the leaf type T.
 	if f.Pointer {
-		// Custom `@Func` rules apply to the pointer type; built-in rules to the
-		// deref'd leaf. A pipe mixing the two runs as ONE ordered pass after
-		// the assign (emitPointerPipe); a pipe of one half keeps that half on
-		// its own target — the leaf's steps ride along with its decode, the
-		// @-rules run on `ref` once the null branch has rejoined.
+		// Custom `@Func` rules apply to the pointer type. Built-in rules apply
+		// to the dereferenced leaf. A pipe that mixes both runs as one ordered
+		// pass after the assignment (emitPointerPipe). A pipe with only one
+		// kind keeps it on its own target: the leaf's steps run with its
+		// decode, and the @ rules run on `ref` after the null branch joins
+		// back.
 		builtinV, customV := model.PartitionCustomValidation(f.Validation)
 		builtinM, customM := model.PartitionCustomMods(f.Mods)
 		builtinSteps, customSteps := model.SplitCustomSteps(fieldPipe(f))
 		ordered := !f.NoValidate && len(builtinSteps) > 0 && len(customSteps) > 0
-		// Decode-into-receiver, any pointer depth. null → nil outer (stdlib
-		// merge parity). Else decode the leaf into temp `v` FIRST (no mutation
-		// on parse failure), then the assign cascade reuses the non-nil prefix
-		// and allocates only the nil tail; a mergeable leaf is seeded first.
+		// Decode into the receiver at any pointer depth. null sets the outer
+		// pointer to nil, as stdlib does. Otherwise decode the leaf into the
+		// temp `v` first, so a parse failure changes nothing. Then the
+		// assignments reuse the non-nil start of the chain and allocate only
+		// the nil rest. A leaf that can reuse memory is seeded first.
 		depth, leafType := model.PointerDepth(f.GoType)
 		leaf := f
 		leaf.Pointer = false
@@ -5405,18 +5583,19 @@ func renderField(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 		}
 		leaf.AtDispatch = false
 		leaf.TargetNil = false
-		// Widened numeric leaf: scan into the wide type, cast at the assign site.
+		// A narrow integer leaf scans into the wide type and converts where
+		// it assigns.
 		scanType, castFn := leafType, ""
 		if wide, wideKind, cast := widenedLeafCast(leaf.Kind, leafType); wide != "" {
 			leaf.Kind, leaf.GoType, scanType, castFn = wideKind, wide, wide, cast
 		}
-		// At dispatch level the null branch breaks to the comma handling.
+		// At dispatch level the null branch breaks out to the comma handling.
 		flat := nullBreakOK(f)
 		inlineNullPeek(b, posVar, fieldLit(f))
 		fmt.Fprintf(b, "%s = nil\n", ref)
 		if ordered {
-			// `@Func` steps take `*T`, so a nil pointer still reaches them;
-			// the built-ins have no leaf here.
+			// `@Func` steps take `*T`, so a nil pointer still reaches them.
+			// The built-in steps have no leaf here.
 			renderPipe(b, customSteps, ref, f.JSONName, f.GoType, f.Kind, f.MultiErr, posVar)
 		}
 		if flat {
@@ -5424,15 +5603,16 @@ func renderField(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 		} else {
 			b.WriteString("} else {\n")
 		}
-		// Fast path: the inline int/uint scanner materializes `n`, so a leaf
-		// with no built-in rules skips the temp — cascade runs off `n`.
+		// Fast path. The inline integer scanner already produces `n`, so a
+		// leaf with no built-in rules needs no temp. The assignments use `n`.
 		if (leaf.Kind == model.KindInt64 || leaf.Kind == model.KindUint64) && !f.String && len(builtinV) == 0 && len(builtinM) == 0 {
 			valExpr := "n"
 			if castFn != "" {
 				valExpr = castFn + "(n)"
 			}
 			var cascade bytes.Buffer
-			// Guard the narrowing cast: an out-of-range leaf overflows, not wraps.
+			// Guard the narrowing conversion, so an out-of-range leaf is an
+			// overflow error and does not wrap.
 			errRet := fmt.Sprintf("return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrNumberOverflow)", posVar, fieldLit(f))
 			cascade.WriteString(narrowIntGuard("n", castFn, errRet))
 			if f.TargetNil {
@@ -5460,7 +5640,8 @@ func renderField(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 				narrowIntGuard("v", castFn, fmt.Sprintf("return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, ggen.ErrNumberOverflow)", posVar, fieldLit(f))),
 			)
 			if f.TargetNil {
-				// Target is a known-nil `var x *T` — straight new-chain assign.
+				// The target is a `var x *T` known to be nil, so assign a new
+				// chain directly.
 				fmt.Fprintf(b, "%s = %s\n", ref, newChain(valExpr, depth))
 			} else {
 				emitPointerAssign(b, ref, depth, valExpr)
@@ -5481,9 +5662,10 @@ func renderField(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 		}
 		return
 	}
-	// `nullzero`: accept an explicit JSON null → Go zero on a non-pointer value
-	// field. Flat-break at dispatch level; else nest in an else so the shared
-	// validateAndMod runs on the zero too.
+	// `nullzero` makes a non-pointer value field accept an explicit JSON null
+	// as the Go zero value. At dispatch level the null branch breaks out.
+	// Otherwise the value decode nests in an else, so validateAndMod also runs
+	// on the zero.
 	nz := nullZeroApplies(f)
 	flat := nz && nullBreakOK(f)
 	if nz {
@@ -5495,7 +5677,8 @@ func renderField(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 			b.WriteString("} else {\n")
 		}
 	}
-	// jsonv2 dropped `,string` for bool; fall through to the bare decode.
+	// jsonv2 does not quote a bool for `,string`, so a bool takes the bare
+	// decode.
 	if f.String && f.Kind != model.KindBool {
 		renderStringTag(b, f, ref, posVar)
 		if nz && !flat {
@@ -5527,9 +5710,10 @@ if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field, floatScanFn(f.Kind))
 	case model.KindStruct:
 		if isGenerated(f.GoType) {
-			// Value-receiver DecodeFrom merges the field's current value;
-			// `consumed` (bytes consumed) advances posVar. Cyclic types route to the
-			// depth core so payload nesting stays bounded.
+			// DecodeFrom is called on the field's current value, which it
+			// resets while reusing its allocations. `consumed`, the number of
+			// bytes read, advances posVar. Cyclic types go through the depth
+			// core, so payload nesting stays bounded.
 			fmt.Fprintf(b, `var consumed int
 %[1]s, consumed, err = %[1]s.`+decodeCallFor(f.GoType)+`
 %[2]s += consumed
@@ -5582,20 +5766,21 @@ if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 	}
 }
 
-// renderSlice is the depth-0 entry point into the recursive slice emitter
-// (struct-field path — not top-level).
+// renderSlice is the depth-0 entry into the recursive slice emitter for a
+// struct field. It is not used for a top-level alias.
 func renderSlice(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	emitByteSliceRead(b, f, ref, posVar, 0, false)
 }
 
-// peelSliceField returns the FieldInfo one level down for a slice-of-slice or
-// slice-of-array element. Rules shift up one level (InnerValidation[0] →
-// ElemValidation, etc.). Called only when f.ElemKind is KindSlice / KindArray.
+// peelSliceField returns the FieldInfo one level down, for the element of a
+// slice of slices or a slice of arrays. Rules move up one level, so
+// InnerValidation[0] becomes ElemValidation, and so on. It is called only
+// when f.ElemKind is KindSlice or KindArray.
 func peelSliceField(f model.FieldInfo) model.FieldInfo {
 	innerGoType := f.ElemType
 	innerElem, innerKind, innerLen := model.StripOneContainer(innerGoType)
-	// Mirror the parse layer: one leading `*` unwraps into ElemPointer; any
-	// remaining stars stay on ElemType for the multi-level route.
+	// Do what the parser does: one leading `*` moves into ElemPointer, and
+	// any other stars stay on ElemType for the multi-level pointer code.
 	innerPointer := false
 	if strings.HasPrefix(innerElem, "*") {
 		innerPointer = true
@@ -5619,8 +5804,8 @@ func peelSliceField(f model.FieldInfo) model.FieldInfo {
 		AllowDups:        f.AllowDups,
 		Copy:             f.Copy,
 		AllowInvalidUTF8: f.AllowInvalidUTF8,
-		// HintLen=-1 ("unset") so preallocCap falls through to the kind
-		// default — the zero-value 0 would read as opt-out.
+		// HintLen=-1 means "unset", so preallocCap uses its default. The zero
+		// value 0 would mean opt out.
 		HintLen: -1,
 	}
 	if innerKind == model.KindArray {
@@ -5638,12 +5823,12 @@ func peelSliceField(f model.FieldInfo) model.FieldInfo {
 			inner.InnerMods = f.InnerMods[1:]
 		}
 	}
-	// Ordered per-level steps: this level's elem is the next inner level down.
+	// Ordered steps per level. This level's element is the next level down.
 	if len(f.Levels) > 1 {
 		inner.Levels = f.Levels[1:]
 	}
-	// Per-level prealloc hints shift down the same way: HintLevels[0] sizes
-	// this peeled level's rows.
+	// Prealloc hints per level shift down the same way. HintLevels[0] sizes
+	// the rows of this level.
 	if len(f.HintLevels) > 0 {
 		inner.HintLen = f.HintLevels[0]
 		inner.HintLevels = f.HintLevels[1:]
@@ -5651,8 +5836,9 @@ func peelSliceField(f model.FieldInfo) model.FieldInfo {
 	return inner
 }
 
-// elemSteps returns the ordered per-element value steps (level-1 inner) —
-// Levels[0] when present, else the derived split buckets.
+// elemSteps returns the ordered value steps for each element, the first inner
+// level. It is Levels[0] when present. Otherwise it is built from the
+// separate ElemMods and ElemValidation lists.
 func elemSteps(f model.FieldInfo) []model.Step {
 	if len(f.Levels) > 0 {
 		return f.Levels[0]
@@ -5660,37 +5846,38 @@ func elemSteps(f model.FieldInfo) []model.Step {
 	return model.StepsFromLegacy(f.ElemMods, f.ElemValidation)
 }
 
-// emitByteArrayRead is a thin wrapper around emitByteSliceRead for [N]T fields
-// (struct-field path — not top-level).
+// emitByteArrayRead is a thin wrapper around emitByteSliceRead for [N]T
+// struct fields. It is not used for a top-level alias.
 func emitByteArrayRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string, depth int) {
 	emitByteSliceRead(b, f, dst, posVar, depth, false)
 }
 
-// emitByteSliceRead emits a JSON array reader against `data` into `dst`,
-// advancing posVar. Handles slices (pre-sized via preallocCap, appended) and
-// fixed-length arrays (strict tuple: exactly f.ArrayLen elements or LenError).
-// Data locals (evN, idxN, slabN) carry the depth suffix to avoid collisions.
-// topLevel marks a whole-value decode (a top-level container alias): there's
-// nothing to parse after the array, so each exit returns directly instead of
-// falling through to a trailing `return`. Always false for struct fields and
-// nested elements (their caller has more to parse).
+// emitByteSliceRead emits a reader for a JSON array in `data` that fills
+// `dst` and advances posVar. It handles slices, which are pre-sized with
+// preallocCap and appended to, and fixed-length arrays, which are strict
+// tuples: exactly f.ArrayLen elements or a LenError. Data locals such as evN,
+// idxN and slabN end in the depth, so names do not collide. topLevel marks a
+// decode of the whole value, a top-level container alias. Nothing follows the
+// array, so each exit returns directly. It is false for struct fields and
+// nested elements, whose caller has more to parse.
 func emitByteSliceRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string, depth int, topLevel bool) {
 	isArray := f.Kind == model.KindArray
 	arrayN := f.ArrayLen
-	// Multi-level pointer element (`[]**T`, …): no slab — each element runs
-	// the parse-first cascade. Depth-1 `[]*T` keeps the slab fast path.
+	// A multi-level pointer element such as `[]**T` gets no slab. Each
+	// element runs the pointer code: parse the leaf, then assign the chain. A
+	// `[]*T` keeps the faster slab path.
 	_, elemDepth := elemPtrType(f)
 	mptr := elemDepth >= 2
-	// kvar is posVar directly: the whole nest shares one position counter,
-	// each level advancing it past the bytes it consumed.
+	// kvar is posVar itself. The whole nest shares one position counter, and
+	// each level advances it past the bytes it read.
 	kvar := posVar
 	evvar := fmt.Sprintf("ev%d", depth)
 	ivar := fmt.Sprintf("idx%d", depth)
-	// No leading WS skip — every value-entry site (after `:`/`[`/`,`, and the
-	// alias path explicitly) already skipped it.
-	// `null` → nil out the slice (arrays don't accept null). At dispatch level
-	// flat-break; a nested slot whose parent consumed the null (NullDone)
-	// skips the peek.
+	// No leading whitespace skip. Every place a value starts, after `:`, `[`
+	// or `,`, already skipped it, and the alias path skips it explicitly.
+	// `null` sets the slice to nil. Arrays do not accept null. At dispatch
+	// level the null branch breaks out. A nested slot whose parent already
+	// handled the null (NullDone) skips the check.
 	flat := !isArray && nullBreakOK(f)
 	if !isArray && !f.NullDone {
 		inlineNullPeek(b, kvar, fieldLit(f))
@@ -5699,8 +5886,9 @@ func emitByteSliceRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string, d
 		case flat:
 			b.WriteString("break\n}\n")
 		case topLevel:
-			// Whole-value alias: null → return directly; no else needed since the
-			// non-null path also returns at the array close.
+			// The alias is the whole value, so null returns at once. No else
+			// is needed, because the non-null path also returns at the closing
+			// bracket.
 			fmt.Fprintf(b, "return result, %s, nil\n}\n", kvar)
 		default:
 			b.WriteString("} else {\n")
@@ -5715,8 +5903,8 @@ func emitByteSliceRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string, d
 	fmt.Fprintf(b, "%s++\n", kvar)
 	inlineSkipWS(b, kvar)
 	if isArray && arrayN == 0 {
-		// `[0]T` holds no slots, so only `[]` parses and there is nothing to
-		// store: an element loop would index a zero-length array.
+		// `[0]T` has no slots, so only `[]` parses and there is nothing to
+		// store. An element loop would index a zero-length array.
 		fmt.Fprintf(b, "if %[1]s < len(data) && data[%[1]s] != ']' { return result, %[1]s, %[2]s }\n",
 			kvar, tupleOverflowErr(f.JSONName, 0, kvar))
 		fmt.Fprintf(
@@ -5734,33 +5922,35 @@ func emitByteSliceRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string, d
 	slabVar := fmt.Sprintf("slab%d", depth)
 	if isArray {
 		fmt.Fprintf(b, "var %s int\n", ivar)
-		// Arrays of pointers: an exact-sized heap slab. `[N]E` would escape
-		// via `&slab[i]` anyway, so `make([]E, N)` skips the stack hop.
+		// An array of pointers gets a heap slab of exact size. A stack
+		// `[N]E` would escape through `&slab[i]` anyway, so `make([]E, N)`
+		// skips that step.
 		if f.ElemPointer && !mptr {
 			fmt.Fprintf(b, "%s := make([]%s, %d)\n", slabVar, f.ElemType, arrayN)
 		}
 	} else {
 		sCap, slCap := preallocCap(f)
 		countable := !f.ElemPointer && scalarCountable(f.ElemKind) && userPreallocHint(f) < 0
-		// When the non-empty arm's prealloc would also be just `dst = T{}`
-		// (no count, no cap, no slab), both empty-peek arms are byte-identical,
-		// so emit one `if dst == nil` and skip the peek.
+		// When the non-empty branch would also only do `dst = T{}`, with no
+		// count, no capacity and no slab, both branches of the empty check
+		// are the same. So emit one `if dst == nil` and skip the check.
 		if !f.ElemPointer && !countable && sCap == "0" {
 			fmt.Fprintf(b, "if %s == nil { %s = %s{} }\n", dst, dst, f.GoType)
 		} else {
 			if f.ElemPointer && !mptr {
 				fmt.Fprintf(b, "var %s []%s\n", slabVar, f.ElemType)
 			}
-			// dst is decode-into-receiver: nil (fresh) or [:0]'d (backing reused).
-			// Allocate only when nil; otherwise reuse the caller's backing.
+			// dst is the receiver's slice. It is nil when fresh, or reset to
+			// [:0] with its backing kept. Allocate only when it is nil.
 			fmt.Fprintf(b, "if %s < len(data) && data[%s] == ']' {\n", kvar, kvar)
 			fmt.Fprintf(b, "if %s == nil { %s = %s{} }\n", dst, dst, f.GoType)
 			fmt.Fprintf(b, "} else {\n")
 			switch {
 			case countable:
-				// Exact-cap from a one-shot delimiter scan (scalar elems carry no
-				// `,`/`]`): kills the growth chain with no over-cap cost.
-				// Reused slots keep their backing; malformed input falls to cap 1.
+				// Exact capacity from one scan for delimiters. Number and bool
+				// elements never contain `,` or `]`. This avoids repeated growth
+				// without over-allocating. A reused slice keeps its backing.
+				// Malformed input falls back to capacity 1.
 				cntVar := fmt.Sprintf("cnt%d", depth)
 				fmt.Fprintf(b, `if %[1]s == nil {
 %[4]s := 1
@@ -5779,25 +5969,25 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 			fmt.Fprintf(b, "}\n")
 		}
 	}
-	// Every elem kind decodes IN PLACE into the destination slot (slab[ivar] /
-	// dst[ivar] for arrays; pre-grown slab/dst tail for slices). err is hoisted
-	// at the DecodeFrom function level.
+	// Every element kind decodes in place into its final slot: slab[ivar] or
+	// dst[ivar] for arrays, and the newly grown last slot of slab or dst for
+	// slices. err is declared once at the top of DecodeFrom.
 	directStruct := f.ElemKind == model.KindStruct && isGenerated(f.ElemType)
 	_ = evvar // unused at this scope
-	// Do-while: the empty `[]` and truncation cases are caught by this one-time
-	// guard (preserving ErrBadArray below); inside, the comma handler's
-	// continue/break drives iteration, so the per-element `data!=']'` re-check is
-	// redundant.
+	// A do-while loop. This one guard catches the empty `[]` and truncated
+	// input, which keeps the ErrBadArray below. Inside, the comma handling's
+	// continue and break drive the loop, so checking `data != ']'` for each
+	// element is not needed.
 	fmt.Fprintf(b, "if %s < len(data) && data[%s] != ']' {\nfor {\n", kvar, kvar)
 	if isArray {
-		// Strict tuple: reject excess elements. Got counts the one that
-		// overflowed, so it reads as too-many next to the too-few case.
+		// Strict tuple. Reject extra elements. Got counts the one extra
+		// element, so the error reads as too many, unlike the too-few case.
 		fmt.Fprintf(b, "if %s >= %d { return result, i, %s }\n",
 			ivar, arrayN,
 			tupleOverflowErr(f.JSONName, arrayN, "i"))
 	}
 	if f.ElemPointer && !mptr {
-		// `null` element → nil pointer; skip the parse + slab work.
+		// A `null` element is a nil pointer. Skip the parse and the slab.
 		inlineNullPeek(b, kvar, fieldLit(f))
 		if isArray {
 			fmt.Fprintf(b, "%s[%s] = nil\n", dst, ivar)
@@ -5811,14 +6001,14 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 		emitNoCloseAfterComma(b, fieldLit(f), kvar, ']')
 		b.WriteString("continue }\nbreak\n}\n")
 	}
-	// Compute the in-place target; slice cases pre-grow the slot here.
+	// Pick the slot to decode into. For slices, the slot is grown here.
 	var target string
 	switch {
 	case isArray && mptr:
 		target = fmt.Sprintf("%s[%s]", dst, ivar)
 	case mptr:
-		// Reslice within cap so the carried pointer chain survives into the
-		// slot and the cascade can reuse it; a past-cap grow starts nil.
+		// Reslice within capacity so the old pointer chain stays in the slot
+		// and can be reused. A grow past capacity starts with nil.
 		if elemPtrReusable(f) {
 			fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, nil) }\n", dst)
 		} else {
@@ -5831,12 +6021,13 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 		target = fmt.Sprintf("%s[%s]", dst, ivar)
 		emitArraySlotBlank(b, f, target, true)
 	case f.ElemPointer:
-		// Slab holds the pointee type; pre-grow the tail slot.
+		// The slab holds the pointee type. Grow it by one slot.
 		emitElemGrow(b, slabVar, f, directStruct)
 		target = fmt.Sprintf("%s[len(%s)-1]", slabVar, slabVar)
 	case f.ElemKind == model.KindSlice:
-		// Slice element: reslice within cap so the carried inner header/backing
-		// survives for reuse; only a past-cap grow allocates a nil slot.
+		// Slice element. Reslice within capacity so the old inner slice and
+		// its backing stay for reuse. Only a grow past capacity adds a nil
+		// slot.
 		fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, nil) }\n", dst)
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	default:
@@ -5846,20 +6037,20 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	field := fieldLit(f)
 	errCheck := fmt.Sprintf("if err != nil { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, err) }\n", kvar, field)
 	if mptr {
-		// Elem rules ride inside the cascade; no slab/post-decode here. Slice
-		// slots are pre-grown nil (TargetNil); ARRAY slots are overwritten
-		// too — the contract is "every slot overwritten", and seeding from
-		// the carried chain merged `[2]**Inner` where `[]**Inner` and
-		// `[2]*Inner` both decoded fresh.
+		// Element rules run inside the pointer code. There is no slab and no
+		// step after the decode here. A slice slot reuses the old pointer
+		// chain when elemPtrReusable allows it, and otherwise gets a new one
+		// (TargetNil).
 		pf := elemPtrField(f, f.JSONName+"[]")
-		// An ARRAY slot keeps the assignment-only cascade: its contract is
-		// "every slot overwritten", pinned by TestMerge_ArraySlotsOverwrite.
+		// An array slot always gets a new chain and only assigns, because
+		// every array slot must be overwritten, never merged. This is pinned
+		// by TestMerge_ArraySlotsOverwrite.
 		pf.TargetNil = isArray || !elemPtrReusable(f)
 		renderField(b, pf, target, kvar)
 	} else {
-		// Named-primitive ELEMENT (`[]Priority`): scan the underlying into a
-		// temp and convert into the slot, same as the field level. The elem
-		// pipe below still runs against the named type.
+		// A named-primitive element, as in `[]Priority`, scans the underlying
+		// type into a temp and converts it into the slot, like the field
+		// level. The element steps below still run against the named type.
 		elemCast, elemTarget := "", ""
 		savedElemType, savedElemKind := f.ElemType, f.ElemKind
 		if prim, kind, ok := inlineNamedPrim(elemAsField(f)); ok {
@@ -5898,20 +6089,20 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 `, target, kvar)
 				b.WriteString(nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, true, "consumed"))
 			} else {
-				// Cross-package / method-carrying element: same ladder the
-				// field level uses. This used to be a bare SkipValue, which
-				// silently decoded every element of a `[]foreign.T` to its
-				// zero value.
+				// An element type from another package, or one with its own
+				// methods, uses the same fallback order as the field level.
 				b.WriteString(renderCrossPkgStructDecode(elemAsField(f), target, kvar))
 			}
 		case model.KindSlice, model.KindArray:
-			// Nested container — recurse, peeling one outer [] / [N] off.
+			// Nested container. Recurse with one outer [] or [N] removed.
 			inner := peelSliceField(f)
 			if inner.Kind == model.KindSlice && len(f.ElemMods) == 0 {
-				// `null` elem → nil slot handled HERE so the inner body isn't
-				// nested in an else (mirrors the []*T nil-elem fast path).
+				// A `null` element gives a nil slot. Handle it here so the
+				// inner body is not nested in an else, like the nil-element
+				// fast path of []*T.
 				inlineNullPeek(b, kvar, fieldLit(f))
-				// Slot may carry a reused/receiver header — nil unconditionally.
+				// The slot may hold an old slice from the receiver, so always
+				// set it to nil.
 				fmt.Fprintf(b, "%s = nil\n", target)
 				if len(f.ElemValidation) > 0 {
 					renderValidationOn(b, f.ElemValidation, target, f.JSONName+"[]", f.ElemType, f.ElemKind, f.MultiErr, "i")
@@ -5926,10 +6117,12 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 				b.WriteString("continue }\nbreak\n}\n")
 				inner.NullDone = true
 			}
-			// Hoist the nested slot into a depth-local `rowN` so the inner loop
-			// writes a local header (no per-element parent-backing barrier);
-			// `target = rowN` publishes the finished row. Seed from the carried
-			// slot ([:0] reset) so the inner decode reuses its backing.
+			// Copy the nested slot into a local `rowN` for this depth. The
+			// inner loop then updates a local slice header instead of writing
+			// into the parent's backing array for each element, which would
+			// cost a GC write barrier each time. `target = rowN` stores the
+			// finished row. The local starts from the old slot, reset to
+			// [:0], so the inner decode reuses its backing array.
 			row := fmt.Sprintf("row%d", depth)
 			fmt.Fprintf(b, "%s := %s\n", row, target)
 			if inner.Kind == model.KindSlice {
@@ -5938,11 +6131,9 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 			emitByteSliceRead(b, inner, row, kvar, depth+1, false)
 			fmt.Fprintf(b, "%s = %s\n", target, row)
 		default:
-			// Dedicated-kind element (time/duration/bytes/raw/netip/url/big/
-			// sqlnull/any/map): the same field-level emitter the struct level
-			// uses, with a sanitized FieldInfo. Used to fall through — the
-			// pre-grown zero slot was never scanned, so every non-empty array
-			// failed ErrBadArray (or the file didn't compile).
+			// An element with a dedicated kind, such as time, duration,
+			// bytes, raw, netip, url, big, sql.Null, any or map, uses the
+			// field-level emitter with a cleaned-up FieldInfo.
 			renderField(b, sliceElemField(f), target, kvar)
 		}
 		if elemCast != "" {
@@ -5953,13 +6144,13 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	}
 	switch {
 	case isArray && f.ElemPointer && !mptr:
-		// Slab slot decoded in-place; publish its address.
+		// The slab slot was decoded in place. Store its address.
 		fmt.Fprintf(b, "%s[%s] = &%s[%s]\n", dst, ivar, slabVar, ivar)
 		fmt.Fprintf(b, "%s++\n", ivar)
 	case isArray:
 		fmt.Fprintf(b, "%s++\n", ivar)
 	case f.ElemPointer && !mptr:
-		// Slab tail decoded in-place; publish addr.
+		// The last slab slot was decoded in place. Append its address.
 		fmt.Fprintf(b, "%s = append(%s, &%s[len(%s)-1])\n", dst, dst, slabVar, slabVar)
 	default:
 	}
@@ -5983,18 +6174,19 @@ if e := bytes.IndexByte(data[%[2]s:], ']'); e >= 0 { %[4]s = bytes.Count(data[%[
 	}
 	fmt.Fprintf(b, "%s++\n", posVar)
 	if topLevel {
-		// Whole-value alias: array consumed, nothing follows → return directly.
+		// The alias is the whole value. The array is read and nothing
+		// follows, so return at once.
 		fmt.Fprintf(b, "return result, %s, nil\n", posVar)
 	}
 	if !isArray && !flat && !f.NullDone && !topLevel {
-		b.WriteString("}\n") // close else (null-check)
+		b.WriteString("}\n") // close the else of the null check
 	}
 }
 
-// renderStreamDecode emits the streaming counterpart of renderDecode, using
-// ggen.Stream methods that pull more bytes on demand.
+// renderStreamDecode emits DecodeFromStream, the stream counterpart of
+// renderDecode. It uses ggen.Stream methods that read more bytes when needed.
 func renderStreamDecode(b *bytes.Buffer, s model.StructInfo) {
-	// Named-result return slot — see DecodeFrom above.
+	// Named results avoid a struct copy on return, as in DecodeFrom above.
 	var body bytes.Buffer
 	if isCyclic(s.Name) {
 		fmt.Fprintf(&body, "func (recv %s) DecodeFromStream(s *ggen.Stream) (%s, error) {\n\treturn recv.decodeFromStreamDepth(s, 0)\n}\n\n", s.Name, s.Name)
@@ -6011,10 +6203,10 @@ func renderStreamDecode(b *bytes.Buffer, s model.StructInfo) {
 			renderStreamDecodeStruct(&body, s)
 		}
 	} else {
-		// Only structs that actually call into a cyclic nested type need
-		// `depth` in scope (decodeCallFor emits `depth+1` there) — render
-		// first and gate on that, so the common acyclic-package struct
-		// doesn't carry a dead const.
+		// Only structs that call into a cyclic nested type need `depth` in
+		// scope, because streamDecodeCallFor emits `depth+1` there. Render
+		// first and check, so the common acyclic struct does not carry an
+		// unused constant.
 		var rest bytes.Buffer
 		if s.IsAlias {
 			renderAliasStreamDecode(&rest, s)
@@ -6030,21 +6222,22 @@ func renderStreamDecode(b *bytes.Buffer, s model.StructInfo) {
 	b.WriteString(tierStreamStringCalls(body.String(), s))
 }
 
-// tierStreamStringCalls rewrites the stream-decode body's string-scan calls
-// to the fixed SIMD tier when one is selected: `= s.String()` / `StringView`
-// / `KeyView` become their fused per-tier Stream methods (assignment-shaped
-// only, so nothing else can match; encode bodies are never passed through).
-// KeyView keeps the scalar-prelude original on all-short-key structs — same
-// gate and rationale as the bytes-path key window (the prelude beats the
-// vector dependency chain on ≤5-byte keys).
+// tierStreamStringCalls rewrites the scan calls in a stream decode body to
+// the chosen SIMD tier. `= s.String()`, `StringView`, `KeyView` and the skip
+// calls become the Stream methods for that tier. Only the assignment form is
+// matched, so nothing else can match, and encode bodies never pass through
+// here. On structs where every key is 5 bytes or shorter, KeyView keeps its
+// scalar version, for the same reason as the bytes-path key window: a few
+// scalar steps beat the dependent vector instructions on short keys.
 func tierStreamStringCalls(body string, s model.StructInfo) string {
 	if simdSuffix == "" {
 		return body
 	}
 	body = strings.ReplaceAll(body, "= s.String(", "= s.String"+simdSuffix+"(")
 	body = strings.ReplaceAll(body, "= s.StringView(", "= s.StringView"+simdSuffix+"(")
-	// Skip tree + dispatch whitespace: same shells/fast paths as the scalar
-	// pair on compact input, vector runs on whitespace-rich streams.
+	// The skip calls and the dispatch whitespace skip. On compact input the
+	// tier versions take the same fast paths as the scalar ones. On input
+	// with much whitespace they skip it with vector instructions.
 	body = strings.ReplaceAll(body, "= s.SkipValue()", "= s.SkipValue"+simdSuffix+"()")
 	body = strings.ReplaceAll(body, "= s.SkipSpace()", "= s.SkipSpace"+simdSuffix+"()")
 	body = strings.ReplaceAll(body, "= s.CaptureValue()", "= s.CaptureValue"+simdSuffix+"()")
@@ -6074,13 +6267,16 @@ func renderStreamDecodeStruct(b *bytes.Buffer, s model.StructInfo) {
 	var pl bytes.Buffer
 	renderStreamPostLoop(&pl, s)
 	plStr := pl.String()
-	// Dispatch runs IMMEDIATELY after KeyView so the alias is still valid for
-	// the switch. ConsumeColon (opening each case) may compact the buffer and
-	// kill the alias, so cases that capture key must clone before it.
+	// The dispatch runs right after KeyView, so the key, which aliases the
+	// Stream's buffer, is still valid for the switch. ConsumeColon, at the
+	// start of each case, may compact the buffer: it moves the unread bytes
+	// to the front, which breaks the alias. So a case that keeps the key must
+	// clone it first.
 	chk := streamErrCheck(`""`)
-	// A drained refill maps to the sentinel the BYTES path reports for the
-	// same truncation: at the key position `{` wants a name, past a value it
-	// wants ',' or '}'. Transient reader errors still propagate raw.
+	// When the reader has no more data, a refill returns the same error the
+	// bytes path reports for the same truncated input. At a key position `{`
+	// expects a name. After a value it expects ',' or '}'. Other reader
+	// errors are returned as they are.
 	rmore := func(sentinel string) string {
 		return fmt.Sprintf(
 			`if s.Pos >= len(s.Bytes()) { if err = s.ReadMore(s.Pos); err != nil { return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, %s)) }; s.Pos = 0 }
@@ -6117,8 +6313,8 @@ for {
 }
 
 func renderStreamDispatch(s model.StructInfo) string {
-	// Each known-key case opens with s.ConsumeColon — the alias isn't needed
-	// past this point, so the shift it triggers is safe.
+	// Each known-key case starts with s.ConsumeColon. The key alias is not
+	// needed after that point, so the buffer shift it may cause is safe.
 	emitField := func(b *bytes.Buffer, f model.FieldInfo, parse string) {
 		field := fieldLit(f)
 		chk := streamErrCheck(field)
@@ -6169,9 +6365,10 @@ func renderStreamDispatch(s model.StructInfo) string {
 	return b.String()
 }
 
-// renderStreamMap emits map decode for the stream path. `null` → nil,
-// empty `{}` → non-nil empty, else fresh make(). Map keys must be detached
-// copies (the buffer can be overwritten on ReadMore), so we use s.String.
+// renderStreamMap emits the stream-path decode of a map. `null` gives nil and
+// an empty `{}` gives a non-nil empty map. A new map is made only when ref is
+// nil. Map keys must be their own copies, because ReadMore can overwrite the
+// buffer, so the keys are read with s.String.
 func renderStreamMap(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	mapNest++
 	defer func() { mapNest-- }()
@@ -6186,7 +6383,7 @@ func renderStreamMap(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	if hint := mapPreallocCap(f); hint > 0 {
 		makeExpr = fmt.Sprintf("make(%s, %d)", f.GoType, hint)
 	}
-	// At dispatch level the null branch breaks to the comma handling.
+	// At dispatch level the null branch breaks out to the comma handling.
 	flat := nullBreakOK(f)
 	fmt.Fprintf(b, `err = s.SkipSpace()
 %[3]s%[4]sif s.Bytes()[s.Pos] == 'n' {
@@ -6222,8 +6419,8 @@ func renderStreamMap(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 
 	mapTarget := fmt.Sprintf("%s[%s]", ref, mkVar)
 	if _, eDepth := elemPtrType(f); eDepth > 0 {
-		// Pointer value (any depth): same cascade as the bytes path, decoded
-		// into the map slot (TargetNil keeps the emit assignment-only).
+		// Pointer value at any depth. The same pointer code as the bytes path
+		// assigns into the map slot. TargetNil makes it only assign.
 		pf := elemPtrField(f, f.JSONName+".value")
 		pf.TargetNil = true
 		b.WriteString(renderStreamField(pf, mapTarget, posVar))
@@ -6235,11 +6432,11 @@ func renderStreamMap(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	s.Pos++
 `, chk, badObj, rm, streamNoCloseAfterComma(field, '}'))
 		if !flat {
-			b.WriteString("}\n") // close else (null-check)
+			b.WriteString("}\n") // close the else of the null check
 		}
 		return
 	}
-	// Named-primitive VALUE — see the bytes twin.
+	// A named-primitive value. See the bytes version in renderMap.
 	valCast, valTarget := "", ""
 	savedElemType, savedElemKind := f.ElemType, f.ElemKind
 	if prim, kind, ok := inlineNamedPrim(elemAsField(f)); ok {
@@ -6292,9 +6489,9 @@ uv, err = s.Uint64()
 			fmt.Fprintf(b, "%s = %s\n", mapTarget, mvVar)
 		}
 	default:
-		// Dedicated-kind value — same field-level delegation as the bytes
-		// twin (the old arm skipped the value, leaving `mk` unused). Braced
-		// for the same scope hygiene.
+		// A value with a dedicated kind uses the field-level emitter, as in
+		// renderMap. The braces keep its locals in their own scope, for the
+		// same reason.
 		vf := sliceElemField(f)
 		vf.JSONName = f.JSONName + ".value"
 		fmt.Fprintf(b, "{\nvar %s %s\n", mvVar, f.ElemType)
@@ -6314,28 +6511,29 @@ uv, err = s.Uint64()
 	s.Pos++
 `, chk, badObj, rm, streamNoCloseAfterComma(field, '}'))
 	if !flat {
-		b.WriteString("}\n") // close else (null-check)
+		b.WriteString("}\n") // close the else of the null check
 	}
 }
 
-// streamErrCheck returns the `if err != nil { return ... }` tail for a
-// stream-side scan call, with the field literal embedded (no post-pass wrap).
+// streamErrCheck returns the `if err != nil { return ... }` check after a
+// stream scan call, with the field literal written in.
 func streamErrCheck(field string) string {
 	return fmt.Sprintf("if err != nil { return result, ggen.NewParseErr(%s, s.Offset(), err) }\n", field)
 }
 
 // bytesErrCheck is the bytes-path equivalent of streamErrCheck, with the
-// 3-tuple `return result, pos, err` shape.
+// three-value `return result, pos, err` form.
 func bytesErrCheck(field, posVar string) string {
 	return fmt.Sprintf("if err != nil { return result, %[1]s, ggen.NewParseErr(%[2]s, %[1]s, err) }\n", posVar, field)
 }
 
-// streamReadMore emits the "buffer exhausted? pull more" guard. keep controls
-// compaction (`0` = grow, `s.Pos` = discard consumed prefix); resetPos appends
-// `s.Pos = 0` after a non-zero keep. sentinel, when non-empty, maps a DRAINED
-// refill to the grammar sentinel the bytes path reports for the same
-// truncation (round-6 #60, extended to every generated value-head refill);
-// transient reader errors still propagate raw via ggen.NotEOF.
+// streamReadMore emits the check that refills the Stream's buffer when it is
+// used up. keep controls compaction: `0` grows the buffer, and `s.Pos` drops
+// the bytes already read. resetPos adds `s.Pos = 0` after a non-zero keep.
+// When sentinel is set and the reader has no more data, the refill returns
+// the same error the bytes path reports for the same truncated input (see
+// opt #60 in cmd/ggen/CLAUDE.md). Other reader errors pass through as they
+// are, via ggen.NotEOF.
 //
 //nolint:unparam // keep is per-site by design (see backlog)
 func streamReadMore(field, keep string, resetPos bool, sentinel string) string {
@@ -6356,8 +6554,8 @@ func streamReadMore(field, keep string, resetPos bool, sentinel string) string {
 	)
 }
 
-// truncSentinel maps a value kind to the grammar sentinel the BYTES path
-// reports for input truncated at that value's head.
+// truncSentinel maps a value kind to the error the bytes path reports when the
+// input ends where that value should start.
 func truncSentinel(k model.TypeKind) string {
 	//exhaustive:ignore not every kind applies here
 	switch k {
@@ -6378,10 +6576,10 @@ func truncSentinel(k model.TypeKind) string {
 	return "ggen.ErrUnexpectedEnd"
 }
 
-// headSentinel is truncSentinel for a FIELD: the sentinel follows the wire
-// shape at the value head, not the Go kind — a pointer chain decodes its
-// leaf, sql.Null* its inner, a `,string` value opens with a quote, and a
-// format:array []byte is a JSON array.
+// headSentinel is truncSentinel for a field. The error follows the JSON shape
+// expected at the start of the value, not the Go kind. A pointer chain
+// decodes its leaf, a sql.Null* decodes its inner value, a `,string` value
+// starts with a quote, and a format:array []byte is a JSON array.
 func headSentinel(f model.FieldInfo) string {
 	goType, kind := f.GoType, f.Kind
 	if f.Pointer {
@@ -6402,17 +6600,9 @@ func headSentinel(f model.FieldInfo) string {
 	return truncSentinel(effectiveKind(goType, kind))
 }
 
-// nestedDecodeErrCheck emits the `if err != nil { … }` tail after a nested
-// DecodeFrom call. The outer field is woven into the wrap so the inner
-// *ParseError's path is prepended ("addr" + "street" → "addr.street"). In
-// multierr mode validation failures merge via Errors.Append; parse errors
-// return early. bytesPath selects the 3-tuple vs 2-tuple shape.
-// nVar names the bytes-path consumed-count local (`consumed`/`entryConsumed`) — the cursor
-// was advanced by it BEFORE this check, so the nested value STARTED at
-// i-nVar and the callee's sub-slice-relative error positions rebase by that
-// (NewParseErrShift / ShiftPos). Stream positions are already global.
-// calleeTypeOf names the type whose DecodeFrom a field's nested decode calls
-// — the element type for containers, else the field's own (pointer-peeled).
+// calleeTypeOf names the type whose DecodeFrom a field's nested decode calls.
+// That is the element type for containers, and otherwise the field's own type
+// without pointers.
 func calleeTypeOf(f model.FieldInfo) string {
 	//exhaustive:ignore not every kind applies here
 	switch f.Kind {
@@ -6428,19 +6618,31 @@ func calleeTypeOf(f model.FieldInfo) string {
 	return f.GoType
 }
 
-// calleeDrains reports whether a nested callee of type t finishes the whole
-// value before surfacing a validation failure — true only for a MULTIERR
-// callee. A single-error callee returns at its FIRST failure, mid-value, so
-// a parent that drained its error and kept going would resume from a
-// desynced cursor.
+// calleeDrains reports whether a nested callee of type t reads the whole
+// value before it reports a validation failure. Only a multierr callee does.
+// A single-error callee returns at its first failure, in the middle of the
+// value. A parent that recorded that error and kept going would continue
+// from the wrong position.
 func calleeDrains(t string) bool {
 	_, ok := multiErrTypes[strings.TrimLeft(t, "*")]
 	return ok
 }
 
-// nestedDecodeErrCheck emits the error handling after a nested decode call.
-// callee is the callee's type name ("" when unknown), used to gate the
-// multierr drain — see calleeDrains.
+// nestedDecodeErrCheck emits the `if err != nil { … }` check after a nested
+// DecodeFrom call. The outer field name goes into the wrap, so it is
+// prepended to the inner *ParseError's path: "addr" and "street" give
+// "addr.street". In multierr mode, validation failures are collected with
+// Errors.Append, and parse errors return at once. bytesPath picks the
+// three-value or two-value return.
+//
+// callee is the callee's type name, or "" when unknown. It decides whether
+// the multierr collection is allowed (see calleeDrains).
+//
+// nVar names the bytes-path local that holds the bytes read, `consumed` or
+// `entryConsumed`. The cursor was already advanced by it before this check,
+// so the nested value started at i-nVar. The callee's error positions are
+// relative to its sub-slice and are shifted by that amount
+// (NewParseErrShift, ShiftPos). Stream positions are already payload offsets.
 func nestedDecodeErrCheck(field, callee string, multierr, bytesPath bool, nVar string) string {
 	wrap := fmt.Sprintf("ggen.NewParseErr(%s, s.Offset(), err)", field)
 	ret := "return result, " + wrap
@@ -6450,8 +6652,8 @@ func nestedDecodeErrCheck(field, callee string, multierr, bytesPath bool, nVar s
 		ret = "return result, i, " + wrap
 		drain = fmt.Sprintf("errs.Append(%s, ggen.ShiftPos(verr, i-%s))", field, nVar)
 	}
-	// Draining is only sound when the callee finished the value; otherwise
-	// its error is a hard stop for this decoder too.
+	// Collecting the error and continuing is only safe when the callee read
+	// the whole value. Otherwise its error stops this decoder too.
 	if !multierr || !calleeDrains(callee) {
 		return fmt.Sprintf("if err != nil { %s }\n", ret)
 	}
@@ -6469,13 +6671,13 @@ func nestedDecodeErrCheck(field, callee string, multierr, bytesPath bool, nVar s
 
 func renderStreamBytes(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	if byteArrayLen(f) > 0 {
-		renderStreamBytesValue(b, f, ref, posVar) // no `null` form — see renderBytes
+		renderStreamBytesValue(b, f, ref, posVar) // no `null` form, see renderBytes
 		return
 	}
 	field := fieldLit(f)
 	rm := streamReadMore(field, "0", false, headSentinel(f))
 	rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
-	// `null` → nil out the field (see renderBytes).
+	// `null` sets the field to nil (see renderBytes).
 	fmt.Fprintf(b, `%[3]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
 		%[4]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, ggen.NewParseErr(%[2]s, s.Offset(), ggen.ErrBadLiteral) }
@@ -6494,14 +6696,14 @@ func renderStreamBytes(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 }
 
 func renderStreamBytesValue(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
-	_ = posVar // stream-path uses s.Pos directly
+	_ = posVar // the stream path uses s.Pos directly
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
 	rm := streamReadMore(field, "0", false, "ggen.ErrBadArray")
 	badArr := fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrBadArray)", field)
 	if f.Format == "array" {
-		// `u` not `v`: a pointer-leaf caller declares `var v []byte` in the
-		// same scope.
+		// The temp is `u`, not `v`, because a pointer-leaf caller declares
+		// `var v []byte` in the same scope.
 		fmt.Fprintf(b, `err = s.ArrayOpen()
 %[2]serr = s.SkipSpace()
 %[2]s%[4]sfor s.Bytes()[s.Pos] != ']' {
@@ -6550,9 +6752,9 @@ copy(%[6]s[:], %[1]sd)
 `, tmp, chk, n, dec, arrayLenErr(f.JSONName, n, "len("+tmp+"d)", "s.Offset()"), ref)
 		return
 	}
-	// `sv` not `v`: a pointer-leaf caller declares `var v []byte` here.
-	// StringView aliases s.buf; AppendDecode consumes it before the next
-	// stream op and retains no bytes — see Stream.StringView.
+	// The temp is `sv`, not `v`, because a pointer-leaf caller declares
+	// `var v []byte` here. StringView aliases s.buf. AppendDecode uses it
+	// before the next Stream call and keeps no bytes. See Stream.StringView.
 	if enc == "" {
 		fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
@@ -6597,8 +6799,9 @@ n, err = s.Int64()
 `, ref, ctor, chk)
 		return
 	}
-	// `sv` not `v`: pointer-leaf caller declares `var v time.Time` here.
-	// StringView aliases s.buf; time.Parse retains none of it — see Stream.StringView.
+	// The temp is `sv`, not `v`, because a pointer-leaf caller declares
+	// `var v time.Time` here. StringView aliases s.buf, and time.Parse keeps
+	// none of it. See Stream.StringView.
 	fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
 %[3]s%[1]s, err = %[2]s
@@ -6609,7 +6812,8 @@ func renderStreamDuration(b *bytes.Buffer, f model.FieldInfo, ref, posVar string
 	_ = posVar
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
-	// `f` / `sv` not `v`: pointer-leaf caller declares `var v time.Duration` here.
+	// The temps are `f` and `sv`, not `v`, because a pointer-leaf caller
+	// declares `var v time.Duration` here.
 	switch f.Format {
 	case "sec":
 		fmt.Fprintf(b, `var f float64
@@ -6629,24 +6833,26 @@ n, err = s.Int64()
 `, ref, unit, chk)
 		return
 	}
-	// StringView: ParseDuration retains no input — see Stream.StringView.
+	// StringView is safe, because ParseDuration keeps none of its input. See
+	// Stream.StringView.
 	fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
 %[2]s%[1]s, err = time.ParseDuration(sv)
 %[2]s`, ref, chk)
 }
 
-// Stream mirrors of renderNetIP / renderNetipAddr / renderNetipPrefix: ""
-// is the zero value, null nils a net.IP.
+// renderStreamNetIP and the netip functions below are the stream versions of
+// renderNetIP, renderNetipAddr and renderNetipPrefix. "" is the zero value,
+// and null sets a net.IP to nil.
 func renderStreamNetIP(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
 	flat := nullBreakOK(f)
 	emitStreamNullZero(b, ref, "nil", field, flat, "ggen.ErrExpectString")
-	// StringView: net.ParseIP copies into a fresh IP; the error literal
-	// retains sv, so it clones — string(sv) on a string is an IDENTITY
-	// conversion (no copy), strings.Clone is the real one.
+	// StringView is safe for the parse, because net.ParseIP copies into a new
+	// IP. The error literal keeps sv, so it is cloned. string(sv) on a string
+	// converts nothing and does not copy. strings.Clone does copy.
 	fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
 %[2]sif sv == "" { %[1]s = nil } else {
@@ -6667,12 +6873,13 @@ func renderStreamNetipPrefix(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	renderStreamNetipParse(b, f, ref, "netip.ParsePrefix", "netip.Prefix{}")
 }
 
-// renderStreamNetipParse scans through StringView: netip.Addr/Prefix are
-// value types and zones are deep-copied by unique, so success retains no
-// input bytes. "" is the zero value (the encoder's shape for it). The
-// FAILURE value keeps the input string verbatim (parseAddrError.in, quoted
-// by Error()), so the error branch re-parses a detached copy — the buffer
-// is recyclable the moment decode returns.
+// renderStreamNetipParse scans with StringView. netip.Addr and netip.Prefix
+// are value types, and the unique package copies zones, so a successful
+// parse keeps no input bytes. "" is the zero value, which is what the encoder
+// writes for it. The error value keeps the input string as is
+// (parseAddrError.in, quoted by Error()). So the error branch parses a
+// detached copy again, and the buffer can be reused as soon as decode
+// returns.
 func renderStreamNetipParse(b *bytes.Buffer, f model.FieldInfo, ref, parse, zero string) {
 	field := fieldLit(f)
 	fmt.Fprintf(b, `var sv string
@@ -6684,9 +6891,10 @@ if err != nil { _, err = %[2]s(strings.Clone(sv)); return result, ggen.NewParseE
 `, ref, parse, streamErrCheck(field), field, zero)
 }
 
-// renderStreamRawJSON copies the captured span into the field (CaptureValue
-// returns a buffer alias, so the append detaches it). The receiver's backing is
-// reused when it has the room, matching the bytes path's copy shape.
+// renderStreamRawJSON copies the captured bytes into the field. CaptureValue
+// returns a slice that aliases the buffer, so the append detaches it. The
+// receiver's backing array is reused when it has room, like the bytes path in
+// copy mode.
 func renderStreamRawJSON(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar
 	chk := streamErrCheck(fieldLit(f))
@@ -6724,7 +6932,8 @@ func renderStreamBigFloat(b *bytes.Buffer, f model.FieldInfo, ref, posVar string
 	_ = posVar
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
-	// StringView: (*big.Float).Parse retains no input — see Stream.StringView.
+	// StringView is safe, because (*big.Float).Parse keeps none of its input.
+	// See Stream.StringView.
 	fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
 %[2]sif _, _, err := (&%[1]s).Parse(sv, 10); err != nil {
@@ -6737,7 +6946,8 @@ func renderStreamBigRat(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) 
 	_ = posVar
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
-	// StringView: (*big.Rat).SetString retains no input — see Stream.StringView.
+	// StringView is safe, because (*big.Rat).SetString keeps none of its
+	// input. See Stream.StringView.
 	fmt.Fprintf(b, `var sv string
 sv, err = s.StringView(`+vArg(f)+`)
 %[2]sif _, ok := (&%[1]s).SetString(sv); !ok {
@@ -6746,7 +6956,7 @@ sv, err = s.StringView(`+vArg(f)+`)
 `, ref, chk, field)
 }
 
-// renderStreamSQLNull is the streaming counterpart of renderSQLNull.
+// renderStreamSQLNull is the stream counterpart of renderSQLNull.
 func renderStreamSQLNull(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar
 	if f.SQLNullInner != nil {
@@ -6857,11 +7067,12 @@ func renderStreamAny(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 %[3]s`, ref, fn, chk, vArg(f))
 }
 
-// streamUnknownKey is the stream-scanner counterpart of unknownKey. `key`
-// aliases the stream buffer; ConsumeColon shifts it, so any value surviving
-// past that (stored keys, retained errors) must be cloned BEFORE ConsumeColon.
-// Every arm consumes the colon first, so a missing one is the grammar error
-// the bytes path reports and UnknownKeyError.Pos is the value head there too.
+// streamUnknownKey is the stream counterpart of unknownKey. `key` aliases the
+// Stream's buffer, and ConsumeColon may shift that buffer. So any use of the
+// key after that point, such as a stored key or an error that keeps it, needs
+// a clone made before ConsumeColon. Every branch reads the colon first. A
+// missing colon then gives the same error as on the bytes path, and
+// UnknownKeyError.Pos is the start of the value, as there.
 func streamUnknownKey(s model.StructInfo, posVar string) string {
 	_ = posVar
 	if embedded := s.EmbedField(); embedded.Embed {
@@ -6918,11 +7129,11 @@ err = s.ConsumeColon()
 }
 
 func renderStreamStringTag(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
-	_ = posVar // stream-path uses s.Pos directly
+	_ = posVar // the stream path uses s.Pos directly
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
-	// Brace-less — see renderStringTag. KeyView's alias is consumed by the
-	// parse before anything can shift it.
+	// No braces, as in renderStringTag. The parse uses KeyView's alias before
+	// anything can shift the buffer.
 	b.WriteString("var sv string\n")
 	fmt.Fprintf(b, "sv, err = s.KeyView(%s)\n", vArg(f))
 	b.WriteString(chk)
@@ -6939,10 +7150,10 @@ default: return result, ggen.NewParseErr(%[2]s, s.Offset(), ggen.ErrBadBool)
 }
 
 func renderStreamField(f model.FieldInfo, ref, posVar string) string {
-	// Converter variant FIRST, exactly like renderField: the converter's
-	// result already has the field's (possibly named) type, so routing a
-	// named-primitive field through the underlying-typed temp below would
-	// assign `cv` (type T) into a temp of T's underlying type.
+	// Converter variants come first, as in renderField. The converter's result
+	// already has the field's type, which may be a named type. Sending a
+	// named-primitive field through the temp of the underlying type below
+	// would assign `cv`, of type T, into a temp of T's underlying type.
 	if model.FieldHasConverter(f) {
 		out := renderVariantDispatchStream(f, ref, posVar)
 		if !f.NoValidate {
@@ -6952,8 +7163,8 @@ func renderStreamField(f model.FieldInfo, ref, posVar string) string {
 		}
 		return out
 	}
-	// Named primitive — see renderField. Same shape on this path: read the
-	// underlying, convert at the assign.
+	// A named primitive, as in renderField. Read the underlying type and
+	// convert where it assigns.
 	if prim, kind, ok := inlineNamedPrim(f); ok && !f.Pointer && !f.String {
 		var out string
 		nz := nullZeroApplies(f)
@@ -6965,7 +7176,7 @@ func renderStreamField(f model.FieldInfo, ref, posVar string) string {
 		}
 		tmp := "named" + f.GoName
 		if rest, expr, ok := foldTailAssign(renderStreamField(namedPrimInner(f, prim, kind), tmp, posVar), tmp); ok {
-			// Write-once temp folds straight into the conversion.
+			// A temp written once folds straight into the conversion.
 			out += rest
 			out += fmt.Sprintf("%s = %s(%s)\n", ref, f.GoType, expr)
 		} else {
@@ -6983,9 +7194,10 @@ func renderStreamField(f model.FieldInfo, ref, posVar string) string {
 		}
 		return out
 	}
-	// See renderField — `,string` on bool is a no-op to match jsonv2. Pointer
-	// fields fall through to the pointer peel below, whose leaf recursion
-	// re-enters here (the string-tag branch on `*T` emits broken code).
+	// As in renderField, `,string` on a bool does nothing, to match jsonv2.
+	// Pointer fields skip this and go to the pointer code below. Its
+	// recursion on the leaf comes back here, because the string-tag branch on
+	// `*T` would emit broken code.
 	if f.String && f.Kind != model.KindBool && !f.Pointer {
 		var out bytes.Buffer
 		nz := nullZeroApplies(f)
@@ -7007,15 +7219,15 @@ func renderStreamField(f model.FieldInfo, ref, posVar string) string {
 	field := fieldLit(f)
 	chk := streamErrCheck(field)
 	if f.Pointer {
-		// See renderField: custom @Func rules want the pointer, built-ins the
-		// leaf, and a pipe mixing the two runs as one ordered pass.
+		// As in renderField, custom @Func rules take the pointer and built-in
+		// rules take the leaf. A pipe that mixes both runs as one ordered pass.
 		builtinV, customV := model.PartitionCustomValidation(f.Validation)
 		builtinM, customM := model.PartitionCustomMods(f.Mods)
 		builtinSteps, customSteps := model.SplitCustomSteps(fieldPipe(f))
 		ordered := !f.NoValidate && len(builtinSteps) > 0 && len(customSteps) > 0
 		rm := streamReadMore(field, "0", false, headSentinel(f))
 		rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
-		// Decode-into-receiver, any depth — see renderField.
+		// Decode into the receiver at any depth. See renderField.
 		depth, leafType := model.PointerDepth(f.GoType)
 		leaf := f
 		leaf.Pointer = false
@@ -7031,12 +7243,13 @@ func renderStreamField(f model.FieldInfo, ref, posVar string) string {
 		}
 		leaf.AtDispatch = false
 		leaf.TargetNil = false
-		// Widened numeric leaf: scan into a wide temp, cast at the assign.
+		// A narrow integer leaf scans into a wide temp and converts where it
+		// assigns.
 		scanType, valExpr, narrowCast := leafType, "v", ""
 		if wide, wideKind, cast := widenedLeafCast(leaf.Kind, leafType); wide != "" {
 			leaf.Kind, leaf.GoType, scanType, valExpr, narrowCast = wideKind, wide, wide, cast+"(v)", cast
 		}
-		// At dispatch level the null branch breaks to the comma handling.
+		// At dispatch level the null branch breaks out to the comma handling.
 		flat := nullBreakOK(f)
 		fmt.Fprintf(b, `%[2]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
@@ -7046,7 +7259,7 @@ func renderStreamField(f model.FieldInfo, ref, posVar string) string {
 	%[1]s = nil
 `, ref, rm, rmKi, field)
 		if ordered {
-			// See renderField: a nil pointer still reaches the @Func steps.
+			// As in renderField, a nil pointer still reaches the @Func steps.
 			renderPipe(b, customSteps, ref, f.JSONName, f.GoType, f.Kind, f.MultiErr, "")
 		}
 		if flat {
@@ -7061,7 +7274,8 @@ func renderStreamField(f model.FieldInfo, ref, posVar string) string {
 		b.WriteString(renderStreamField(leaf, "v", posVar))
 		b.WriteString(narrowIntGuard("v", narrowCast, fmt.Sprintf("return result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrNumberOverflow)", field)))
 		if f.TargetNil {
-			// Target is a known-nil `var x *T` — straight new-chain assign.
+			// The target is a `var x *T` known to be nil, so assign a new
+			// chain directly.
 			fmt.Fprintf(b, "%s = %s\n", ref, newChain(valExpr, depth))
 		} else {
 			emitPointerAssign(b, ref, depth, valExpr)
@@ -7100,7 +7314,7 @@ func renderStreamField(f model.FieldInfo, ref, posVar string) string {
 %[6]s%[7]s%[4]s = %[5]s(%[1]s)
 `, wideVar, wideType, method, ref, castTo, chk, guard)
 	}
-	// `nullzero`: see renderField.
+	// `nullzero`, as in renderField.
 	nz := nullZeroApplies(f)
 	flat := nz && nullBreakOK(f)
 	if nz {
@@ -7179,13 +7393,13 @@ func renderStreamSlice(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	emitStreamSliceRead(b, f, ref, posVar, 0)
 }
 
-// emitStreamSliceRead is the streaming counterpart of emitByteSliceRead.
+// emitStreamSliceRead is the stream counterpart of emitByteSliceRead.
 func emitStreamSliceRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string, depth int) {
-	_ = posVar // stream-path uses s.Pos directly
+	_ = posVar // the stream path uses s.Pos directly
 	isArray := f.Kind == model.KindArray
 	arrayN := f.ArrayLen
-	// Multi-level pointer element — same cascade as the bytes path; slab is
-	// depth-1 only.
+	// A multi-level pointer element uses the same pointer code as the bytes
+	// path. Only `[]*T` gets a slab.
 	_, elemDepth := elemPtrType(f)
 	mptr := elemDepth >= 2
 	ivar := fmt.Sprintf("idx%d", depth)
@@ -7194,7 +7408,8 @@ func emitStreamSliceRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string,
 	chk := streamErrCheck(field)
 	rm := streamReadMore(field, "0", false, "ggen.ErrBadArray")
 	rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
-	// At dispatch level flat-break; a NullDone nested slot skips the peek.
+	// At dispatch level the null branch breaks out. A nested slot whose
+	// parent already handled the null (NullDone) skips the check.
 	flat := !isArray && nullBreakOK(f)
 	if !isArray && !f.NullDone {
 		fmt.Fprintf(b, `err = s.SkipSpace()
@@ -7215,7 +7430,8 @@ func emitStreamSliceRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string,
 %[1]serr = s.SkipSpace()
 %[1]s%[2]s`, chk, rm)
 	if isArray && arrayN == 0 {
-		// See emitByteSliceRead: no slots, so `[]` is the only tuple that fits.
+		// No slots, so `[]` is the only tuple that fits. See
+		// emitByteSliceRead.
 		fmt.Fprintf(b, "if s.Bytes()[s.Pos] != ']' { return result, %s }\n", tupleOverflowErr(f.JSONName, 0, ""))
 		b.WriteString("s.Pos++\n")
 		return
@@ -7227,8 +7443,8 @@ func emitStreamSliceRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string,
 		}
 	} else {
 		sCap, slCap := preallocCap(f)
-		// dst is decode-into-receiver: nil (fresh) or [:0]'d (backing reused).
-		// Allocate only when nil.
+		// dst is the receiver's slice. It is nil when fresh, or reset to [:0]
+		// with its backing kept. Allocate only when it is nil.
 		if f.ElemPointer && !mptr {
 			fmt.Fprintf(b, "var %s []%s\n", slabVar, f.ElemType)
 		}
@@ -7246,17 +7462,17 @@ func emitStreamSliceRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string,
 		}
 		b.WriteString("}\n")
 	}
-	// Generated struct elems decode IN PLACE — see emitByteSliceRead.
+	// Generated struct elements decode in place. See emitByteSliceRead.
 	directStruct := f.ElemKind == model.KindStruct && isGenerated(f.ElemType)
 	b.WriteString("for s.Bytes()[s.Pos] != ']' {\n")
 	if isArray {
-		// Excess element — see emitByteSliceRead.
+		// Reject extra elements. See emitByteSliceRead.
 		fmt.Fprintf(b, "if %s >= %d { return result, %s }\n",
 			ivar, arrayN,
 			tupleOverflowErr(f.JSONName, arrayN, ""))
 	}
 	if f.ElemPointer && !mptr {
-		// `null` element → nil pointer; skip the parse + slab work.
+		// A `null` element is a nil pointer. Skip the parse and the slab.
 		nilAssign := fmt.Sprintf("%s = append(%s, nil)\n", dst, dst)
 		if isArray {
 			nilAssign = fmt.Sprintf("%s[%s] = nil\n%s++\n", dst, ivar, ivar)
@@ -7272,14 +7488,14 @@ func emitStreamSliceRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string,
 }
 `, nilAssign, chk, field, rm, rmKi, streamNoCloseAfterComma(field, ']'))
 	}
-	// Compute the in-place target; slice cases pre-grow the slot here.
+	// Pick the slot to decode into. For slices, the slot is grown here.
 	var target string
 	switch {
 	case isArray && mptr:
 		target = fmt.Sprintf("%s[%s]", dst, ivar)
 	case mptr:
-		// Reslice within cap so the carried pointer chain survives into the
-		// slot and the cascade can reuse it; a past-cap grow starts nil.
+		// Reslice within capacity so the old pointer chain stays in the slot
+		// and can be reused. A grow past capacity starts with nil.
 		if elemPtrReusable(f) {
 			fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, nil) }\n", dst)
 		} else {
@@ -7295,7 +7511,8 @@ func emitStreamSliceRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string,
 		emitElemGrow(b, slabVar, f, directStruct)
 		target = fmt.Sprintf("%s[len(%s)-1]", slabVar, slabVar)
 	case f.ElemKind == model.KindSlice:
-		// Reslice within cap to keep the carried header — see emitByteSliceRead.
+		// Reslice within capacity to keep the old inner slice. See
+		// emitByteSliceRead.
 		fmt.Fprintf(b, "if len(%[1]s) < cap(%[1]s) { %[1]s = %[1]s[:len(%[1]s)+1] } else { %[1]s = append(%[1]s, nil) }\n", dst)
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	default:
@@ -7303,18 +7520,18 @@ func emitStreamSliceRead(b *bytes.Buffer, f model.FieldInfo, dst, posVar string,
 		target = fmt.Sprintf("%s[len(%s)-1]", dst, dst)
 	}
 	if mptr {
-		// Elem rules ride inside the cascade; no slab/post-decode here. Slice
-		// slots are pre-grown nil (TargetNil); ARRAY slots are overwritten
-		// too — the contract is "every slot overwritten", and seeding from
-		// the carried chain merged `[2]**Inner` where `[]**Inner` and
-		// `[2]*Inner` both decoded fresh.
+		// Element rules run inside the pointer code. There is no slab and no
+		// step after the decode here. A slice slot reuses the old pointer
+		// chain when elemPtrReusable allows it, and otherwise gets a new one
+		// (TargetNil).
 		pf := elemPtrField(f, f.JSONName+"[]")
-		// An ARRAY slot keeps the assignment-only cascade: its contract is
-		// "every slot overwritten", pinned by TestMerge_ArraySlotsOverwrite.
+		// An array slot always gets a new chain and only assigns, because
+		// every array slot must be overwritten, never merged. This is pinned
+		// by TestMerge_ArraySlotsOverwrite.
 		pf.TargetNil = isArray || !elemPtrReusable(f)
 		b.WriteString(renderStreamField(pf, target, "s.Pos"))
 	} else {
-		// Named-primitive ELEMENT — see emitByteSliceRead.
+		// A named-primitive element. See emitByteSliceRead.
 		elemCast, elemTarget := "", ""
 		savedElemType, savedElemKind := f.ElemType, f.ElemKind
 		if prim, kind, ok := inlineNamedPrim(elemAsField(f)); ok {
@@ -7360,22 +7577,24 @@ uv, err = s.Uint64()
 				fmt.Fprintf(b, `%[1]s, err = %[1]s.`+streamDecodeCallFor(f.ElemType)+`
 %[2]s`, target, nestedDecodeErrCheck(fieldLit(f), calleeTypeOf(f), f.MultiErr, false, ""))
 			} else {
-				// Cross-package element: the bytes path used to skip it and
-				// this path emitted nothing at all.
+				// An element type from another package uses the same
+				// fallback order as the field level.
 				b.WriteString(renderCrossPkgStructStreamDecode(elemAsField(f), target, ""))
 			}
 		case model.KindSlice, model.KindArray:
 			inner := peelSliceField(f)
 			if inner.Kind == model.KindSlice && len(f.ElemMods) == 0 {
-				// `null` elem → nil slot handled HERE so the inner body isn't
-				// nested in an else (mirrors the []*T nil-elem fast path).
+				// A `null` element gives a nil slot. Handle it here so the
+				// inner body is not nested in an else, like the nil-element
+				// fast path of []*T.
 				fmt.Fprintf(b, `%[2]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
 		%[3]sif s.Bytes()[s.Pos+ki] != "null"[ki] { return result, ggen.NewParseErr(%[1]s, s.Offset(), ggen.ErrBadLiteral) }
 	}
 	s.Pos += 4
 `, field, rm, rmKi)
-				// Slot may carry a reused/receiver header — nil unconditionally.
+				// The slot may hold an old slice from the receiver, so always
+				// set it to nil.
 				fmt.Fprintf(b, "%s = nil\n", target)
 				if len(f.ElemValidation) > 0 {
 					renderValidationOn(b, f.ElemValidation, target, f.JSONName+"[]", f.ElemType, f.ElemKind, f.MultiErr, "")
@@ -7390,8 +7609,9 @@ break
 `, chk, rm, streamNoCloseAfterComma(field, ']'))
 				inner.NullDone = true
 			}
-			// Hoist the nested slot into `rowN` (seeded from the carried slot
-			// for backing reuse); publish with `target = rowN`. See emitByteSliceRead.
+			// Copy the nested slot into a local `rowN`, seeded from the old
+			// slot so its backing array is reused, and store it back with
+			// `target = rowN`. See emitByteSliceRead.
 			row := fmt.Sprintf("row%d", depth)
 			fmt.Fprintf(b, "%s := %s\n", row, target)
 			if inner.Kind == model.KindSlice {
@@ -7400,8 +7620,8 @@ break
 			emitStreamSliceRead(b, inner, row, "s.Pos", depth+1)
 			fmt.Fprintf(b, "%s = %s\n", target, row)
 		default:
-			// Dedicated-kind element — same field-level emitter the struct
-			// level uses; see the bytes twin in emitByteSliceRead.
+			// An element with a dedicated kind uses the field-level emitter.
+			// See the bytes version in emitByteSliceRead.
 			b.WriteString(renderStreamField(sliceElemField(f), target, "s.Pos"))
 		}
 		if elemCast != "" {
@@ -7412,12 +7632,12 @@ break
 	}
 	switch {
 	case isArray && f.ElemPointer && !mptr:
-		// Slab slot decoded in-place; publish its address.
+		// The slab slot was decoded in place. Store its address.
 		fmt.Fprintf(b, "%[1]s[%[2]s] = &%[3]s[%[2]s]\n%[2]s++\n", dst, ivar, slabVar)
 	case isArray:
 		fmt.Fprintf(b, "%s++\n", ivar)
 	case f.ElemPointer && !mptr:
-		// Slab tail decoded in-place; publish addr.
+		// The last slab slot was decoded in place. Append its address.
 		fmt.Fprintf(b, "%[1]s = append(%[1]s, &%[2]s[len(%[2]s)-1])\n", dst, slabVar)
 	default:
 	}
@@ -7434,40 +7654,40 @@ if s.Bytes()[s.Pos] != ']' { return result, ggen.NewParseErr(%[2]s, s.Offset(), 
 	}
 	b.WriteString("s.Pos++\n")
 	if !isArray && !flat && !f.NullDone {
-		b.WriteString("}\n") // close else (null-check)
+		b.WriteString("}\n") // close the else of the null check
 	}
 }
 
-// generatedTypes is the set of struct names that this generation pass is
-// emitting code for. renderReadStruct / renderAppendValue consult it to decide
-// whether to emit a direct DecodeFrom/AppendJSON call or a jsonv2 fallback
-// (for cross-package / unannotated types).
+// generatedTypes is the set of struct names this generation pass emits code
+// for. The emitters check it to decide between a direct DecodeFrom or
+// AppendJSON call and the fallback for types from other packages or
+// unannotated types.
 var generatedTypes map[string]struct{}
 
-// generatedFields carries each object-shaped generated struct's fields
-// alongside generatedTypes (aliases stay out — their methods delegate), so an
-// emitter can ask what a value type OWNS — whether decoding into a carried
-// value would recycle any allocation, or only overwrite scalars — and whether
-// a nested struct can encode as `{}`. Same lifetime as generatedTypes.
+// generatedFields holds the fields of each generated struct that encodes as a
+// JSON object, next to generatedTypes. Aliases are left out because their
+// methods delegate. ownsAllocations uses it to ask whether decoding into an
+// existing value would reuse any memory, or only overwrite scalars. It lives
+// as long as generatedTypes.
 var generatedFields map[string][]model.FieldInfo
 
 // namedKinds maps every named type in the pass whose underlying type is a
-// primitive to that primitive's kind ("Count" → KindInt) — both the ones
-// carrying `//ggen:generate` (which get a full method surface, so their FIELD
-// occurrences report KindStruct) and plain unannotated ones the user never
-// asked ggen about. Rule/mod codegen consults it through effectiveKind so the
-// checks compile and cast through the underlying. Struct/container aliases are
-// absent.
+// primitive to that primitive's kind, such as "Count" to KindInt. It holds
+// both annotated ones, which get a full method set so their fields report
+// KindStruct, and plain ones the user never annotated. Rule and mod codegen
+// reads it through effectiveKind, so the checks compile and convert through
+// the underlying type. Struct and container aliases are not in it.
 var namedKinds map[string]model.TypeKind
 
-// aliasCodegen records the codegen-shaping flags each ANNOTATED primitive alias
-// was generated with. A field of such a type is decoded inline (scan the
-// underlying primitive, convert at the assign) instead of calling the alias's
-// own methods — but only when the alias would have emitted the same code the
-// inline path does. `//ggen:generate htmlescape type HtmlString string` is the
-// documented way to escape one type and not the rest, and `copy` /
-// `allowinvalidutf8` likewise change what a string decode emits; inlining those
-// with the PARENT's flags would silently drop the alias's behaviour.
+// aliasCodegen records the flags that change codegen, as each annotated
+// primitive alias was generated with them. A field of such a type is decoded
+// inline, scanning the underlying primitive and converting at the assignment,
+// instead of calling the alias's own methods. That happens only when the
+// alias would have emitted the same code as the inline path.
+// `//ggen:generate htmlescape type HtmlString string` is the documented way
+// to escape one type and not the rest. `copy` and `allowinvalidutf8` also
+// change what a string decode emits. Inlining those with the parent's flags
+// would silently drop the alias's behaviour.
 type aliasCodegen struct {
 	HTMLEscape       bool
 	Copy             bool

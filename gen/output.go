@@ -68,7 +68,8 @@ func NewOutput(dir string) *Output {
 }
 
 // File returns the file at path, creating it with e. Asking for an existing
-// path returns that file; a different emitter for it is an error at Write.
+// path returns that file. Asking for it with a different emitter is an error
+// at Write.
 func (o *Output) File(p string, e Emitter) *File {
 	p = path.Clean(filepath.ToSlash(p))
 	if e == nil {
@@ -99,7 +100,7 @@ func (f *File) Emitter() Emitter { return f.emitter }
 func (f *File) Placed() []Placed { return f.placed }
 
 // Place puts a shape into the file under name. A type may be placed once per
-// mode in an Output, and a name once per file; violations fail Write.
+// mode in an Output, and a name once per file. Write fails on a violation.
 func (f *File) Place(s *Shape, name string) *File {
 	o := f.out
 	for _, err := range s.errs {
@@ -125,7 +126,7 @@ func (f *File) Place(s *Shape, name string) *File {
 	return f
 }
 
-// Report is what emitters could not express, collected over one Write.
+// Report returns what emitters could not express, collected over one Write.
 func (o *Output) Report() *Report { return &o.report }
 
 // Report collects issues emitters raise.
@@ -146,7 +147,7 @@ func (r *Report) Add(where, msg string) {
 	r.Issues = append(r.Issues, Issue{where, msg})
 }
 
-// Unsupported records that rule r on field f has no twin in the target.
+// Unsupported records that rule on field f has no equivalent in the target.
 func (r *Report) Unsupported(f *Field, rule Rule, msg string) {
 	r.Add(declName(f.Shape.Decl)+"."+f.JSONName, rule.Op.String()+": "+msg)
 }
@@ -177,8 +178,8 @@ func (o *Output) Write() error {
 	if len(errs) > 0 {
 		return errors.Join(errs...)
 	}
-	// Stage every file, then rename: a failure halfway leaves no half-written
-	// output behind.
+	// Write every file to a temporary sibling first, then rename them all. A
+	// failure while writing leaves no half-written output behind.
 	type staged struct{ tmp, dst string }
 	var writes []staged
 	cleanup := func() {
@@ -421,8 +422,8 @@ type Context struct {
 }
 
 // Resolve returns where a referenced type was placed in mode. Write has
-// already failed for a missing generated type; for an unplaced enum type it
-// returns the zero Placed, see Lookup.
+// already failed for a missing generated type. For an unplaced enum type it
+// returns the zero Placed. See Lookup.
 func (c *Context) Resolve(ref *TypeDecl, mode Mode) Placed {
 	p, _ := c.Lookup(ref, mode)
 	return p
@@ -451,8 +452,8 @@ func (c *Context) FileOf(ref *TypeDecl, mode Mode) *File {
 	return nil
 }
 
-// Later reports whether ref is placed in this file but not yet emitted: a
-// reference to it from the current declaration points forward, as in a
+// Later reports whether ref is placed in this file but not yet emitted. A
+// reference to it from the current declaration then points forward, as in a
 // recursive type.
 func (c *Context) Later(ref *TypeDecl, mode Mode) bool {
 	if c.FileOf(ref, mode) != c.File {

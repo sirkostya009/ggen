@@ -97,8 +97,9 @@ func TestClasses(t *testing.T) {
 }
 
 // TestRuntime compiles the classes and decodes inputs with known Go verdicts.
-// It needs GGEN_KOTLIN_HOME holding kotlinc/, a JRE directory starting with
-// "jdk", and the kotlinx-serialization-{core,json}-jvm jars.
+// It needs GGEN_KOTLIN_HOME, a directory holding kotlinc/, a JRE directory
+// whose name starts with "jdk", and the kotlinx-serialization-core-jvm and
+// kotlinx-serialization-json-jvm jars.
 func TestRuntime(t *testing.T) {
 	t.Parallel()
 	home := os.Getenv("GGEN_KOTLIN_HOME")
@@ -205,7 +206,8 @@ fun main() {
 	}
 }
 
-// TestFor decides headers and external types per output file and placed type.
+// TestFor pins the ...For options that decide headers and external types per
+// output file and placed type.
 func TestFor(t *testing.T) {
 	t.Parallel()
 	set, err := gen.Load("../testdata/api", "../testdata/other")

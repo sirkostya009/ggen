@@ -2,9 +2,10 @@ package integrationtests
 
 //go:generate ../ggen $GOFILE
 
-// Direct wire-byte assertions (tighter than stdcompat's round-trip-via-any):
-// omitempty/omitzero must drop the key, and format tags must emit values the
-// stdlib decoder accepts. Uses jsontext to walk objects type-free.
+// Direct checks on the encoded bytes. These are stricter than the stdcompat
+// tests, which compare values after a round-trip through `any`. omitempty and
+// omitzero must drop the key, and format tags must emit values the standard
+// library parsers accept. jsontext is used to walk objects without a Go type.
 
 import (
 	"bytes"
@@ -24,7 +25,8 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
-// objectKeys parses a JSON object into a map of top-level key → raw value.
+// objectKeys parses a JSON object into a map from each top-level key to its
+// raw value.
 func objectKeys(t *testing.T, data []byte) map[string]jsontext.Value {
 	t.Helper()
 	var raw map[string]jsontext.Value
@@ -58,7 +60,7 @@ func mustPresent(t *testing.T, data []byte, keys ...string) {
 func TestOmit_NilPointerKeyAbsent(t *testing.T) {
 	t.Parallel()
 	out, _ := ggen.Marshal(PointerStruct{Name: new("x"), Enabled: new(false)})
-	// name/enabled are not omitempty — must be present.
+	// name and enabled are not omitempty, so they must be present.
 	mustPresent(t, out, "name", "enabled")
 	mustAbsent(t, out, "count", "ratio", "addr", "when")
 }
@@ -78,7 +80,7 @@ func TestOmit_ZeroNumberKeyAbsent(t *testing.T) {
 	mustPresent(t, out, "name", "count")
 }
 
-// omitempty drops empty string and nil slice.
+// omitempty drops an empty string and a nil slice.
 func TestOmit_EmptyContainersAbsent(t *testing.T) {
 	t.Parallel()
 	out, _ := ggen.Marshal(OmitStruct{Name: "x", StrCount: 1})
@@ -123,7 +125,7 @@ func TestFormat_HexParseable(t *testing.T) {
 	}
 }
 
-// Default `[]byte` (no format) is base64.
+// A `[]byte` without a format tag is base64.
 func TestFormat_Base64Parseable(t *testing.T) {
 	t.Parallel()
 	want := []byte("hello world")
@@ -170,7 +172,7 @@ func TestFormat_Base32Parseable(t *testing.T) {
 	}
 }
 
-// `format:array` emits a JSON array of numbers (uint8 each).
+// `format:array` emits a JSON array of numbers, one uint8 each.
 func TestFormat_BytesArray(t *testing.T) {
 	t.Parallel()
 	want := []byte{10, 20, 30, 40}
@@ -241,7 +243,7 @@ func TestFormat_DurationSecIsNumber(t *testing.T) {
 	}
 }
 
-// `format:units` emits a Go-duration string time.ParseDuration accepts.
+// `format:units` emits a Go duration string that time.ParseDuration accepts.
 func TestFormat_DurationUnitsParseable(t *testing.T) {
 	t.Parallel()
 	d := time.Hour + 30*time.Minute
@@ -258,14 +260,15 @@ func TestFormat_DurationUnitsParseable(t *testing.T) {
 	}
 }
 
-// Wire shape for every supported time format: numeric `unix*` variants emit
-// bare digits, every other layout emits a quoted string time.Parse reads back.
+// Encoded form of every supported time format. The numeric `unix*` formats
+// emit bare digits. Every other layout emits a quoted string that time.Parse
+// reads back.
 func TestFormat_AllTimeLayouts(t *testing.T) {
 	t.Parallel()
 	out, _ := ggen.Marshal(timeFormatsAll())
 	got := objectKeys(t, out)
 
-	// Numeric formats are unquoted; `unix` may carry a fractional decimal.
+	// Numeric formats are unquoted. `unix` may have a fractional part.
 	intNumericFields := []string{"unixMilli", "unixMicro", "unixNano"}
 	for _, k := range intNumericFields {
 		v := got[k]
@@ -299,8 +302,8 @@ func TestFormat_AllTimeLayouts(t *testing.T) {
 	}
 }
 
-// net.IP / netip.Addr / netip.Prefix all emit quoted strings the corresponding
-// parser accepts.
+// net.IP, netip.Addr and netip.Prefix all emit quoted strings that their own
+// parsers accept.
 func TestFormat_NetIPParseable(t *testing.T) {
 	t.Parallel()
 	addr, _ := netip.ParseAddr("192.0.2.7")
@@ -328,7 +331,7 @@ func TestFormat_NetIPParseable(t *testing.T) {
 	}
 }
 
-// Nil slice → `null`, empty non-nil → `[]`.
+// A nil slice encodes as `null`, and an empty non-nil slice as `[]`.
 func TestNilSlice_MarshalsAsNull(t *testing.T) {
 	t.Parallel()
 	out, err := ggen.Marshal(Node{ID: 1, Name: "n"})
@@ -341,7 +344,7 @@ func TestNilSlice_MarshalsAsNull(t *testing.T) {
 			t.Errorf("nil slice %q → %s, want null", k, got[k])
 		}
 	}
-	// Non-nil empty stays as [].
+	// An empty non-nil slice stays [].
 	out2, err := ggen.Marshal(Node{ID: 1, Name: "n", Tags: []string{}, Children: []Node{}})
 	if err != nil {
 		t.Fatal(err)
@@ -354,7 +357,7 @@ func TestNilSlice_MarshalsAsNull(t *testing.T) {
 	}
 }
 
-// Nil map → `null`, empty non-nil → `{}`.
+// A nil map encodes as `null`, and an empty non-nil map as `{}`.
 func TestNilMap_MarshalsAsNull(t *testing.T) {
 	t.Parallel()
 	out, err := ggen.Marshal(Node{ID: 1, Name: "n"})
@@ -375,8 +378,8 @@ func TestNilMap_MarshalsAsNull(t *testing.T) {
 	}
 }
 
-// `[]`/`{}` decode to non-nil empty containers (symmetric to
-// TestNullDecode_LeavesContainerNil).
+// `[]` and `{}` decode to non-nil empty containers. This is the counterpart
+// of TestNullDecode_LeavesContainerNil.
 func TestEmptyArrayDecode_NonNil(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"id":1,"name":"n","tags":[],"children":[],"props":{},"score":0,"active":false}`)
@@ -394,7 +397,8 @@ func TestEmptyArrayDecode_NonNil(t *testing.T) {
 		t.Errorf("Props = %v (nil=%v len=%d), want non-nil empty", got.Props, got.Props == nil, len(got.Props))
 	}
 
-	// Pointer-element slices (slab path) too.
+	// Slices of pointers too. They decode pointees into one shared backing
+	// slice (the slab path).
 	ptr, _, err := PtrSliceStruct{}.DecodeFrom([]byte(`{"items":[],"tuple":[null,null,null],"nodes":[]}`))
 	if err != nil {
 		t.Fatalf("unmarshal PtrSliceStruct: %v", err)
@@ -407,13 +411,14 @@ func TestEmptyArrayDecode_NonNil(t *testing.T) {
 	}
 }
 
-// stdlib merges into a pre-populated map (old keys survive); ggen's DecodeFrom
-// replaces it.
+// jsonv2 merges into a map that already holds entries, so old keys survive.
+// ggen's DecodeFrom replaces the map.
 func TestStdlibVsGgen_MapReplaceDivergence(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"id":1,"name":"n","props":{"new":"v"},"score":0,"active":false}`)
 
-	// stdlib baseline; skip rather than falsely fail if a future Go changes it.
+	// jsonv2 baseline. Skip instead of failing if a future Go changes this
+	// behaviour.
 	stdGot := Node{ID: 1, Name: "n", Props: map[string]string{"old": "kept"}}
 	if err := jsonv2.Unmarshal(in, &stdGot); err != nil {
 		t.Fatalf("jsonv2: %v", err)
@@ -425,7 +430,7 @@ func TestStdlibVsGgen_MapReplaceDivergence(t *testing.T) {
 		t.Skipf("stdlib didn't decode 'new' key as expected (got %v) — divergence test premise has shifted", stdGot.Props)
 	}
 
-	// ggen: same pre-populated value — DecodeFrom replaces the map.
+	// ggen with the same starting value. DecodeFrom replaces the map.
 	ggGot := Node{ID: 1, Name: "n", Props: map[string]string{"old": "kept"}}
 	ggGot, _, err := ggGot.DecodeFrom(in)
 	if err != nil {
@@ -438,14 +443,14 @@ func TestStdlibVsGgen_MapReplaceDivergence(t *testing.T) {
 		t.Errorf("ggen should have 'new' key, got %v", ggGot.Props)
 	}
 
-	// Same input → different observable results.
+	// The same input gives different results.
 	if len(stdGot.Props) == len(ggGot.Props) {
 		t.Errorf("expected divergence: stdlib map %v vs ggen map %v", stdGot.Props, ggGot.Props)
 	}
 }
 
-// The decoder consumes `null` for slice and map fields, leaving the Go value
-// nil — symmetric to the encoder.
+// The decoder accepts `null` for slice and map fields and leaves the Go value
+// nil. This mirrors the encoder.
 func TestNullDecode_LeavesContainerNil(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"id":1,"name":"n","tags":null,"children":null,"props":null,"score":0,"active":false}`)
@@ -464,14 +469,15 @@ func TestNullDecode_LeavesContainerNil(t *testing.T) {
 	}
 }
 
-// omitempty drops nil slices/maps entirely (their wire form is `null`).
+// omitempty drops nil slices and maps entirely. Their encoded form would be
+// `null`.
 func TestOmitEmpty_NilSliceMap_KeyAbsent(t *testing.T) {
 	t.Parallel()
 	out, _ := ggen.Marshal(OmitStruct{Name: "x", StrCount: 1})
 	mustAbsent(t, out, "tags", "labels")
 }
 
-// omitempty drops empty (len==0) non-nil slices/maps too.
+// omitempty also drops empty (len == 0) non-nil slices and maps.
 func TestOmitEmpty_EmptyContainer_KeyAbsent(t *testing.T) {
 	t.Parallel()
 	out, _ := ggen.Marshal(OmitStruct{
@@ -482,15 +488,16 @@ func TestOmitEmpty_EmptyContainer_KeyAbsent(t *testing.T) {
 	mustAbsent(t, out, "tags", "labels")
 }
 
-// omitzero drops nil (Go zero) but keeps empty non-nil — unlike omitempty.
+// omitzero drops nil, which is the Go zero value, but keeps an empty non-nil
+// container. omitempty drops both.
 func TestOmitZero_NilContainer_KeyAbsent(t *testing.T) {
 	t.Parallel()
 	out, _ := ggen.Marshal(OmitStruct{Name: "x", StrCount: 1})
 	mustAbsent(t, out, "extra", "meta")
 }
 
-// omitzero keeps empty non-nil: `make([]T, 0)` / `make(map, 0)` are non-zero Go
-// values → emit `[]` / `{}`.
+// omitzero keeps an empty non-nil container. `make([]T, 0)` and
+// `make(map, 0)` are not Go zero values, so they emit `[]` and `{}`.
 func TestOmitZero_EmptyContainer_KeyEmitted(t *testing.T) {
 	t.Parallel()
 	out, _ := ggen.Marshal(OmitStruct{
@@ -507,8 +514,8 @@ func TestOmitZero_EmptyContainer_KeyEmitted(t *testing.T) {
 	}
 }
 
-// `[]*T` through the slab path: element values survive the roundtrip, pointer
-// identity does not.
+// `[]*T` through the slab path: element values survive the round-trip, but
+// the pointers themselves are new.
 func TestPtrSlice_RoundTrip(t *testing.T) {
 	t.Parallel()
 	a := Address{Street: "S1", City: "C1", ZipCode: "11111"}
@@ -546,8 +553,8 @@ func TestPtrSlice_RoundTrip(t *testing.T) {
 	}
 }
 
-// A nil `[]*T` slice serializes as `null` (matching the value-slice rule);
-// decode of `null` produces a nil slice.
+// A nil `[]*T` slice encodes as `null`, like a slice of values. Decoding
+// `null` gives a nil slice.
 func TestPtrSlice_NilSlice_AsNull(t *testing.T) {
 	t.Parallel()
 	out, err := ggen.Marshal(PtrSliceStruct{})
@@ -561,7 +568,7 @@ func TestPtrSlice_NilSlice_AsNull(t *testing.T) {
 	if string(got["nodes"]) != "null" {
 		t.Errorf("nil nodes → %s, want null", got["nodes"])
 	}
-	// Roundtrip back to nil.
+	// Round-trip back to nil.
 	parsed, _, err := PtrSliceStruct{}.DecodeFrom(out)
 	if err != nil {
 		t.Fatal(err)
@@ -571,7 +578,7 @@ func TestPtrSlice_NilSlice_AsNull(t *testing.T) {
 	}
 }
 
-// A slice of all-null elements decodes to nil pointers (length preserved).
+// A slice of only null elements decodes to nil pointers and keeps its length.
 func TestPtrSlice_AllNullElements(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"items":[null,null,null],"tuple":[null,null,null],"nodes":[null]}`)
@@ -594,8 +601,9 @@ func TestPtrSlice_AllNullElements(t *testing.T) {
 	}
 }
 
-// A 40-field struct exercises the bitmask seen-tracking path (roundtrip,
-// missing-required, duplicate-key).
+// A 40-field struct exercises the path that tracks seen fields as bits in an
+// integer. It checks round-trip, a missing required field and a duplicate
+// key.
 func TestWideStruct_BitmaskSeenFlags(t *testing.T) {
 	t.Parallel()
 	in := WideStruct{
@@ -620,24 +628,26 @@ func TestWideStruct_BitmaskSeenFlags(t *testing.T) {
 		t.Errorf("roundtrip mismatch:\n got: %+v\nwant: %+v", got, in)
 	}
 
-	// Missing-required must surface a RequiredError after the post-loop check.
+	// A missing required field must give a RequiredError from the check after
+	// the key loop.
 	_, _, err = WideStruct{}.DecodeFrom([]byte(`{"f1":"x"}`))
 	if err == nil {
 		t.Fatal("expected RequiredError on missing fields, got nil")
 	}
 
-	// Duplicate key must fire the bitmask check.
+	// A duplicate key must be caught by the seen-bits check.
 	_, _, err = WideStruct{}.DecodeFrom([]byte(`{"f1":"a","f1":"b"}`))
 	if err == nil {
 		t.Fatal("expected DuplicateKeyError on repeated key, got nil")
 	}
 }
 
-// --- Time formats excluded from cross-compat, single-field types so
-// TimeFormatsStruct can embed them via anonymous-field promotion; covered
-// here for wire shape + JSONSize budget. `Layout` jsonv2 rejects outright
-// (invalid format flag). Stamp/Stamp*/customTiny jsonv2 ACCEPTS on marshal,
-// but the layouts carry no year, so decoded values cannot round-trip.
+// --- Time formats left out of the stdcompat checks. Each is a single-field
+// type, so TimeFormatsStruct can embed them and get the field promoted. They
+// are tested here for encoded form and JSONSize budget. jsonv2 rejects
+// `Layout` outright as an invalid format flag. jsonv2 accepts Stamp, the
+// other Stamp* layouts and customTiny on marshal, but these layouts have no
+// year, so decoded values cannot round-trip.
 
 //ggen:generate
 type TimeLayout struct {
@@ -664,19 +674,21 @@ type TimeStampNano struct {
 	StampNano time.Time `json:"stampNano,format:StampNano"`
 }
 
-// Smallest realistic custom layout — exercises timeFormatSize's
-// `len(format)+6` fallback floor. (The verbose-layout sibling lives in the
-// stdcompat subset: TimeCustomLong round-trips under jsonv2.)
+// TimeCustomTiny has the smallest realistic custom layout. It exercises
+// timeFormatSize's `len(format)+6` fallback at the short end. The long
+// layout case is TimeCustomLong in stdcompat_test.go, which round-trips
+// under jsonv2.
 //
 //ggen:generate
 type TimeCustomTiny struct {
 	CustomTiny time.Time `json:"customTiny,format:'2'"`
 }
 
-// A custom layout's literal characters are copied verbatim by AppendFormat,
-// so one carrying `"` or `\` used to land raw between the quotes — invalid
-// JSON for the quote, a silent backspace escape for the backslash. Both now
-// close through the escape-on-dirty helper.
+// TimeEscapingLayout has custom layouts with `"` and `\` in their literal
+// text. AppendFormat copies literal characters as is, so the output must be
+// JSON-escaped. Written raw, the quote would make the JSON invalid, and `\b`
+// would silently decode as a backspace. The encoder escapes the formatted
+// text when it contains such characters.
 //
 //ggen:generate
 type TimeEscapingLayout struct {
@@ -709,7 +721,7 @@ func TestFormat_CustomLayoutEscapes(t *testing.T) {
 	if sl != when.Format(`a\b 2006`) {
 		t.Errorf("slash layout: %q, want %q", sl, when.Format(`a\b 2006`))
 	}
-	// The widened budget still bounds the escaped output.
+	// The larger size budget still covers the escaped output.
 	if n := in.JSONSize(); len(out) > n {
 		t.Errorf("JSONSize %d < output %d", n, len(out))
 	}
@@ -719,8 +731,8 @@ func TestFormat_CustomLayoutEscapes(t *testing.T) {
 	}
 }
 
-// TimeFormatsStruct is TimeFormatsStdCompat plus the jsonv2-rejected formats
-// above.
+// TimeFormatsStruct is TimeFormatsStdCompat plus the formats above that are
+// left out of the stdcompat checks.
 //
 //ggen:generate
 type TimeFormatsStruct struct {
@@ -733,10 +745,11 @@ type TimeFormatsStruct struct {
 	TimeCustomTiny
 }
 
-// timeFormatsAll sets every field to the same worst-output moment (max-width
-// nanos, unnamed zone → numeric offset) so the per-format byte bound is maxed.
+// timeFormatsAll sets every field to the same time with the longest output:
+// nanoseconds at full width, and a zone with no name so it prints as a
+// numeric offset. This pushes every format to its maximum byte length.
 func timeFormatsAll() TimeFormatsStruct {
-	// Unnamed fixed-offset zone forces the 5-char numeric offset.
+	// A fixed-offset zone with no name forces the 5-char numeric offset.
 	noName := time.FixedZone("", -7*3600)
 	when := time.Date(9999, 12, 31, 23, 59, 59, 999999999, noName)
 	return TimeFormatsStruct{
@@ -752,8 +765,8 @@ func timeFormatsAll() TimeFormatsStruct {
 
 // --- Boundary edges --------------------------------------------------------
 
-// BoundaryStruct collects edge cases: NaN/Inf floats, integer overflow, and
-// escape-hostile string content.
+// BoundaryStruct collects edge cases: NaN and Inf floats, integer overflow,
+// and string content that needs escaping.
 //
 //ggen:generate
 type BoundaryStruct struct {
@@ -762,8 +775,8 @@ type BoundaryStruct struct {
 	Str string  `json:"str"`
 }
 
-// NaN marshal must not leak a bare `NaN` literal (error or null-encoding both
-// fine).
+// Marshaling NaN must not emit a bare `NaN` literal. Either an error or
+// encoding it as null is fine.
 func TestBoundary_FloatNaN_marshal(t *testing.T) {
 	t.Parallel()
 	in := BoundaryStruct{F: math.NaN()}
@@ -794,14 +807,14 @@ func TestBoundary_IntegerOverflow_unmarshal(t *testing.T) {
 	in := []byte(`{"i":9999999999999999999,"f":0,"str":""}`)
 	got, _, err := BoundaryStruct{}.DecodeFrom(in)
 	if err == nil {
-		// Saturation at MaxInt64 is acceptable; arbitrary truncation isn't.
+		// Clamping to MaxInt64 is acceptable. Arbitrary truncation is not.
 		if got.I < 0 {
 			t.Errorf("silent overflow to negative: I = %d", got.I)
 		}
 	}
 }
 
-// 1e308 stays finite, 1e309 overflows; neither may panic.
+// 1e308 stays finite and 1e309 overflows. Neither may panic.
 func TestBoundary_FloatPrecision_unmarshal(t *testing.T) {
 	t.Parallel()
 	ok := []byte(`{"f":1e308,"i":0,"str":""}`)
@@ -812,11 +825,11 @@ func TestBoundary_FloatPrecision_unmarshal(t *testing.T) {
 	}
 	overflow := []byte(`{"f":1e309,"i":0,"str":""}`)
 	_, _, err := BoundaryStruct{}.DecodeFrom(overflow)
-	_ = err // either error or +Inf is documented stdlib behavior
+	_ = err // the stdlib documents either an error or +Inf here
 }
 
-// A string of every short-escape char round-trips, and JSONSize absorbs the
-// worst-case 2× expansion.
+// A string of every character with a short escape (\b, \n and so on)
+// round-trips, and JSONSize covers the worst case where every byte doubles.
 func TestBoundary_EveryEscapeAtOnce(t *testing.T) {
 	t.Parallel()
 	str := "\b\f\n\r\t\"\\"
@@ -842,7 +855,8 @@ func TestBoundary_EveryEscapeAtOnce(t *testing.T) {
 	}
 }
 
-// \uD800 alone must not panic (error or U+FFFD).
+// A lone \uD800 must not panic. Either an error or U+FFFD is fine. \uD800 is
+// half of a UTF-16 surrogate pair, which is not valid on its own.
 func TestBoundary_LoneSurrogate_unmarshal(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"f":0,"i":0,"str":"\uD800"}`)

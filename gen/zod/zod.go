@@ -21,7 +21,8 @@ func ImportExt(ext string) Option { return func(e *Emitter) { e.importExt = ext 
 // Header writes line at the top of every file, e.g. a generated-code marker.
 func Header(line string) Option { return HeaderFor(func(*gen.File) string { return line }) }
 
-// HeaderFor decides the first line per output file; "" writes none.
+// HeaderFor decides the first line per output file. Returning "" writes no
+// header.
 func HeaderFor(fn func(f *gen.File) string) Option { return func(e *Emitter) { e.header = fn } }
 
 // Func appends action to the schema of every value checked or transformed by
@@ -62,14 +63,15 @@ func ExternalType(goPath, tsType string) Option {
 // inlining them into every file.
 func Runtime(f *gen.File) Option { return func(e *Emitter) { e.runtime = f } }
 
-// SchemaName derives the schema constant's name of placed type p, whose name
-// stays the type's name, in file f. Default: the placed name.
+// SchemaName derives the name of the schema constant for placed type p in
+// file f. The placed name stays the type's name. The default schema name is
+// the placed name.
 func SchemaName(fn func(f *gen.File, p gen.Placed) string) Option {
 	return func(e *Emitter) { e.schemaName = fn }
 }
 
-// Override renders a type itself when fn returns ok, before any other rule:
-// e.g. bigint for int64 fields.
+// Override renders a type itself when fn returns ok, before any other rule.
+// For example, it can render int64 fields as bigint.
 func Override(fn func(ctx *gen.Context, p gen.Placed, t *gen.Type) (schema string, ok bool)) Option {
 	return func(e *Emitter) { e.override = fn }
 }
@@ -216,7 +218,7 @@ func (e *Emitter) object(ctx *gen.Context, s *gen.Shape) string {
 	return b.String()
 }
 
-// kind is what methods a rendered schema has.
+// kind tells which methods a rendered schema has.
 type kind uint8
 
 const (
@@ -452,7 +454,7 @@ func formatWord(format string) string {
 	return format
 }
 
-// intBounds is the exact range of a Go integer kind, as decimal literals.
+// intBounds returns the exact range of a Go integer kind, as decimal literals.
 func intBounds(k gen.GoKind, forceUnsigned bool) (lo, hi string) {
 	bits := 64
 	//exhaustive:ignore not every kind applies here
@@ -478,7 +480,7 @@ func intBounds(k gen.GoKind, forceUnsigned bool) (lo, hi string) {
 }
 
 // escapeDollar protects a replacement string from String.replaceAll, which
-// reads $&, $1 and $$ in it; Go's strings.Replacer is literal.
+// reads $&, $1 and $$ in it. Go's strings.Replacer treats them literally.
 func escapeDollar(s string) string { return strings.ReplaceAll(s, "$", "$$$$") }
 
 // checkSafe reports a numeric bound JavaScript cannot hold exactly.
@@ -635,10 +637,8 @@ func lenOp(op gen.Op) (cmp, word string) {
 	return "===", "must be exactly"
 }
 
-// count spells "1 byte" / "2 bytes".
-
-// funcAction is the twin of an @Func rule: FuncFor, then Func by the reference
-// as written, then by import path and name.
+// funcAction returns the zod action for an @Func rule. It tries FuncFor, then
+// Func by the reference as written, then Func by import path and name.
 func (e *Emitter) funcAction(ctx *gen.Context, r gen.Rule) (string, bool) {
 	if e.funcFor != nil {
 		if action, ok := e.funcFor(ctx.File, e.placed, r); ok {

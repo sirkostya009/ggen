@@ -12,12 +12,14 @@ import (
 	"unicode/utf8"
 )
 
-// TestSIMD_NoOverRead pins every SIMD tier to reading nothing past the end
-// of its input. Each probe places its bytes flush against a PROT_NONE page,
-// so an over-read is a SIGSEGV — which kills the process rather than failing
-// the test, hence the probes run in a child test binary and the parent
-// reports the crash. Masked-off lanes never change a result, so no parity
-// test can catch this; only the guard page can.
+// TestSIMD_NoOverRead checks that no SIMD function reads past the end of its
+// input. SIMD code loads 16, 32 or 64 bytes with one CPU instruction, so a
+// load near the end can reach beyond the slice. Each probe puts its input
+// right before a PROT_NONE page, a page that cannot be read. An over-read
+// then crashes with SIGSEGV. That kills the whole process instead of failing
+// the test, so the probes run in a child test binary and the parent reports
+// the crash. Bytes read past the end are ignored by the result, so comparing
+// outputs can never catch this. Only the guard page can.
 func TestSIMD_NoOverRead(t *testing.T) {
 	t.Parallel()
 	if os.Getenv("GGEN_OVERREAD_PROBE") == "1" {
@@ -31,9 +33,10 @@ func TestSIMD_NoOverRead(t *testing.T) {
 	}
 }
 
-// guardPage maps an accessible page followed by a PROT_NONE one. place copies
-// src so its last byte is the last accessible byte; the returned slice's
-// capacity ends there too, so a Stream refilling into it stays flush.
+// guardPage maps a readable page followed by a PROT_NONE page. place copies
+// src so that its last byte is the last readable byte. The returned slice's
+// capacity also ends there, so a Stream that reads into it stays right
+// against the guard page.
 func guardPage(t *testing.T) (place func(src []byte) []byte, done func()) {
 	t.Helper()
 	page := syscall.Getpagesize()
@@ -73,7 +76,8 @@ func overReadProbe(t *testing.T) {
 		}
 	}
 
-	// Bytes-path string tiers: terminated and unterminated, at every length.
+	// String functions on []byte input, with and without a closing quote,
+	// at every length.
 	for n := 0; n <= maxN; n++ {
 		for _, body := range bodies(n) {
 			for _, payload := range []string{`"` + body + `"`, `"` + body} {
@@ -91,7 +95,9 @@ func overReadProbe(t *testing.T) {
 		}
 	}
 
-	// Validators, across the x64 gate and both truncation shapes.
+	// UTF-8 validators, at lengths below and above the point where
+	// validUTF8x64 stops handing off to validUTF8x16. The last two spans
+	// end in a cut-off multi-byte character.
 	for n := 0; n <= 2*maxN; n++ {
 		for _, span := range []string{
 			strings.Repeat("é", n/2) + strings.Repeat("a", n%2),
@@ -110,7 +116,7 @@ func overReadProbe(t *testing.T) {
 		}
 	}
 
-	// Skip and whitespace tiers over the bytes path.
+	// Skip and whitespace functions on []byte input.
 	skipTiers := []struct {
 		name string
 		fn   func([]byte, int) (int, error)
@@ -144,7 +150,8 @@ func overReadProbe(t *testing.T) {
 		}
 	}
 
-	// Encode tiers, the string aliasing the page-edge bytes.
+	// Encode functions. The string points straight at the bytes at the
+	// page edge, without a copy.
 	encTiers := []struct {
 		name   string
 		fn     func([]byte, string) []byte
@@ -172,8 +179,9 @@ func overReadProbe(t *testing.T) {
 		}
 	}
 
-	// Stream cores: the window's capacity ends at the page edge, so the first
-	// refill lands the whole payload flush against it.
+	// Stream functions. The Stream's buffer, called the window, ends at the
+	// page edge. The first read from the reader fills the whole payload right
+	// up against the guard page.
 	type streamFn = func(*Stream) (string, error)
 	streamTiers := []struct {
 		name   string

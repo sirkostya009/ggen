@@ -28,11 +28,12 @@ type URLStruct struct {
 	Site url.URL `json:"site"`
 }
 
-// JSONSize is an upper bound: ggen.Marshal preallocates exactly that many
-// bytes and AppendJSON must never grow the buffer. The bound covers realistic
-// worst-case input (long ASCII, short-escapes, html chars, max-width numbers,
-// deep nesting); sub-0x20 control chars (\uXXXX, 6×) are deliberately not
-// covered — rare, and the one-time realloc keeps the buffer tight otherwise.
+// JSONSize is an upper bound. ggen.Marshal preallocates exactly that many
+// bytes, and AppendJSON must never grow the buffer. The bound covers
+// realistic worst-case input: long ASCII, two-char escapes, HTML characters,
+// max-width numbers and deep nesting. Control characters below 0x20 take a
+// 6-byte \uXXXX escape and are left out on purpose. They are rare, and one
+// realloc for them keeps the buffer tight in every other case.
 func TestJSONSize_NoReallocOnWorstCase(t *testing.T) {
 	t.Parallel()
 
@@ -86,7 +87,7 @@ func TestJSONSize_NoReallocOnWorstCase(t *testing.T) {
 			},
 		},
 		{
-			// omitempty/omitzero: zero-valued omit fields must not be
+			// omitempty and omitzero: zero-valued omitted fields must not be
 			// reserved in the cap.
 			name: "OmitStruct_all_omits_at_zero",
 			v: OmitStruct{
@@ -95,9 +96,9 @@ func TestJSONSize_NoReallocOnWorstCase(t *testing.T) {
 			},
 		},
 		{
-			// JSON-empty guards (text kinds, nested struct, any, pointer
-			// peel, [N]byte omitzero) all populated: every guarded budget
-			// must be reserved.
+			// Every JSON-empty guard is populated: text kinds, nested
+			// struct, any, pointers and [N]byte omitzero. Every guarded
+			// budget must be reserved.
 			name: "R10OmitEmpty_all_populated",
 			v: R10OmitEmpty{
 				IP:   net.ParseIP("2001:db8:85a3::8a2e:370:7334"),
@@ -113,8 +114,8 @@ func TestJSONSize_NoReallocOnWorstCase(t *testing.T) {
 			},
 		},
 		{
-			// Every format size path (time/duration/bytes) + IPv6 (the
-			// wider arm of the v4/v6 split), under one cap.
+			// Every format size path (time, duration, bytes) plus IPv6, the
+			// wider side of the IPv4 and IPv6 split, under one cap.
 			name: "NativeTypes_v6_max_formats",
 			v: NativeTypes{
 				CreatedAt: time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.UTC),
@@ -131,7 +132,7 @@ func TestJSONSize_NoReallocOnWorstCase(t *testing.T) {
 			},
 		},
 		{
-			// IPv4 arm — the v4 path must not underestimate.
+			// The IPv4 side. Its budget must not underestimate.
 			name: "NativeTypes_v4_formats",
 			v: NativeTypes{
 				CreatedAt: time.Date(2026, 5, 14, 12, 0, 0, 0, time.UTC),
@@ -153,7 +154,7 @@ func TestJSONSize_NoReallocOnWorstCase(t *testing.T) {
 			v:    richTypesWorst(),
 		},
 		{
-			// All pointers populated — exercises the non-nil branch
+			// All pointers populated. This exercises the non-nil branch
 			// through every pointee kind.
 			name: "PointerStruct_all_populated",
 			v: PointerStruct{
@@ -166,8 +167,8 @@ func TestJSONSize_NoReallocOnWorstCase(t *testing.T) {
 			},
 		},
 		{
-			// Cross-pkg External2's generated JSONSize must be called
-			// (not a flat fallback).
+			// The cross-package External2's generated JSONSize must be
+			// called, not a flat fallback.
 			name: "FastFallbackStruct_foreign_jsonsize",
 			v: FastFallbackStruct{
 				ID:    worstShort,
@@ -196,9 +197,10 @@ func TestJSONSize_NoReallocOnWorstCase(t *testing.T) {
 	}
 }
 
-// JSONSize must shrink on the cheaper arm of a runtime split (IPv4 < IPv6,
-// short URL < long URL). Pins tightness — over-allocation regressions still
-// pass the worst-case cap test, so check them explicitly.
+// JSONSize must shrink on the cheaper side of a runtime split. IPv4 is
+// shorter than IPv6, and a short URL is shorter than a long one. This pins
+// tightness. Over-allocation still passes the worst-case cap test, so check
+// it explicitly.
 func TestJSONSize_RuntimeBranches(t *testing.T) {
 	t.Parallel()
 
@@ -227,8 +229,8 @@ func TestJSONSize_RuntimeBranches(t *testing.T) {
 	}
 }
 
-// URL component-summing path across empty/full/credential/percent-encoded
-// shapes.
+// The URL component-summing path across empty, full, credential and
+// percent-encoded shapes.
 func TestJSONSize_URLStruct(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -272,8 +274,8 @@ func TestJSONSize_URLStruct(t *testing.T) {
 	}
 }
 
-// Per-format budget for every time format in isolation, with worst-output
-// input (numeric zone fallback, max nanos).
+// The budget of every time format in isolation, with input that gives the
+// longest output: numeric zone fallback and max nanoseconds.
 func TestJSONSize_TimeFormats(t *testing.T) {
 	t.Parallel()
 	noName := time.FixedZone("", -7*3600)
@@ -387,7 +389,8 @@ func richTypesWorst() RichTypes {
 	}
 }
 
-// Cap-guard for [N]T fields.
+// Cap-guard for [N]T fields. A cap-guard checks that AppendJSON stays within
+// the capacity JSONSize reserved.
 func TestJSONSize_TupleStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
 	in := TupleStruct{
@@ -431,7 +434,7 @@ func TestJSONSize_ZeroTupleContainers_NoRealloc(t *testing.T) {
 	}
 }
 
-// A POINTER to a fixed byte array budgets the encoded pointee, not a tuple.
+// A pointer to a fixed byte array budgets the encoded pointee, not a tuple.
 func TestJSONSize_PtrByteArray_NoRealloc(t *testing.T) {
 	t.Parallel()
 	p := [8]byte{1, 2, 3, 4, 5, 6, 7, 8}
@@ -454,8 +457,8 @@ func TestJSONSize_PtrByteArray_NoRealloc(t *testing.T) {
 	}
 }
 
-// htmlescape opt-in expands < > & to 6× (\uXXXX); the bound must cover an
-// all-< > & string.
+// The htmlescape opt-in expands <, > and & to 6 bytes each (\uXXXX). The
+// bound must cover a string made only of them.
 func TestJSONSize_HTMLEscapeStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
 	in := HTMLEscapeStruct{Note: strings.Repeat("<>&", 50)}
@@ -472,8 +475,8 @@ func TestJSONSize_HTMLEscapeStruct_NoRealloc(t *testing.T) {
 	}
 }
 
-// An `any` is sized by walking the value it holds, so the bound holds for a
-// payload of any size at every position an `any` can occupy — including the
+// An `any` is sized by walking the value it holds. So the bound holds for a
+// payload of any size at every position an `any` can take. That includes the
 // htmlescape escape factor and a generated struct reporting its own JSONSize.
 func TestJSONSize_AnyPositions_NoRealloc(t *testing.T) {
 	t.Parallel()
@@ -513,7 +516,7 @@ func TestJSONSize_AnyPositions_NoRealloc(t *testing.T) {
 	}
 }
 
-// The bound must cover the fixed field AND every spliced inline map entry.
+// The bound must cover the fixed field and every spliced catch-all map entry.
 func TestJSONSize_InlineStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
 	in := EmbedStruct{
@@ -536,7 +539,7 @@ func TestJSONSize_InlineStruct_NoRealloc(t *testing.T) {
 	}
 }
 
-// ,string wrap adds two quotes over the bare-number budget at every width.
+// The ,string wrap adds two quotes over the bare-number budget at every width.
 func TestJSONSize_StringTagStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
 	in := StringTagStruct{
@@ -575,8 +578,8 @@ func populatedSQLNullAt(when time.Time) SQLNullStruct {
 	return out
 }
 
-// Cap-guard for every sql.NullX flavor, both Valid=true and Valid=false
-// (size = max(inner, len("null"))).
+// Cap-guard for every sql.NullX flavor, with Valid both true and false. The
+// size is max(inner, len("null")).
 func TestJSONSize_SQLNullStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -654,7 +657,7 @@ func TestJSONSize_SQLNullPerType_NoRealloc(t *testing.T) {
 			SQLNullTimeStruct{},
 			SQLNullTimeStruct{T: sql.NullTime{Time: when, Valid: true}},
 		},
-		// Generic sql.Null[T] — same size contract as the named flavors.
+		// Generic sql.Null[T] has the same size contract as the named flavors.
 		{
 			"GenString",
 			SQLNullGenStringStruct{},
@@ -680,7 +683,8 @@ func TestJSONSize_SQLNullPerType_NoRealloc(t *testing.T) {
 			SQLNullGenTimeStruct{},
 			SQLNullGenTimeStruct{T: sql.Null[time.Time]{V: when, Valid: true}},
 		},
-		// Custom inner types — named primitive (json fallback) + TextMarshaler.
+		// Custom inner types: a named primitive (json fallback) and a
+		// TextMarshaler.
 		{
 			"GenAccountID",
 			SQLNullGenAccountStruct{},
@@ -723,7 +727,8 @@ func TestJSONSize_SQLNullPerType_NoRealloc(t *testing.T) {
 	}
 }
 
-// Cap-guard for []*T slabs, with nil + non-nil elements.
+// Cap-guard for []*T slabs, with nil and non-nil elements. A slab is a []*T
+// whose pointees share one backing array.
 func TestJSONSize_PtrSliceStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
 	a := Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
@@ -746,7 +751,7 @@ func TestJSONSize_PtrSliceStruct_NoRealloc(t *testing.T) {
 	}
 }
 
-// Per-shape cap-guard for the three slab flavors (Items / Tuple / Nodes).
+// Per-shape cap-guard for the three slab flavors: Items, Tuple and Nodes.
 func TestJSONSize_PtrSlicePerShape_NoRealloc(t *testing.T) {
 	t.Parallel()
 	a := Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
@@ -782,7 +787,7 @@ func TestJSONSize_PtrSlicePerShape_NoRealloc(t *testing.T) {
 	}
 }
 
-// Per-pointee-kind cap-guard for single-level *T fields, nil + populated arms.
+// Per-pointee-kind cap-guard for single-level *T fields, nil and populated.
 func TestJSONSize_PtrFieldPerKind_NoRealloc(t *testing.T) {
 	t.Parallel()
 	worst := strings.Repeat(`"\`+"\n\t", 16)
@@ -821,8 +826,8 @@ func TestJSONSize_PtrFieldPerKind_NoRealloc(t *testing.T) {
 	}
 }
 
-// Per-depth cap-guard for multi-level pointers (**int … **Address), top-nil
-// + fully-allocated arms.
+// Per-depth cap-guard for multi-level pointers, from **int to **Address. It
+// covers a nil top level and a fully allocated chain.
 func TestJSONSize_NPtrPerDepth_NoRealloc(t *testing.T) {
 	t.Parallel()
 	worst := strings.Repeat(`"\`+"\n\t", 16)
@@ -857,7 +862,7 @@ func TestJSONSize_NPtrPerDepth_NoRealloc(t *testing.T) {
 	}
 }
 
-// Cap-guard for an any field over a nested map+array+string mix.
+// Cap-guard for an any field over a mix of nested maps, arrays and strings.
 func TestJSONSize_AnyStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
 	body := map[string]any{
@@ -896,9 +901,9 @@ func TestJSONSize_AnyNumberStruct_NoRealloc(t *testing.T) {
 	}
 }
 
-// Container aliases used to return a flat 1024 — a real container past it ran
-// the growth chain, breaking the single-alloc Marshal contract; they now run
-// the same per-kind machinery as a struct field of that shape.
+// Container aliases are sized by the same per-kind rules as a struct field of
+// that shape. A flat estimate would let a large container grow the buffer
+// and break the single-allocation Marshal contract.
 func TestJSONSize_ContainerAliases_NoRealloc(t *testing.T) {
 	t.Parallel()
 	check := func(name string, size int, got []byte, err error) {
@@ -913,7 +918,7 @@ func TestJSONSize_ContainerAliases_NoRealloc(t *testing.T) {
 			t.Errorf("%s undersized: len=%d > size=%d", name, len(got), size)
 		}
 	}
-	// ~6.6 KB wire — far past the old flat 1024.
+	// About 7 KB on the wire, well past any small flat estimate.
 	tags := make(AliasTags, 300)
 	for i := range tags {
 		tags[i] = "tag-value-0123456789"
@@ -936,8 +941,9 @@ func TestJSONSize_ContainerAliases_NoRealloc(t *testing.T) {
 	check("AliasTuple", size, got, err)
 }
 
-// A zoned netip.Addr was unbudgeted — the '%'+zone bytes exceeded the flat
-// 39 and broke the single-alloc Marshal contract even before escaping.
+// A zoned netip.Addr must budget its '%' and zone bytes. Without them the
+// text exceeds the 39 bytes of a plain IPv6 address and breaks the
+// single-allocation Marshal contract, even before escaping.
 func TestJSONSize_NetipZone_NoRealloc(t *testing.T) {
 	t.Parallel()
 	in := NativeTypes{Addr: netip.MustParseAddr("1111:2222:3333:4444:5555:6666:7777:8888%eth0")}
