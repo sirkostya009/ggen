@@ -346,10 +346,9 @@ none: it hides regressions in the rows you dropped. If the output is long, it is
 long; emit it whole.
 
 **ALWAYS warm up and use a CONTROL ROW; never wait on the machine.** Bench
-before/after head-to-head at whatever the box gives you: the `power-saver`
-3 GHz cap and a busy box are fine, and the ceiling cannot be lifted reliably
-here anyway (asusd and powerdevil re-pin `scaling_max_freq`, root-owned). What
-makes a capped or loaded run trustworthy is the protocol, because the FIRST
+before/after head-to-head at whatever the box gives you: a frequency cap and a
+busy box are fine. What makes a capped or loaded run trustworthy is the
+protocol, because the FIRST
 binary measured eats the frequency ramp and can read up to **50% slow** —
 DeepNested/ggen once swung 16.8 → 24.6 µs on an UNCHANGED binary, and two
 "regressions" (depth cap +10.3% avx512, number grammar +25%) were pure artifact.
@@ -446,8 +445,7 @@ that non-inlinable call forced every digit iteration of `skipNumber` through a
 stack load and store. Passing both by value and returning them keeps the
 cursor in a register (10 address-of sites → 0); `refillSkip` stays out of line.
 
-Core-pinned, 500x, count=2 (two separate passes, one per binary each), 3 GHz
-power-saver cap:
+Core-pinned, 500x, count=2 (two separate passes, one per binary each):
 
 | `ggen_stream` row | scalar pass 1 / 2 | simd pass 1 / 2 |
 | --- | --- | --- |

@@ -269,7 +269,7 @@ surface pinned by `Decoder[T]`).
   algorithm on 16-byte lanes, AVX1-safe) replaces the scalar `utf8.Valid`
   second pass in `classifyStructural` + the stream cores: ~6.5× on the
   validation component (4 KB Cyrillic 3456→~530 ns). Control-checked re-measure
-  (2026-07, performance profile — see bench/CLAUDE.md): cumulative pre-UTF8 →
+  (2026-07, see bench/CLAUDE.md): cumulative pre-UTF8 →
   now, NoAlloc +67.7% scalar / +38.7% avx512, RuneGated +54.4% / +9.5% — the
   vector pass is why the avx512 penalties are a fraction of the scalar ones.
   ASCII rows flat; EscapeHeavy regressed +12.7% avx512 (escape path gained a
@@ -879,9 +879,9 @@ surface pinned by `Decoder[T]`).
   never exercised the grow-only EMITTED refills that are the entire problem.
   Probe generated decoders, not runtime helpers, for stream buffer growth.
   (2) the first cost numbers (43x for unconditional, 1.55x for the
-  `len == cap` gate) were taken under the power-saver profile with in-process
+  `len == cap` gate) were taken with in-process
   `go test -bench` and no discarded warmup. Re-measured per the house rules
-  (performance profile, prebuilt `go test -c` binaries, warmup discarded, one
+  (prebuilt `go test -c` binaries, warmup discarded, one
   pinned pass each) the unconditional cost is 25x and the gated cost is 2-3% —
   the 1.55x was pure artifact and nearly cost a correct optimisation. The
   backlog already says in-process `-bench` runs are not comparable on micros;
