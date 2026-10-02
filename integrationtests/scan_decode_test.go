@@ -414,7 +414,7 @@ func TestUnmarshalStream_BytesEqualsStream(t *testing.T) {
 		complexPayload,
 		[]byte(`{"id":1,"name":"x"}`),
 		[]byte(`{"id":1,"name":"x","tags":["a","b"],"props":{"k":"v"}}`),
-		[]byte(`{"id":1,"name":"éscape","children":[{"id":2}]}`),
+		[]byte(`{"id":1,"name":"\u00e9scape","children":[{"id":2}]}`),
 		[]byte(`{"id":1,"name":"x","score":1e-10,"tags":[]}`),
 		[]byte(`{"id":-9223372036854775808,"name":"min","score":-1.5e308}`),
 	}
@@ -698,7 +698,7 @@ func TestInvalidUTF8Rejected(t *testing.T) {
 		{"invalid_in_escape_string", "{\"street\":\"a\\n\xff\",\"city\":\"Y\",\"zipCode\":\"12345\"}", true},
 		{"valid_unicode_short", `{"street":"żółć","city":"Y","zipCode":"12345"}`, false},
 		{"valid_unicode_long", `{"street":"` + long + `é😀","city":"Y","zipCode":"12345"}`, false},
-		{"valid_escaped_pair", `{"street":"a😀b","city":"Y","zipCode":"12345"}`, false},
+		{"valid_escaped_pair", `{"street":"a\ud83d\ude00b","city":"Y","zipCode":"12345"}`, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

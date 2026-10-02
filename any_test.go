@@ -29,7 +29,7 @@ var anyCases = []struct {
 	{"false", `false`},
 	{"empty_string", `""`},
 	{"plain_string", `"hello"`},
-	{"escaped_string", `"a\\b\tc\n\"é"`},
+	{"escaped_string", `"a\\b\tc\n\"\u00e9"`},
 	{"int", `42`},
 	{"neg_int", `-7`},
 	{"float", `3.14`},

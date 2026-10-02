@@ -30,9 +30,9 @@ var stringHappyCases = []struct {
 	{"escape_n", `"a\nb"`},
 	{"escape_r", `"a\rb"`},
 	{"escape_t", `"a\tb"`},
-	{"unicode_bmp", `"é"`},
-	{"unicode_surrogate_pair", `"😀"`},
-	{"unicode_then_text", `"xéy"`},
+	{"unicode_bmp", `"\u00e9"`},
+	{"unicode_surrogate_pair", `"\ud83d\ude00"`},
+	{"unicode_then_text", `"x\u00e9y"`},
 	{"utf8_passthrough", `"héllo"`},
 	{"all_ascii_escapes", `"\b\f\n\r\t\"\\\/"`},
 }
@@ -106,11 +106,11 @@ func TestDetach(t *testing.T) { //nolint:paralleltest // measures allocations
 	// The value must survive overwriting the source, for both aliased and
 	// copied strings.
 	cases := []struct{ in, want string }{
-		{`"hello"`, "hello"}, // no escape: String aliases, Detach clones
-		{`"xéy"`, "xéy"},     // no escape, multi-byte: aliased
-		{`"a\nb"`, "a\nb"},   // escape: stringSlow copies, Detach does nothing
-		{`"😀"`, "😀"},         // no escape, 4-byte rune: aliased
-		{`""`, ""},           // empty
+		{`"hello"`, "hello"},    // no escape: String aliases, Detach clones
+		{`"xéy"`, "xéy"},        // no escape, multi-byte: aliased
+		{`"a\nb"`, "a\nb"},      // escape: stringSlow copies, Detach does nothing
+		{`"\ud83d\ude00"`, "😀"}, // surrogate pair escape: stringSlow copies
+		{`""`, ""},              // empty
 	}
 	for _, tc := range cases {
 		src := []byte(tc.in)
@@ -182,7 +182,7 @@ func TestString_LoneSurrogateParity(t *testing.T) {
 		})
 	}
 	// A valid 4-byte character still decodes.
-	if got, _, err := String([]byte(`"😀"`), 0, true); err != nil || got != "😀" {
+	if got, _, err := String([]byte(`"\uD83D\uDE00"`), 0, true); err != nil || got != "😀" {
 		t.Errorf("valid pair: got %q err=%v", got, err)
 	}
 }
@@ -512,7 +512,7 @@ var escapeAlphabet = []string{
 	`a`, `bc`, `def`, `ghijklmn`, `opqrstuvwxyz0123`,
 	`0123456789abcdef0123456789abcdef`, // twice the window
 	`\"`, `\\`, `\/`, `\b`, `\f`, `\n`, `\r`, `\t`,
-	`A`, `é`, `😀`, `\ud83d`, `\ude00`, `\u00`, `\uZZZZ`,
+	`\u0041`, `\u00e9`, `\ud83d\ude00`, `\ud83d`, `\ude00`, `\u00`, `\uZZZZ`,
 	"é", "日本語", "😀", "\xc3", "\xff\xfe", "\x80",
 	"\x01", "\x1f", "\x7f", " ", "\t\\t",
 }

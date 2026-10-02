@@ -344,7 +344,7 @@ func TestFloatNumberBufBounded(t *testing.T) {
 func TestStreamCaptureValue(t *testing.T) {
 	t.Parallel()
 	values := []string{
-		`123`, `-45.67e8`, `"plain"`, `"esc\n\tA😀"`, `true`, `null`,
+		`123`, `-45.67e8`, `"plain"`, `"esc\n\t\u0041\ud83d\ude00"`, `true`, `null`,
 		`[1,2,3,[4,5,[6,7]],8]`, `{"a":1,"b":[2,3],"c":{"d":"e"}}`,
 		`"` + strings.Repeat("a", 5000) + `"`,
 	}
@@ -790,7 +790,7 @@ func TestStreamSkipValue_MatchesBytes(t *testing.T) {
 func TestStreamStringSurrogateAcrossRefill(t *testing.T) {
 	t.Parallel()
 	for pad := range 48 {
-		body := strings.Repeat("a", pad) + `😀` + strings.Repeat("b", 6)
+		body := strings.Repeat("a", pad) + `\ud83d\ude00` + strings.Repeat("b", 6)
 		payload := `"` + body + `"`
 		want, _, err := String([]byte(payload), 0, true)
 		if err != nil {
@@ -1359,6 +1359,7 @@ func TestBytesStreamTruncationErrorParity(t *testing.T) {
 		{"Int64-sign", "-", func(d []byte) error { _, _, e := Int64(d, 0); return e }, func(s *Stream) error { _, e := s.Int64(); return e }},
 		{"Uint64", "", func(d []byte) error { _, _, e := Uint64(d, 0); return e }, func(s *Stream) error { _, e := s.Uint64(); return e }},
 		{"Float64", "", func(d []byte) error { _, _, e := Float64(d, 0); return e }, func(s *Stream) error { _, e := s.Float64(); return e }},
+		{"Float32", "", func(d []byte) error { _, _, e := Float32(d, 0); return e }, func(s *Stream) error { _, e := s.Float32(); return e }},
 		{"Number", "", func(d []byte) error { _, _, e := Number(d, 0); return e }, func(s *Stream) error { _, e := s.Number(); return e }},
 		{"Bool", "", func(d []byte) error { _, _, e := Bool(d, 0); return e }, func(s *Stream) error { _, e := s.Bool(); return e }},
 		{"String", "", func(d []byte) error { _, _, e := String(d, 0, true); return e }, func(s *Stream) error { _, e := s.String(true); return e }},
@@ -1734,7 +1735,7 @@ func TestStreamStringSurrogate_LiveReader(t *testing.T) {
 		{`"\ud83d"}`, true},
 		{`"\ud83d"}`, false},
 		{`"\ud83dab"`, false},
-		{`"😀"`, true},
+		{`"\ud83d\ude00"`, true},
 	} {
 		block := make(chan struct{})
 		done := make(chan res, 1)
@@ -1812,6 +1813,12 @@ func TestStreamErrorPos_MatchesBytes(t *testing.T) {
 			numbers,
 			func(d []byte, i int) (int, error) { _, p, e := Float64(d, i); return p, e },
 			func(s *Stream) error { _, e := s.Float64(); return e },
+		},
+		{
+			"Float32",
+			numbers,
+			func(d []byte, i int) (int, error) { _, p, e := Float32(d, i); return p, e },
+			func(s *Stream) error { _, e := s.Float32(); return e },
 		},
 		{
 			"Number",

@@ -164,7 +164,7 @@ func TestCopy_NestedDecouples(t *testing.T) {
 // scribbled.
 func TestCopy_EscapedDecouples(t *testing.T) {
 	t.Parallel()
-	const js = `{"name":"a\nb\"c\\dé😀","tags":["té","plain"],"props":{"k\ny":"v\"w"},"extra":"x😀","refs":[{"label":"r\t0"}]}`
+	const js = `{"name":"a\nb\"c\\d\u00e9\ud83d\ude00","tags":["t\u00e9","plain"],"props":{"k\ny":"v\"w"},"extra":"x\ud83d\ude00","refs":[{"label":"r\t0"}]}`
 
 	wantName := "a\nb\"c\\dé\U0001F600"
 	wantTag0 := "té"

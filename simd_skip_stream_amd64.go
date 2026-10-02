@@ -709,7 +709,7 @@ func (s *Stream) CaptureValueAVX() ([]byte, error) {
 			}
 		}
 		if eof {
-			s.Pos = start
+			s.Pos = end
 			return nil, err
 		}
 		// A failure at a byte inside the window, not at its end, is final.
@@ -719,7 +719,7 @@ func (s *Stream) CaptureValueAVX() ([]byte, error) {
 		// which a parity test checks. ErrMaxDepth is final wherever it
 		// happens.
 		if err != nil && (end < len(s.buf) || err == ErrMaxDepth) {
-			s.Pos = start
+			s.Pos = end
 			return nil, err
 		}
 		if e := s.ReadMore(start); e != nil {
@@ -749,7 +749,7 @@ func (s *Stream) CaptureValueAVX2() ([]byte, error) {
 			}
 		}
 		if eof {
-			s.Pos = start
+			s.Pos = end
 			return nil, err
 		}
 		// A failure at a byte inside the window, not at its end, is final.
@@ -759,7 +759,7 @@ func (s *Stream) CaptureValueAVX2() ([]byte, error) {
 		// which a parity test checks. ErrMaxDepth is final wherever it
 		// happens.
 		if err != nil && (end < len(s.buf) || err == ErrMaxDepth) {
-			s.Pos = start
+			s.Pos = end
 			return nil, err
 		}
 		if e := s.ReadMore(start); e != nil {
@@ -789,7 +789,7 @@ func (s *Stream) CaptureValueAVX512() ([]byte, error) {
 			}
 		}
 		if eof {
-			s.Pos = start
+			s.Pos = end
 			return nil, err
 		}
 		// A failure at a byte inside the window, not at its end, is final.
@@ -799,7 +799,7 @@ func (s *Stream) CaptureValueAVX512() ([]byte, error) {
 		// which a parity test checks. ErrMaxDepth is final wherever it
 		// happens.
 		if err != nil && (end < len(s.buf) || err == ErrMaxDepth) {
-			s.Pos = start
+			s.Pos = end
 			return nil, err
 		}
 		if e := s.ReadMore(start); e != nil {

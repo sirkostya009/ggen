@@ -30,7 +30,7 @@ func TestSkipValueSIMD_Parity(t *testing.T) {
 	var cases [][]byte
 	seeds := []string{
 		`null`, `true`, `false`, `0`, `-12.5e3`, `""`, `"hi"`,
-		`"esc\"aped\nvalue"`, `"unié😀"`,
+		`"esc\"aped\nvalue"`, `"uni\u00e9\ud83d\ude00"`,
 		`[]`, `{}`, `[1,2,3]`, `{"a":1,"b":[true,null,"x"]}`,
 		`{"deep":{"er":{"est":[{"k":"v"},[[["s"]]]]}}}`,
 		`"` + strings.Repeat("x", 300) + `"`,
@@ -121,8 +121,9 @@ func TestSkipSpaceSIMD_Parity(t *testing.T) {
 }
 
 // TestStreamSkipValueSIMD_Parity checks the SIMD versions of
-// Stream.SkipValue against the scalar one. Offset must match: the end of the
-// value, or the byte where it gave up on error. The error must match too.
+// Stream.SkipValue and Stream.CaptureValue against the scalar ones. Offset
+// must match: the end of the value, or the byte where it gave up on error.
+// The error and the captured bytes must match too.
 // Inputs are compact and indented values, truncations and broken mutations.
 // The readers return small chunks, so the Stream must read more input in the
 // middle of a string or a whitespace run.
@@ -175,6 +176,20 @@ func TestStreamSkipValueSIMD_Parity(t *testing.T) {
 		err := fn(&s)
 		return s.Offset(), err
 	}
+	captures := []struct {
+		name string
+		fn   func(*Stream) ([]byte, error)
+	}{
+		{"CaptureValueAVX", (*Stream).CaptureValueAVX},
+		{"CaptureValueAVX2", (*Stream).CaptureValueAVX2},
+		{"CaptureValueAVX512", (*Stream).CaptureValueAVX512},
+	}
+	capture := func(fn func(*Stream) ([]byte, error), payload []byte, chunk int) (string, int, error) {
+		var s Stream
+		s.Reset(&chunkReader{bytes.NewReader(payload), chunk}, make([]byte, 0, 8))
+		v, err := fn(&s)
+		return string(v), s.Offset(), err
+	}
 	for _, in := range cases {
 		for _, chunk := range []int{1, 3, 7, 64} {
 			wantOff, wantErr := run((*Stream).SkipValue, in, chunk)
@@ -183,6 +198,14 @@ func TestStreamSkipValueSIMD_Parity(t *testing.T) {
 				if wantErr != gotErr || gotOff != wantOff {
 					t.Fatalf("%s(%q, chunk=%d) = (%d, %v), scalar (%d, %v)",
 						tier.name, in, chunk, gotOff, gotErr, wantOff, wantErr)
+				}
+			}
+			wantV, wantOff, wantErr := capture((*Stream).CaptureValue, in, chunk)
+			for _, tier := range captures {
+				gotV, gotOff, gotErr := capture(tier.fn, in, chunk)
+				if wantErr != gotErr || gotOff != wantOff || gotV != wantV {
+					t.Fatalf("%s(%q, chunk=%d) = (%q, %d, %v), scalar (%q, %d, %v)",
+						tier.name, in, chunk, gotV, gotOff, gotErr, wantV, wantOff, wantErr)
 				}
 			}
 		}

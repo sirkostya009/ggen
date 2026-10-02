@@ -687,6 +687,16 @@ surface pinned by `Decoder[T]`).
   (`map key must be string`), so the accepted shape is reachable only
   through `AppendAny`.
 
+- **`JSONSize` undercounts strings holding control bytes.** `sizeStrMult`
+  is 2×, which covers `\n`/`\"`/`\\`, but a control byte other than
+  `\b\f\n\r\t` encodes as `\u00XX`, 6×. Raw control bytes are rejected on
+  decode, yet a `\u0001` escape decodes to one, as does any Go value built in
+  code, so such a value breaks the no-grow contract (one buffer growth, output
+  correct). `AnySize`'s 2× has the same hole. A flat 6× triples the
+  reservation for every string. Alternatives: count control bytes at runtime
+  in the size loop (a scan per string), or accept the miss. Decide with a
+  house-rule A/B on Mega_Marshal B/op before changing.
+
 - **A non-generated foreign struct still budgets a flat 128 in `JSONSize`**
   (`sizeContribKind`, and `len×128` for its slice elements), so a large one
   breaks the no-grow contract the `any` sizing (cmd/ggen opt #88) now keeps.

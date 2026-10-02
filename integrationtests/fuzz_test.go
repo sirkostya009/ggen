@@ -23,7 +23,7 @@ var fuzzSeeds = [][]byte{
 	[]byte(`{"id":1,"name":"x"}`),
 	[]byte(`{"id":1,"name":"x","tags":["a","b"],"props":{"k":"v"}}`),
 	[]byte(`{"id":1,"children":[{"id":2,"children":[{"id":3}]}]}`),
-	[]byte(`{"name":"A😀","score":1.5e10}`),
+	[]byte(`{"name":"\u0041\ud83d\ude00","score":1.5e10}`),
 	[]byte(`{"active":true,"tags":[]}`),
 	[]byte(`null`),
 	[]byte(`[]`),

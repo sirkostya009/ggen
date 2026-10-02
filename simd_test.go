@@ -30,7 +30,7 @@ func TestStringSIMD_Parity(t *testing.T) {
 		[]byte(`""`), []byte(`"a"`), []byte(`"ab"`), []byte(`not a string`),
 		{},
 		[]byte(`"unterminated`), []byte(`"trailing\`), []byte(`"bad\u12`),
-		[]byte(`"esc\nape"`), []byte(`"A😀"`), []byte(`"\q"`),
+		[]byte(`"esc\nape"`), []byte(`"\u0041\ud83d\ude00"`), []byte(`"\q"`),
 		// Broken escapes at the very end of the input, next to inputs that
 		// are only cut short.
 		[]byte(`"\u12"`), []byte(`"ab\uZ"`), []byte(`"\u00`), []byte(`"\ud83d\uDE`),
@@ -114,7 +114,7 @@ func TestStreamStringSIMD_Parity(t *testing.T) {
 		{"AVX512", (*Stream).StringAVX512},
 	}
 	var bodies []string
-	bodies = append(bodies, "", "a", "hello", `esc\"aped`, `tail\\`, `uniécode`)
+	bodies = append(bodies, "", "a", "hello", `esc\"aped`, `tail\\`, `uni\u00e9code`)
 	for _, n := range []int{1, 15, 16, 17, 31, 32, 33, 63, 64, 65, 130, 600} {
 		b := bytes.Repeat([]byte{'x'}, n)
 		bodies = append(bodies, string(b))

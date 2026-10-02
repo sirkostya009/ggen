@@ -1038,6 +1038,7 @@ func (s *Stream) Float32() (float32, error) {
 	i := s.Pos
 	if i >= len(s.buf) {
 		if err := s.ReadMore(i); err != nil {
+			s.Pos = 0
 			return 0, NotEOF(err, ErrBadNumber)
 		}
 		i = 0
@@ -1074,8 +1075,8 @@ scan:
 		return 0, ErrBadNumber
 	}
 	end, gerr := skipNumber(s.buf[start:i], 0)
-	if gerr != nil || end == 0 {
-		s.Pos = start
+	if gerr != nil {
+		s.Pos = start + end
 		return 0, ErrBadNumber
 	}
 	i = start + end

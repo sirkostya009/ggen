@@ -616,9 +616,8 @@ func isThirdParty(p string) bool {
 
 // preregisterOneOfs walks all rules and fills the oneof registry before
 // rendering starts. The registry holds one package-level slice per unique
-// allowed set. Lookups during rendering are then plain map reads, which keeps
-// parallel rendering safe. Deduplication makes the result independent of
-// order.
+// allowed set. Registering first numbers the slices in the order the rules
+// are declared, whatever order rendering later reaches them in.
 func preregisterOneOfs(structs []model.StructInfo) {
 	walk := func(rules []model.ValidationRule) {
 		for _, v := range rules {
@@ -2348,8 +2347,9 @@ const (
 	sizeUint  = 20 // "18446744073709551615"
 	sizeFloat = 25 // shortest round-trip 'f' form: sign, "0.", 5 zeros, 17 digits
 	// sizeStrMult covers the short escapes \n, \" and \\, which double a
-	// byte. Control bytes grow 6 times, but the decoder rejects them, so the
-	// bound is tight for valid JSON.
+	// byte. Other control bytes grow 6 times (\u0001). The decoder rejects
+	// them raw, but a \u0001 escape decodes to one, so a string holding them
+	// can outgrow the budget and make AppendJSON grow its buffer once.
 	sizeStrMult     = 2
 	sizeStrMultHTML = 6 // htmlescape writes <, > and & as \uXXXX, 6 bytes
 	sizeStrPad      = 2 // surrounding quotes
