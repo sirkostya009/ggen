@@ -68,6 +68,17 @@ arms alike — the stream builds the unknown-key error only after
 chunk size (.claude/scan.md, "Aggressive compaction"). Pinned by
 `TestRead_unknownKey_streamParity`.
 
+## A bare `Errors` means the value was read whole
+
+Only a multierr decoder returns `Errors`, and only at its closing brace.
+`NewParseErr` cuts a nested `Errors` down to its first entry, because a
+decoder that calls it stops in the middle of its own value: a fail-fast
+parent of a multierr child hands up one error. `Stream.Array` and
+`Stream.Seq` rely on that to yield an element with its `Errors` and go on
+to the next one instead of ending. `UnmarshalSlice` keeps the whole `Errors` of
+the element it stopped on (index-prefixed), as it is the top level. Pinned by
+the `TestMultierr_*` tests around `DrainFailFast` in `mods_test.go`.
+
 ## Concrete error structs (one per rule)
 
 Pointer-receiver structs, all implement `ggen.Error`. Each carries a

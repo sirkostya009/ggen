@@ -59,6 +59,12 @@ func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {
 		var zero T
 		v, n, err := zero.DecodeFrom(data[i:])
 		if err != nil {
+			// a multierr element read itself whole, so all of its failures are kept
+			if es, ok := err.(Errors); ok {
+				es.AddPos(i)
+				es.PrependPath(arrField(len(result)))
+				return nil, es
+			}
 			return nil, NewParseErrShift(arrField(len(result)), i+n, n, err)
 		}
 		result = append(result, v)

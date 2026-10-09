@@ -73,15 +73,24 @@ func NewParseErrShift(segment string, pos, n int, err error) error {
 // NewParseErr wraps an error returned by a generated decoder:
 //
 //   - An [Error] gets segment added to the front of its path and is returned
-//     as is, so errors.As still finds it.
+//     as is, so errors.As still finds it. [Errors] is cut down to its first
+//     entry first, see below.
 //   - A *ParseError gets segment added to the front of its Path. Its Pos
 //     keeps pointing at the deeper failure.
 //   - Any other error is wrapped as &ParseError{Path: {segment}, Pos, Err}.
 //
 // An empty segment leaves the path unchanged.
+//
+// A decoder that calls NewParseErr stops in the middle of its own value, so
+// it hands up a single error, never [Errors]. A bare Errors then always means
+// a multierr decoder read its whole value, which is what lets [Stream.Array]
+// and [Stream.Seq] go on to the next one.
 func NewParseErr(segment string, pos int, err error) error {
 	if err == nil {
 		return nil
+	}
+	if es, ok := err.(Errors); ok && len(es) > 0 {
+		err = es[0]
 	}
 	if _, ok := err.(Error); ok {
 		// Add the segment like the *ParseError case does, so a nested

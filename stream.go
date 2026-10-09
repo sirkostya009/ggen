@@ -2072,7 +2072,10 @@ func (s *Stream) Slice[T StreamDecoder[T]](rcv ...[]T) ([]T, error) {
 //
 // The range ends when the closing bracket is read, and leaves the cursor just
 // after it so the Stream can be read again. A malformed array yields one
-// error and stops. Breaking out early leaves the cursor inside the array.
+// error and stops. An element that only broke validation rules under
+// multierr is yielded with its [Errors], and the range goes on to the next
+// one, since such an element was read whole. Breaking out early leaves the
+// cursor inside the array.
 // There is no way to find the end of the array without reading through it.
 // So a Stream left in the middle of a range is only good for closing.
 //
@@ -2122,11 +2125,11 @@ func (s *Stream) Array[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 				s.Pos = 0
 			}
 			v, err := into.DecodeFromStream(s)
-			if err != nil {
+			if _, ok := err.(Errors); err != nil && !ok {
 				yield(zero, err)
 				return
 			}
-			if !yield(v, nil) {
+			if !yield(v, err) {
 				return
 			}
 			into = v
@@ -2173,7 +2176,9 @@ func (s *Stream) Array[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 // The loop ends cleanly, with no error yielded, when the reader drains
 // between values. So a file or a closed socket ends the range normally.
 // Anything else, such as a malformed value or a reader error, is yielded
-// once as the error and then ends the sequence. Breaking out of the range
+// once as the error and then ends the sequence. A value that only broke
+// validation rules under multierr is yielded with its [Errors], and the
+// sequence goes on, as in [Stream.Array]. Breaking out of the range
 // stops reading. The Stream is left where the last value ended, so it can be
 // passed to another method afterwards.
 //
@@ -2232,7 +2237,10 @@ func (s *Stream) Seq[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 				s.Pos = 0
 			}
 			v, err := into.DecodeFromStream(s)
-			if !yield(v, err) || err != nil {
+			if !yield(v, err) {
+				return
+			}
+			if _, ok := err.(Errors); err != nil && !ok {
 				return
 			}
 			// Carry this element's containers into the next decode.

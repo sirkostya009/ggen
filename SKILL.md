@@ -82,18 +82,18 @@ Most flags have matching annotation token (no leading dash). Annotations space-s
 | CLI flag            | annotation         | effect                                                                                                                                                                                                                                                                        |
 | ------------------- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `-o <path>`         | —                  | override output path (single-file / single-package only; rejected with several targets or a pattern)                                                                                                                                                                          |
-| `-pkg <name>`       | —                  | override the package name in the generated file (same scope as `-o`)                                                                                                                                                                                                           |
+| `-pkg <name>`       | —                  | override the package name in the generated file (same scope as `-o`)                                                                                                                                                                                                          |
 | `-marshal`          | `marshal`          | also emit `MarshalJSON` so the type satisfies `encoding/json.Marshaler`                                                                                                                                                                                                       |
 | `-unmarshal`        | `unmarshal`        | also emit `UnmarshalJSON` for `encoding/json.Unmarshaler`                                                                                                                                                                                                                     |
-| `-multierr`         | `multierr`         | accumulate every validation failure into `ggen.Errors` (slice) instead of returning on the first                                                                                                                                                                        |
+| `-multierr`         | `multierr`         | accumulate every validation failure into `ggen.Errors` (slice) instead of returning on the first                                                                                                                                                                              |
 | `-allowdups`        | `allowdups`        | accept duplicate JSON keys, first-wins (default: error on second occurrence)                                                                                                                                                                                                  |
 | `-novalidate`       | `novalidate`       | drop validation, required-field checks, and mods                                                                                                                                                                                                                              |
-| `-ignoreunknown`    | `ignoreunknown`    | silently drop unknown JSON keys (default: error). Overridden when an embedded fallback map is present                                                                                                                                                                          |
+| `-ignoreunknown`    | `ignoreunknown`    | silently drop unknown JSON keys (default: error). Overridden when an embedded fallback map is present                                                                                                                                                                         |
 | `-nullzero`         | `nullzero`         | accept explicit JSON `null` on every non-pointer value field, decoding it to the Go zero (default: error). A per-field `nullzero` decode variant in `pipe:` opts in one field                                                                                                 |
 | `-nosortkeys`       | `nosortkeys`       | emit struct fields in declaration order (default: alphabetical, compresses better)                                                                                                                                                                                            |
 | `-usenumber`        | `usenumber`        | decode JSON numbers in `any` fields as `json.Number` instead of `float64`                                                                                                                                                                                                     |
 | `-htmlescape`       | `htmlescape`       | escape `<`, `>`, `&` to `\uXXXX` (default: literal, matches `encoding/json` v2)                                                                                                                                                                                               |
-| `-allowinvalidutf8` | `allowinvalidutf8` | skip decode UTF-8 validation: invalid bytes pass raw into strings/keys/raw spans (inside `any` values and the `,embed` catch-all too), unpaired surrogates → U+FFFD (default: reject, jsonv2 parity). Grammar checks stay                                                       |
+| `-allowinvalidutf8` | `allowinvalidutf8` | skip decode UTF-8 validation: invalid bytes pass raw into strings/keys/raw spans (inside `any` values and the `,embed` catch-all too), unpaired surrogates → U+FFFD (default: reject, jsonv2 parity). Grammar checks stay                                                     |
 | `-copy`             | `copy`             | bytes-path `DecodeFrom` copies strings / `json.RawMessage` / any-embedded strings out of the input instead of aliasing it, so input is safe to store long term after decode                                                                                                   |
 | `-dry`              | —                  | parse + validate every annotated struct, surface all errors, emit no file. Rejects `-o`/`-pkg`                                                                                                                                                                                |
 | `-simd <tier>`      | —                  | SIMD tier for string scans + marshal escape scans: `off`/`avx`/`avx2`/`avx512`. `GOEXPERIMENT=simd` at ggen invocation auto-selects `avx`; wider tiers are explicit opt-ins. Tier is baked in at generate time; output requires `GOEXPERIMENT=simd` to build + a matching CPU |
@@ -177,27 +177,27 @@ Price int `json:"price" pipe:". / @FromMoney"`                // FromMoney(Money
 
 **Value steps** run in declared order. Validators:
 
-| step                                                          | applies to    | checks                      |
-| ------------------------------------------------------------- | ------------- | --------------------------- |
-| `notempty`                                                    | str/container | non-empty / non-zero length |
-| `len=N`, `minlen=N`, `maxlen=N`                               | str/container | byte length / element count |
-| `runes=N`, `minrunes=N`, `maxrunes=N`                         | string        | utf8 rune count             |
-| `gt=N`, `gte=N`, `lt=N`, `lte=N`                              | numeric       | comparison                  |
-| `eq=X`, `neq=X`                                               | str/numeric   | equality                    |
-| `multiple=N`                                                  | integer       | `% N == 0`                  |
-| `oneof=a\|b\|c`                                               | str/numeric   | one of the alternatives     |
-| `url`, `alphanum`, `numeric`, `hexadecimal`                   | string        | character-class predicate   |
-| `islower`, `isupper`                                          | string        | no wrong-case letters (caseless runes pass) |
-| `starts=X`, `ends=X`, `contains=X`                            | string        | substring test              |
+| step                                        | applies to    | checks                                      |
+| ------------------------------------------- | ------------- | ------------------------------------------- |
+| `notempty`                                  | str/container | non-empty / non-zero length                 |
+| `len=N`, `minlen=N`, `maxlen=N`             | str/container | byte length / element count                 |
+| `runes=N`, `minrunes=N`, `maxrunes=N`       | string        | utf8 rune count                             |
+| `gt=N`, `gte=N`, `lt=N`, `lte=N`            | numeric       | comparison                                  |
+| `eq=X`, `neq=X`                             | str/numeric   | equality                                    |
+| `multiple=N`                                | integer       | `% N == 0`                                  |
+| `oneof=a\|b\|c`                             | str/numeric   | one of the alternatives                     |
+| `url`, `alphanum`, `numeric`, `hexadecimal` | string        | character-class predicate                   |
+| `islower`, `isupper`                        | string        | no wrong-case letters (caseless runes pass) |
+| `starts=X`, `ends=X`, `contains=X`          | string        | substring test                              |
 
 Mods (transforms):
 
-| step                        | applies to | effect                                                                      |
-| --------------------------- | ---------- | --------------------------------------------------------------------------- |
-| `trim`, `tolower`, `toupper` | string    | whitespace / case                                                           |
-| `trimleft=X`, `trimright=X` | string     | strip prefix / suffix                                                       |
-| `replace=old\|new`          | string     | substring replace                                                           |
-| `clamp=lo\|hi`              | numeric    | bound into `[lo,hi]` (either side may be empty: `clamp=0\|`, `clamp=\|100`) |
+| step                         | applies to | effect                                                                      |
+| ---------------------------- | ---------- | --------------------------------------------------------------------------- |
+| `trim`, `tolower`, `toupper` | string     | whitespace / case                                                           |
+| `trimleft=X`, `trimright=X`  | string     | strip prefix / suffix                                                       |
+| `replace=old\|new`           | string     | substring replace                                                           |
+| `clamp=lo\|hi`               | numeric    | bound into `[lo,hi]` (either side may be empty: `clamp=0\|`, `clamp=\|100`) |
 
 Container levels: `inner:` scopes to one level down, `keys:` to map keys. A
 bare prefix takes one step (`inner:trim`); parenthesize several
@@ -256,7 +256,7 @@ if errors.As(err, &e) {
 
 `GTError`/`GTEError`/`LTError`/`LTEError` carry the bound in `Limit`, `MultipleError` in `Of` — both `any`, spelled with the field's own type, so a `uint64` bound above 2^53 is reported exactly instead of rounded. Type-switch or print with `%v`.
 
-In `multierr` mode generated code return `ggen.Errors` (`[]ggen.Error`). Implement `Unwrap() []error`.
+In `multierr` mode generated code return `ggen.Errors` (`[]ggen.Error`). Implement `Unwrap() []error`. A bare `ggen.Errors` = the value was read whole: `Array`/`Seq` yield it alongside the (partially valid) value and keep going. A fail-fast parent of a multierr child hands up only the child's first error.
 
 Parse failures (malformed JSON, wrong primitive type) wrap in `*ggen.ParseError` carrying `Path` (root-relative segments, `[]string{"addr","street"}`), `Pos` (byte offset where scanning stopped — identical for `DecodeFrom` and `DecodeFromStream` at any buffer size), `Err` (underlying `ggen.ErrX` sentinel). `errors.Is(err, ggen.ErrBadString)` keeps working through the wrap. Validation errors NOT wrapped — typed pointers stay reachable. `ParseError.Error()` renders `parse error at <a.b.c> (pos <n>): <cause>`.
 
@@ -300,13 +300,13 @@ For fields whose type live outside package being generated, ggen probe method se
 
 `//ggen:generate` on named top-level type works too. Strategy picked from underlying type shape and method set:
 
-| flavor                           | example                 | strategy                                                                      |
-| -------------------------------- | ----------------------- | ----------------------------------------------------------------------------- |
-| primitive                        | `type Count int`        | scan + cast                                                                   |
+| flavor                           | example                 | strategy                                                                                                                                         |
+| -------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| primitive                        | `type Count int`        | scan + cast                                                                                                                                      |
 | struct (exported fields)         | `type Comment Inner`    | field introspection — treats the alias like a regular struct; `@Func`/`@Conv` in the underlying's tags honoured, resolved in the alias's package |
-| struct (has `DecodeFrom`)        | `type X HasGgenMethods` | cast + delegate, also when the methods are generated in the same run (an alias carrying its own annotation introspects instead) |
-| struct (opaque + Marshaler/Text) | `type Local time.Time`  | delegate to underlying's `MarshalJSON`/`MarshalText` (`AppendText` preferred) |
-| container                        | `type Tags []string`    | same emitters as slice/map/array fields                                       |
+| struct (has `DecodeFrom`)        | `type X HasGgenMethods` | cast + delegate, also when the methods are generated in the same run (an alias carrying its own annotation introspects instead)                  |
+| struct (opaque + Marshaler/Text) | `type Local time.Time`  | delegate to underlying's `MarshalJSON`/`MarshalText` (`AppendText` preferred)                                                                    |
+| container                        | `type Tags []string`    | same emitters as slice/map/array fields                                                                                                          |
 
 Aliases of channels, interfaces, functions rejected at generate time.
 
@@ -385,6 +385,8 @@ users, err = s.Slice(users)
 
 // lazy array iteration — Slice gathers []T, Array yields elements and keeps
 // nothing. Cursor lands past the `]`, so the Stream reads on afterwards.
+// A multierr element's ggen.Errors is yielded with the element and the loop
+// goes on (Seq too). Any other error ends it.
 for item, err := range ggen.NewStream(r, buf[:0]).Array[Item]() { ... }
 
 // unbounded iteration (NDJSON / concatenated values / socket). Reuses ONE
@@ -434,7 +436,7 @@ Build tag propagation: struct in file behind `//go:build foo` land in `<dir>_foo
 | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | "still want `json.Marshal(u)` to work"                      | `-marshal` (and/or `-unmarshal`)                                                                      |
 | "collect all errors, not just the first"                    | `-multierr`                                                                                           |
-| "skip unknown keys silently"                                | `-ignoreunknown` or a `json:",embed"` catch-all map                                                  |
+| "skip unknown keys silently"                                | `-ignoreunknown` or a `json:",embed"` catch-all map                                                   |
 | "accept `null` on a scalar instead of erroring"             | a `nullzero` decode variant in `pipe:` per field, or `-nullzero` / `//ggen:generate nullzero` for all |
 | "fastest possible decode, I trust the input"                | `-novalidate` (+ `-allowinvalidutf8` if input may carry non-UTF-8 strings)                            |
 | "payload has broken UTF-8 / lone surrogates, decode anyway" | `-allowinvalidutf8` or `//ggen:generate allowinvalidutf8` per struct                                  |

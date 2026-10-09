@@ -3258,6 +3258,247 @@ func (s DrainOuter) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
+func (recv DrainFailFast) DecodeFrom(data []byte) (result DrainFailFast, i int, err error) {
+	result = recv
+	seenIME := false
+	seenName := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenIME {
+			result.IME = DrainInnerME{}
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "ime":
+			if seenIME {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ime"}}
+			}
+			seenIME = true
+			var consumed int
+			result.IME, consumed, err = result.IME.DecodeFrom(data[i:])
+			i += consumed
+			if err != nil {
+				return result, i, ggen.NewParseErrShift("ime", i, consumed, err)
+			}
+		case "name":
+			if seenName {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+			}
+			seenName = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("name", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Name, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("name", i, err)
+				}
+			}
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenIME {
+				result.IME = DrainInnerME{}
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv DrainFailFast) DecodeFromStream(s *ggen.Stream) (result DrainFailFast, err error) {
+	result = recv
+	seenIME := false
+	seenName := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenIME {
+			result.IME = DrainInnerME{}
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "ime":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("ime", s.Offset(), err)
+			}
+			if seenIME {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ime"}}
+			}
+			seenIME = true
+			result.IME, err = result.IME.DecodeFromStream(s)
+			if err != nil {
+				return result, ggen.NewParseErr("ime", s.Offset(), err)
+			}
+		case "name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("name", s.Offset(), err)
+			}
+			if seenName {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+			}
+			seenName = true
+			result.Name, err = s.String(true)
+			if err != nil {
+				return result, ggen.NewParseErr("name", s.Offset(), err)
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenIME {
+				result.IME = DrainInnerME{}
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s DrainFailFast) JSONSize() int {
+	size := 18
+	size += s.IME.JSONSize()
+	size += len(s.Name) * 2
+	return size
+}
+
+func (s DrainFailFast) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"ime\":"...)
+	if dst, err = s.IME.AppendJSON(dst); err != nil {
+		return dst, err
+	}
+	dst = append(dst, ",\"name\":\""...)
+	dst = ggen.AppendStringNoHTML(dst, s.Name)
+	return append(dst, '}'), nil
+}
+
 func (recv R10PtrPipeOrder) DecodeFrom(data []byte) (result R10PtrPipeOrder, i int, err error) {
 	result = recv
 	seenCp := false
