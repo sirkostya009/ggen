@@ -66,12 +66,12 @@ func TestParseError_ErrorString(t *testing.T) {
 	}{
 		{
 			"with field",
-			&ParseError{Path: []string{"addr", "street"}, Pos: 42, Err: ErrBadString},
+			&ParseError{Keys: []string{"addr", "street"}, Pos: 42, Err: ErrBadString},
 			"parse error at addr.street (pos 42): " + ErrBadString.Error(),
 		},
 		{"no field", &ParseError{Pos: 7, Err: ErrBadObject}, "parse error (pos 7): " + ErrBadObject.Error()},
-		{"zero pos", &ParseError{Path: []string{"x"}, Err: ErrBadNumber}, "parse error at x (pos 0): " + ErrBadNumber.Error()},
-		{"nil err", &ParseError{Path: []string{"y"}, Pos: 1}, "parse error at y (pos 1)"},
+		{"zero pos", &ParseError{Keys: []string{"x"}, Err: ErrBadNumber}, "parse error at x (pos 0): " + ErrBadNumber.Error()},
+		{"nil err", &ParseError{Keys: []string{"y"}, Pos: 1}, "parse error at y (pos 1)"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -104,8 +104,8 @@ func TestNewParseErr_NilErr(t *testing.T) {
 func TestNewParseErr_ValidationPassthrough(t *testing.T) {
 	t.Parallel()
 	cases := []error{
-		&MinLenError{Path: []string{"x"}, Limit: 5, Got: 1},
-		Errors{&RequiredError{Path: []string{"x"}}},
+		&MinLenError{Keys: []string{"x"}, Limit: 5, Got: 1},
+		Errors{&RequiredError{Keys: []string{"x"}}},
 	}
 	for i, in := range cases {
 		got := NewParseErr("outer", 10, in)
@@ -122,7 +122,7 @@ func TestNewParseErr_RawErrorWraps(t *testing.T) {
 	if !errors.As(got, &pe) {
 		t.Fatalf("expected wrap, got %T", got)
 	}
-	if len(pe.Path) != 1 || pe.Path[0] != "name" || pe.Pos != 12 || pe.Err != ErrBadString {
+	if len(pe.Keys) != 1 || pe.Keys[0] != "name" || pe.Pos != 12 || pe.Err != ErrBadString {
 		t.Errorf("ParseError = %+v", pe)
 	}
 }
@@ -131,7 +131,7 @@ func TestNewParseErr_ChainPrefixesField(t *testing.T) {
 	t.Parallel()
 	// The inner error is already a *ParseError. The outer call prepends its
 	// segment to the Path.
-	inner := &ParseError{Path: []string{"zip"}, Pos: 7, Err: ErrBadNumber}
+	inner := &ParseError{Keys: []string{"zip"}, Pos: 7, Err: ErrBadNumber}
 	got := NewParseErr("addr", 99, inner)
 	var pe *ParseError
 	if !errors.As(got, &pe) {
@@ -140,8 +140,8 @@ func TestNewParseErr_ChainPrefixesField(t *testing.T) {
 	if pe != inner {
 		t.Error("wrap should reuse inner, not allocate new")
 	}
-	if strings.Join(pe.Path, ".") != "addr.zip" {
-		t.Errorf("Path = %v, want [addr zip]", pe.Path)
+	if strings.Join(pe.Keys, ".") != "addr.zip" {
+		t.Errorf("Path = %v, want [addr zip]", pe.Keys)
 	}
 	// Pos stays at the innermost error site.
 	if pe.Pos != 7 {
@@ -151,10 +151,10 @@ func TestNewParseErr_ChainPrefixesField(t *testing.T) {
 
 func TestNewParseErr_ChainEmptyFieldNoChange(t *testing.T) {
 	t.Parallel()
-	inner := &ParseError{Path: []string{"zip"}, Err: ErrBadNumber}
+	inner := &ParseError{Keys: []string{"zip"}, Err: ErrBadNumber}
 	_ = NewParseErr("", 0, inner)
-	if strings.Join(inner.Path, ".") != "zip" {
-		t.Errorf("Path mutated to %v on empty outer field", inner.Path)
+	if strings.Join(inner.Keys, ".") != "zip" {
+		t.Errorf("Path mutated to %v on empty outer field", inner.Keys)
 	}
 }
 
@@ -162,8 +162,8 @@ func TestNewParseErr_ChainEmptyInnerField(t *testing.T) {
 	t.Parallel()
 	inner := &ParseError{Pos: 3, Err: ErrBadNumber}
 	_ = NewParseErr("addr", 0, inner)
-	if strings.Join(inner.Path, ".") != "addr" {
-		t.Errorf("Path = %v, want [addr]", inner.Path)
+	if strings.Join(inner.Keys, ".") != "addr" {
+		t.Errorf("Path = %v, want [addr]", inner.Keys)
 	}
 }
 
@@ -192,8 +192,8 @@ func TestUnmarshalSlice_WrapsBracketError(t *testing.T) {
 	if !errors.As(err, &pe) {
 		t.Fatalf("err = %T, want *ParseError", err)
 	}
-	if strings.Join(pe.Path, ".") != "[]" {
-		t.Errorf("Path = %v, want [\"[]\"]", pe.Path)
+	if strings.Join(pe.Keys, ".") != "[]" {
+		t.Errorf("Path = %v, want [\"[]\"]", pe.Keys)
 	}
 	if !errors.Is(err, ErrBadArray) {
 		t.Errorf("errors.Is(err, ErrBadArray) = false: %v", err)
@@ -212,8 +212,8 @@ func TestUnmarshalSlice_ElementErrorCarriesIndex(t *testing.T) {
 	if !errors.As(err, &pe) {
 		t.Fatalf("err = %T, want *ParseError", err)
 	}
-	if strings.Join(pe.Path, ".") != "[1]" {
-		t.Errorf("Path = %v, want [\"[1]\"]", pe.Path)
+	if strings.Join(pe.Keys, ".") != "[1]" {
+		t.Errorf("Path = %v, want [\"[1]\"]", pe.Keys)
 	}
 }
 

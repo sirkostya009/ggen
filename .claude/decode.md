@@ -66,14 +66,14 @@ func NewParseErr(field string, pos int, err error) error
 
 `ParseError` is what every generated `DecodeFrom` / `DecodeFromStream` returns for raw parse failures. `Field` = dotted JSON path through the document, `Pos` = the byte offset where scanning STOPPED, relative to the data slice passed to the top-level method (nested sites rebase via `NewParseErrShift`) — the same byte on the bytes and stream paths at any chunk size, since every stream primitive rebases onto its bytes twin's stop position (.claude/scan.md) — `Err` = the underlying `ggen.ErrX` sentinel. `errors.Is(err, ggen.ErrBadString)` works via `Unwrap()`.
 
-`NewParseErrShift(field, pos, shift, err)` is the nested-decode variant: it adds `shift` to every positional error the callee returned (`AddPos` on `*ParseError` / `Errors` / the typed validation errors) before wrapping, because the callee ran on a sub-slice. Bytes-path nested-decode sites use it (cmd/ggen/CLAUDE.md opt #14); on the stream path only the cross-package `UnmarshalJSON` rung does, since its callee runs on a captured span rather than on the live buffer.
+`NewParseErrShift(field, pos, shift, err)` is the nested-decode variant: it adds `shift` to every positional error the callee returned (`shiftPos` over `*ParseError` and its cause, `ModError`, `Errors`, the typed validation errors) before wrapping, because the callee ran on a sub-slice. Bytes-path nested-decode sites use it (cmd/ggen/CLAUDE.md opt #14); on the stream path only the cross-package `UnmarshalJSON` rung does, since its callee runs on a captured span rather than on the live buffer.
 
 `NewParseErr` is the call-site constructor at every error-return site in generated decoders. Codegen embeds `field` as a compile-time literal per branch (`"street"`, `"addr"`, …) or as a runtime expression for dynamic keys (`key` in the bytes path — aliased into the caller's data, safe on the error path; `strings.Clone(key)` for the stream path, since the underlying buffer may have compacted). Behaviour:
 
 - nil err → nil (zero-cost happy path — no allocation, no field-name probe)
-- `ggen.Error` / `ggen.Errors` → prepend the segment onto the Path (typed pointers stay reachable via `errors.As` — the value passes through, only its Path grows, so nested fail-fast validation errors keep their outer segments)
-- already a `*ParseError` (deeper wrap) → **mutates** its `Field` in place, prepending the outer field name (`"addr"` + inner `"zip"` → `"addr.zip"`); `Pos` left at the deeper site
-- raw error → wraps as `&ParseError{Field, Pos, Err: err}`
+- `ggen.ValidationError` / `ggen.Errors` (cut to its first entry) → prepend the segment onto the Keys (typed pointers stay reachable via `errors.As` — the value passes through, only its Keys grow, so nested fail-fast validation errors keep their outer segments)
+- already a `*ParseError` (deeper wrap) → **mutates** its `Keys` in place, prepending the outer field name (`"addr"` + inner `"zip"` → `"addr.zip"`); `Pos` left at the deeper site
+- raw error → wraps as `&ParseError{Keys, Pos, Err: err}`
 
 `Error()` renders `parse error[ at <field>] (pos <n>): <cause>` from a preallocated `[]byte` returned as an `unsafe.String` alias; the cause's `Error()` is called exactly once and appended directly, so chained wraps stay linear.
 

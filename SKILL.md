@@ -249,16 +249,18 @@ negative is a generate-time error, as is anything above 2147483647, the largest 
 ```go
 var e *ggen.MinLenError
 if errors.As(err, &e) {
-	// e.Path, e.Limit, e.Got
+	// e.Keys, e.Limit, e.Got
 	// e.Pos — failure byte offset, relative to the full payload
 }
 ```
 
+Untyped: every validation error implements `ggen.ValidationError` — `Rule()`, `Path() []string` (= `Keys`), `Message()` (the text without the path), and `Error()` = `"a.b: " + Message()` (just `Message()` when the path is empty), e.g. `slug: missing required field`, `x: unknown key`. `CustomError.Message()` is the validator's error text. Slice elements read `"tags[]"`. `*ParseError` has `Path()`/`Message()` too (Message = `Err`'s text) but is not a `ValidationError`.
+
 `GTError`/`GTEError`/`LTError`/`LTEError` carry the bound in `Limit`, `MultipleError` in `Of` — both `any`, spelled with the field's own type, so a `uint64` bound above 2^53 is reported exactly instead of rounded. Type-switch or print with `%v`.
 
-In `multierr` mode generated code return `ggen.Errors` (`[]ggen.Error`). Implement `Unwrap() []error`. A bare `ggen.Errors` = the value was read whole: `Array`/`Seq` yield it alongside the (partially valid) value and keep going. A fail-fast parent of a multierr child hands up only the child's first error.
+In `multierr` mode generated code return `ggen.Errors` (`[]ggen.ValidationError`, itself not a `ValidationError`). Implement `Unwrap() []error`. A bare `ggen.Errors` = the value was read whole: `Array`/`Seq` yield it alongside the (partially valid) value and keep going. A fail-fast parent of a multierr child hands up only the child's first error.
 
-Parse failures (malformed JSON, wrong primitive type) wrap in `*ggen.ParseError` carrying `Path` (root-relative segments, `[]string{"addr","street"}`), `Pos` (byte offset where scanning stopped — identical for `DecodeFrom` and `DecodeFromStream` at any buffer size), `Err` (underlying `ggen.ErrX` sentinel). `errors.Is(err, ggen.ErrBadString)` keeps working through the wrap. Validation errors NOT wrapped — typed pointers stay reachable. `ParseError.Error()` renders `parse error at <a.b.c> (pos <n>): <cause>`.
+Parse failures (malformed JSON, wrong primitive type) wrap in `*ggen.ParseError` carrying `Keys` (root-relative segments, `[]string{"addr","street"}`), `Pos` (byte offset where scanning stopped — identical for `DecodeFrom` and `DecodeFromStream` at any buffer size), `Err` (underlying `ggen.ErrX` sentinel). `errors.Is(err, ggen.ErrBadString)` keeps working through the wrap. Validation errors NOT wrapped — typed pointers stay reachable. `ParseError.Error()` renders `parse error at <a.b.c> (pos <n>): <cause>`.
 
 Sentinels identical on both paths: an unescaped control byte inside a string → `ErrBadString` with `Pos` on the control byte itself, closing quote or not (`"ab\x01}` → 3); `n`/`t`/`f` not spelling its literal → `ErrBadLiteral`/`ErrBadBool`, `Pos` on the first wrong byte; `,string` number outside JSON grammar (`"NaN"`, `"+1"`, `"01"`) → `ErrBadNumber`; `[N]T` with too many elements → `LenError{Want: N, Got: N+1, AtLeast: true}` (decode stops at first extra element, `Got` = lower bound, message says "at least"; too few: exact count, `AtLeast` false). Malformed escape → `Pos` on its backslash (`"ab\u00zz"` → 3); input that ran out mid-escape → `Pos` at end of input (`"ab\` → 4, `"ab\u00` → 7); same on both paths, any chunk size.
 

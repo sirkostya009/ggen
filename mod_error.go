@@ -13,13 +13,6 @@ type ModError struct {
 	Value any
 }
 
-// AddPos shifts the byte offset by d. Nested decodes on the bytes path use it
-// to turn an offset into a sub-slice into an offset into the whole payload
-// (see NewParseErrShift). ModError carries a Pos like the validation errors,
-// so it needs the same hook. Without it a nested ModError would keep a
-// sub-slice offset while its sibling errors use whole-payload offsets.
-func (e *ModError) AddPos(d int) { e.Pos += d }
-
 func (e *ModError) Error() string {
 	if e.Msg != "" {
 		return e.Msg

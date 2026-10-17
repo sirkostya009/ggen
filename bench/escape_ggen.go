@@ -72,7 +72,7 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 		switch key {
 		case "a":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"a"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a"}}
 			}
 			seenA = true
 			if i >= len(data) || data[i] != '"' {
@@ -97,7 +97,7 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 			}
 		case "b":
 			if seenB {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}}
 			}
 			seenB = true
 			if i >= len(data) || data[i] != '"' {
@@ -122,7 +122,7 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 			}
 		case "c":
 			if seenC {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"c"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"c"}}
 			}
 			seenC = true
 			if i >= len(data) || data[i] != '"' {
@@ -147,7 +147,7 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 			}
 		case "d":
 			if seenD {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"d"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"d"}}
 			}
 			seenD = true
 			if i >= len(data) || data[i] != '"' {
@@ -171,7 +171,7 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 				}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -255,7 +255,7 @@ func (recv EscapeDoc) DecodeFromStream(s *ggen.Stream) (result EscapeDoc, err er
 				return result, ggen.NewParseErr("a", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a"}}
 			}
 			seenA = true
 			result.A, err = s.String(true)
@@ -268,7 +268,7 @@ func (recv EscapeDoc) DecodeFromStream(s *ggen.Stream) (result EscapeDoc, err er
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}}
 			}
 			seenB = true
 			result.B, err = s.String(true)
@@ -281,7 +281,7 @@ func (recv EscapeDoc) DecodeFromStream(s *ggen.Stream) (result EscapeDoc, err er
 				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
 			if seenC {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"c"}}
 			}
 			seenC = true
 			result.C, err = s.String(true)
@@ -294,7 +294,7 @@ func (recv EscapeDoc) DecodeFromStream(s *ggen.Stream) (result EscapeDoc, err er
 				return result, ggen.NewParseErr("d", s.Offset(), err)
 			}
 			if seenD {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"d"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"d"}}
 			}
 			seenD = true
 			result.D, err = s.String(true)
@@ -307,7 +307,7 @@ func (recv EscapeDoc) DecodeFromStream(s *ggen.Stream) (result EscapeDoc, err er
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -435,7 +435,7 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 		switch key {
 		case "a":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"a"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a"}}
 			}
 			seenA = true
 			if i >= len(data) || data[i] != '"' {
@@ -461,7 +461,7 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 			}
 		case "b":
 			if seenB {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}}
 			}
 			seenB = true
 			if i >= len(data) || data[i] != '"' {
@@ -487,7 +487,7 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 			}
 		case "c":
 			if seenC {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"c"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"c"}}
 			}
 			seenC = true
 			if i >= len(data) || data[i] != '"' {
@@ -513,7 +513,7 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 			}
 		case "d":
 			if seenD {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"d"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"d"}}
 			}
 			seenD = true
 			if i >= len(data) || data[i] != '"' {
@@ -538,7 +538,7 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 				result.D = ggen.Detach(result.D, data)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{strings.Clone(key)}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{strings.Clone(key)}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -622,7 +622,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *ggen.Stream) (result CopyEscapeDoc
 				return result, ggen.NewParseErr("a", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a"}}
 			}
 			seenA = true
 			result.A, err = s.String(true)
@@ -635,7 +635,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *ggen.Stream) (result CopyEscapeDoc
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}}
 			}
 			seenB = true
 			result.B, err = s.String(true)
@@ -648,7 +648,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *ggen.Stream) (result CopyEscapeDoc
 				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
 			if seenC {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"c"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"c"}}
 			}
 			seenC = true
 			result.C, err = s.String(true)
@@ -661,7 +661,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *ggen.Stream) (result CopyEscapeDoc
 				return result, ggen.NewParseErr("d", s.Offset(), err)
 			}
 			if seenD {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"d"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"d"}}
 			}
 			seenD = true
 			result.D, err = s.String(true)
@@ -674,7 +674,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *ggen.Stream) (result CopyEscapeDoc
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

@@ -76,7 +76,7 @@ func TestRead_unknownFields_errorByDefault(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error on unknown key")
 	}
-	if !strings.Contains(err.Error(), `unknown key "xx"`) {
+	if err.Error() != "xx: unknown key" {
 		t.Errorf("error = %q, want unknown-key message", err.Error())
 	}
 }
@@ -128,8 +128,8 @@ func TestRead_parseErrorTopLevel(t *testing.T) {
 	if !errors.Is(err, ggen.ErrBadObject) {
 		t.Fatalf("errors.Is(err, ggen.ErrBadObject) = false; got %v", err)
 	}
-	if len(pe.Path) != 0 {
-		t.Fatalf("Path = %v; want empty for top-level error", pe.Path)
+	if len(pe.Keys) != 0 {
+		t.Fatalf("Path = %v; want empty for top-level error", pe.Keys)
 	}
 }
 
@@ -144,8 +144,8 @@ func TestRead_parseErrorFieldName(t *testing.T) {
 	if !errors.As(err, &pe) {
 		t.Fatalf("err = %T, want *ggen.ParseError", err)
 	}
-	if strings.Join(pe.Path, ".") != "street" {
-		t.Fatalf("Path = %v; want [street]", pe.Path)
+	if strings.Join(pe.Keys, ".") != "street" {
+		t.Fatalf("Path = %v; want [street]", pe.Keys)
 	}
 	if pe.Pos <= 0 {
 		t.Fatalf("Pos = %d; want > 0", pe.Pos)
@@ -183,8 +183,8 @@ func TestIgnoreUnknown_streamErrorKeepsKeyName(t *testing.T) {
 		if !errors.As(err, &pe) {
 			t.Fatalf("err = %T %v", err, err)
 		}
-		if len(pe.Path) != 1 || pe.Path[0] != "unknownkeyname" {
-			t.Errorf("Path = %q, want [unknownkeyname]", pe.Path)
+		if len(pe.Keys) != 1 || pe.Keys[0] != "unknownkeyname" {
+			t.Errorf("Path = %q, want [unknownkeyname]", pe.Keys)
 		}
 	}
 }

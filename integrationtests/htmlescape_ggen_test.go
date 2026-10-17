@@ -60,7 +60,7 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 		switch key {
 		case "note":
 			if seenNote {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"note"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"note"}}
 			}
 			seenNote = true
 			if i >= len(data) || data[i] != '"' {
@@ -84,7 +84,7 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 				}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -147,7 +147,7 @@ func (recv HTMLRawStruct) DecodeFromStream(s *ggen.Stream) (result HTMLRawStruct
 				return result, ggen.NewParseErr("note", s.Offset(), err)
 			}
 			if seenNote {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"note"}}
 			}
 			seenNote = true
 			result.Note, err = s.String(true)
@@ -160,7 +160,7 @@ func (recv HTMLRawStruct) DecodeFromStream(s *ggen.Stream) (result HTMLRawStruct
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -262,7 +262,7 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 		switch key {
 		case "note":
 			if seenNote {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"note"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"note"}}
 			}
 			seenNote = true
 			if i >= len(data) || data[i] != '"' {
@@ -287,7 +287,7 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 			}
 		case "payload":
 			if seenPayload {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"payload"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"payload"}}
 			}
 			seenPayload = true
 			result.Payload, i, err = ggen.Any(data, i, true)
@@ -295,7 +295,7 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 				return result, i, ggen.NewParseErr("payload", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -365,7 +365,7 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				return result, ggen.NewParseErr("note", s.Offset(), err)
 			}
 			if seenNote {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"note"}}
 			}
 			seenNote = true
 			result.Note, err = s.String(true)
@@ -378,7 +378,7 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				return result, ggen.NewParseErr("payload", s.Offset(), err)
 			}
 			if seenPayload {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"payload"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"payload"}}
 			}
 			seenPayload = true
 			result.Payload, err = s.Any(true)
@@ -391,7 +391,7 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

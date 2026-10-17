@@ -74,7 +74,7 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 		switch key {
 		case "addresses":
 			if seenAddresses {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"addresses"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"addresses"}}
 			}
 			seenAddresses = true
 			if i < len(data) && data[i] == 'n' {
@@ -164,7 +164,7 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 			i++
 		case "counts":
 			if seenCounts {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"counts"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"counts"}}
 			}
 			seenCounts = true
 			if i < len(data) && data[i] == 'n' {
@@ -294,11 +294,11 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 				i++
 			}
 			if len(result.Counts) > 10 {
-				return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"counts"}, Limit: 10, Got: len(result.Counts)}
+				return result, i, &ggen.MaxLenError{Pos: i, Keys: []string{"counts"}, Limit: 10, Got: len(result.Counts)}
 			}
 		case "labels":
 			if seenLabels {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"labels"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"labels"}}
 			}
 			seenLabels = true
 			if i < len(data) && data[i] == 'n' {
@@ -401,7 +401,7 @@ func (recv MapStruct) DecodeFrom(data []byte) (result MapStruct, i int, err erro
 			}
 			i++
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -469,7 +469,7 @@ func (recv MapStruct) DecodeFromStream(s *ggen.Stream) (result MapStruct, err er
 				return result, ggen.NewParseErr("addresses", s.Offset(), err)
 			}
 			if seenAddresses {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"addresses"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"addresses"}}
 			}
 			seenAddresses = true
 			err = s.SkipSpace()
@@ -579,7 +579,7 @@ func (recv MapStruct) DecodeFromStream(s *ggen.Stream) (result MapStruct, err er
 				return result, ggen.NewParseErr("counts", s.Offset(), err)
 			}
 			if seenCounts {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"counts"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"counts"}}
 			}
 			seenCounts = true
 			err = s.SkipSpace()
@@ -684,7 +684,7 @@ func (recv MapStruct) DecodeFromStream(s *ggen.Stream) (result MapStruct, err er
 				s.Pos++
 			}
 			if len(result.Counts) > 10 {
-				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"counts"}, Limit: 10, Got: len(result.Counts)}
+				return result, &ggen.MaxLenError{Pos: s.Offset(), Keys: []string{"counts"}, Limit: 10, Got: len(result.Counts)}
 			}
 		case "labels":
 			err = s.ConsumeColon()
@@ -692,7 +692,7 @@ func (recv MapStruct) DecodeFromStream(s *ggen.Stream) (result MapStruct, err er
 				return result, ggen.NewParseErr("labels", s.Offset(), err)
 			}
 			if seenLabels {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"labels"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"labels"}}
 			}
 			seenLabels = true
 			err = s.SkipSpace()
@@ -802,7 +802,7 @@ func (recv MapStruct) DecodeFromStream(s *ggen.Stream) (result MapStruct, err er
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -976,7 +976,7 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 		switch key {
 		case "clamped":
 			if seenClamped {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"clamped"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"clamped"}}
 			}
 			seenClamped = true
 			if i < len(data) && data[i] == 'n' {
@@ -1113,7 +1113,7 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 			i++
 		case "counts":
 			if seenCounts {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"counts"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"counts"}}
 			}
 			seenCounts = true
 			if i < len(data) && data[i] == 'n' {
@@ -1223,10 +1223,10 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 					}
 					result.Counts[mk] = int(n)
 					if result.Counts[mk] < 0 {
-						return result, i, &ggen.GTEError{Pos: i, Path: []string{"counts.value"}, Limit: int(0), Value: result.Counts[mk]}
+						return result, i, &ggen.GTEError{Pos: i, Keys: []string{"counts.value"}, Limit: int(0), Value: result.Counts[mk]}
 					}
 					if result.Counts[mk] > 100 {
-						return result, i, &ggen.LTEError{Pos: i, Path: []string{"counts.value"}, Limit: int(100), Value: result.Counts[mk]}
+						return result, i, &ggen.LTEError{Pos: i, Keys: []string{"counts.value"}, Limit: int(100), Value: result.Counts[mk]}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -1250,7 +1250,7 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 			i++
 		case "names":
 			if seenNames {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"names"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"names"}}
 			}
 			seenNames = true
 			if i < len(data) && data[i] == 'n' {
@@ -1331,10 +1331,10 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 						}
 					}
 					if len(result.Names[mk]) < 1 {
-						return result, i, &ggen.MinLenError{Pos: i, Path: []string{"names.value"}, Limit: 1, Got: len(result.Names[mk])}
+						return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"names.value"}, Limit: 1, Got: len(result.Names[mk])}
 					}
 					if len(result.Names[mk]) > 5 {
-						return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"names.value"}, Limit: 5, Got: len(result.Names[mk])}
+						return result, i, &ggen.MaxLenError{Pos: i, Keys: []string{"names.value"}, Limit: 5, Got: len(result.Names[mk])}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -1357,7 +1357,7 @@ func (recv MapDiveStruct) DecodeFrom(data []byte) (result MapDiveStruct, i int, 
 			}
 			i++
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1425,7 +1425,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *ggen.Stream) (result MapDiveStruct
 				return result, ggen.NewParseErr("clamped", s.Offset(), err)
 			}
 			if seenClamped {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"clamped"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"clamped"}}
 			}
 			seenClamped = true
 			err = s.SkipSpace()
@@ -1541,7 +1541,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *ggen.Stream) (result MapDiveStruct
 				return result, ggen.NewParseErr("counts", s.Offset(), err)
 			}
 			if seenCounts {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"counts"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"counts"}}
 			}
 			seenCounts = true
 			err = s.SkipSpace()
@@ -1620,10 +1620,10 @@ func (recv MapDiveStruct) DecodeFromStream(s *ggen.Stream) (result MapDiveStruct
 				}
 				result.Counts[mk] = int(iv)
 				if result.Counts[mk] < 0 {
-					return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"counts.value"}, Limit: int(0), Value: result.Counts[mk]}
+					return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"counts.value"}, Limit: int(0), Value: result.Counts[mk]}
 				}
 				if result.Counts[mk] > 100 {
-					return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"counts.value"}, Limit: int(100), Value: result.Counts[mk]}
+					return result, &ggen.LTEError{Pos: s.Offset(), Keys: []string{"counts.value"}, Limit: int(100), Value: result.Counts[mk]}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -1657,7 +1657,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *ggen.Stream) (result MapDiveStruct
 				return result, ggen.NewParseErr("names", s.Offset(), err)
 			}
 			if seenNames {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"names"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"names"}}
 			}
 			seenNames = true
 			err = s.SkipSpace()
@@ -1734,10 +1734,10 @@ func (recv MapDiveStruct) DecodeFromStream(s *ggen.Stream) (result MapDiveStruct
 					return result, ggen.NewParseErr("names", s.Offset(), err)
 				}
 				if len(result.Names[mk]) < 1 {
-					return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"names.value"}, Limit: 1, Got: len(result.Names[mk])}
+					return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"names.value"}, Limit: 1, Got: len(result.Names[mk])}
 				}
 				if len(result.Names[mk]) > 5 {
-					return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"names.value"}, Limit: 5, Got: len(result.Names[mk])}
+					return result, &ggen.MaxLenError{Pos: s.Offset(), Keys: []string{"names.value"}, Limit: 5, Got: len(result.Names[mk])}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -1771,7 +1771,7 @@ func (recv MapDiveStruct) DecodeFromStream(s *ggen.Stream) (result MapDiveStruct
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1910,10 +1910,10 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 			result.Name = ""
 		}
 		if !seenID {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"id"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"id"}}
 		}
 		if !seenName {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"name"}}
 		}
 		return result, i, nil
 	}
@@ -1948,7 +1948,7 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 		switch key {
 		case "id":
 			if seenID {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"id"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"id"}}
 			}
 			seenID = true
 			if i >= len(data) || data[i] != '"' {
@@ -1973,7 +1973,7 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 			}
 		case "meta":
 			if seenMeta {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"meta"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"meta"}}
 			}
 			seenMeta = true
 			if i >= len(data) || data[i] != '"' {
@@ -1998,7 +1998,7 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 			}
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -2022,10 +2022,10 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 				}
 			}
 			if len(result.Name) < 1 {
-				return result, i, &ggen.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2052,10 +2052,10 @@ func (recv Derived) DecodeFrom(data []byte) (result Derived, i int, err error) {
 				result.Name = ""
 			}
 			if !seenID {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"id"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"id"}}
 			}
 			if !seenName {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"name"}}
 			}
 			return result, i, nil
 		}
@@ -2094,10 +2094,10 @@ func (recv Derived) DecodeFromStream(s *ggen.Stream) (result Derived, err error)
 			result.Name = ""
 		}
 		if !seenID {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"id"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"id"}}
 		}
 		if !seenName {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}}
 		}
 		return result, nil
 	}
@@ -2114,7 +2114,7 @@ func (recv Derived) DecodeFromStream(s *ggen.Stream) (result Derived, err error)
 				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 			if seenID {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"id"}}
 			}
 			seenID = true
 			result.ID, err = s.String(true)
@@ -2127,7 +2127,7 @@ func (recv Derived) DecodeFromStream(s *ggen.Stream) (result Derived, err error)
 				return result, ggen.NewParseErr("meta", s.Offset(), err)
 			}
 			if seenMeta {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"meta"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"meta"}}
 			}
 			seenMeta = true
 			result.Meta, err = s.String(true)
@@ -2140,7 +2140,7 @@ func (recv Derived) DecodeFromStream(s *ggen.Stream) (result Derived, err error)
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -2148,7 +2148,7 @@ func (recv Derived) DecodeFromStream(s *ggen.Stream) (result Derived, err error)
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if len(result.Name) < 1 {
-				return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 		default:
 			ownKey := strings.Clone(key)
@@ -2156,7 +2156,7 @@ func (recv Derived) DecodeFromStream(s *ggen.Stream) (result Derived, err error)
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2190,10 +2190,10 @@ func (recv Derived) DecodeFromStream(s *ggen.Stream) (result Derived, err error)
 				result.Name = ""
 			}
 			if !seenID {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"id"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"id"}}
 			}
 			if !seenName {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			return result, nil
 		}
@@ -2300,7 +2300,7 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 		switch key {
 		case "b":
 			if seenB {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}}
 			}
 			seenB = true
 			if i < len(data) && data[i] == 'n' {
@@ -2389,7 +2389,7 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 			i++
 		case "f":
 			if seenF {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"f"}}
 			}
 			seenF = true
 			if i < len(data) && data[i] == 'n' {
@@ -2477,7 +2477,7 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 			i++
 		case "i":
 			if seenI {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i"}}
 			}
 			seenI = true
 			if i < len(data) && data[i] == 'n' {
@@ -2610,7 +2610,7 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 			i++
 		case "u":
 			if seenU {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"u"}}
 			}
 			seenU = true
 			if i < len(data) && data[i] == 'n' {
@@ -2723,7 +2723,7 @@ func (recv NamedValMaps) DecodeFrom(data []byte) (result NamedValMaps, i int, er
 			}
 			i++
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2795,7 +2795,7 @@ func (recv NamedValMaps) DecodeFromStream(s *ggen.Stream) (result NamedValMaps, 
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}}
 			}
 			seenB = true
 			err = s.SkipSpace()
@@ -2905,7 +2905,7 @@ func (recv NamedValMaps) DecodeFromStream(s *ggen.Stream) (result NamedValMaps, 
 				return result, ggen.NewParseErr("f", s.Offset(), err)
 			}
 			if seenF {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"f"}}
 			}
 			seenF = true
 			err = s.SkipSpace()
@@ -3015,7 +3015,7 @@ func (recv NamedValMaps) DecodeFromStream(s *ggen.Stream) (result NamedValMaps, 
 				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i"}}
 			}
 			seenI = true
 			err = s.SkipSpace()
@@ -3125,7 +3125,7 @@ func (recv NamedValMaps) DecodeFromStream(s *ggen.Stream) (result NamedValMaps, 
 				return result, ggen.NewParseErr("u", s.Offset(), err)
 			}
 			if seenU {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"u"}}
 			}
 			seenU = true
 			err = s.SkipSpace()
@@ -3235,7 +3235,7 @@ func (recv NamedValMaps) DecodeFromStream(s *ggen.Stream) (result NamedValMaps, 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3429,7 +3429,7 @@ func (recv NestedMaps) DecodeFrom(data []byte) (result NestedMaps, i int, err er
 		switch key {
 		case "counts":
 			if seenCounts {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"counts"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"counts"}}
 			}
 			seenCounts = true
 			if i < len(data) && data[i] == 'n' {
@@ -3639,7 +3639,7 @@ func (recv NestedMaps) DecodeFrom(data []byte) (result NestedMaps, i int, err er
 			i++
 		case "inners":
 			if seenInners {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"inners"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"inners"}}
 			}
 			seenInners = true
 			if i < len(data) && data[i] == 'n' {
@@ -3808,7 +3808,7 @@ func (recv NestedMaps) DecodeFrom(data []byte) (result NestedMaps, i int, err er
 			i++
 		case "lists":
 			if seenLists {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"lists"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"lists"}}
 			}
 			seenLists = true
 			if i < len(data) && data[i] == 'n' {
@@ -4068,7 +4068,7 @@ func (recv NestedMaps) DecodeFrom(data []byte) (result NestedMaps, i int, err er
 			}
 			i++
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -4145,7 +4145,7 @@ func (recv NestedMaps) DecodeFromStream(s *ggen.Stream) (result NestedMaps, err 
 				return result, ggen.NewParseErr("counts", s.Offset(), err)
 			}
 			if seenCounts {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"counts"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"counts"}}
 			}
 			seenCounts = true
 			err = s.SkipSpace()
@@ -4354,7 +4354,7 @@ func (recv NestedMaps) DecodeFromStream(s *ggen.Stream) (result NestedMaps, err 
 				return result, ggen.NewParseErr("inners", s.Offset(), err)
 			}
 			if seenInners {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"inners"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"inners"}}
 			}
 			seenInners = true
 			err = s.SkipSpace()
@@ -4563,7 +4563,7 @@ func (recv NestedMaps) DecodeFromStream(s *ggen.Stream) (result NestedMaps, err 
 				return result, ggen.NewParseErr("lists", s.Offset(), err)
 			}
 			if seenLists {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lists"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"lists"}}
 			}
 			seenLists = true
 			err = s.SkipSpace()
@@ -4850,7 +4850,7 @@ func (recv NestedMaps) DecodeFromStream(s *ggen.Stream) (result NestedMaps, err 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

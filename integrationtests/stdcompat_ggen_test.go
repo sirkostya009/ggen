@@ -62,7 +62,7 @@ func (recv TimeCustomComma) DecodeFrom(data []byte) (result TimeCustomComma, i i
 		switch key {
 		case "customComma":
 			if seenCustomComma {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"customComma"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"customComma"}}
 			}
 			seenCustomComma = true
 			var s string
@@ -91,7 +91,7 @@ func (recv TimeCustomComma) DecodeFrom(data []byte) (result TimeCustomComma, i i
 				return result, i, ggen.NewParseErr("customComma", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -154,7 +154,7 @@ func (recv TimeCustomComma) DecodeFromStream(s *ggen.Stream) (result TimeCustomC
 				return result, ggen.NewParseErr("customComma", s.Offset(), err)
 			}
 			if seenCustomComma {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"customComma"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"customComma"}}
 			}
 			seenCustomComma = true
 			var sv string
@@ -172,7 +172,7 @@ func (recv TimeCustomComma) DecodeFromStream(s *ggen.Stream) (result TimeCustomC
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -271,7 +271,7 @@ func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, i int
 		switch key {
 		case "customLong":
 			if seenCustomLong {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"customLong"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"customLong"}}
 			}
 			seenCustomLong = true
 			var s string
@@ -300,7 +300,7 @@ func (recv TimeCustomLong) DecodeFrom(data []byte) (result TimeCustomLong, i int
 				return result, i, ggen.NewParseErr("customLong", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -363,7 +363,7 @@ func (recv TimeCustomLong) DecodeFromStream(s *ggen.Stream) (result TimeCustomLo
 				return result, ggen.NewParseErr("customLong", s.Offset(), err)
 			}
 			if seenCustomLong {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"customLong"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"customLong"}}
 			}
 			seenCustomLong = true
 			var sv string
@@ -381,7 +381,7 @@ func (recv TimeCustomLong) DecodeFromStream(s *ggen.Stream) (result TimeCustomLo
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -480,7 +480,7 @@ func (recv TimeDefault) DecodeFrom(data []byte) (result TimeDefault, i int, err 
 		switch key {
 		case "default":
 			if seenDefault {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"default"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"default"}}
 			}
 			seenDefault = true
 			var s string
@@ -509,7 +509,7 @@ func (recv TimeDefault) DecodeFrom(data []byte) (result TimeDefault, i int, err 
 				return result, i, ggen.NewParseErr("default", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -572,7 +572,7 @@ func (recv TimeDefault) DecodeFromStream(s *ggen.Stream) (result TimeDefault, er
 				return result, ggen.NewParseErr("default", s.Offset(), err)
 			}
 			if seenDefault {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"default"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"default"}}
 			}
 			seenDefault = true
 			var sv string
@@ -590,7 +590,7 @@ func (recv TimeDefault) DecodeFromStream(s *ggen.Stream) (result TimeDefault, er
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -689,7 +689,7 @@ func (recv TimeUnix) DecodeFrom(data []byte) (result TimeUnix, i int, err error)
 		switch key {
 		case "unix":
 			if seenUnix {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"unix"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unix"}}
 			}
 			seenUnix = true
 			var f float64
@@ -701,7 +701,7 @@ func (recv TimeUnix) DecodeFrom(data []byte) (result TimeUnix, i int, err error)
 			nsec := int64((f - float64(sec)) * 1e9)
 			result.Unix = time.Unix(sec, nsec)
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -764,7 +764,7 @@ func (recv TimeUnix) DecodeFromStream(s *ggen.Stream) (result TimeUnix, err erro
 				return result, ggen.NewParseErr("unix", s.Offset(), err)
 			}
 			if seenUnix {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unix"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unix"}}
 			}
 			seenUnix = true
 			var f float64
@@ -782,7 +782,7 @@ func (recv TimeUnix) DecodeFromStream(s *ggen.Stream) (result TimeUnix, err erro
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -879,7 +879,7 @@ func (recv TimeUnixMilli) DecodeFrom(data []byte) (result TimeUnixMilli, i int, 
 		switch key {
 		case "unixMilli":
 			if seenUnixMilli {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"unixMilli"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unixMilli"}}
 			}
 			seenUnixMilli = true
 			var n int64
@@ -889,7 +889,7 @@ func (recv TimeUnixMilli) DecodeFrom(data []byte) (result TimeUnixMilli, i int, 
 			}
 			result.UnixMilli = time.UnixMilli(n)
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -952,7 +952,7 @@ func (recv TimeUnixMilli) DecodeFromStream(s *ggen.Stream) (result TimeUnixMilli
 				return result, ggen.NewParseErr("unixMilli", s.Offset(), err)
 			}
 			if seenUnixMilli {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unixMilli"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unixMilli"}}
 			}
 			seenUnixMilli = true
 			var n int64
@@ -967,7 +967,7 @@ func (recv TimeUnixMilli) DecodeFromStream(s *ggen.Stream) (result TimeUnixMilli
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1064,7 +1064,7 @@ func (recv TimeUnixMicro) DecodeFrom(data []byte) (result TimeUnixMicro, i int, 
 		switch key {
 		case "unixMicro":
 			if seenUnixMicro {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"unixMicro"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unixMicro"}}
 			}
 			seenUnixMicro = true
 			var n int64
@@ -1074,7 +1074,7 @@ func (recv TimeUnixMicro) DecodeFrom(data []byte) (result TimeUnixMicro, i int, 
 			}
 			result.UnixMicro = time.UnixMicro(n)
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1137,7 +1137,7 @@ func (recv TimeUnixMicro) DecodeFromStream(s *ggen.Stream) (result TimeUnixMicro
 				return result, ggen.NewParseErr("unixMicro", s.Offset(), err)
 			}
 			if seenUnixMicro {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unixMicro"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unixMicro"}}
 			}
 			seenUnixMicro = true
 			var n int64
@@ -1152,7 +1152,7 @@ func (recv TimeUnixMicro) DecodeFromStream(s *ggen.Stream) (result TimeUnixMicro
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1249,7 +1249,7 @@ func (recv TimeUnixNano) DecodeFrom(data []byte) (result TimeUnixNano, i int, er
 		switch key {
 		case "unixNano":
 			if seenUnixNano {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"unixNano"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unixNano"}}
 			}
 			seenUnixNano = true
 			var n int64
@@ -1259,7 +1259,7 @@ func (recv TimeUnixNano) DecodeFrom(data []byte) (result TimeUnixNano, i int, er
 			}
 			result.UnixNano = time.Unix(0, n)
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1322,7 +1322,7 @@ func (recv TimeUnixNano) DecodeFromStream(s *ggen.Stream) (result TimeUnixNano, 
 				return result, ggen.NewParseErr("unixNano", s.Offset(), err)
 			}
 			if seenUnixNano {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unixNano"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unixNano"}}
 			}
 			seenUnixNano = true
 			var n int64
@@ -1337,7 +1337,7 @@ func (recv TimeUnixNano) DecodeFromStream(s *ggen.Stream) (result TimeUnixNano, 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1434,7 +1434,7 @@ func (recv TimeANSIC) DecodeFrom(data []byte) (result TimeANSIC, i int, err erro
 		switch key {
 		case "ansic":
 			if seenANSIC {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ansic"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"ansic"}}
 			}
 			seenANSIC = true
 			var s string
@@ -1463,7 +1463,7 @@ func (recv TimeANSIC) DecodeFrom(data []byte) (result TimeANSIC, i int, err erro
 				return result, i, ggen.NewParseErr("ansic", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1526,7 +1526,7 @@ func (recv TimeANSIC) DecodeFromStream(s *ggen.Stream) (result TimeANSIC, err er
 				return result, ggen.NewParseErr("ansic", s.Offset(), err)
 			}
 			if seenANSIC {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ansic"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"ansic"}}
 			}
 			seenANSIC = true
 			var sv string
@@ -1544,7 +1544,7 @@ func (recv TimeANSIC) DecodeFromStream(s *ggen.Stream) (result TimeANSIC, err er
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1641,7 +1641,7 @@ func (recv TimeUnixDate) DecodeFrom(data []byte) (result TimeUnixDate, i int, er
 		switch key {
 		case "unixDate":
 			if seenUnixDate {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"unixDate"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unixDate"}}
 			}
 			seenUnixDate = true
 			var s string
@@ -1670,7 +1670,7 @@ func (recv TimeUnixDate) DecodeFrom(data []byte) (result TimeUnixDate, i int, er
 				return result, i, ggen.NewParseErr("unixDate", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1733,7 +1733,7 @@ func (recv TimeUnixDate) DecodeFromStream(s *ggen.Stream) (result TimeUnixDate, 
 				return result, ggen.NewParseErr("unixDate", s.Offset(), err)
 			}
 			if seenUnixDate {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unixDate"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unixDate"}}
 			}
 			seenUnixDate = true
 			var sv string
@@ -1751,7 +1751,7 @@ func (recv TimeUnixDate) DecodeFromStream(s *ggen.Stream) (result TimeUnixDate, 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1848,7 +1848,7 @@ func (recv TimeRubyDate) DecodeFrom(data []byte) (result TimeRubyDate, i int, er
 		switch key {
 		case "rubyDate":
 			if seenRubyDate {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rubyDate"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rubyDate"}}
 			}
 			seenRubyDate = true
 			var s string
@@ -1877,7 +1877,7 @@ func (recv TimeRubyDate) DecodeFrom(data []byte) (result TimeRubyDate, i int, er
 				return result, i, ggen.NewParseErr("rubyDate", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1940,7 +1940,7 @@ func (recv TimeRubyDate) DecodeFromStream(s *ggen.Stream) (result TimeRubyDate, 
 				return result, ggen.NewParseErr("rubyDate", s.Offset(), err)
 			}
 			if seenRubyDate {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rubyDate"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rubyDate"}}
 			}
 			seenRubyDate = true
 			var sv string
@@ -1958,7 +1958,7 @@ func (recv TimeRubyDate) DecodeFromStream(s *ggen.Stream) (result TimeRubyDate, 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2055,7 +2055,7 @@ func (recv TimeRFC822) DecodeFrom(data []byte) (result TimeRFC822, i int, err er
 		switch key {
 		case "rfc822":
 			if seenRFC822 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rfc822"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc822"}}
 			}
 			seenRFC822 = true
 			var s string
@@ -2084,7 +2084,7 @@ func (recv TimeRFC822) DecodeFrom(data []byte) (result TimeRFC822, i int, err er
 				return result, i, ggen.NewParseErr("rfc822", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2147,7 +2147,7 @@ func (recv TimeRFC822) DecodeFromStream(s *ggen.Stream) (result TimeRFC822, err 
 				return result, ggen.NewParseErr("rfc822", s.Offset(), err)
 			}
 			if seenRFC822 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc822"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc822"}}
 			}
 			seenRFC822 = true
 			var sv string
@@ -2165,7 +2165,7 @@ func (recv TimeRFC822) DecodeFromStream(s *ggen.Stream) (result TimeRFC822, err 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2262,7 +2262,7 @@ func (recv TimeRFC822Z) DecodeFrom(data []byte) (result TimeRFC822Z, i int, err 
 		switch key {
 		case "rfc822Z":
 			if seenRFC822Z {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rfc822Z"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc822Z"}}
 			}
 			seenRFC822Z = true
 			var s string
@@ -2291,7 +2291,7 @@ func (recv TimeRFC822Z) DecodeFrom(data []byte) (result TimeRFC822Z, i int, err 
 				return result, i, ggen.NewParseErr("rfc822Z", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2354,7 +2354,7 @@ func (recv TimeRFC822Z) DecodeFromStream(s *ggen.Stream) (result TimeRFC822Z, er
 				return result, ggen.NewParseErr("rfc822Z", s.Offset(), err)
 			}
 			if seenRFC822Z {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc822Z"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc822Z"}}
 			}
 			seenRFC822Z = true
 			var sv string
@@ -2372,7 +2372,7 @@ func (recv TimeRFC822Z) DecodeFromStream(s *ggen.Stream) (result TimeRFC822Z, er
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2469,7 +2469,7 @@ func (recv TimeRFC850) DecodeFrom(data []byte) (result TimeRFC850, i int, err er
 		switch key {
 		case "rfc850":
 			if seenRFC850 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rfc850"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc850"}}
 			}
 			seenRFC850 = true
 			var s string
@@ -2498,7 +2498,7 @@ func (recv TimeRFC850) DecodeFrom(data []byte) (result TimeRFC850, i int, err er
 				return result, i, ggen.NewParseErr("rfc850", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2561,7 +2561,7 @@ func (recv TimeRFC850) DecodeFromStream(s *ggen.Stream) (result TimeRFC850, err 
 				return result, ggen.NewParseErr("rfc850", s.Offset(), err)
 			}
 			if seenRFC850 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc850"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc850"}}
 			}
 			seenRFC850 = true
 			var sv string
@@ -2579,7 +2579,7 @@ func (recv TimeRFC850) DecodeFromStream(s *ggen.Stream) (result TimeRFC850, err 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2676,7 +2676,7 @@ func (recv TimeRFC1123) DecodeFrom(data []byte) (result TimeRFC1123, i int, err 
 		switch key {
 		case "rfc1123":
 			if seenRFC1123 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rfc1123"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc1123"}}
 			}
 			seenRFC1123 = true
 			var s string
@@ -2705,7 +2705,7 @@ func (recv TimeRFC1123) DecodeFrom(data []byte) (result TimeRFC1123, i int, err 
 				return result, i, ggen.NewParseErr("rfc1123", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2768,7 +2768,7 @@ func (recv TimeRFC1123) DecodeFromStream(s *ggen.Stream) (result TimeRFC1123, er
 				return result, ggen.NewParseErr("rfc1123", s.Offset(), err)
 			}
 			if seenRFC1123 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc1123"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc1123"}}
 			}
 			seenRFC1123 = true
 			var sv string
@@ -2786,7 +2786,7 @@ func (recv TimeRFC1123) DecodeFromStream(s *ggen.Stream) (result TimeRFC1123, er
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2883,7 +2883,7 @@ func (recv TimeRFC1123Z) DecodeFrom(data []byte) (result TimeRFC1123Z, i int, er
 		switch key {
 		case "rfc1123Z":
 			if seenRFC1123Z {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rfc1123Z"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc1123Z"}}
 			}
 			seenRFC1123Z = true
 			var s string
@@ -2912,7 +2912,7 @@ func (recv TimeRFC1123Z) DecodeFrom(data []byte) (result TimeRFC1123Z, i int, er
 				return result, i, ggen.NewParseErr("rfc1123Z", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2975,7 +2975,7 @@ func (recv TimeRFC1123Z) DecodeFromStream(s *ggen.Stream) (result TimeRFC1123Z, 
 				return result, ggen.NewParseErr("rfc1123Z", s.Offset(), err)
 			}
 			if seenRFC1123Z {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc1123Z"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc1123Z"}}
 			}
 			seenRFC1123Z = true
 			var sv string
@@ -2993,7 +2993,7 @@ func (recv TimeRFC1123Z) DecodeFromStream(s *ggen.Stream) (result TimeRFC1123Z, 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3090,7 +3090,7 @@ func (recv TimeRFC3339) DecodeFrom(data []byte) (result TimeRFC3339, i int, err 
 		switch key {
 		case "rfc3339":
 			if seenRFC3339 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rfc3339"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc3339"}}
 			}
 			seenRFC3339 = true
 			var s string
@@ -3119,7 +3119,7 @@ func (recv TimeRFC3339) DecodeFrom(data []byte) (result TimeRFC3339, i int, err 
 				return result, i, ggen.NewParseErr("rfc3339", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3182,7 +3182,7 @@ func (recv TimeRFC3339) DecodeFromStream(s *ggen.Stream) (result TimeRFC3339, er
 				return result, ggen.NewParseErr("rfc3339", s.Offset(), err)
 			}
 			if seenRFC3339 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc3339"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc3339"}}
 			}
 			seenRFC3339 = true
 			var sv string
@@ -3200,7 +3200,7 @@ func (recv TimeRFC3339) DecodeFromStream(s *ggen.Stream) (result TimeRFC3339, er
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3299,7 +3299,7 @@ func (recv TimeRFC3339Nano) DecodeFrom(data []byte) (result TimeRFC3339Nano, i i
 		switch key {
 		case "rfc3339Nano":
 			if seenRFC3339Nano {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rfc3339Nano"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc3339Nano"}}
 			}
 			seenRFC3339Nano = true
 			var s string
@@ -3328,7 +3328,7 @@ func (recv TimeRFC3339Nano) DecodeFrom(data []byte) (result TimeRFC3339Nano, i i
 				return result, i, ggen.NewParseErr("rfc3339Nano", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3391,7 +3391,7 @@ func (recv TimeRFC3339Nano) DecodeFromStream(s *ggen.Stream) (result TimeRFC3339
 				return result, ggen.NewParseErr("rfc3339Nano", s.Offset(), err)
 			}
 			if seenRFC3339Nano {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc3339Nano"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc3339Nano"}}
 			}
 			seenRFC3339Nano = true
 			var sv string
@@ -3409,7 +3409,7 @@ func (recv TimeRFC3339Nano) DecodeFromStream(s *ggen.Stream) (result TimeRFC3339
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3508,7 +3508,7 @@ func (recv TimeKitchen) DecodeFrom(data []byte) (result TimeKitchen, i int, err 
 		switch key {
 		case "kitchen":
 			if seenKitchen {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"kitchen"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"kitchen"}}
 			}
 			seenKitchen = true
 			var s string
@@ -3537,7 +3537,7 @@ func (recv TimeKitchen) DecodeFrom(data []byte) (result TimeKitchen, i int, err 
 				return result, i, ggen.NewParseErr("kitchen", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3600,7 +3600,7 @@ func (recv TimeKitchen) DecodeFromStream(s *ggen.Stream) (result TimeKitchen, er
 				return result, ggen.NewParseErr("kitchen", s.Offset(), err)
 			}
 			if seenKitchen {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"kitchen"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"kitchen"}}
 			}
 			seenKitchen = true
 			var sv string
@@ -3618,7 +3618,7 @@ func (recv TimeKitchen) DecodeFromStream(s *ggen.Stream) (result TimeKitchen, er
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3715,7 +3715,7 @@ func (recv TimeDateTime) DecodeFrom(data []byte) (result TimeDateTime, i int, er
 		switch key {
 		case "dateTime":
 			if seenDateTime {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"dateTime"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"dateTime"}}
 			}
 			seenDateTime = true
 			var s string
@@ -3744,7 +3744,7 @@ func (recv TimeDateTime) DecodeFrom(data []byte) (result TimeDateTime, i int, er
 				return result, i, ggen.NewParseErr("dateTime", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3807,7 +3807,7 @@ func (recv TimeDateTime) DecodeFromStream(s *ggen.Stream) (result TimeDateTime, 
 				return result, ggen.NewParseErr("dateTime", s.Offset(), err)
 			}
 			if seenDateTime {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"dateTime"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"dateTime"}}
 			}
 			seenDateTime = true
 			var sv string
@@ -3825,7 +3825,7 @@ func (recv TimeDateTime) DecodeFromStream(s *ggen.Stream) (result TimeDateTime, 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3922,7 +3922,7 @@ func (recv TimeDateOnly) DecodeFrom(data []byte) (result TimeDateOnly, i int, er
 		switch key {
 		case "dateOnly":
 			if seenDateOnly {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"dateOnly"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"dateOnly"}}
 			}
 			seenDateOnly = true
 			var s string
@@ -3951,7 +3951,7 @@ func (recv TimeDateOnly) DecodeFrom(data []byte) (result TimeDateOnly, i int, er
 				return result, i, ggen.NewParseErr("dateOnly", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -4014,7 +4014,7 @@ func (recv TimeDateOnly) DecodeFromStream(s *ggen.Stream) (result TimeDateOnly, 
 				return result, ggen.NewParseErr("dateOnly", s.Offset(), err)
 			}
 			if seenDateOnly {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"dateOnly"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"dateOnly"}}
 			}
 			seenDateOnly = true
 			var sv string
@@ -4032,7 +4032,7 @@ func (recv TimeDateOnly) DecodeFromStream(s *ggen.Stream) (result TimeDateOnly, 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -4129,7 +4129,7 @@ func (recv TimeTimeOnly) DecodeFrom(data []byte) (result TimeTimeOnly, i int, er
 		switch key {
 		case "timeOnly":
 			if seenTimeOnly {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"timeOnly"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"timeOnly"}}
 			}
 			seenTimeOnly = true
 			var s string
@@ -4158,7 +4158,7 @@ func (recv TimeTimeOnly) DecodeFrom(data []byte) (result TimeTimeOnly, i int, er
 				return result, i, ggen.NewParseErr("timeOnly", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -4221,7 +4221,7 @@ func (recv TimeTimeOnly) DecodeFromStream(s *ggen.Stream) (result TimeTimeOnly, 
 				return result, ggen.NewParseErr("timeOnly", s.Offset(), err)
 			}
 			if seenTimeOnly {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"timeOnly"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"timeOnly"}}
 			}
 			seenTimeOnly = true
 			var sv string
@@ -4239,7 +4239,7 @@ func (recv TimeTimeOnly) DecodeFromStream(s *ggen.Stream) (result TimeTimeOnly, 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -4416,7 +4416,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 		switch key {
 		case "ansic":
 			if seenANSIC {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ansic"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"ansic"}}
 			}
 			seenANSIC = true
 			var s string
@@ -4446,7 +4446,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "customComma":
 			if seenCustomComma {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"customComma"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"customComma"}}
 			}
 			seenCustomComma = true
 			var s string
@@ -4476,7 +4476,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "customLong":
 			if seenCustomLong {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"customLong"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"customLong"}}
 			}
 			seenCustomLong = true
 			var s string
@@ -4506,7 +4506,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "dateOnly":
 			if seenDateOnly {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"dateOnly"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"dateOnly"}}
 			}
 			seenDateOnly = true
 			var s string
@@ -4536,7 +4536,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "dateTime":
 			if seenDateTime {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"dateTime"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"dateTime"}}
 			}
 			seenDateTime = true
 			var s string
@@ -4566,7 +4566,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "default":
 			if seenDefault {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"default"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"default"}}
 			}
 			seenDefault = true
 			var s string
@@ -4596,7 +4596,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "kitchen":
 			if seenKitchen {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"kitchen"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"kitchen"}}
 			}
 			seenKitchen = true
 			var s string
@@ -4626,7 +4626,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "rfc1123":
 			if seenRFC1123 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rfc1123"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc1123"}}
 			}
 			seenRFC1123 = true
 			var s string
@@ -4656,7 +4656,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "rfc1123Z":
 			if seenRFC1123Z {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rfc1123Z"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc1123Z"}}
 			}
 			seenRFC1123Z = true
 			var s string
@@ -4686,7 +4686,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "rfc3339":
 			if seenRFC3339 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rfc3339"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc3339"}}
 			}
 			seenRFC3339 = true
 			var s string
@@ -4716,7 +4716,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "rfc3339Nano":
 			if seenRFC3339Nano {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rfc3339Nano"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc3339Nano"}}
 			}
 			seenRFC3339Nano = true
 			var s string
@@ -4746,7 +4746,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "rfc822":
 			if seenRFC822 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rfc822"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc822"}}
 			}
 			seenRFC822 = true
 			var s string
@@ -4776,7 +4776,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "rfc822Z":
 			if seenRFC822Z {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rfc822Z"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc822Z"}}
 			}
 			seenRFC822Z = true
 			var s string
@@ -4806,7 +4806,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "rfc850":
 			if seenRFC850 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rfc850"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc850"}}
 			}
 			seenRFC850 = true
 			var s string
@@ -4836,7 +4836,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "rubyDate":
 			if seenRubyDate {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"rubyDate"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rubyDate"}}
 			}
 			seenRubyDate = true
 			var s string
@@ -4866,7 +4866,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "timeOnly":
 			if seenTimeOnly {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"timeOnly"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"timeOnly"}}
 			}
 			seenTimeOnly = true
 			var s string
@@ -4896,7 +4896,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "unix":
 			if seenUnix {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"unix"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unix"}}
 			}
 			seenUnix = true
 			var f float64
@@ -4909,7 +4909,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			result.Unix = time.Unix(sec, nsec)
 		case "unixDate":
 			if seenUnixDate {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"unixDate"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unixDate"}}
 			}
 			seenUnixDate = true
 			var s string
@@ -4939,7 +4939,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 		case "unixMicro":
 			if seenUnixMicro {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"unixMicro"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unixMicro"}}
 			}
 			seenUnixMicro = true
 			var n int64
@@ -4950,7 +4950,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			result.UnixMicro = time.UnixMicro(n)
 		case "unixMilli":
 			if seenUnixMilli {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"unixMilli"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unixMilli"}}
 			}
 			seenUnixMilli = true
 			var n int64
@@ -4961,7 +4961,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			result.UnixMilli = time.UnixMilli(n)
 		case "unixNano":
 			if seenUnixNano {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"unixNano"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unixNano"}}
 			}
 			seenUnixNano = true
 			var n int64
@@ -4971,7 +4971,7 @@ func (recv TimeFormatsStdCompat) DecodeFrom(data []byte) (result TimeFormatsStdC
 			}
 			result.UnixNano = time.Unix(0, n)
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -5174,7 +5174,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("ansic", s.Offset(), err)
 			}
 			if seenANSIC {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ansic"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"ansic"}}
 			}
 			seenANSIC = true
 			var sv string
@@ -5192,7 +5192,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("customComma", s.Offset(), err)
 			}
 			if seenCustomComma {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"customComma"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"customComma"}}
 			}
 			seenCustomComma = true
 			var sv string
@@ -5210,7 +5210,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("customLong", s.Offset(), err)
 			}
 			if seenCustomLong {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"customLong"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"customLong"}}
 			}
 			seenCustomLong = true
 			var sv string
@@ -5228,7 +5228,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("dateOnly", s.Offset(), err)
 			}
 			if seenDateOnly {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"dateOnly"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"dateOnly"}}
 			}
 			seenDateOnly = true
 			var sv string
@@ -5246,7 +5246,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("dateTime", s.Offset(), err)
 			}
 			if seenDateTime {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"dateTime"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"dateTime"}}
 			}
 			seenDateTime = true
 			var sv string
@@ -5264,7 +5264,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("default", s.Offset(), err)
 			}
 			if seenDefault {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"default"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"default"}}
 			}
 			seenDefault = true
 			var sv string
@@ -5282,7 +5282,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("kitchen", s.Offset(), err)
 			}
 			if seenKitchen {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"kitchen"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"kitchen"}}
 			}
 			seenKitchen = true
 			var sv string
@@ -5300,7 +5300,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("rfc1123", s.Offset(), err)
 			}
 			if seenRFC1123 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc1123"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc1123"}}
 			}
 			seenRFC1123 = true
 			var sv string
@@ -5318,7 +5318,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("rfc1123Z", s.Offset(), err)
 			}
 			if seenRFC1123Z {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc1123Z"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc1123Z"}}
 			}
 			seenRFC1123Z = true
 			var sv string
@@ -5336,7 +5336,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("rfc3339", s.Offset(), err)
 			}
 			if seenRFC3339 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc3339"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc3339"}}
 			}
 			seenRFC3339 = true
 			var sv string
@@ -5354,7 +5354,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("rfc3339Nano", s.Offset(), err)
 			}
 			if seenRFC3339Nano {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc3339Nano"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc3339Nano"}}
 			}
 			seenRFC3339Nano = true
 			var sv string
@@ -5372,7 +5372,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("rfc822", s.Offset(), err)
 			}
 			if seenRFC822 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc822"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc822"}}
 			}
 			seenRFC822 = true
 			var sv string
@@ -5390,7 +5390,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("rfc822Z", s.Offset(), err)
 			}
 			if seenRFC822Z {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc822Z"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc822Z"}}
 			}
 			seenRFC822Z = true
 			var sv string
@@ -5408,7 +5408,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("rfc850", s.Offset(), err)
 			}
 			if seenRFC850 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rfc850"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc850"}}
 			}
 			seenRFC850 = true
 			var sv string
@@ -5426,7 +5426,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("rubyDate", s.Offset(), err)
 			}
 			if seenRubyDate {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"rubyDate"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rubyDate"}}
 			}
 			seenRubyDate = true
 			var sv string
@@ -5444,7 +5444,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("timeOnly", s.Offset(), err)
 			}
 			if seenTimeOnly {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"timeOnly"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"timeOnly"}}
 			}
 			seenTimeOnly = true
 			var sv string
@@ -5462,7 +5462,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("unix", s.Offset(), err)
 			}
 			if seenUnix {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unix"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unix"}}
 			}
 			seenUnix = true
 			var f float64
@@ -5480,7 +5480,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("unixDate", s.Offset(), err)
 			}
 			if seenUnixDate {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unixDate"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unixDate"}}
 			}
 			seenUnixDate = true
 			var sv string
@@ -5498,7 +5498,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("unixMicro", s.Offset(), err)
 			}
 			if seenUnixMicro {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unixMicro"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unixMicro"}}
 			}
 			seenUnixMicro = true
 			var n int64
@@ -5513,7 +5513,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("unixMilli", s.Offset(), err)
 			}
 			if seenUnixMilli {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unixMilli"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unixMilli"}}
 			}
 			seenUnixMilli = true
 			var n int64
@@ -5528,7 +5528,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 				return result, ggen.NewParseErr("unixNano", s.Offset(), err)
 			}
 			if seenUnixNano {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"unixNano"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unixNano"}}
 			}
 			seenUnixNano = true
 			var n int64
@@ -5543,7 +5543,7 @@ func (recv TimeFormatsStdCompat) DecodeFromStream(s *ggen.Stream) (result TimeFo
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -5754,7 +5754,7 @@ func (recv IgnoredEmbedStruct) DecodeFrom(data []byte) (result IgnoredEmbedStruc
 		switch key {
 		case "kept":
 			if seenKept {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"kept"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"kept"}}
 			}
 			seenKept = true
 			if i >= len(data) || data[i] != '"' {
@@ -5779,7 +5779,7 @@ func (recv IgnoredEmbedStruct) DecodeFrom(data []byte) (result IgnoredEmbedStruc
 			}
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -5803,7 +5803,7 @@ func (recv IgnoredEmbedStruct) DecodeFrom(data []byte) (result IgnoredEmbedStruc
 				}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -5873,7 +5873,7 @@ func (recv IgnoredEmbedStruct) DecodeFromStream(s *ggen.Stream) (result IgnoredE
 				return result, ggen.NewParseErr("kept", s.Offset(), err)
 			}
 			if seenKept {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"kept"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"kept"}}
 			}
 			seenKept = true
 			result.Kept, err = s.String(true)
@@ -5886,7 +5886,7 @@ func (recv IgnoredEmbedStruct) DecodeFromStream(s *ggen.Stream) (result IgnoredE
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -5899,7 +5899,7 @@ func (recv IgnoredEmbedStruct) DecodeFromStream(s *ggen.Stream) (result IgnoredE
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -6027,7 +6027,7 @@ func (recv richSubset) DecodeFrom(data []byte) (result richSubset, i int, err er
 		switch key {
 		case "big":
 			if seenBig {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"big"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"big"}}
 			}
 			seenBig = true
 			start := i
@@ -6040,7 +6040,7 @@ func (recv richSubset) DecodeFrom(data []byte) (result richSubset, i int, err er
 			}
 		case "bigF":
 			if seenBigF {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"bigF"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"bigF"}}
 			}
 			seenBigF = true
 			var s string
@@ -6069,7 +6069,7 @@ func (recv richSubset) DecodeFrom(data []byte) (result richSubset, i int, err er
 			}
 		case "bigR":
 			if seenBigR {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"bigR"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"bigR"}}
 			}
 			seenBigR = true
 			var s string
@@ -6098,7 +6098,7 @@ func (recv richSubset) DecodeFrom(data []byte) (result richSubset, i int, err er
 			}
 		case "gofrsId":
 			if seenGofrsID {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"gofrsId"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"gofrsId"}}
 			}
 			seenGofrsID = true
 			var ts string
@@ -6113,7 +6113,7 @@ func (recv richSubset) DecodeFrom(data []byte) (result richSubset, i int, err er
 			}
 		case "id":
 			if seenID {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"id"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"id"}}
 			}
 			seenID = true
 			var ts string
@@ -6128,7 +6128,7 @@ func (recv richSubset) DecodeFrom(data []byte) (result richSubset, i int, err er
 			}
 		case "raw1":
 			if seenRaw1 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"raw1"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"raw1"}}
 			}
 			seenRaw1 = true
 			start := i
@@ -6143,7 +6143,7 @@ func (recv richSubset) DecodeFrom(data []byte) (result richSubset, i int, err er
 			result.Raw1 = data[start:i]
 		case "raw2":
 			if seenRaw2 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"raw2"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"raw2"}}
 			}
 			seenRaw2 = true
 			start := i
@@ -6157,7 +6157,7 @@ func (recv richSubset) DecodeFrom(data []byte) (result richSubset, i int, err er
 			}
 			result.Raw2 = data[start:i]
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -6262,7 +6262,7 @@ func (recv richSubset) DecodeFromStream(s *ggen.Stream) (result richSubset, err 
 				return result, ggen.NewParseErr("big", s.Offset(), err)
 			}
 			if seenBig {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"big"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"big"}}
 			}
 			seenBig = true
 			span, err := s.CaptureValue()
@@ -6278,7 +6278,7 @@ func (recv richSubset) DecodeFromStream(s *ggen.Stream) (result richSubset, err 
 				return result, ggen.NewParseErr("bigF", s.Offset(), err)
 			}
 			if seenBigF {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bigF"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"bigF"}}
 			}
 			seenBigF = true
 			var sv string
@@ -6295,7 +6295,7 @@ func (recv richSubset) DecodeFromStream(s *ggen.Stream) (result richSubset, err 
 				return result, ggen.NewParseErr("bigR", s.Offset(), err)
 			}
 			if seenBigR {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bigR"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"bigR"}}
 			}
 			seenBigR = true
 			var sv string
@@ -6312,7 +6312,7 @@ func (recv richSubset) DecodeFromStream(s *ggen.Stream) (result richSubset, err 
 				return result, ggen.NewParseErr("gofrsId", s.Offset(), err)
 			}
 			if seenGofrsID {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"gofrsId"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"gofrsId"}}
 			}
 			seenGofrsID = true
 			var ts string
@@ -6331,7 +6331,7 @@ func (recv richSubset) DecodeFromStream(s *ggen.Stream) (result richSubset, err 
 				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 			if seenID {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"id"}}
 			}
 			seenID = true
 			var ts string
@@ -6350,7 +6350,7 @@ func (recv richSubset) DecodeFromStream(s *ggen.Stream) (result richSubset, err 
 				return result, ggen.NewParseErr("raw1", s.Offset(), err)
 			}
 			if seenRaw1 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw1"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"raw1"}}
 			}
 			seenRaw1 = true
 			span, err := s.CaptureValue()
@@ -6368,7 +6368,7 @@ func (recv richSubset) DecodeFromStream(s *ggen.Stream) (result richSubset, err 
 				return result, ggen.NewParseErr("raw2", s.Offset(), err)
 			}
 			if seenRaw2 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"raw2"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"raw2"}}
 			}
 			seenRaw2 = true
 			span, err := s.CaptureValue()
@@ -6386,7 +6386,7 @@ func (recv richSubset) DecodeFromStream(s *ggen.Stream) (result richSubset, err 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -6548,7 +6548,7 @@ func (recv F64Wire) DecodeFrom(data []byte) (result F64Wire, i int, err error) {
 		switch key {
 		case "v":
 			if seenV {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"v"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"v"}}
 			}
 			seenV = true
 			result.V, i, err = ggen.Float64(data, i)
@@ -6556,7 +6556,7 @@ func (recv F64Wire) DecodeFrom(data []byte) (result F64Wire, i int, err error) {
 				return result, i, ggen.NewParseErr("v", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -6619,7 +6619,7 @@ func (recv F64Wire) DecodeFromStream(s *ggen.Stream) (result F64Wire, err error)
 				return result, ggen.NewParseErr("v", s.Offset(), err)
 			}
 			if seenV {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"v"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"v"}}
 			}
 			seenV = true
 			result.V, err = s.Float64()
@@ -6632,7 +6632,7 @@ func (recv F64Wire) DecodeFromStream(s *ggen.Stream) (result F64Wire, err error)
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -6731,7 +6731,7 @@ func (recv F32Wire) DecodeFrom(data []byte) (result F32Wire, i int, err error) {
 		switch key {
 		case "v":
 			if seenV {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"v"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"v"}}
 			}
 			seenV = true
 			result.V, i, err = ggen.Float32(data, i)
@@ -6739,7 +6739,7 @@ func (recv F32Wire) DecodeFrom(data []byte) (result F32Wire, i int, err error) {
 				return result, i, ggen.NewParseErr("v", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -6802,7 +6802,7 @@ func (recv F32Wire) DecodeFromStream(s *ggen.Stream) (result F32Wire, err error)
 				return result, ggen.NewParseErr("v", s.Offset(), err)
 			}
 			if seenV {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"v"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"v"}}
 			}
 			seenV = true
 			result.V, err = s.Float32()
@@ -6815,7 +6815,7 @@ func (recv F32Wire) DecodeFromStream(s *ggen.Stream) (result F32Wire, err error)
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -6914,7 +6914,7 @@ func (recv AnyWire) DecodeFrom(data []byte) (result AnyWire, i int, err error) {
 		switch key {
 		case "v":
 			if seenV {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"v"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"v"}}
 			}
 			seenV = true
 			result.V, i, err = ggen.Any(data, i, true)
@@ -6922,7 +6922,7 @@ func (recv AnyWire) DecodeFrom(data []byte) (result AnyWire, i int, err error) {
 				return result, i, ggen.NewParseErr("v", i, err)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -6985,7 +6985,7 @@ func (recv AnyWire) DecodeFromStream(s *ggen.Stream) (result AnyWire, err error)
 				return result, ggen.NewParseErr("v", s.Offset(), err)
 			}
 			if seenV {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"v"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"v"}}
 			}
 			seenV = true
 			result.V, err = s.Any(true)
@@ -6998,7 +6998,7 @@ func (recv AnyWire) DecodeFromStream(s *ggen.Stream) (result AnyWire, err error)
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

@@ -64,7 +64,7 @@ func (recv EmbedStruct) DecodeFrom(data []byte) (result EmbedStruct, i int, err 
 		switch key {
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -160,7 +160,7 @@ func (recv EmbedStruct) DecodeFromStream(s *ggen.Stream) (result EmbedStruct, er
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -301,7 +301,7 @@ func (recv EmbedStringsStruct) DecodeFrom(data []byte) (result EmbedStringsStruc
 		switch key {
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -397,7 +397,7 @@ func (recv EmbedStringsStruct) DecodeFromStream(s *ggen.Stream) (result EmbedStr
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -537,7 +537,7 @@ func (recv EmbedStructsStruct) DecodeFrom(data []byte) (result EmbedStructsStruc
 		switch key {
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -637,7 +637,7 @@ func (recv EmbedStructsStruct) DecodeFromStream(s *ggen.Stream) (result EmbedStr
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -780,7 +780,7 @@ func (recv EmbedRawStruct) DecodeFrom(data []byte) (result EmbedRawStruct, i int
 		switch key {
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -882,7 +882,7 @@ func (recv EmbedRawStruct) DecodeFromStream(s *ggen.Stream) (result EmbedRawStru
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String(true)

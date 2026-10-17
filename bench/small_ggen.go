@@ -56,10 +56,10 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 			result.Name = ""
 		}
 		if !seenEmail {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"email"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"email"}}
 		}
 		if !seenName {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"name"}}
 		}
 		return result, i, nil
 	}
@@ -94,7 +94,7 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 		switch key {
 		case "age":
 			if seenAge {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"age"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"age"}}
 			}
 			seenAge = true
 			neg := false
@@ -147,14 +147,14 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 			}
 			result.Age = int(n)
 			if result.Age < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"age"}, Limit: int(0), Value: result.Age}
+				return result, i, &ggen.GTEError{Pos: i, Keys: []string{"age"}, Limit: int(0), Value: result.Age}
 			}
 			if result.Age > 150 {
-				return result, i, &ggen.LTEError{Pos: i, Path: []string{"age"}, Limit: int(150), Value: result.Age}
+				return result, i, &ggen.LTEError{Pos: i, Keys: []string{"age"}, Limit: int(150), Value: result.Age}
 			}
 		case "bio":
 			if seenBio {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"bio"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"bio"}}
 			}
 			seenBio = true
 			if i >= len(data) || data[i] != '"' {
@@ -178,11 +178,11 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 				}
 			}
 			if len(result.Bio) > 4096 {
-				return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"bio"}, Limit: 4096, Got: len(result.Bio)}
+				return result, i, &ggen.MaxLenError{Pos: i, Keys: []string{"bio"}, Limit: 4096, Got: len(result.Bio)}
 			}
 		case "email":
 			if seenEmail {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"email"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"email"}}
 			}
 			seenEmail = true
 			if i >= len(data) || data[i] != '"' {
@@ -206,11 +206,11 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 				}
 			}
 			if !strings.Contains(result.Email, "@") {
-				return result, i, &ggen.ContainsError{Pos: i, Path: []string{"email"}, Want: "@", Value: result.Email}
+				return result, i, &ggen.ContainsError{Pos: i, Keys: []string{"email"}, Want: "@", Value: result.Email}
 			}
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -234,14 +234,14 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 				}
 			}
 			if len(result.Name) < 1 {
-				return result, i, &ggen.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 			if len(result.Name) > 64 {
-				return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"name"}, Limit: 64, Got: len(result.Name)}
+				return result, i, &ggen.MaxLenError{Pos: i, Keys: []string{"name"}, Limit: 64, Got: len(result.Name)}
 			}
 		case "tags":
 			if seenTags {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"tags"}}
 			}
 			seenTags = true
 			if i < len(data) && data[i] == 'n' {
@@ -292,13 +292,13 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 						}
 					}
 					if len(result.Tags[len(result.Tags)-1]) == 0 {
-						return result, i, &ggen.NotEmptyError{Pos: i, Path: []string{"tags[]"}}
+						return result, i, &ggen.NotEmptyError{Pos: i, Keys: []string{"tags[]"}}
 					}
 					if len(result.Tags[len(result.Tags)-1]) < 1 {
-						return result, i, &ggen.MinLenError{Pos: i, Path: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
+						return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
 					}
 					if len(result.Tags[len(result.Tags)-1]) > 32 {
-						return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"tags[]"}, Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
+						return result, i, &ggen.MaxLenError{Pos: i, Keys: []string{"tags[]"}, Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -321,7 +321,7 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 			}
 			i++
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -351,10 +351,10 @@ func (recv Validated) DecodeFrom(data []byte) (result Validated, i int, err erro
 				result.Name = ""
 			}
 			if !seenEmail {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"email"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"email"}}
 			}
 			if !seenName {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"name"}}
 			}
 			return result, i, nil
 		}
@@ -401,10 +401,10 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 			result.Name = ""
 		}
 		if !seenEmail {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"email"}}
 		}
 		if !seenName {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}}
 		}
 		return result, nil
 	}
@@ -421,7 +421,7 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 				return result, ggen.NewParseErr("age", s.Offset(), err)
 			}
 			if seenAge {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"age"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"age"}}
 			}
 			seenAge = true
 			var iv int64
@@ -431,10 +431,10 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 			}
 			result.Age = int(iv)
 			if result.Age < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"age"}, Limit: int(0), Value: result.Age}
+				return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"age"}, Limit: int(0), Value: result.Age}
 			}
 			if result.Age > 150 {
-				return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"age"}, Limit: int(150), Value: result.Age}
+				return result, &ggen.LTEError{Pos: s.Offset(), Keys: []string{"age"}, Limit: int(150), Value: result.Age}
 			}
 		case "bio":
 			err = s.ConsumeColon()
@@ -442,7 +442,7 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 				return result, ggen.NewParseErr("bio", s.Offset(), err)
 			}
 			if seenBio {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bio"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"bio"}}
 			}
 			seenBio = true
 			result.Bio, err = s.String(true)
@@ -450,7 +450,7 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 				return result, ggen.NewParseErr("bio", s.Offset(), err)
 			}
 			if len(result.Bio) > 4096 {
-				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"bio"}, Limit: 4096, Got: len(result.Bio)}
+				return result, &ggen.MaxLenError{Pos: s.Offset(), Keys: []string{"bio"}, Limit: 4096, Got: len(result.Bio)}
 			}
 		case "email":
 			err = s.ConsumeColon()
@@ -458,7 +458,7 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 				return result, ggen.NewParseErr("email", s.Offset(), err)
 			}
 			if seenEmail {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"email"}}
 			}
 			seenEmail = true
 			result.Email, err = s.String(true)
@@ -466,7 +466,7 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 				return result, ggen.NewParseErr("email", s.Offset(), err)
 			}
 			if !strings.Contains(result.Email, "@") {
-				return result, &ggen.ContainsError{Pos: s.Offset(), Path: []string{"email"}, Want: "@", Value: result.Email}
+				return result, &ggen.ContainsError{Pos: s.Offset(), Keys: []string{"email"}, Want: "@", Value: result.Email}
 			}
 		case "name":
 			err = s.ConsumeColon()
@@ -474,7 +474,7 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -482,10 +482,10 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if len(result.Name) < 1 {
-				return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 			if len(result.Name) > 64 {
-				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 64, Got: len(result.Name)}
+				return result, &ggen.MaxLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 64, Got: len(result.Name)}
 			}
 		case "tags":
 			err = s.ConsumeColon()
@@ -493,7 +493,7 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 				return result, ggen.NewParseErr("tags", s.Offset(), err)
 			}
 			if seenTags {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"tags"}}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -549,13 +549,13 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 					return result, ggen.NewParseErr("tags", s.Offset(), err)
 				}
 				if len(result.Tags[len(result.Tags)-1]) == 0 {
-					return result, &ggen.NotEmptyError{Pos: s.Offset(), Path: []string{"tags[]"}}
+					return result, &ggen.NotEmptyError{Pos: s.Offset(), Keys: []string{"tags[]"}}
 				}
 				if len(result.Tags[len(result.Tags)-1]) < 1 {
-					return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
+					return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
 				}
 				if len(result.Tags[len(result.Tags)-1]) > 32 {
-					return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
+					return result, &ggen.MaxLenError{Pos: s.Offset(), Keys: []string{"tags[]"}, Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -589,7 +589,7 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -626,10 +626,10 @@ func (recv Validated) DecodeFromStream(s *ggen.Stream) (result Validated, err er
 				result.Name = ""
 			}
 			if !seenEmail {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"email"}}
 			}
 			if !seenName {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			return result, nil
 		}
@@ -715,10 +715,10 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 			result.Name = ""
 		}
 		if !seenEmail {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"email"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"email"}}
 		}
 		if !seenName {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"name"}}
 		}
 		return result, i, nil
 	}
@@ -753,7 +753,7 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 		switch key {
 		case "age":
 			if seenAge {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"age"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"age"}}
 			}
 			seenAge = true
 			neg := false
@@ -806,14 +806,14 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 			}
 			result.Age = int(n)
 			if result.Age < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"age"}, Limit: int(0), Value: result.Age}
+				return result, i, &ggen.GTEError{Pos: i, Keys: []string{"age"}, Limit: int(0), Value: result.Age}
 			}
 			if result.Age > 150 {
-				return result, i, &ggen.LTEError{Pos: i, Path: []string{"age"}, Limit: int(150), Value: result.Age}
+				return result, i, &ggen.LTEError{Pos: i, Keys: []string{"age"}, Limit: int(150), Value: result.Age}
 			}
 		case "bio":
 			if seenBio {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"bio"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"bio"}}
 			}
 			seenBio = true
 			if i >= len(data) || data[i] != '"' {
@@ -838,11 +838,11 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 				result.Bio = ggen.Detach(result.Bio, data)
 			}
 			if len(result.Bio) > 4096 {
-				return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"bio"}, Limit: 4096, Got: len(result.Bio)}
+				return result, i, &ggen.MaxLenError{Pos: i, Keys: []string{"bio"}, Limit: 4096, Got: len(result.Bio)}
 			}
 		case "email":
 			if seenEmail {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"email"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"email"}}
 			}
 			seenEmail = true
 			if i >= len(data) || data[i] != '"' {
@@ -867,11 +867,11 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 				result.Email = ggen.Detach(result.Email, data)
 			}
 			if !strings.Contains(result.Email, "@") {
-				return result, i, &ggen.ContainsError{Pos: i, Path: []string{"email"}, Want: "@", Value: result.Email}
+				return result, i, &ggen.ContainsError{Pos: i, Keys: []string{"email"}, Want: "@", Value: result.Email}
 			}
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -896,14 +896,14 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 				result.Name = ggen.Detach(result.Name, data)
 			}
 			if len(result.Name) < 1 {
-				return result, i, &ggen.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 			if len(result.Name) > 64 {
-				return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"name"}, Limit: 64, Got: len(result.Name)}
+				return result, i, &ggen.MaxLenError{Pos: i, Keys: []string{"name"}, Limit: 64, Got: len(result.Name)}
 			}
 		case "tags":
 			if seenTags {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"tags"}}
 			}
 			seenTags = true
 			if i < len(data) && data[i] == 'n' {
@@ -955,13 +955,13 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 						result.Tags[len(result.Tags)-1] = ggen.Detach(result.Tags[len(result.Tags)-1], data)
 					}
 					if len(result.Tags[len(result.Tags)-1]) == 0 {
-						return result, i, &ggen.NotEmptyError{Pos: i, Path: []string{"tags[]"}}
+						return result, i, &ggen.NotEmptyError{Pos: i, Keys: []string{"tags[]"}}
 					}
 					if len(result.Tags[len(result.Tags)-1]) < 1 {
-						return result, i, &ggen.MinLenError{Pos: i, Path: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
+						return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
 					}
 					if len(result.Tags[len(result.Tags)-1]) > 32 {
-						return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"tags[]"}, Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
+						return result, i, &ggen.MaxLenError{Pos: i, Keys: []string{"tags[]"}, Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -984,7 +984,7 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 			}
 			i++
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{strings.Clone(key)}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{strings.Clone(key)}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1014,10 +1014,10 @@ func (recv CopyValidated) DecodeFrom(data []byte) (result CopyValidated, i int, 
 				result.Name = ""
 			}
 			if !seenEmail {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"email"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"email"}}
 			}
 			if !seenName {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"name"}}
 			}
 			return result, i, nil
 		}
@@ -1064,10 +1064,10 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 			result.Name = ""
 		}
 		if !seenEmail {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"email"}}
 		}
 		if !seenName {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}}
 		}
 		return result, nil
 	}
@@ -1084,7 +1084,7 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 				return result, ggen.NewParseErr("age", s.Offset(), err)
 			}
 			if seenAge {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"age"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"age"}}
 			}
 			seenAge = true
 			var iv int64
@@ -1094,10 +1094,10 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 			}
 			result.Age = int(iv)
 			if result.Age < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"age"}, Limit: int(0), Value: result.Age}
+				return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"age"}, Limit: int(0), Value: result.Age}
 			}
 			if result.Age > 150 {
-				return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"age"}, Limit: int(150), Value: result.Age}
+				return result, &ggen.LTEError{Pos: s.Offset(), Keys: []string{"age"}, Limit: int(150), Value: result.Age}
 			}
 		case "bio":
 			err = s.ConsumeColon()
@@ -1105,7 +1105,7 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 				return result, ggen.NewParseErr("bio", s.Offset(), err)
 			}
 			if seenBio {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bio"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"bio"}}
 			}
 			seenBio = true
 			result.Bio, err = s.String(true)
@@ -1113,7 +1113,7 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 				return result, ggen.NewParseErr("bio", s.Offset(), err)
 			}
 			if len(result.Bio) > 4096 {
-				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"bio"}, Limit: 4096, Got: len(result.Bio)}
+				return result, &ggen.MaxLenError{Pos: s.Offset(), Keys: []string{"bio"}, Limit: 4096, Got: len(result.Bio)}
 			}
 		case "email":
 			err = s.ConsumeColon()
@@ -1121,7 +1121,7 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 				return result, ggen.NewParseErr("email", s.Offset(), err)
 			}
 			if seenEmail {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"email"}}
 			}
 			seenEmail = true
 			result.Email, err = s.String(true)
@@ -1129,7 +1129,7 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 				return result, ggen.NewParseErr("email", s.Offset(), err)
 			}
 			if !strings.Contains(result.Email, "@") {
-				return result, &ggen.ContainsError{Pos: s.Offset(), Path: []string{"email"}, Want: "@", Value: result.Email}
+				return result, &ggen.ContainsError{Pos: s.Offset(), Keys: []string{"email"}, Want: "@", Value: result.Email}
 			}
 		case "name":
 			err = s.ConsumeColon()
@@ -1137,7 +1137,7 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -1145,10 +1145,10 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if len(result.Name) < 1 {
-				return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 			if len(result.Name) > 64 {
-				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 64, Got: len(result.Name)}
+				return result, &ggen.MaxLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 64, Got: len(result.Name)}
 			}
 		case "tags":
 			err = s.ConsumeColon()
@@ -1156,7 +1156,7 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 				return result, ggen.NewParseErr("tags", s.Offset(), err)
 			}
 			if seenTags {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"tags"}}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -1212,13 +1212,13 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 					return result, ggen.NewParseErr("tags", s.Offset(), err)
 				}
 				if len(result.Tags[len(result.Tags)-1]) == 0 {
-					return result, &ggen.NotEmptyError{Pos: s.Offset(), Path: []string{"tags[]"}}
+					return result, &ggen.NotEmptyError{Pos: s.Offset(), Keys: []string{"tags[]"}}
 				}
 				if len(result.Tags[len(result.Tags)-1]) < 1 {
-					return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
+					return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"tags[]"}, Limit: 1, Got: len(result.Tags[len(result.Tags)-1])}
 				}
 				if len(result.Tags[len(result.Tags)-1]) > 32 {
-					return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
+					return result, &ggen.MaxLenError{Pos: s.Offset(), Keys: []string{"tags[]"}, Limit: 32, Got: len(result.Tags[len(result.Tags)-1])}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -1252,7 +1252,7 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1289,10 +1289,10 @@ func (recv CopyValidated) DecodeFromStream(s *ggen.Stream) (result CopyValidated
 				result.Name = ""
 			}
 			if !seenEmail {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"email"}}
 			}
 			if !seenName {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			return result, nil
 		}
@@ -1386,10 +1386,10 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			result.Sub = ""
 		}
 		if !seenIss {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"iss"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"iss"}}
 		}
 		if !seenSub {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"sub"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"sub"}}
 		}
 		return result, i, nil
 	}
@@ -1424,7 +1424,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 		switch key {
 		case "aud":
 			if seenAud {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"aud"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"aud"}}
 			}
 			seenAud = true
 			if i >= len(data) || data[i] != '"' {
@@ -1449,7 +1449,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			}
 		case "exp":
 			if seenExp {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"exp"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"exp"}}
 			}
 			seenExp = true
 			neg := false
@@ -1502,11 +1502,11 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			}
 			result.Exp = n
 			if result.Exp < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"exp"}, Limit: int64(0), Value: result.Exp}
+				return result, i, &ggen.GTEError{Pos: i, Keys: []string{"exp"}, Limit: int64(0), Value: result.Exp}
 			}
 		case "iat":
 			if seenIat {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"iat"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"iat"}}
 			}
 			seenIat = true
 			neg := false
@@ -1559,11 +1559,11 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			}
 			result.Iat = n
 			if result.Iat < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"iat"}, Limit: int64(0), Value: result.Iat}
+				return result, i, &ggen.GTEError{Pos: i, Keys: []string{"iat"}, Limit: int64(0), Value: result.Iat}
 			}
 		case "iss":
 			if seenIss {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"iss"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"iss"}}
 			}
 			seenIss = true
 			if i >= len(data) || data[i] != '"' {
@@ -1588,7 +1588,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			}
 		case "jti":
 			if seenJti {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"jti"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"jti"}}
 			}
 			seenJti = true
 			if i >= len(data) || data[i] != '"' {
@@ -1613,7 +1613,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			}
 		case "nbf":
 			if seenNbf {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"nbf"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"nbf"}}
 			}
 			seenNbf = true
 			neg := false
@@ -1667,7 +1667,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 			result.Nbf = n
 		case "sub":
 			if seenSub {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"sub"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"sub"}}
 			}
 			seenSub = true
 			if i >= len(data) || data[i] != '"' {
@@ -1691,7 +1691,7 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 				}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1730,10 +1730,10 @@ func (recv Claim) DecodeFrom(data []byte) (result Claim, i int, err error) {
 				result.Sub = ""
 			}
 			if !seenIss {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"iss"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"iss"}}
 			}
 			if !seenSub {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"sub"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"sub"}}
 			}
 			return result, i, nil
 		}
@@ -1788,10 +1788,10 @@ func (recv Claim) DecodeFromStream(s *ggen.Stream) (result Claim, err error) {
 			result.Sub = ""
 		}
 		if !seenIss {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"iss"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"iss"}}
 		}
 		if !seenSub {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"sub"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"sub"}}
 		}
 		return result, nil
 	}
@@ -1808,7 +1808,7 @@ func (recv Claim) DecodeFromStream(s *ggen.Stream) (result Claim, err error) {
 				return result, ggen.NewParseErr("aud", s.Offset(), err)
 			}
 			if seenAud {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"aud"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"aud"}}
 			}
 			seenAud = true
 			result.Aud, err = s.String(true)
@@ -1821,7 +1821,7 @@ func (recv Claim) DecodeFromStream(s *ggen.Stream) (result Claim, err error) {
 				return result, ggen.NewParseErr("exp", s.Offset(), err)
 			}
 			if seenExp {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"exp"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"exp"}}
 			}
 			seenExp = true
 			result.Exp, err = s.Int64()
@@ -1829,7 +1829,7 @@ func (recv Claim) DecodeFromStream(s *ggen.Stream) (result Claim, err error) {
 				return result, ggen.NewParseErr("exp", s.Offset(), err)
 			}
 			if result.Exp < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"exp"}, Limit: int64(0), Value: result.Exp}
+				return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"exp"}, Limit: int64(0), Value: result.Exp}
 			}
 		case "iat":
 			err = s.ConsumeColon()
@@ -1837,7 +1837,7 @@ func (recv Claim) DecodeFromStream(s *ggen.Stream) (result Claim, err error) {
 				return result, ggen.NewParseErr("iat", s.Offset(), err)
 			}
 			if seenIat {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"iat"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"iat"}}
 			}
 			seenIat = true
 			result.Iat, err = s.Int64()
@@ -1845,7 +1845,7 @@ func (recv Claim) DecodeFromStream(s *ggen.Stream) (result Claim, err error) {
 				return result, ggen.NewParseErr("iat", s.Offset(), err)
 			}
 			if result.Iat < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"iat"}, Limit: int64(0), Value: result.Iat}
+				return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"iat"}, Limit: int64(0), Value: result.Iat}
 			}
 		case "iss":
 			err = s.ConsumeColon()
@@ -1853,7 +1853,7 @@ func (recv Claim) DecodeFromStream(s *ggen.Stream) (result Claim, err error) {
 				return result, ggen.NewParseErr("iss", s.Offset(), err)
 			}
 			if seenIss {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"iss"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"iss"}}
 			}
 			seenIss = true
 			result.Iss, err = s.String(true)
@@ -1866,7 +1866,7 @@ func (recv Claim) DecodeFromStream(s *ggen.Stream) (result Claim, err error) {
 				return result, ggen.NewParseErr("jti", s.Offset(), err)
 			}
 			if seenJti {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"jti"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"jti"}}
 			}
 			seenJti = true
 			result.Jti, err = s.String(true)
@@ -1879,7 +1879,7 @@ func (recv Claim) DecodeFromStream(s *ggen.Stream) (result Claim, err error) {
 				return result, ggen.NewParseErr("nbf", s.Offset(), err)
 			}
 			if seenNbf {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nbf"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"nbf"}}
 			}
 			seenNbf = true
 			result.Nbf, err = s.Int64()
@@ -1892,7 +1892,7 @@ func (recv Claim) DecodeFromStream(s *ggen.Stream) (result Claim, err error) {
 				return result, ggen.NewParseErr("sub", s.Offset(), err)
 			}
 			if seenSub {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"sub"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"sub"}}
 			}
 			seenSub = true
 			result.Sub, err = s.String(true)
@@ -1905,7 +1905,7 @@ func (recv Claim) DecodeFromStream(s *ggen.Stream) (result Claim, err error) {
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1951,10 +1951,10 @@ func (recv Claim) DecodeFromStream(s *ggen.Stream) (result Claim, err error) {
 				result.Sub = ""
 			}
 			if !seenIss {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"iss"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"iss"}}
 			}
 			if !seenSub {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"sub"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"sub"}}
 			}
 			return result, nil
 		}
@@ -2062,10 +2062,10 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 			result.Sub = ""
 		}
 		if !seenIss {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"iss"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"iss"}}
 		}
 		if !seenSub {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"sub"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"sub"}}
 		}
 		return result, i, nil
 	}
@@ -2100,7 +2100,7 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 		switch key {
 		case "aud":
 			if seenAud {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"aud"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"aud"}}
 			}
 			seenAud = true
 			if i >= len(data) || data[i] != '"' {
@@ -2126,7 +2126,7 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 			}
 		case "exp":
 			if seenExp {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"exp"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"exp"}}
 			}
 			seenExp = true
 			neg := false
@@ -2179,11 +2179,11 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 			}
 			result.Exp = n
 			if result.Exp < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"exp"}, Limit: int64(0), Value: result.Exp}
+				return result, i, &ggen.GTEError{Pos: i, Keys: []string{"exp"}, Limit: int64(0), Value: result.Exp}
 			}
 		case "iat":
 			if seenIat {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"iat"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"iat"}}
 			}
 			seenIat = true
 			neg := false
@@ -2236,11 +2236,11 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 			}
 			result.Iat = n
 			if result.Iat < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"iat"}, Limit: int64(0), Value: result.Iat}
+				return result, i, &ggen.GTEError{Pos: i, Keys: []string{"iat"}, Limit: int64(0), Value: result.Iat}
 			}
 		case "iss":
 			if seenIss {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"iss"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"iss"}}
 			}
 			seenIss = true
 			if i >= len(data) || data[i] != '"' {
@@ -2266,7 +2266,7 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 			}
 		case "jti":
 			if seenJti {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"jti"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"jti"}}
 			}
 			seenJti = true
 			if i >= len(data) || data[i] != '"' {
@@ -2292,7 +2292,7 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 			}
 		case "nbf":
 			if seenNbf {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"nbf"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"nbf"}}
 			}
 			seenNbf = true
 			neg := false
@@ -2346,7 +2346,7 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 			result.Nbf = n
 		case "sub":
 			if seenSub {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"sub"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"sub"}}
 			}
 			seenSub = true
 			if i >= len(data) || data[i] != '"' {
@@ -2371,7 +2371,7 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 				result.Sub = ggen.Detach(result.Sub, data)
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{strings.Clone(key)}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{strings.Clone(key)}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2410,10 +2410,10 @@ func (recv CopyClaim) DecodeFrom(data []byte) (result CopyClaim, i int, err erro
 				result.Sub = ""
 			}
 			if !seenIss {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"iss"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"iss"}}
 			}
 			if !seenSub {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"sub"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"sub"}}
 			}
 			return result, i, nil
 		}
@@ -2468,10 +2468,10 @@ func (recv CopyClaim) DecodeFromStream(s *ggen.Stream) (result CopyClaim, err er
 			result.Sub = ""
 		}
 		if !seenIss {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"iss"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"iss"}}
 		}
 		if !seenSub {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"sub"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"sub"}}
 		}
 		return result, nil
 	}
@@ -2488,7 +2488,7 @@ func (recv CopyClaim) DecodeFromStream(s *ggen.Stream) (result CopyClaim, err er
 				return result, ggen.NewParseErr("aud", s.Offset(), err)
 			}
 			if seenAud {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"aud"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"aud"}}
 			}
 			seenAud = true
 			result.Aud, err = s.String(true)
@@ -2501,7 +2501,7 @@ func (recv CopyClaim) DecodeFromStream(s *ggen.Stream) (result CopyClaim, err er
 				return result, ggen.NewParseErr("exp", s.Offset(), err)
 			}
 			if seenExp {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"exp"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"exp"}}
 			}
 			seenExp = true
 			result.Exp, err = s.Int64()
@@ -2509,7 +2509,7 @@ func (recv CopyClaim) DecodeFromStream(s *ggen.Stream) (result CopyClaim, err er
 				return result, ggen.NewParseErr("exp", s.Offset(), err)
 			}
 			if result.Exp < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"exp"}, Limit: int64(0), Value: result.Exp}
+				return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"exp"}, Limit: int64(0), Value: result.Exp}
 			}
 		case "iat":
 			err = s.ConsumeColon()
@@ -2517,7 +2517,7 @@ func (recv CopyClaim) DecodeFromStream(s *ggen.Stream) (result CopyClaim, err er
 				return result, ggen.NewParseErr("iat", s.Offset(), err)
 			}
 			if seenIat {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"iat"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"iat"}}
 			}
 			seenIat = true
 			result.Iat, err = s.Int64()
@@ -2525,7 +2525,7 @@ func (recv CopyClaim) DecodeFromStream(s *ggen.Stream) (result CopyClaim, err er
 				return result, ggen.NewParseErr("iat", s.Offset(), err)
 			}
 			if result.Iat < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"iat"}, Limit: int64(0), Value: result.Iat}
+				return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"iat"}, Limit: int64(0), Value: result.Iat}
 			}
 		case "iss":
 			err = s.ConsumeColon()
@@ -2533,7 +2533,7 @@ func (recv CopyClaim) DecodeFromStream(s *ggen.Stream) (result CopyClaim, err er
 				return result, ggen.NewParseErr("iss", s.Offset(), err)
 			}
 			if seenIss {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"iss"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"iss"}}
 			}
 			seenIss = true
 			result.Iss, err = s.String(true)
@@ -2546,7 +2546,7 @@ func (recv CopyClaim) DecodeFromStream(s *ggen.Stream) (result CopyClaim, err er
 				return result, ggen.NewParseErr("jti", s.Offset(), err)
 			}
 			if seenJti {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"jti"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"jti"}}
 			}
 			seenJti = true
 			result.Jti, err = s.String(true)
@@ -2559,7 +2559,7 @@ func (recv CopyClaim) DecodeFromStream(s *ggen.Stream) (result CopyClaim, err er
 				return result, ggen.NewParseErr("nbf", s.Offset(), err)
 			}
 			if seenNbf {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"nbf"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"nbf"}}
 			}
 			seenNbf = true
 			result.Nbf, err = s.Int64()
@@ -2572,7 +2572,7 @@ func (recv CopyClaim) DecodeFromStream(s *ggen.Stream) (result CopyClaim, err er
 				return result, ggen.NewParseErr("sub", s.Offset(), err)
 			}
 			if seenSub {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"sub"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"sub"}}
 			}
 			seenSub = true
 			result.Sub, err = s.String(true)
@@ -2585,7 +2585,7 @@ func (recv CopyClaim) DecodeFromStream(s *ggen.Stream) (result CopyClaim, err er
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2631,10 +2631,10 @@ func (recv CopyClaim) DecodeFromStream(s *ggen.Stream) (result CopyClaim, err er
 				result.Sub = ""
 			}
 			if !seenIss {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"iss"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"iss"}}
 			}
 			if !seenSub {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"sub"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"sub"}}
 			}
 			return result, nil
 		}
@@ -2754,13 +2754,13 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			result.Username = ""
 		}
 		if !seenEmail {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"email"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"email"}}
 		}
 		if !seenName {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"name"}}
 		}
 		if !seenUsername {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"username"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"username"}}
 		}
 		return result, i, nil
 	}
@@ -2795,7 +2795,7 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 		switch key {
 		case "age":
 			if seenAge {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"age"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"age"}}
 			}
 			seenAge = true
 			neg := false
@@ -2848,14 +2848,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			}
 			result.Age = int(n)
 			if result.Age < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"age"}, Limit: int(0), Value: result.Age}
+				return result, i, &ggen.GTEError{Pos: i, Keys: []string{"age"}, Limit: int(0), Value: result.Age}
 			}
 			if result.Age > 130 {
-				return result, i, &ggen.LTEError{Pos: i, Path: []string{"age"}, Limit: int(130), Value: result.Age}
+				return result, i, &ggen.LTEError{Pos: i, Keys: []string{"age"}, Limit: int(130), Value: result.Age}
 			}
 		case "country":
 			if seenCountry {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"country"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"country"}}
 			}
 			seenCountry = true
 			if i >= len(data) || data[i] != '"' {
@@ -2879,14 +2879,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				}
 			}
 			if len(result.Country) < 2 || len(result.Country) > 8 {
-				return result, i, &ggen.RunesError{Pos: i, Path: []string{"country"}, Want: 2, Got: utf8.RuneCountInString(result.Country)}
+				return result, i, &ggen.RunesError{Pos: i, Keys: []string{"country"}, Want: 2, Got: utf8.RuneCountInString(result.Country)}
 			} else if rc := utf8.RuneCountInString(result.Country); rc != 2 {
-				return result, i, &ggen.RunesError{Pos: i, Path: []string{"country"}, Want: 2, Got: rc}
+				return result, i, &ggen.RunesError{Pos: i, Keys: []string{"country"}, Want: 2, Got: rc}
 			}
 			result.Country = strings.ToUpper(result.Country)
 		case "email":
 			if seenEmail {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"email"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"email"}}
 			}
 			seenEmail = true
 			if i >= len(data) || data[i] != '"' {
@@ -2910,18 +2910,18 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				}
 			}
 			if !strings.Contains(result.Email, "@") {
-				return result, i, &ggen.ContainsError{Pos: i, Path: []string{"email"}, Want: "@", Value: result.Email}
+				return result, i, &ggen.ContainsError{Pos: i, Keys: []string{"email"}, Want: "@", Value: result.Email}
 			}
 			if len(result.Email) > 512 {
-				return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"email"}, Limit: 128, Got: utf8.RuneCountInString(result.Email)}
+				return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"email"}, Limit: 128, Got: utf8.RuneCountInString(result.Email)}
 			} else if len(result.Email) > 128 {
 				if rc := utf8.RuneCountInString(result.Email); rc > 128 {
-					return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"email"}, Limit: 128, Got: rc}
+					return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"email"}, Limit: 128, Got: rc}
 				}
 			}
 		case "lang":
 			if seenLang {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"lang"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"lang"}}
 			}
 			seenLang = true
 			if i >= len(data) || data[i] != '"' {
@@ -2947,11 +2947,11 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			switch result.Lang {
 			case "en", "es", "fr", "de", "uk":
 			default:
-				return result, i, &ggen.OneOfError{Pos: i, Path: []string{"lang"}, Allowed: ggenOneof_small_0, Value: result.Lang}
+				return result, i, &ggen.OneOfError{Pos: i, Keys: []string{"lang"}, Allowed: ggenOneof_small_0, Value: result.Lang}
 			}
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -2975,18 +2975,18 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				}
 			}
 			if len(result.Name) < 1 {
-				return result, i, &ggen.MinRunesError{Pos: i, Path: []string{"name"}, Limit: 1, Got: utf8.RuneCountInString(result.Name)}
+				return result, i, &ggen.MinRunesError{Pos: i, Keys: []string{"name"}, Limit: 1, Got: utf8.RuneCountInString(result.Name)}
 			}
 			if len(result.Name) > 256 {
-				return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"name"}, Limit: 64, Got: utf8.RuneCountInString(result.Name)}
+				return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"name"}, Limit: 64, Got: utf8.RuneCountInString(result.Name)}
 			} else if len(result.Name) > 64 {
 				if rc := utf8.RuneCountInString(result.Name); rc > 64 {
-					return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"name"}, Limit: 64, Got: rc}
+					return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"name"}, Limit: 64, Got: rc}
 				}
 			}
 		case "phone":
 			if seenPhone {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"phone"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"phone"}}
 			}
 			seenPhone = true
 			if i >= len(data) || data[i] != '"' {
@@ -3010,25 +3010,25 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				}
 			}
 			if len(result.Phone) < 7 {
-				return result, i, &ggen.MinRunesError{Pos: i, Path: []string{"phone"}, Limit: 7, Got: utf8.RuneCountInString(result.Phone)}
+				return result, i, &ggen.MinRunesError{Pos: i, Keys: []string{"phone"}, Limit: 7, Got: utf8.RuneCountInString(result.Phone)}
 			} else if len(result.Phone) < 25 {
 				if rc := utf8.RuneCountInString(result.Phone); rc < 7 {
-					return result, i, &ggen.MinRunesError{Pos: i, Path: []string{"phone"}, Limit: 7, Got: rc}
+					return result, i, &ggen.MinRunesError{Pos: i, Keys: []string{"phone"}, Limit: 7, Got: rc}
 				}
 			}
 			if len(result.Phone) > 80 {
-				return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"phone"}, Limit: 20, Got: utf8.RuneCountInString(result.Phone)}
+				return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"phone"}, Limit: 20, Got: utf8.RuneCountInString(result.Phone)}
 			} else if len(result.Phone) > 20 {
 				if rc := utf8.RuneCountInString(result.Phone); rc > 20 {
-					return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"phone"}, Limit: 20, Got: rc}
+					return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"phone"}, Limit: 20, Got: rc}
 				}
 			}
 			if !ggen.IsNumeric(result.Phone) {
-				return result, i, &ggen.NumericError{Pos: i, Path: []string{"phone"}, Value: result.Phone}
+				return result, i, &ggen.NumericError{Pos: i, Keys: []string{"phone"}, Value: result.Phone}
 			}
 		case "role":
 			if seenRole {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"role"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"role"}}
 			}
 			seenRole = true
 			if i >= len(data) || data[i] != '"' {
@@ -3054,11 +3054,11 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 			switch result.Role {
 			case "admin", "user", "guest":
 			default:
-				return result, i, &ggen.OneOfError{Pos: i, Path: []string{"role"}, Allowed: ggenOneof_small_1, Value: result.Role}
+				return result, i, &ggen.OneOfError{Pos: i, Keys: []string{"role"}, Allowed: ggenOneof_small_1, Value: result.Role}
 			}
 		case "score":
 			if seenScore {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"score"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, i, err = ggen.Float64(data, i)
@@ -3066,14 +3066,14 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				return result, i, ggen.NewParseErr("score", i, err)
 			}
 			if result.Score < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"score"}, Limit: float64(0), Value: result.Score}
+				return result, i, &ggen.GTEError{Pos: i, Keys: []string{"score"}, Limit: float64(0), Value: result.Score}
 			}
 			if result.Score > 100 {
-				return result, i, &ggen.LTEError{Pos: i, Path: []string{"score"}, Limit: float64(100), Value: result.Score}
+				return result, i, &ggen.LTEError{Pos: i, Keys: []string{"score"}, Limit: float64(100), Value: result.Score}
 			}
 		case "url":
 			if seenURL {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"url"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"url"}}
 			}
 			seenURL = true
 			if i >= len(data) || data[i] != '"' {
@@ -3097,11 +3097,11 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				}
 			}
 			if !ggen.IsURL(result.URL) {
-				return result, i, &ggen.URLError{Pos: i, Path: []string{"url"}, Value: result.URL}
+				return result, i, &ggen.URLError{Pos: i, Keys: []string{"url"}, Value: result.URL}
 			}
 		case "username":
 			if seenUsername {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"username"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"username"}}
 			}
 			seenUsername = true
 			if i >= len(data) || data[i] != '"' {
@@ -3125,25 +3125,25 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				}
 			}
 			if len(result.Username) < 3 {
-				return result, i, &ggen.MinRunesError{Pos: i, Path: []string{"username"}, Limit: 3, Got: utf8.RuneCountInString(result.Username)}
+				return result, i, &ggen.MinRunesError{Pos: i, Keys: []string{"username"}, Limit: 3, Got: utf8.RuneCountInString(result.Username)}
 			} else if len(result.Username) < 9 {
 				if rc := utf8.RuneCountInString(result.Username); rc < 3 {
-					return result, i, &ggen.MinRunesError{Pos: i, Path: []string{"username"}, Limit: 3, Got: rc}
+					return result, i, &ggen.MinRunesError{Pos: i, Keys: []string{"username"}, Limit: 3, Got: rc}
 				}
 			}
 			if len(result.Username) > 128 {
-				return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"username"}, Limit: 32, Got: utf8.RuneCountInString(result.Username)}
+				return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"username"}, Limit: 32, Got: utf8.RuneCountInString(result.Username)}
 			} else if len(result.Username) > 32 {
 				if rc := utf8.RuneCountInString(result.Username); rc > 32 {
-					return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"username"}, Limit: 32, Got: rc}
+					return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"username"}, Limit: 32, Got: rc}
 				}
 			}
 			if !ggen.IsAlphanum(result.Username) {
-				return result, i, &ggen.AlphanumError{Pos: i, Path: []string{"username"}, Value: result.Username}
+				return result, i, &ggen.AlphanumError{Pos: i, Keys: []string{"username"}, Value: result.Username}
 			}
 			result.Username = strings.ToLower(result.Username)
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3191,13 +3191,13 @@ func (recv ValidationHeavy) DecodeFrom(data []byte) (result ValidationHeavy, i i
 				result.Username = ""
 			}
 			if !seenEmail {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"email"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"email"}}
 			}
 			if !seenName {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"name"}}
 			}
 			if !seenUsername {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"username"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"username"}}
 			}
 			return result, i, nil
 		}
@@ -3264,13 +3264,13 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 			result.Username = ""
 		}
 		if !seenEmail {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"email"}}
 		}
 		if !seenName {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}}
 		}
 		if !seenUsername {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"username"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"username"}}
 		}
 		return result, nil
 	}
@@ -3287,7 +3287,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("age", s.Offset(), err)
 			}
 			if seenAge {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"age"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"age"}}
 			}
 			seenAge = true
 			var iv int64
@@ -3297,10 +3297,10 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 			}
 			result.Age = int(iv)
 			if result.Age < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"age"}, Limit: int(0), Value: result.Age}
+				return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"age"}, Limit: int(0), Value: result.Age}
 			}
 			if result.Age > 130 {
-				return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"age"}, Limit: int(130), Value: result.Age}
+				return result, &ggen.LTEError{Pos: s.Offset(), Keys: []string{"age"}, Limit: int(130), Value: result.Age}
 			}
 		case "country":
 			err = s.ConsumeColon()
@@ -3308,7 +3308,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("country", s.Offset(), err)
 			}
 			if seenCountry {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"country"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"country"}}
 			}
 			seenCountry = true
 			result.Country, err = s.String(true)
@@ -3316,9 +3316,9 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("country", s.Offset(), err)
 			}
 			if len(result.Country) < 2 || len(result.Country) > 8 {
-				return result, &ggen.RunesError{Pos: s.Offset(), Path: []string{"country"}, Want: 2, Got: utf8.RuneCountInString(result.Country)}
+				return result, &ggen.RunesError{Pos: s.Offset(), Keys: []string{"country"}, Want: 2, Got: utf8.RuneCountInString(result.Country)}
 			} else if rc := utf8.RuneCountInString(result.Country); rc != 2 {
-				return result, &ggen.RunesError{Pos: s.Offset(), Path: []string{"country"}, Want: 2, Got: rc}
+				return result, &ggen.RunesError{Pos: s.Offset(), Keys: []string{"country"}, Want: 2, Got: rc}
 			}
 			result.Country = strings.ToUpper(result.Country)
 		case "email":
@@ -3327,7 +3327,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("email", s.Offset(), err)
 			}
 			if seenEmail {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"email"}}
 			}
 			seenEmail = true
 			result.Email, err = s.String(true)
@@ -3335,13 +3335,13 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("email", s.Offset(), err)
 			}
 			if !strings.Contains(result.Email, "@") {
-				return result, &ggen.ContainsError{Pos: s.Offset(), Path: []string{"email"}, Want: "@", Value: result.Email}
+				return result, &ggen.ContainsError{Pos: s.Offset(), Keys: []string{"email"}, Want: "@", Value: result.Email}
 			}
 			if len(result.Email) > 512 {
-				return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"email"}, Limit: 128, Got: utf8.RuneCountInString(result.Email)}
+				return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"email"}, Limit: 128, Got: utf8.RuneCountInString(result.Email)}
 			} else if len(result.Email) > 128 {
 				if rc := utf8.RuneCountInString(result.Email); rc > 128 {
-					return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"email"}, Limit: 128, Got: rc}
+					return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"email"}, Limit: 128, Got: rc}
 				}
 			}
 		case "lang":
@@ -3350,7 +3350,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("lang", s.Offset(), err)
 			}
 			if seenLang {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lang"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"lang"}}
 			}
 			seenLang = true
 			result.Lang, err = s.String(true)
@@ -3360,7 +3360,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 			switch result.Lang {
 			case "en", "es", "fr", "de", "uk":
 			default:
-				return result, &ggen.OneOfError{Pos: s.Offset(), Path: []string{"lang"}, Allowed: ggenOneof_small_0, Value: result.Lang}
+				return result, &ggen.OneOfError{Pos: s.Offset(), Keys: []string{"lang"}, Allowed: ggenOneof_small_0, Value: result.Lang}
 			}
 		case "name":
 			err = s.ConsumeColon()
@@ -3368,7 +3368,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -3376,13 +3376,13 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if len(result.Name) < 1 {
-				return result, &ggen.MinRunesError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: utf8.RuneCountInString(result.Name)}
+				return result, &ggen.MinRunesError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 1, Got: utf8.RuneCountInString(result.Name)}
 			}
 			if len(result.Name) > 256 {
-				return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"name"}, Limit: 64, Got: utf8.RuneCountInString(result.Name)}
+				return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 64, Got: utf8.RuneCountInString(result.Name)}
 			} else if len(result.Name) > 64 {
 				if rc := utf8.RuneCountInString(result.Name); rc > 64 {
-					return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"name"}, Limit: 64, Got: rc}
+					return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 64, Got: rc}
 				}
 			}
 		case "phone":
@@ -3391,7 +3391,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("phone", s.Offset(), err)
 			}
 			if seenPhone {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"phone"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"phone"}}
 			}
 			seenPhone = true
 			result.Phone, err = s.String(true)
@@ -3399,21 +3399,21 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("phone", s.Offset(), err)
 			}
 			if len(result.Phone) < 7 {
-				return result, &ggen.MinRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 7, Got: utf8.RuneCountInString(result.Phone)}
+				return result, &ggen.MinRunesError{Pos: s.Offset(), Keys: []string{"phone"}, Limit: 7, Got: utf8.RuneCountInString(result.Phone)}
 			} else if len(result.Phone) < 25 {
 				if rc := utf8.RuneCountInString(result.Phone); rc < 7 {
-					return result, &ggen.MinRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 7, Got: rc}
+					return result, &ggen.MinRunesError{Pos: s.Offset(), Keys: []string{"phone"}, Limit: 7, Got: rc}
 				}
 			}
 			if len(result.Phone) > 80 {
-				return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 20, Got: utf8.RuneCountInString(result.Phone)}
+				return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"phone"}, Limit: 20, Got: utf8.RuneCountInString(result.Phone)}
 			} else if len(result.Phone) > 20 {
 				if rc := utf8.RuneCountInString(result.Phone); rc > 20 {
-					return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"phone"}, Limit: 20, Got: rc}
+					return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"phone"}, Limit: 20, Got: rc}
 				}
 			}
 			if !ggen.IsNumeric(result.Phone) {
-				return result, &ggen.NumericError{Pos: s.Offset(), Path: []string{"phone"}, Value: result.Phone}
+				return result, &ggen.NumericError{Pos: s.Offset(), Keys: []string{"phone"}, Value: result.Phone}
 			}
 		case "role":
 			err = s.ConsumeColon()
@@ -3421,7 +3421,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("role", s.Offset(), err)
 			}
 			if seenRole {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"role"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"role"}}
 			}
 			seenRole = true
 			result.Role, err = s.String(true)
@@ -3431,7 +3431,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 			switch result.Role {
 			case "admin", "user", "guest":
 			default:
-				return result, &ggen.OneOfError{Pos: s.Offset(), Path: []string{"role"}, Allowed: ggenOneof_small_1, Value: result.Role}
+				return result, &ggen.OneOfError{Pos: s.Offset(), Keys: []string{"role"}, Allowed: ggenOneof_small_1, Value: result.Role}
 			}
 		case "score":
 			err = s.ConsumeColon()
@@ -3439,7 +3439,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("score", s.Offset(), err)
 			}
 			if seenScore {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"score"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, err = s.Float64()
@@ -3447,10 +3447,10 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("score", s.Offset(), err)
 			}
 			if result.Score < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"score"}, Limit: float64(0), Value: result.Score}
+				return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"score"}, Limit: float64(0), Value: result.Score}
 			}
 			if result.Score > 100 {
-				return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"score"}, Limit: float64(100), Value: result.Score}
+				return result, &ggen.LTEError{Pos: s.Offset(), Keys: []string{"score"}, Limit: float64(100), Value: result.Score}
 			}
 		case "url":
 			err = s.ConsumeColon()
@@ -3458,7 +3458,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("url", s.Offset(), err)
 			}
 			if seenURL {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"url"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"url"}}
 			}
 			seenURL = true
 			result.URL, err = s.String(true)
@@ -3466,7 +3466,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("url", s.Offset(), err)
 			}
 			if !ggen.IsURL(result.URL) {
-				return result, &ggen.URLError{Pos: s.Offset(), Path: []string{"url"}, Value: result.URL}
+				return result, &ggen.URLError{Pos: s.Offset(), Keys: []string{"url"}, Value: result.URL}
 			}
 		case "username":
 			err = s.ConsumeColon()
@@ -3474,7 +3474,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("username", s.Offset(), err)
 			}
 			if seenUsername {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"username"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"username"}}
 			}
 			seenUsername = true
 			result.Username, err = s.String(true)
@@ -3482,21 +3482,21 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				return result, ggen.NewParseErr("username", s.Offset(), err)
 			}
 			if len(result.Username) < 3 {
-				return result, &ggen.MinRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 3, Got: utf8.RuneCountInString(result.Username)}
+				return result, &ggen.MinRunesError{Pos: s.Offset(), Keys: []string{"username"}, Limit: 3, Got: utf8.RuneCountInString(result.Username)}
 			} else if len(result.Username) < 9 {
 				if rc := utf8.RuneCountInString(result.Username); rc < 3 {
-					return result, &ggen.MinRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 3, Got: rc}
+					return result, &ggen.MinRunesError{Pos: s.Offset(), Keys: []string{"username"}, Limit: 3, Got: rc}
 				}
 			}
 			if len(result.Username) > 128 {
-				return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 32, Got: utf8.RuneCountInString(result.Username)}
+				return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"username"}, Limit: 32, Got: utf8.RuneCountInString(result.Username)}
 			} else if len(result.Username) > 32 {
 				if rc := utf8.RuneCountInString(result.Username); rc > 32 {
-					return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"username"}, Limit: 32, Got: rc}
+					return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"username"}, Limit: 32, Got: rc}
 				}
 			}
 			if !ggen.IsAlphanum(result.Username) {
-				return result, &ggen.AlphanumError{Pos: s.Offset(), Path: []string{"username"}, Value: result.Username}
+				return result, &ggen.AlphanumError{Pos: s.Offset(), Keys: []string{"username"}, Value: result.Username}
 			}
 			result.Username = strings.ToLower(result.Username)
 		default:
@@ -3505,7 +3505,7 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3560,13 +3560,13 @@ func (recv ValidationHeavy) DecodeFromStream(s *ggen.Stream) (result ValidationH
 				result.Username = ""
 			}
 			if !seenEmail {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"email"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"email"}}
 			}
 			if !seenName {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			if !seenUsername {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"username"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"username"}}
 			}
 			return result, nil
 		}
@@ -3702,7 +3702,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 		switch key {
 		case "age":
 			if seenAge {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"age"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"age"}}
 			}
 			seenAge = true
 			neg := false
@@ -3756,7 +3756,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			result.Age = int(n)
 		case "country":
 			if seenCountry {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"country"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"country"}}
 			}
 			seenCountry = true
 			if i >= len(data) || data[i] != '"' {
@@ -3781,7 +3781,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "email":
 			if seenEmail {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"email"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"email"}}
 			}
 			seenEmail = true
 			if i >= len(data) || data[i] != '"' {
@@ -3806,7 +3806,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "lang":
 			if seenLang {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"lang"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"lang"}}
 			}
 			seenLang = true
 			if i >= len(data) || data[i] != '"' {
@@ -3831,7 +3831,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -3856,7 +3856,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "phone":
 			if seenPhone {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"phone"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"phone"}}
 			}
 			seenPhone = true
 			if i >= len(data) || data[i] != '"' {
@@ -3881,7 +3881,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "role":
 			if seenRole {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"role"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"role"}}
 			}
 			seenRole = true
 			if i >= len(data) || data[i] != '"' {
@@ -3906,7 +3906,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "score":
 			if seenScore {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"score"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, i, err = ggen.Float64(data, i)
@@ -3915,7 +3915,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "url":
 			if seenURL {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"url"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"url"}}
 			}
 			seenURL = true
 			if i >= len(data) || data[i] != '"' {
@@ -3940,7 +3940,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 			}
 		case "username":
 			if seenUsername {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"username"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"username"}}
 			}
 			seenUsername = true
 			if i >= len(data) || data[i] != '"' {
@@ -3964,7 +3964,7 @@ func (recv NoValidationHeavy) DecodeFrom(data []byte) (result NoValidationHeavy,
 				}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -4090,7 +4090,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *ggen.Stream) (result NoValidat
 				return result, ggen.NewParseErr("age", s.Offset(), err)
 			}
 			if seenAge {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"age"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"age"}}
 			}
 			seenAge = true
 			var iv int64
@@ -4105,7 +4105,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *ggen.Stream) (result NoValidat
 				return result, ggen.NewParseErr("country", s.Offset(), err)
 			}
 			if seenCountry {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"country"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"country"}}
 			}
 			seenCountry = true
 			result.Country, err = s.String(true)
@@ -4118,7 +4118,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *ggen.Stream) (result NoValidat
 				return result, ggen.NewParseErr("email", s.Offset(), err)
 			}
 			if seenEmail {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"email"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"email"}}
 			}
 			seenEmail = true
 			result.Email, err = s.String(true)
@@ -4131,7 +4131,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *ggen.Stream) (result NoValidat
 				return result, ggen.NewParseErr("lang", s.Offset(), err)
 			}
 			if seenLang {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lang"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"lang"}}
 			}
 			seenLang = true
 			result.Lang, err = s.String(true)
@@ -4144,7 +4144,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *ggen.Stream) (result NoValidat
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -4157,7 +4157,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *ggen.Stream) (result NoValidat
 				return result, ggen.NewParseErr("phone", s.Offset(), err)
 			}
 			if seenPhone {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"phone"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"phone"}}
 			}
 			seenPhone = true
 			result.Phone, err = s.String(true)
@@ -4170,7 +4170,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *ggen.Stream) (result NoValidat
 				return result, ggen.NewParseErr("role", s.Offset(), err)
 			}
 			if seenRole {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"role"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"role"}}
 			}
 			seenRole = true
 			result.Role, err = s.String(true)
@@ -4183,7 +4183,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *ggen.Stream) (result NoValidat
 				return result, ggen.NewParseErr("score", s.Offset(), err)
 			}
 			if seenScore {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"score"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"score"}}
 			}
 			seenScore = true
 			result.Score, err = s.Float64()
@@ -4196,7 +4196,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *ggen.Stream) (result NoValidat
 				return result, ggen.NewParseErr("url", s.Offset(), err)
 			}
 			if seenURL {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"url"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"url"}}
 			}
 			seenURL = true
 			result.URL, err = s.String(true)
@@ -4209,7 +4209,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *ggen.Stream) (result NoValidat
 				return result, ggen.NewParseErr("username", s.Offset(), err)
 			}
 			if seenUsername {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"username"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"username"}}
 			}
 			seenUsername = true
 			result.Username, err = s.String(true)
@@ -4222,7 +4222,7 @@ func (recv NoValidationHeavy) DecodeFromStream(s *ggen.Stream) (result NoValidat
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -4378,7 +4378,7 @@ func (recv RuneGated) DecodeFrom(data []byte) (result RuneGated, i int, err erro
 		switch key {
 		case "asciiRunes":
 			if seenAsciiRunes {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"asciiRunes"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"asciiRunes"}}
 			}
 			seenAsciiRunes = true
 			if i >= len(data) || data[i] != '"' {
@@ -4402,14 +4402,14 @@ func (recv RuneGated) DecodeFrom(data []byte) (result RuneGated, i int, err erro
 				}
 			}
 			if !ggen.IsAlphanum(result.AsciiRunes) {
-				return result, i, &ggen.AlphanumError{Pos: i, Path: []string{"asciiRunes"}, Value: result.AsciiRunes}
+				return result, i, &ggen.AlphanumError{Pos: i, Keys: []string{"asciiRunes"}, Value: result.AsciiRunes}
 			}
 			if len(result.AsciiRunes) > 1000000 {
-				return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"asciiRunes"}, Limit: 1000000, Got: len(result.AsciiRunes)}
+				return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"asciiRunes"}, Limit: 1000000, Got: len(result.AsciiRunes)}
 			}
 		case "longRunes":
 			if seenLongRunes {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"longRunes"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"longRunes"}}
 			}
 			seenLongRunes = true
 			if i >= len(data) || data[i] != '"' {
@@ -4433,21 +4433,21 @@ func (recv RuneGated) DecodeFrom(data []byte) (result RuneGated, i int, err erro
 				}
 			}
 			if len(result.LongRunes) < 4 {
-				return result, i, &ggen.MinRunesError{Pos: i, Path: []string{"longRunes"}, Limit: 4, Got: utf8.RuneCountInString(result.LongRunes)}
+				return result, i, &ggen.MinRunesError{Pos: i, Keys: []string{"longRunes"}, Limit: 4, Got: utf8.RuneCountInString(result.LongRunes)}
 			} else if len(result.LongRunes) < 13 {
 				if rc := utf8.RuneCountInString(result.LongRunes); rc < 4 {
-					return result, i, &ggen.MinRunesError{Pos: i, Path: []string{"longRunes"}, Limit: 4, Got: rc}
+					return result, i, &ggen.MinRunesError{Pos: i, Keys: []string{"longRunes"}, Limit: 4, Got: rc}
 				}
 			}
 			if len(result.LongRunes) > 4000000 {
-				return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"longRunes"}, Limit: 1000000, Got: utf8.RuneCountInString(result.LongRunes)}
+				return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"longRunes"}, Limit: 1000000, Got: utf8.RuneCountInString(result.LongRunes)}
 			} else if len(result.LongRunes) > 1000000 {
 				if rc := utf8.RuneCountInString(result.LongRunes); rc > 1000000 {
-					return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"longRunes"}, Limit: 1000000, Got: rc}
+					return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"longRunes"}, Limit: 1000000, Got: rc}
 				}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -4517,7 +4517,7 @@ func (recv RuneGated) DecodeFromStream(s *ggen.Stream) (result RuneGated, err er
 				return result, ggen.NewParseErr("asciiRunes", s.Offset(), err)
 			}
 			if seenAsciiRunes {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"asciiRunes"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"asciiRunes"}}
 			}
 			seenAsciiRunes = true
 			result.AsciiRunes, err = s.String(true)
@@ -4525,10 +4525,10 @@ func (recv RuneGated) DecodeFromStream(s *ggen.Stream) (result RuneGated, err er
 				return result, ggen.NewParseErr("asciiRunes", s.Offset(), err)
 			}
 			if !ggen.IsAlphanum(result.AsciiRunes) {
-				return result, &ggen.AlphanumError{Pos: s.Offset(), Path: []string{"asciiRunes"}, Value: result.AsciiRunes}
+				return result, &ggen.AlphanumError{Pos: s.Offset(), Keys: []string{"asciiRunes"}, Value: result.AsciiRunes}
 			}
 			if len(result.AsciiRunes) > 1000000 {
-				return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"asciiRunes"}, Limit: 1000000, Got: len(result.AsciiRunes)}
+				return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"asciiRunes"}, Limit: 1000000, Got: len(result.AsciiRunes)}
 			}
 		case "longRunes":
 			err = s.ConsumeColon()
@@ -4536,7 +4536,7 @@ func (recv RuneGated) DecodeFromStream(s *ggen.Stream) (result RuneGated, err er
 				return result, ggen.NewParseErr("longRunes", s.Offset(), err)
 			}
 			if seenLongRunes {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"longRunes"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"longRunes"}}
 			}
 			seenLongRunes = true
 			result.LongRunes, err = s.String(true)
@@ -4544,17 +4544,17 @@ func (recv RuneGated) DecodeFromStream(s *ggen.Stream) (result RuneGated, err er
 				return result, ggen.NewParseErr("longRunes", s.Offset(), err)
 			}
 			if len(result.LongRunes) < 4 {
-				return result, &ggen.MinRunesError{Pos: s.Offset(), Path: []string{"longRunes"}, Limit: 4, Got: utf8.RuneCountInString(result.LongRunes)}
+				return result, &ggen.MinRunesError{Pos: s.Offset(), Keys: []string{"longRunes"}, Limit: 4, Got: utf8.RuneCountInString(result.LongRunes)}
 			} else if len(result.LongRunes) < 13 {
 				if rc := utf8.RuneCountInString(result.LongRunes); rc < 4 {
-					return result, &ggen.MinRunesError{Pos: s.Offset(), Path: []string{"longRunes"}, Limit: 4, Got: rc}
+					return result, &ggen.MinRunesError{Pos: s.Offset(), Keys: []string{"longRunes"}, Limit: 4, Got: rc}
 				}
 			}
 			if len(result.LongRunes) > 4000000 {
-				return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"longRunes"}, Limit: 1000000, Got: utf8.RuneCountInString(result.LongRunes)}
+				return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"longRunes"}, Limit: 1000000, Got: utf8.RuneCountInString(result.LongRunes)}
 			} else if len(result.LongRunes) > 1000000 {
 				if rc := utf8.RuneCountInString(result.LongRunes); rc > 1000000 {
-					return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"longRunes"}, Limit: 1000000, Got: rc}
+					return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"longRunes"}, Limit: 1000000, Got: rc}
 				}
 			}
 		default:
@@ -4563,7 +4563,7 @@ func (recv RuneGated) DecodeFromStream(s *ggen.Stream) (result RuneGated, err er
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -4667,7 +4667,7 @@ func (recv HTMLEscape) DecodeFrom(data []byte) (result HTMLEscape, i int, err er
 		switch key {
 		case "note":
 			if seenNote {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"note"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"note"}}
 			}
 			seenNote = true
 			if i >= len(data) || data[i] != '"' {
@@ -4691,7 +4691,7 @@ func (recv HTMLEscape) DecodeFrom(data []byte) (result HTMLEscape, i int, err er
 				}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -4754,7 +4754,7 @@ func (recv HTMLEscape) DecodeFromStream(s *ggen.Stream) (result HTMLEscape, err 
 				return result, ggen.NewParseErr("note", s.Offset(), err)
 			}
 			if seenNote {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"note"}}
 			}
 			seenNote = true
 			result.Note, err = s.String(true)
@@ -4767,7 +4767,7 @@ func (recv HTMLEscape) DecodeFromStream(s *ggen.Stream) (result HTMLEscape, err 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -4865,7 +4865,7 @@ func (recv HTMLPlain) DecodeFrom(data []byte) (result HTMLPlain, i int, err erro
 		switch key {
 		case "note":
 			if seenNote {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"note"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"note"}}
 			}
 			seenNote = true
 			if i >= len(data) || data[i] != '"' {
@@ -4889,7 +4889,7 @@ func (recv HTMLPlain) DecodeFrom(data []byte) (result HTMLPlain, i int, err erro
 				}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -4952,7 +4952,7 @@ func (recv HTMLPlain) DecodeFromStream(s *ggen.Stream) (result HTMLPlain, err er
 				return result, ggen.NewParseErr("note", s.Offset(), err)
 			}
 			if seenNote {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"note"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"note"}}
 			}
 			seenNote = true
 			result.Note, err = s.String(true)
@@ -4965,7 +4965,7 @@ func (recv HTMLPlain) DecodeFromStream(s *ggen.Stream) (result HTMLPlain, err er
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

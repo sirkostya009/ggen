@@ -305,7 +305,7 @@ func TestUnmarshalStream_UnknownKeyErrorClone(t *testing.T) {
 	if !errors.As(err, &ue) {
 		t.Fatalf("got %T (%v), want *UnknownKeyError", err, err)
 	}
-	got := strings.Join(ue.Path, ".")
+	got := strings.Join(ue.Keys, ".")
 	if got != "SomeUnknownKeyHere" {
 		t.Errorf("Path = %q, want %q (cloning broken)", got, "SomeUnknownKeyHere")
 	}
@@ -478,8 +478,8 @@ func TestStream_parseErrorFieldName(t *testing.T) {
 	if !errors.As(err, &pe) {
 		t.Fatalf("err = %T, want *ggen.ParseError", err)
 	}
-	if strings.Join(pe.Path, ".") != "street" {
-		t.Fatalf("Path = %v; want [street]", pe.Path)
+	if strings.Join(pe.Keys, ".") != "street" {
+		t.Fatalf("Path = %v; want [street]", pe.Keys)
 	}
 	if !errors.Is(err, ggen.ErrExpectString) {
 		t.Fatalf("errors.Is sentinel mismatch: %v", err)
@@ -1055,8 +1055,8 @@ func TestParseError_SliceStructural(t *testing.T) {
 			if !errors.As(berr, &pe) {
 				t.Fatalf("bytes: got %T %v, want *ggen.ParseError", berr, berr)
 			}
-			if len(pe.Path) == 0 || pe.Path[0] != "tags" {
-				t.Errorf("bytes: Path = %v, want [tags ...]", pe.Path)
+			if len(pe.Keys) == 0 || pe.Keys[0] != "tags" {
+				t.Errorf("bytes: Path = %v, want [tags ...]", pe.Keys)
 			}
 			if pe.Pos < 8 {
 				t.Errorf("bytes: Pos = %d, want >= 8 (inside the value)", pe.Pos)
@@ -1066,8 +1066,8 @@ func TestParseError_SliceStructural(t *testing.T) {
 			if !errors.As(serr, &spe) {
 				t.Fatalf("stream: got %T %v, want *ggen.ParseError", serr, serr)
 			}
-			if len(spe.Path) == 0 || spe.Path[0] != "tags" {
-				t.Errorf("stream: Path = %v, want [tags ...]", spe.Path)
+			if len(spe.Keys) == 0 || spe.Keys[0] != "tags" {
+				t.Errorf("stream: Path = %v, want [tags ...]", spe.Keys)
 			}
 		})
 	}
@@ -1089,8 +1089,8 @@ func TestParseError_VariantDispatch(t *testing.T) {
 			if !errors.As(err, &pe) {
 				t.Fatalf("got %T %v, want *ggen.ParseError", err, err)
 			}
-			if len(pe.Path) == 0 || pe.Path[0] != "count" {
-				t.Errorf("Path = %v, want [count]", pe.Path)
+			if len(pe.Keys) == 0 || pe.Keys[0] != "count" {
+				t.Errorf("Path = %v, want [count]", pe.Keys)
 			}
 			if pe.Pos < 9 {
 				t.Errorf("Pos = %d, want >= 9 (at the value)", pe.Pos)

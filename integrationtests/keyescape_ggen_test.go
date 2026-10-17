@@ -62,7 +62,7 @@ func (recv KeyEscQuote) DecodeFrom(data []byte) (result KeyEscQuote, i int, err 
 		switch key {
 		case "q\"x":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"q\"x"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"q\"x"}}
 			}
 			seenA = true
 			neg := false
@@ -115,7 +115,7 @@ func (recv KeyEscQuote) DecodeFrom(data []byte) (result KeyEscQuote, i int, err 
 			}
 			result.A = int(n)
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -178,7 +178,7 @@ func (recv KeyEscQuote) DecodeFromStream(s *ggen.Stream) (result KeyEscQuote, er
 				return result, ggen.NewParseErr("q\"x", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"q\"x"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"q\"x"}}
 			}
 			seenA = true
 			var iv int64
@@ -193,7 +193,7 @@ func (recv KeyEscQuote) DecodeFromStream(s *ggen.Stream) (result KeyEscQuote, er
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -290,7 +290,7 @@ func (recv KeyEscBackslash) DecodeFrom(data []byte) (result KeyEscBackslash, i i
 		switch key {
 		case "a\\b":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"a\\b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a\\b"}}
 			}
 			seenA = true
 			neg := false
@@ -343,7 +343,7 @@ func (recv KeyEscBackslash) DecodeFrom(data []byte) (result KeyEscBackslash, i i
 			}
 			result.A = int(n)
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -406,7 +406,7 @@ func (recv KeyEscBackslash) DecodeFromStream(s *ggen.Stream) (result KeyEscBacks
 				return result, ggen.NewParseErr("a\\b", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a\\b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a\\b"}}
 			}
 			seenA = true
 			var iv int64
@@ -421,7 +421,7 @@ func (recv KeyEscBackslash) DecodeFromStream(s *ggen.Stream) (result KeyEscBacks
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -518,7 +518,7 @@ func (recv KeyEscHTML) DecodeFrom(data []byte) (result KeyEscHTML, i int, err er
 		switch key {
 		case "a&b":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"a&b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a&b"}}
 			}
 			seenA = true
 			neg := false
@@ -571,7 +571,7 @@ func (recv KeyEscHTML) DecodeFrom(data []byte) (result KeyEscHTML, i int, err er
 			}
 			result.A = int(n)
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -634,7 +634,7 @@ func (recv KeyEscHTML) DecodeFromStream(s *ggen.Stream) (result KeyEscHTML, err 
 				return result, ggen.NewParseErr("a&b", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a&b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a&b"}}
 			}
 			seenA = true
 			var iv int64
@@ -649,7 +649,7 @@ func (recv KeyEscHTML) DecodeFromStream(s *ggen.Stream) (result KeyEscHTML, err 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

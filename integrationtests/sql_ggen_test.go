@@ -65,7 +65,7 @@ func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStr
 		switch key {
 		case "s":
 			if seenS {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"s"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"s"}}
 			}
 			seenS = true
 			if i < len(data) && data[i] == 'n' {
@@ -100,7 +100,7 @@ func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStr
 				result.S = sql.NullString{String: nv, Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -163,7 +163,7 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *ggen.Stream) (result SQLNull
 				return result, ggen.NewParseErr("s", s.Offset(), err)
 			}
 			if seenS {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"s"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"s"}}
 			}
 			seenS = true
 			if s.Pos >= len(s.Bytes()) {
@@ -199,7 +199,7 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *ggen.Stream) (result SQLNull
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -302,7 +302,7 @@ func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struc
 		switch key {
 		case "i":
 			if seenI {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i"}}
 			}
 			seenI = true
 			if i < len(data) && data[i] == 'n' {
@@ -364,7 +364,7 @@ func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struc
 				result.I = sql.NullInt64{Int64: n, Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -427,7 +427,7 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i"}}
 			}
 			seenI = true
 			if s.Pos >= len(s.Bytes()) {
@@ -463,7 +463,7 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -564,7 +564,7 @@ func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struc
 		switch key {
 		case "i32":
 			if seenI32 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i32"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i32"}}
 			}
 			seenI32 = true
 			if i < len(data) && data[i] == 'n' {
@@ -629,7 +629,7 @@ func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struc
 				result.I32 = sql.NullInt32{Int32: int32(n), Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -692,7 +692,7 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 				return result, ggen.NewParseErr("i32", s.Offset(), err)
 			}
 			if seenI32 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i32"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i32"}}
 			}
 			seenI32 = true
 			if s.Pos >= len(s.Bytes()) {
@@ -731,7 +731,7 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -832,7 +832,7 @@ func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struc
 		switch key {
 		case "i16":
 			if seenI16 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i16"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i16"}}
 			}
 			seenI16 = true
 			if i < len(data) && data[i] == 'n' {
@@ -897,7 +897,7 @@ func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struc
 				result.I16 = sql.NullInt16{Int16: int16(n), Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -960,7 +960,7 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 				return result, ggen.NewParseErr("i16", s.Offset(), err)
 			}
 			if seenI16 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i16"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i16"}}
 			}
 			seenI16 = true
 			if s.Pos >= len(s.Bytes()) {
@@ -999,7 +999,7 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1100,7 +1100,7 @@ func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct,
 		switch key {
 		case "b":
 			if seenB {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}}
 			}
 			seenB = true
 			if i < len(data) && data[i] == 'n' {
@@ -1146,7 +1146,7 @@ func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct,
 				result.B = sql.NullByte{Byte: uint8(n), Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1209,7 +1209,7 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullBy
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}}
 			}
 			seenB = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1248,7 +1248,7 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullBy
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1349,7 +1349,7 @@ func (recv SQLNullBoolStruct) DecodeFrom(data []byte) (result SQLNullBoolStruct,
 		switch key {
 		case "bl":
 			if seenBL {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"bl"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"bl"}}
 			}
 			seenBL = true
 			if i < len(data) && data[i] == 'n' {
@@ -1369,7 +1369,7 @@ func (recv SQLNullBoolStruct) DecodeFrom(data []byte) (result SQLNullBoolStruct,
 				result.BL = sql.NullBool{Bool: nv, Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1432,7 +1432,7 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullBo
 				return result, ggen.NewParseErr("bl", s.Offset(), err)
 			}
 			if seenBL {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bl"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"bl"}}
 			}
 			seenBL = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1468,7 +1468,7 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullBo
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1569,7 +1569,7 @@ func (recv SQLNullFloat64Struct) DecodeFrom(data []byte) (result SQLNullFloat64S
 		switch key {
 		case "f":
 			if seenF {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"f"}}
 			}
 			seenF = true
 			if i < len(data) && data[i] == 'n' {
@@ -1588,7 +1588,7 @@ func (recv SQLNullFloat64Struct) DecodeFrom(data []byte) (result SQLNullFloat64S
 				result.F = sql.NullFloat64{Float64: nv, Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1651,7 +1651,7 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 				return result, ggen.NewParseErr("f", s.Offset(), err)
 			}
 			if seenF {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"f"}}
 			}
 			seenF = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1687,7 +1687,7 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -1790,7 +1790,7 @@ func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct,
 		switch key {
 		case "t":
 			if seenT {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"t"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"t"}}
 			}
 			seenT = true
 			if i < len(data) && data[i] == 'n' {
@@ -1830,7 +1830,7 @@ func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct,
 				result.T = sql.NullTime{Time: nv, Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1893,7 +1893,7 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullTi
 				return result, ggen.NewParseErr("t", s.Offset(), err)
 			}
 			if seenT {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"t"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"t"}}
 			}
 			seenT = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1934,7 +1934,7 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullTi
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2039,7 +2039,7 @@ func (recv SQLNullGenStringStruct) DecodeFrom(data []byte) (result SQLNullGenStr
 		switch key {
 		case "s":
 			if seenS {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"s"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"s"}}
 			}
 			seenS = true
 			if i < len(data) && data[i] == 'n' {
@@ -2074,7 +2074,7 @@ func (recv SQLNullGenStringStruct) DecodeFrom(data []byte) (result SQLNullGenStr
 				result.S = sql.Null[string]{V: nv, Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2137,7 +2137,7 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *ggen.Stream) (result SQLN
 				return result, ggen.NewParseErr("s", s.Offset(), err)
 			}
 			if seenS {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"s"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"s"}}
 			}
 			seenS = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2173,7 +2173,7 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *ggen.Stream) (result SQLN
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2276,7 +2276,7 @@ func (recv SQLNullGenIntStruct) DecodeFrom(data []byte) (result SQLNullGenIntStr
 		switch key {
 		case "i":
 			if seenI {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i"}}
 			}
 			seenI = true
 			if i < len(data) && data[i] == 'n' {
@@ -2338,7 +2338,7 @@ func (recv SQLNullGenIntStruct) DecodeFrom(data []byte) (result SQLNullGenIntStr
 				result.I = sql.Null[int]{V: int(n), Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2401,7 +2401,7 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *ggen.Stream) (result SQLNull
 				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i"}}
 			}
 			seenI = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2437,7 +2437,7 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *ggen.Stream) (result SQLNull
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2538,7 +2538,7 @@ func (recv SQLNullGenUint64Struct) DecodeFrom(data []byte) (result SQLNullGenUin
 		switch key {
 		case "u":
 			if seenU {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"u"}}
 			}
 			seenU = true
 			if i < len(data) && data[i] == 'n' {
@@ -2581,7 +2581,7 @@ func (recv SQLNullGenUint64Struct) DecodeFrom(data []byte) (result SQLNullGenUin
 				result.U = sql.Null[uint64]{V: n, Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2644,7 +2644,7 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *ggen.Stream) (result SQLN
 				return result, ggen.NewParseErr("u", s.Offset(), err)
 			}
 			if seenU {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"u"}}
 			}
 			seenU = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2680,7 +2680,7 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *ggen.Stream) (result SQLN
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -2781,7 +2781,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFrom(data []byte) (result SQLNullGenFl
 		switch key {
 		case "f":
 			if seenF {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"f"}}
 			}
 			seenF = true
 			if i < len(data) && data[i] == 'n' {
@@ -2800,7 +2800,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFrom(data []byte) (result SQLNullGenFl
 				result.F = sql.Null[float32]{V: nv, Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -2863,7 +2863,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *ggen.Stream) (result SQL
 				return result, ggen.NewParseErr("f", s.Offset(), err)
 			}
 			if seenF {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"f"}}
 			}
 			seenF = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2899,7 +2899,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *ggen.Stream) (result SQL
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3002,7 +3002,7 @@ func (recv SQLNullGenBoolStruct) DecodeFrom(data []byte) (result SQLNullGenBoolS
 		switch key {
 		case "bl":
 			if seenBL {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"bl"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"bl"}}
 			}
 			seenBL = true
 			if i < len(data) && data[i] == 'n' {
@@ -3022,7 +3022,7 @@ func (recv SQLNullGenBoolStruct) DecodeFrom(data []byte) (result SQLNullGenBoolS
 				result.BL = sql.Null[bool]{V: nv, Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3085,7 +3085,7 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 				return result, ggen.NewParseErr("bl", s.Offset(), err)
 			}
 			if seenBL {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bl"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"bl"}}
 			}
 			seenBL = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3121,7 +3121,7 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3222,7 +3222,7 @@ func (recv SQLNullGenTimeStruct) DecodeFrom(data []byte) (result SQLNullGenTimeS
 		switch key {
 		case "t":
 			if seenT {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"t"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"t"}}
 			}
 			seenT = true
 			if i < len(data) && data[i] == 'n' {
@@ -3262,7 +3262,7 @@ func (recv SQLNullGenTimeStruct) DecodeFrom(data []byte) (result SQLNullGenTimeS
 				result.T = sql.Null[time.Time]{V: nv, Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3325,7 +3325,7 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 				return result, ggen.NewParseErr("t", s.Offset(), err)
 			}
 			if seenT {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"t"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"t"}}
 			}
 			seenT = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3366,7 +3366,7 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3471,7 +3471,7 @@ func (recv SQLNullGenAccountStruct) DecodeFrom(data []byte) (result SQLNullGenAc
 		switch key {
 		case "a":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"a"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a"}}
 			}
 			seenA = true
 			if i < len(data) && data[i] == 'n' {
@@ -3533,7 +3533,7 @@ func (recv SQLNullGenAccountStruct) DecodeFrom(data []byte) (result SQLNullGenAc
 				result.A = sql.Null[SQLAccountID]{V: SQLAccountID(n), Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3596,7 +3596,7 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *ggen.Stream) (result SQL
 				return result, ggen.NewParseErr("a", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"a"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a"}}
 			}
 			seenA = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3632,7 +3632,7 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *ggen.Stream) (result SQL
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3733,7 +3733,7 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 		switch key {
 		case "l":
 			if seenL {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"l"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"l"}}
 			}
 			seenL = true
 			if i < len(data) && data[i] == 'n' {
@@ -3768,7 +3768,7 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 				result.L = sql.Null[SQLLabel]{V: SQLLabel(namedV), Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -3831,7 +3831,7 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *ggen.Stream) (result SQLNu
 				return result, ggen.NewParseErr("l", s.Offset(), err)
 			}
 			if seenL {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"l"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"l"}}
 			}
 			seenL = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3867,7 +3867,7 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *ggen.Stream) (result SQLNu
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -3970,7 +3970,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFrom(data []byte) (result SQLNullGenUUIDS
 		switch key {
 		case "id":
 			if seenID {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"id"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"id"}}
 			}
 			seenID = true
 			if i < len(data) && data[i] == 'n' {
@@ -3995,7 +3995,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFrom(data []byte) (result SQLNullGenUUIDS
 				result.ID = sql.Null[uuid.UUID]{V: nv, Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -4058,7 +4058,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 			if seenID {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"id"}}
 			}
 			seenID = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4100,7 +4100,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -4235,7 +4235,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 		switch key {
 		case "b":
 			if seenB {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}}
 			}
 			seenB = true
 			if i < len(data) && data[i] == 'n' {
@@ -4282,7 +4282,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "bl":
 			if seenBL {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"bl"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"bl"}}
 			}
 			seenBL = true
 			if i < len(data) && data[i] == 'n' {
@@ -4303,7 +4303,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "f":
 			if seenF {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"f"}}
 			}
 			seenF = true
 			if i < len(data) && data[i] == 'n' {
@@ -4323,7 +4323,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "i":
 			if seenI {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i"}}
 			}
 			seenI = true
 			if i < len(data) && data[i] == 'n' {
@@ -4386,7 +4386,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "i16":
 			if seenI16 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i16"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i16"}}
 			}
 			seenI16 = true
 			if i < len(data) && data[i] == 'n' {
@@ -4452,7 +4452,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "i32":
 			if seenI32 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i32"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i32"}}
 			}
 			seenI32 = true
 			if i < len(data) && data[i] == 'n' {
@@ -4518,7 +4518,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "s":
 			if seenS {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"s"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"s"}}
 			}
 			seenS = true
 			if i < len(data) && data[i] == 'n' {
@@ -4554,7 +4554,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "t":
 			if seenT {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"t"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"t"}}
 			}
 			seenT = true
 			if i < len(data) && data[i] == 'n' {
@@ -4594,7 +4594,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 				result.T = sql.NullTime{Time: nv, Valid: true}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -4706,7 +4706,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}}
 			}
 			seenB = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4745,7 +4745,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("bl", s.Offset(), err)
 			}
 			if seenBL {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"bl"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"bl"}}
 			}
 			seenBL = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4781,7 +4781,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("f", s.Offset(), err)
 			}
 			if seenF {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"f"}}
 			}
 			seenF = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4817,7 +4817,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i"}}
 			}
 			seenI = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4853,7 +4853,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("i16", s.Offset(), err)
 			}
 			if seenI16 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i16"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i16"}}
 			}
 			seenI16 = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4892,7 +4892,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("i32", s.Offset(), err)
 			}
 			if seenI32 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i32"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i32"}}
 			}
 			seenI32 = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4931,7 +4931,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("s", s.Offset(), err)
 			}
 			if seenS {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"s"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"s"}}
 			}
 			seenS = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4967,7 +4967,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("t", s.Offset(), err)
 			}
 			if seenT {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"t"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"t"}}
 			}
 			seenT = true
 			if s.Pos >= len(s.Bytes()) {
@@ -5008,7 +5008,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

@@ -61,7 +61,7 @@ func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, i int, err erro
 		switch key {
 		case "site":
 			if seenSite {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"site"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"site"}}
 			}
 			seenSite = true
 			var s string
@@ -92,7 +92,7 @@ func (recv URLStruct) DecodeFrom(data []byte) (result URLStruct, i int, err erro
 			}
 			result.Site = *u
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -155,7 +155,7 @@ func (recv URLStruct) DecodeFromStream(s *ggen.Stream) (result URLStruct, err er
 				return result, ggen.NewParseErr("site", s.Offset(), err)
 			}
 			if seenSite {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"site"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"site"}}
 			}
 			seenSite = true
 			var sv string
@@ -174,7 +174,7 @@ func (recv URLStruct) DecodeFromStream(s *ggen.Stream) (result URLStruct, err er
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

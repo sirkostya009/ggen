@@ -85,7 +85,7 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 		switch key {
 		case "count":
 			if seenCount {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"count"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"count"}}
 			}
 			seenCount = true
 			neg := false
@@ -138,11 +138,11 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 			}
 			result.Count = int(n)
 			if err := EvenOnly(result.Count); err != nil {
-				return result, i, &ggen.CustomError{Pos: i, Path: []string{"count"}, Name: "EvenOnly", Value: result.Count, Cause: err}
+				return result, i, &ggen.CustomError{Pos: i, Keys: []string{"count"}, Name: "EvenOnly", Value: result.Count, Cause: err}
 			}
 		case "scores":
 			if seenScores {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"scores"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"scores"}}
 			}
 			seenScores = true
 			if i < len(data) && data[i] == 'n' {
@@ -226,10 +226,10 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 					}
 					result.Scores[len(result.Scores)-1] = int(n)
 					if result.Scores[len(result.Scores)-1] < 0 {
-						return result, i, &ggen.GTEError{Pos: i, Path: []string{"scores[]"}, Limit: int(0), Value: result.Scores[len(result.Scores)-1]}
+						return result, i, &ggen.GTEError{Pos: i, Keys: []string{"scores[]"}, Limit: int(0), Value: result.Scores[len(result.Scores)-1]}
 					}
 					if result.Scores[len(result.Scores)-1] > 100 {
-						return result, i, &ggen.LTEError{Pos: i, Path: []string{"scores[]"}, Limit: int(100), Value: result.Scores[len(result.Scores)-1]}
+						return result, i, &ggen.LTEError{Pos: i, Keys: []string{"scores[]"}, Limit: int(100), Value: result.Scores[len(result.Scores)-1]}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -253,7 +253,7 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 			i++
 		case "tags":
 			if seenTags {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"tags"}}
 			}
 			seenTags = true
 			if i < len(data) && data[i] == 'n' {
@@ -303,17 +303,17 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 							}
 						}
 						if len(result.Tags[len(result.Tags)-1]) < 2 {
-							return result, i, &ggen.MinRunesError{Pos: i, Path: []string{"tags[]"}, Limit: 2, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
+							return result, i, &ggen.MinRunesError{Pos: i, Keys: []string{"tags[]"}, Limit: 2, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
 						} else if len(result.Tags[len(result.Tags)-1]) < 5 {
 							if rc := utf8.RuneCountInString(result.Tags[len(result.Tags)-1]); rc < 2 {
-								return result, i, &ggen.MinRunesError{Pos: i, Path: []string{"tags[]"}, Limit: 2, Got: rc}
+								return result, i, &ggen.MinRunesError{Pos: i, Keys: []string{"tags[]"}, Limit: 2, Got: rc}
 							}
 						}
 						if len(result.Tags[len(result.Tags)-1]) > 40 {
-							return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"tags[]"}, Limit: 10, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
+							return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"tags[]"}, Limit: 10, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
 						} else if len(result.Tags[len(result.Tags)-1]) > 10 {
 							if rc := utf8.RuneCountInString(result.Tags[len(result.Tags)-1]); rc > 10 {
-								return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"tags[]"}, Limit: 10, Got: rc}
+								return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"tags[]"}, Limit: 10, Got: rc}
 							}
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -338,14 +338,14 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 				i++
 			}
 			if len(result.Tags) < 1 {
-				return result, i, &ggen.MinLenError{Pos: i, Path: []string{"tags"}, Limit: 1, Got: len(result.Tags)}
+				return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"tags"}, Limit: 1, Got: len(result.Tags)}
 			}
 			if len(result.Tags) > 3 {
-				return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"tags"}, Limit: 3, Got: len(result.Tags)}
+				return result, i, &ggen.MaxLenError{Pos: i, Keys: []string{"tags"}, Limit: 3, Got: len(result.Tags)}
 			}
 		case "title":
 			if seenTitle {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"title"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"title"}}
 			}
 			seenTitle = true
 			if i >= len(data) || data[i] != '"' {
@@ -369,17 +369,17 @@ func (recv DiveStruct) DecodeFrom(data []byte) (result DiveStruct, i int, err er
 				}
 			}
 			if len(result.Title) < 1 {
-				return result, i, &ggen.MinRunesError{Pos: i, Path: []string{"title"}, Limit: 1, Got: utf8.RuneCountInString(result.Title)}
+				return result, i, &ggen.MinRunesError{Pos: i, Keys: []string{"title"}, Limit: 1, Got: utf8.RuneCountInString(result.Title)}
 			}
 			if len(result.Title) > 20 {
-				return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"title"}, Limit: 5, Got: utf8.RuneCountInString(result.Title)}
+				return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"title"}, Limit: 5, Got: utf8.RuneCountInString(result.Title)}
 			} else if len(result.Title) > 5 {
 				if rc := utf8.RuneCountInString(result.Title); rc > 5 {
-					return result, i, &ggen.MaxRunesError{Pos: i, Path: []string{"title"}, Limit: 5, Got: rc}
+					return result, i, &ggen.MaxRunesError{Pos: i, Keys: []string{"title"}, Limit: 5, Got: rc}
 				}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -457,7 +457,7 @@ func (recv DiveStruct) DecodeFromStream(s *ggen.Stream) (result DiveStruct, err 
 				return result, ggen.NewParseErr("count", s.Offset(), err)
 			}
 			if seenCount {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"count"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"count"}}
 			}
 			seenCount = true
 			var iv int64
@@ -467,7 +467,7 @@ func (recv DiveStruct) DecodeFromStream(s *ggen.Stream) (result DiveStruct, err 
 			}
 			result.Count = int(iv)
 			if err := EvenOnly(result.Count); err != nil {
-				return result, &ggen.CustomError{Pos: s.Offset(), Path: []string{"count"}, Name: "EvenOnly", Value: result.Count, Cause: err}
+				return result, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"count"}, Name: "EvenOnly", Value: result.Count, Cause: err}
 			}
 		case "scores":
 			err = s.ConsumeColon()
@@ -475,7 +475,7 @@ func (recv DiveStruct) DecodeFromStream(s *ggen.Stream) (result DiveStruct, err 
 				return result, ggen.NewParseErr("scores", s.Offset(), err)
 			}
 			if seenScores {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"scores"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"scores"}}
 			}
 			seenScores = true
 			err = s.SkipSpace()
@@ -533,10 +533,10 @@ func (recv DiveStruct) DecodeFromStream(s *ggen.Stream) (result DiveStruct, err 
 				}
 				result.Scores[len(result.Scores)-1] = int(iv)
 				if result.Scores[len(result.Scores)-1] < 0 {
-					return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"scores[]"}, Limit: int(0), Value: result.Scores[len(result.Scores)-1]}
+					return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"scores[]"}, Limit: int(0), Value: result.Scores[len(result.Scores)-1]}
 				}
 				if result.Scores[len(result.Scores)-1] > 100 {
-					return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"scores[]"}, Limit: int(100), Value: result.Scores[len(result.Scores)-1]}
+					return result, &ggen.LTEError{Pos: s.Offset(), Keys: []string{"scores[]"}, Limit: int(100), Value: result.Scores[len(result.Scores)-1]}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -570,7 +570,7 @@ func (recv DiveStruct) DecodeFromStream(s *ggen.Stream) (result DiveStruct, err 
 				return result, ggen.NewParseErr("tags", s.Offset(), err)
 			}
 			if seenTags {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"tags"}}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -625,17 +625,17 @@ func (recv DiveStruct) DecodeFromStream(s *ggen.Stream) (result DiveStruct, err 
 						return result, ggen.NewParseErr("tags", s.Offset(), err)
 					}
 					if len(result.Tags[len(result.Tags)-1]) < 2 {
-						return result, &ggen.MinRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 2, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
+						return result, &ggen.MinRunesError{Pos: s.Offset(), Keys: []string{"tags[]"}, Limit: 2, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
 					} else if len(result.Tags[len(result.Tags)-1]) < 5 {
 						if rc := utf8.RuneCountInString(result.Tags[len(result.Tags)-1]); rc < 2 {
-							return result, &ggen.MinRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 2, Got: rc}
+							return result, &ggen.MinRunesError{Pos: s.Offset(), Keys: []string{"tags[]"}, Limit: 2, Got: rc}
 						}
 					}
 					if len(result.Tags[len(result.Tags)-1]) > 40 {
-						return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 10, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
+						return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"tags[]"}, Limit: 10, Got: utf8.RuneCountInString(result.Tags[len(result.Tags)-1])}
 					} else if len(result.Tags[len(result.Tags)-1]) > 10 {
 						if rc := utf8.RuneCountInString(result.Tags[len(result.Tags)-1]); rc > 10 {
-							return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"tags[]"}, Limit: 10, Got: rc}
+							return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"tags[]"}, Limit: 10, Got: rc}
 						}
 					}
 					err = s.SkipSpace()
@@ -666,10 +666,10 @@ func (recv DiveStruct) DecodeFromStream(s *ggen.Stream) (result DiveStruct, err 
 				s.Pos++
 			}
 			if len(result.Tags) < 1 {
-				return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"tags"}, Limit: 1, Got: len(result.Tags)}
+				return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"tags"}, Limit: 1, Got: len(result.Tags)}
 			}
 			if len(result.Tags) > 3 {
-				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"tags"}, Limit: 3, Got: len(result.Tags)}
+				return result, &ggen.MaxLenError{Pos: s.Offset(), Keys: []string{"tags"}, Limit: 3, Got: len(result.Tags)}
 			}
 		case "title":
 			err = s.ConsumeColon()
@@ -677,7 +677,7 @@ func (recv DiveStruct) DecodeFromStream(s *ggen.Stream) (result DiveStruct, err 
 				return result, ggen.NewParseErr("title", s.Offset(), err)
 			}
 			if seenTitle {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"title"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"title"}}
 			}
 			seenTitle = true
 			result.Title, err = s.String(true)
@@ -685,13 +685,13 @@ func (recv DiveStruct) DecodeFromStream(s *ggen.Stream) (result DiveStruct, err 
 				return result, ggen.NewParseErr("title", s.Offset(), err)
 			}
 			if len(result.Title) < 1 {
-				return result, &ggen.MinRunesError{Pos: s.Offset(), Path: []string{"title"}, Limit: 1, Got: utf8.RuneCountInString(result.Title)}
+				return result, &ggen.MinRunesError{Pos: s.Offset(), Keys: []string{"title"}, Limit: 1, Got: utf8.RuneCountInString(result.Title)}
 			}
 			if len(result.Title) > 20 {
-				return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"title"}, Limit: 5, Got: utf8.RuneCountInString(result.Title)}
+				return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"title"}, Limit: 5, Got: utf8.RuneCountInString(result.Title)}
 			} else if len(result.Title) > 5 {
 				if rc := utf8.RuneCountInString(result.Title); rc > 5 {
-					return result, &ggen.MaxRunesError{Pos: s.Offset(), Path: []string{"title"}, Limit: 5, Got: rc}
+					return result, &ggen.MaxRunesError{Pos: s.Offset(), Keys: []string{"title"}, Limit: 5, Got: rc}
 				}
 			}
 		default:
@@ -700,7 +700,7 @@ func (recv DiveStruct) DecodeFromStream(s *ggen.Stream) (result DiveStruct, err 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -858,7 +858,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 		switch key {
 		case "lookup":
 			if seenLookup {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"lookup"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"lookup"}}
 			}
 			seenLookup = true
 			if i < len(data) && data[i] == 'n' {
@@ -909,7 +909,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 						}
 					}
 					if err := KeyShape(mk); err != nil {
-						return result, i, &ggen.CustomError{Pos: i, Path: []string{"lookup.key"}, Name: "KeyShape", Value: mk, Cause: err}
+						return result, i, &ggen.CustomError{Pos: i, Keys: []string{"lookup.key"}, Name: "KeyShape", Value: mk, Cause: err}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -992,7 +992,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 			i++
 		case "mixed":
 			if seenMixed {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"mixed"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"mixed"}}
 			}
 			seenMixed = true
 			if i < len(data) && data[i] == 'n' {
@@ -1124,7 +1124,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 			i++
 		case "ptr":
 			if seenPtr {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"ptr"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"ptr"}}
 			}
 			seenPtr = true
 			if i < len(data) && data[i] == 'n' {
@@ -1189,11 +1189,11 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 				}
 			}
 			if err := PointerCheck(result.Ptr); err != nil {
-				return result, i, &ggen.CustomError{Pos: i, Path: []string{"ptr"}, Name: "PointerCheck", Value: result.Ptr, Cause: err}
+				return result, i, &ggen.CustomError{Pos: i, Keys: []string{"ptr"}, Name: "PointerCheck", Value: result.Ptr, Cause: err}
 			}
 		case "tags":
 			if seenTags {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"tags"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"tags"}}
 			}
 			seenTags = true
 			if i < len(data) && data[i] == 'n' {
@@ -1244,7 +1244,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 						}
 					}
 					if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
-						return result, i, &ggen.CustomError{Pos: i, Path: []string{"tags[]"}, Name: "NotBlank", Value: result.Tags[len(result.Tags)-1], Cause: err}
+						return result, i, &ggen.CustomError{Pos: i, Keys: []string{"tags[]"}, Name: "NotBlank", Value: result.Tags[len(result.Tags)-1], Cause: err}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -1268,7 +1268,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 			i++
 		case "trim":
 			if seenTrim {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"trim"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"trim"}}
 			}
 			seenTrim = true
 			if i < len(data) && data[i] == 'n' {
@@ -1340,7 +1340,7 @@ func (recv CustomDiveStruct) DecodeFrom(data []byte) (result CustomDiveStruct, i
 			}
 			i++
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -1419,7 +1419,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *ggen.Stream) (result CustomDive
 				return result, ggen.NewParseErr("lookup", s.Offset(), err)
 			}
 			if seenLookup {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"lookup"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"lookup"}}
 			}
 			seenLookup = true
 			err = s.SkipSpace()
@@ -1475,7 +1475,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *ggen.Stream) (result CustomDive
 					return result, ggen.NewParseErr("lookup", s.Offset(), err)
 				}
 				if err := KeyShape(mk); err != nil {
-					return result, &ggen.CustomError{Pos: s.Offset(), Path: []string{"lookup.key"}, Name: "KeyShape", Value: mk, Cause: err}
+					return result, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"lookup.key"}, Name: "KeyShape", Value: mk, Cause: err}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -1532,7 +1532,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *ggen.Stream) (result CustomDive
 				return result, ggen.NewParseErr("mixed", s.Offset(), err)
 			}
 			if seenMixed {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"mixed"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"mixed"}}
 			}
 			seenMixed = true
 			err = s.SkipSpace()
@@ -1643,7 +1643,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *ggen.Stream) (result CustomDive
 				return result, ggen.NewParseErr("ptr", s.Offset(), err)
 			}
 			if seenPtr {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"ptr"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"ptr"}}
 			}
 			seenPtr = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1677,7 +1677,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *ggen.Stream) (result CustomDive
 				}
 			}
 			if err := PointerCheck(result.Ptr); err != nil {
-				return result, &ggen.CustomError{Pos: s.Offset(), Path: []string{"ptr"}, Name: "PointerCheck", Value: result.Ptr, Cause: err}
+				return result, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"ptr"}, Name: "PointerCheck", Value: result.Ptr, Cause: err}
 			}
 		case "tags":
 			err = s.ConsumeColon()
@@ -1685,7 +1685,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *ggen.Stream) (result CustomDive
 				return result, ggen.NewParseErr("tags", s.Offset(), err)
 			}
 			if seenTags {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"tags"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"tags"}}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -1741,7 +1741,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *ggen.Stream) (result CustomDive
 					return result, ggen.NewParseErr("tags", s.Offset(), err)
 				}
 				if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
-					return result, &ggen.CustomError{Pos: s.Offset(), Path: []string{"tags[]"}, Name: "NotBlank", Value: result.Tags[len(result.Tags)-1], Cause: err}
+					return result, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"tags[]"}, Name: "NotBlank", Value: result.Tags[len(result.Tags)-1], Cause: err}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -1775,7 +1775,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *ggen.Stream) (result CustomDive
 				return result, ggen.NewParseErr("trim", s.Offset(), err)
 			}
 			if seenTrim {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"trim"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"trim"}}
 			}
 			seenTrim = true
 			err = s.SkipSpace()
@@ -1863,7 +1863,7 @@ func (recv CustomDiveStruct) DecodeFromStream(s *ggen.Stream) (result CustomDive
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

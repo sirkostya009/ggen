@@ -955,18 +955,18 @@ func leafKind(f model.FieldInfo, leafType string) model.TypeKind {
 // arrayLenErr builds a typed *ggen.LenError literal for the strict element
 // count check of a fixed-length array.
 func arrayLenErr(field string, want int, gotExpr, posVar string) string {
-	return withPos(fmt.Sprintf("&ggen.LenError{Path: []string{%q}, Want: %d, Got: %s}", field, want, gotExpr), posVar)
+	return withPos(fmt.Sprintf("&ggen.LenError{Keys: []string{%q}, Want: %d, Got: %s}", field, want, gotExpr), posVar)
 }
 
 // tupleOverflowErr is the LenError for a tuple that stops at its first element
 // past want. The true length is only known to be at least want+1.
 func tupleOverflowErr(field string, want int, posVar string) string {
-	return withPos(fmt.Sprintf("&ggen.LenError{Path: []string{%q}, Want: %d, Got: %d, AtLeast: true}", field, want, want+1), posVar)
+	return withPos(fmt.Sprintf("&ggen.LenError{Keys: []string{%q}, Want: %d, Got: %d, AtLeast: true}", field, want, want+1), posVar)
 }
 
 // requiredErr builds a typed *ggen.RequiredError literal.
 func requiredErr(field string) string {
-	return fmt.Sprintf("&ggen.RequiredError{Path: []string{%q}}", field)
+	return fmt.Sprintf("&ggen.RequiredError{Keys: []string{%q}}", field)
 }
 
 // oneofRegistry collects the unique sets of allowed strings. Each set is
@@ -1109,11 +1109,11 @@ func emitRuneRule(b *bytes.Buffer, v model.ValidationRule, ref, jsonName, goType
 	errLit := func(got string) string {
 		switch v.Name {
 		case "runes":
-			return fmt.Sprintf("&ggen.RunesError{Path: []string{%q}, Want: %s, Got: %s}", jsonName, v.Value, got)
+			return fmt.Sprintf("&ggen.RunesError{Keys: []string{%q}, Want: %s, Got: %s}", jsonName, v.Value, got)
 		case "minrunes":
-			return fmt.Sprintf("&ggen.MinRunesError{Path: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, got)
+			return fmt.Sprintf("&ggen.MinRunesError{Keys: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, got)
 		default: // maxrunes
-			return fmt.Sprintf("&ggen.MaxRunesError{Path: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, got)
+			return fmt.Sprintf("&ggen.MaxRunesError{Keys: []string{%q}, Limit: %s, Got: %s}", jsonName, v.Value, got)
 		}
 	}
 	// utf8 takes a plain string, so a named string type needs a conversion.
@@ -1178,50 +1178,50 @@ func renderOneVal(b *bytes.Buffer, v model.ValidationRule, ref, jsonName, goType
 
 	case "notempty":
 		fmt.Fprintf(b, "if len(%s) == 0 {\n\t%s\n}\n", ref,
-			onErr(fmt.Sprintf("&ggen.NotEmptyError{Path: []string{%q}}", jsonName)))
+			onErr(fmt.Sprintf("&ggen.NotEmptyError{Keys: []string{%q}}", jsonName)))
 
 	case "len":
 		fmt.Fprintf(b, "if len(%s) != %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&ggen.LenError{Path: []string{%q}, Want: %s, Got: len(%s)}", jsonName, v.Value, ref)))
+			onErr(fmt.Sprintf("&ggen.LenError{Keys: []string{%q}, Want: %s, Got: len(%s)}", jsonName, v.Value, ref)))
 	case "minlen":
 		fmt.Fprintf(b, "if len(%s) < %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&ggen.MinLenError{Path: []string{%q}, Limit: %s, Got: len(%s)}", jsonName, v.Value, ref)))
+			onErr(fmt.Sprintf("&ggen.MinLenError{Keys: []string{%q}, Limit: %s, Got: len(%s)}", jsonName, v.Value, ref)))
 	case "maxlen":
 		fmt.Fprintf(b, "if len(%s) > %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&ggen.MaxLenError{Path: []string{%q}, Limit: %s, Got: len(%s)}", jsonName, v.Value, ref)))
+			onErr(fmt.Sprintf("&ggen.MaxLenError{Keys: []string{%q}, Limit: %s, Got: len(%s)}", jsonName, v.Value, ref)))
 
 	case "gt":
 		fmt.Fprintf(b, "if %s <= %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&ggen.GTError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
+			onErr(fmt.Sprintf("&ggen.GTError{Keys: []string{%q}, Limit: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
 	case "gte":
 		fmt.Fprintf(b, "if %s < %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&ggen.GTEError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
+			onErr(fmt.Sprintf("&ggen.GTEError{Keys: []string{%q}, Limit: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
 	case "lt":
 		fmt.Fprintf(b, "if %s >= %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&ggen.LTError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
+			onErr(fmt.Sprintf("&ggen.LTError{Keys: []string{%q}, Limit: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
 	case "lte":
 		fmt.Fprintf(b, "if %s > %s {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&ggen.LTEError{Path: []string{%q}, Limit: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
+			onErr(fmt.Sprintf("&ggen.LTEError{Keys: []string{%q}, Limit: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
 
 	case "eq":
 		if kind == model.KindString {
 			fmt.Fprintf(b, "if %s != %q {\n\t%s\n}\n",
 				ref, v.Value,
-				onErr(fmt.Sprintf("&ggen.EqError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&ggen.EqError{Keys: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
 		} else if model.IsNumeric(kind) {
 			fmt.Fprintf(b, "if %s != %s {\n\t%s\n}\n",
 				ref, v.Value,
-				onErr(fmt.Sprintf("&ggen.EqError{Path: []string{%q}, Want: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
+				onErr(fmt.Sprintf("&ggen.EqError{Keys: []string{%q}, Want: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
 		}
 	case "neq":
 		if kind == model.KindString {
 			fmt.Fprintf(b, "if %s == %q {\n\t%s\n}\n",
 				ref, v.Value,
-				onErr(fmt.Sprintf("&ggen.NeqError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
+				onErr(fmt.Sprintf("&ggen.NeqError{Keys: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, ref)))
 		} else if model.IsNumeric(kind) {
 			fmt.Fprintf(b, "if %s == %s {\n\t%s\n}\n",
 				ref, v.Value,
-				onErr(fmt.Sprintf("&ggen.NeqError{Path: []string{%q}, Want: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
+				onErr(fmt.Sprintf("&ggen.NeqError{Keys: []string{%q}, Want: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
 		}
 
 	case "oneof":
@@ -1229,44 +1229,44 @@ func renderOneVal(b *bytes.Buffer, v model.ValidationRule, ref, jsonName, goType
 		varName := registerOneOf(model.SplitPipeParts(v.Value))
 		fmt.Fprintf(b, "switch %s {\ncase %s:\ndefault:\n\t%s\n}\n",
 			ref, cases,
-			onErr(fmt.Sprintf("&ggen.OneOfError{Path: []string{%q}, Allowed: %s, Value: %s}", jsonName, varName, ref)))
+			onErr(fmt.Sprintf("&ggen.OneOfError{Keys: []string{%q}, Allowed: %s, Value: %s}", jsonName, varName, ref)))
 
 	case "url":
 		fmt.Fprintf(b, "if !ggen.IsURL(%s) {\n\t%s\n}\n", str,
-			onErr(fmt.Sprintf("&ggen.URLError{Path: []string{%q}, Value: %s}", jsonName, str)))
+			onErr(fmt.Sprintf("&ggen.URLError{Keys: []string{%q}, Value: %s}", jsonName, str)))
 
 	case "alphanum":
 		fmt.Fprintf(b, "if !ggen.IsAlphanum(%s) {\n\t%s\n}\n", str,
-			onErr(fmt.Sprintf("&ggen.AlphanumError{Path: []string{%q}, Value: %s}", jsonName, str)))
+			onErr(fmt.Sprintf("&ggen.AlphanumError{Keys: []string{%q}, Value: %s}", jsonName, str)))
 	case "numeric":
 		fmt.Fprintf(b, "if !ggen.IsNumeric(%s) {\n\t%s\n}\n", str,
-			onErr(fmt.Sprintf("&ggen.NumericError{Path: []string{%q}, Value: %s}", jsonName, str)))
+			onErr(fmt.Sprintf("&ggen.NumericError{Keys: []string{%q}, Value: %s}", jsonName, str)))
 	case "islower":
 		fmt.Fprintf(b, "if !ggen.IsLower(%s) {\n\t%s\n}\n", str,
-			onErr(fmt.Sprintf("&ggen.LowerError{Path: []string{%q}, Value: %s}", jsonName, str)))
+			onErr(fmt.Sprintf("&ggen.LowerError{Keys: []string{%q}, Value: %s}", jsonName, str)))
 	case "isupper":
 		fmt.Fprintf(b, "if !ggen.IsUpper(%s) {\n\t%s\n}\n", str,
-			onErr(fmt.Sprintf("&ggen.UpperError{Path: []string{%q}, Value: %s}", jsonName, str)))
+			onErr(fmt.Sprintf("&ggen.UpperError{Keys: []string{%q}, Value: %s}", jsonName, str)))
 	case "hexadecimal":
 		fmt.Fprintf(b, "if !ggen.IsHex(%s) {\n\t%s\n}\n", str,
-			onErr(fmt.Sprintf("&ggen.HexadecimalError{Path: []string{%q}, Value: %s}", jsonName, str)))
+			onErr(fmt.Sprintf("&ggen.HexadecimalError{Keys: []string{%q}, Value: %s}", jsonName, str)))
 
 	case "starts":
 		fmt.Fprintf(b, "if !strings.HasPrefix(%s, %q) {\n\t%s\n}\n",
 			str, v.Value,
-			onErr(fmt.Sprintf("&ggen.StartsError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, str)))
+			onErr(fmt.Sprintf("&ggen.StartsError{Keys: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, str)))
 	case "ends":
 		fmt.Fprintf(b, "if !strings.HasSuffix(%s, %q) {\n\t%s\n}\n",
 			str, v.Value,
-			onErr(fmt.Sprintf("&ggen.EndsError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, str)))
+			onErr(fmt.Sprintf("&ggen.EndsError{Keys: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, str)))
 	case "contains":
 		fmt.Fprintf(b, "if !strings.Contains(%s, %q) {\n\t%s\n}\n",
 			str, v.Value,
-			onErr(fmt.Sprintf("&ggen.ContainsError{Path: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, str)))
+			onErr(fmt.Sprintf("&ggen.ContainsError{Keys: []string{%q}, Want: %q, Value: %s}", jsonName, v.Value, str)))
 
 	case "multiple":
 		fmt.Fprintf(b, "if %s %% %s != 0 {\n\t%s\n}\n", ref, v.Value,
-			onErr(fmt.Sprintf("&ggen.MultipleError{Path: []string{%q}, Of: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
+			onErr(fmt.Sprintf("&ggen.MultipleError{Keys: []string{%q}, Of: %s, Value: %s}", jsonName, numBound(kind, v.Value), ref)))
 
 	default:
 		// `@FuncName` is a user-defined validator, resolved at parse time.
@@ -1283,7 +1283,7 @@ func renderOneVal(b *bytes.Buffer, v model.ValidationRule, ref, jsonName, goType
 					ref,
 					onErr(
 						fmt.Sprintf(
-							"&ggen.PredicateError{Path: []string{%q}, Name: %q, Msg: %q, Value: %s}",
+							"&ggen.PredicateError{Keys: []string{%q}, Name: %q, Msg: %q, Value: %s}",
 							jsonName,
 							strings.TrimPrefix(v.Name, "@"),
 							v.Msg,
@@ -1298,7 +1298,7 @@ func renderOneVal(b *bytes.Buffer, v model.ValidationRule, ref, jsonName, goType
 					call,
 					ref,
 					onErr(
-						fmt.Sprintf("&ggen.CustomError{Path: []string{%q}, Name: %q, Value: %s, Cause: err}", jsonName, strings.TrimPrefix(v.Name, "@"), ref),
+						fmt.Sprintf("&ggen.CustomError{Keys: []string{%q}, Name: %q, Value: %s, Cause: err}", jsonName, strings.TrimPrefix(v.Name, "@"), ref),
 					),
 				)
 			}
@@ -4017,7 +4017,7 @@ func renderDispatch(b *bytes.Buffer, s model.StructInfo) {
 		}
 		if s.MultiErr {
 			fmt.Fprintf(b, `if %[1]s {
-	errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Path: []string{%[2]q}})
+	errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{%[2]q}})
 	i, err = ggen.SkipValue(data, i)
 	%[3]s} else {
 	%[4]s`, seen, f.JSONName, chk, set)
@@ -4025,7 +4025,7 @@ func renderDispatch(b *bytes.Buffer, s model.StructInfo) {
 			b.WriteString("}\n")
 			return
 		}
-		fmt.Fprintf(b, `if %s { return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{%q}} }
+		fmt.Fprintf(b, `if %s { return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{%q}} }
 %s`, seen, f.JSONName, set)
 		renderField(b, f, "result."+f.GoName, "i")
 	}
@@ -5123,11 +5123,11 @@ result.%[3]s[%[5]s] = entry
 %[2]s`, posVar, chk)
 	}
 	if s.MultiErr {
-		return fmt.Sprintf(`errs = append(errs, &ggen.UnknownKeyError{Pos: %[1]s, Path: []string{%[3]s}})
+		return fmt.Sprintf(`errs = append(errs, &ggen.UnknownKeyError{Pos: %[1]s, Keys: []string{%[3]s}})
 %[1]s, err = ggen.SkipValue(data, %[1]s)
 %[2]s`, posVar, chk, keyExpr)
 	}
-	return fmt.Sprintf("return result, %[1]s, &ggen.UnknownKeyError{Pos: %[1]s, Path: []string{%[2]s}}\n", posVar, keyExpr)
+	return fmt.Sprintf("return result, %[1]s, &ggen.UnknownKeyError{Pos: %[1]s, Keys: []string{%[2]s}}\n", posVar, keyExpr)
 }
 
 // renderPipe emits an ordered list of value steps against ref: mods and
@@ -6336,7 +6336,7 @@ func renderStreamDispatch(s model.StructInfo) string {
 		}
 		if s.MultiErr {
 			fmt.Fprintf(b, `if %[1]s {
-	errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{%[2]q}})
+	errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{%[2]q}})
 	err = s.SkipValue()
 	%[5]s} else {
 	%[3]s%[4]s
@@ -6344,7 +6344,7 @@ func renderStreamDispatch(s model.StructInfo) string {
 `, seen, f.JSONName, set, parse, chk)
 			return
 		}
-		fmt.Fprintf(b, `if %s { return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{%q}} }
+		fmt.Fprintf(b, `if %s { return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{%q}} }
 %s%s`, seen, f.JSONName, set, parse)
 	}
 
@@ -6632,7 +6632,7 @@ func calleeDrains(t string) bool {
 // DecodeFrom call. The outer field name goes into the wrap, so it is
 // prepended to the inner *ParseError's path: "addr" and "street" give
 // "addr.street". In multierr mode, validation failures are collected with
-// Errors.Append, and parse errors return at once. bytesPath picks the
+// Errors.Collect, and parse errors return at once. bytesPath picks the
 // three-value or two-value return.
 //
 // callee is the callee's type name, or "" when unknown. It decides whether
@@ -6642,29 +6642,23 @@ func calleeDrains(t string) bool {
 // `entryConsumed`. The cursor was already advanced by it before this check,
 // so the nested value started at i-nVar. The callee's error positions are
 // relative to its sub-slice and are shifted by that amount
-// (NewParseErrShift, ShiftPos). Stream positions are already payload offsets.
+// (NewParseErrShift, Errors.Collect). Stream positions are already payload
+// offsets.
 func nestedDecodeErrCheck(field, callee string, multierr, bytesPath bool, nVar string) string {
 	wrap := fmt.Sprintf("ggen.NewParseErr(%s, s.Offset(), err)", field)
 	ret := "return result, " + wrap
-	drain := fmt.Sprintf("errs.Append(%s, verr)", field)
+	shift := "0"
 	if bytesPath {
 		wrap = fmt.Sprintf("ggen.NewParseErrShift(%s, i, %s, err)", field, nVar)
 		ret = "return result, i, " + wrap
-		drain = fmt.Sprintf("errs.Append(%s, ggen.ShiftPos(verr, i-%s))", field, nVar)
+		shift = "i-" + nVar
 	}
 	// Collecting the error and continuing is only safe when the callee read
 	// the whole value. Otherwise its error stops this decoder too.
 	if !multierr || !calleeDrains(callee) {
 		return fmt.Sprintf("if err != nil { %s }\n", ret)
 	}
-	return fmt.Sprintf(`if err != nil {
-	if verr, ok := err.(ggen.Error); ok {
-		%[1]s
-	} else {
-		%[2]s
-	}
-}
-`, drain, ret)
+	return fmt.Sprintf("if err != nil && !errs.Collect(%s, %s, err) { %s }\n", field, shift, ret)
 }
 
 // --- stream native-type renderers ---
@@ -7118,13 +7112,13 @@ err = s.ConsumeColon()
 	if s.MultiErr {
 		return fmt.Sprintf(`ownKey := strings.Clone(key)
 err = s.ConsumeColon()
-%[1]serrs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}})
+%[1]serrs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}})
 err = s.SkipValue()
 %[1]s`, chk)
 	}
 	return fmt.Sprintf(`ownKey := strings.Clone(key)
 err = s.ConsumeColon()
-%sreturn result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+%sreturn result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 `, chk)
 }
 

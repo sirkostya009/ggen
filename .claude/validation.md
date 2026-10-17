@@ -3,7 +3,7 @@
 Runtime package, top-level sibling of `decode` (validation is not a sub-concern
 of parsing — hard parse failures wrap in `ggen.ParseError`; only rule-level
 failures land here). One concrete error struct per validation rule (plus
-`Error` interface + `Errors` slice). Codegen emits typed literals at the
+`ValidationError` interface + `Errors` slice). Codegen emits typed literals at the
 failure site — no field-stuffed generic error, no per-error rule-name compare
 at the use site.
 
@@ -18,16 +18,24 @@ Format predicates for generated validation branches, each 1:1 with a rule name:
 ## Surface
 
 ```go
-type Error interface { error; Rule() Rule }
+type ValidationError interface { error; Rule() Rule; Path() []string; Message() string }
 type Rule string                              // const enum of rule names
-type Errors []Error                           // multierr return; Unwrap() []error
+type Errors []ValidationError                 // multierr return; Unwrap() []error; not a ValidationError itself
 ```
 
 `Rule` constants: `Required`, `NotEmpty`, `Len`, `MinLen`, `MaxLen`, `Runes`,
 `MinRunes`, `MaxRunes`, `GT`, `GTE`, `LT`, `LTE`, `Eq`, `Neq`, `OneOf`,
 `URL`, `Alphanum`, `Numeric`, `Lower` (= "islower"), `Upper` (= "isupper"),
 `Hexadecimal`, `Starts`, `Ends`, `Contains`, `Multiple`, `DuplicateKey`,
-`UnknownKey`, `Custom`, `Predicate`, `MultiErr`.
+`UnknownKey`, `Custom`, `Predicate`.
+
+`Error()` is `joinError(Keys, Message())`: `"a.b: " + Message()`, or just
+`Message()` for an empty path. `Path()`/`Message()` exist so a caller (rr's
+Standard Schema `{message, path}` issues) can place each failure next to its
+form field without parsing `Error()`. The field is `Keys` because a method
+can't share the field's name. `*ParseError` has the same `Keys` field and
+`Path()`/`Message()` (Message = `Err`'s text) but no `Rule`, so it is not a
+`ValidationError`.
 
 ## `Pos` (failure location)
 
@@ -40,12 +48,11 @@ unknown-key literals):
 - **Bytes path** — the cursor `i`, a true index into `data`. NESTED decoders
   run on `data[i:]`, so their errors surface sub-slice-relative and the call
   site rebases them by the value start (`ggen.NewParseErrShift`, or
-  `ggen.ShiftPos` in the multierr drain) — every error type carries
-  `AddPos(d int)` (sibling of `PrependPath`, `Errors` loops its leaves) to
-  make that mechanical. `*ParseError.AddPos` also cascades into its wrapped
-  cause, since a fallible mod's `ModError` is born pre-wrapped and would
-  otherwise keep a sub-slice-relative `Pos`
-  (`TestParseErrAddPosCascadesToModError`). Pinned by `TestNestedValidationPath_Complete` +
+  `Errors.Collect`'s shift argument in the multierr drain). Both go through
+  the unexported `relocate(e, segment, d)` over the interface's `at()`;
+  `NewParseErrShift`'s `shiftPos` also walks into a `*ParseError`'s cause,
+  since a fallible mod's `ModError` is born pre-wrapped and would otherwise
+  keep a sub-slice-relative `Pos` (`TestParseErrShiftCascadesToModError`). Pinned by `TestNestedValidationPath_Complete` +
   `TestNestedMultierr_drainsInnerValidationErrors` (bytes == stream).
 - **Stream path** — `ggen.Stream.Offset()` (= `consumed + Pos`), NOT the raw
   buffer-relative `s.Pos`: the stream buffer compacts as it slides, so only
@@ -81,12 +88,13 @@ the `TestMultierr_*` tests around `DrainFailFast` in `mods_test.go`.
 
 ## Concrete error structs (one per rule)
 
-Pointer-receiver structs, all implement `ggen.Error`. Each carries a
-`Pos int` and a root-relative `Path []string` (both first) plus an exported
-`PrependPath(segment)` — deliberately NOT part of the `Error` interface
-(implementing `Error` doesn't require it; `ggen.NewParseErr` and
-`Errors.Append` assert for it to complete nested paths). Shapes below list
-the remaining fields:
+Pointer-receiver structs, all implement `ggen.ValidationError`. Each carries
+a `Pos int` and a root-relative `Keys []string` (both first). The interface
+is sealed by the unexported `at() (*int, *[]string)`, which hands the
+runtime pointers to both: `relocate` shifts `Pos` and prepends a key through
+it, so `NewParseErr`, `NewParseErrShift`, `Errors.Collect` and
+`UnmarshalSlice` need no type assertions. Shapes below list the remaining
+fields:
 
 - **presence**: `RequiredError`, `NotEmptyError`
 - **length**: `LenError{Want, Got int; AtLeast bool}`, `MinLenError`/`MaxLenError{Limit, Got int}`.
@@ -126,11 +134,12 @@ bound parsing made reachable. Read them with a type switch or `%v`. Pinned by
 _, _, err := T{}.DecodeFrom(data)
 var minlen *ggen.MinLenError
 if errors.As(err, &minlen) {
-    // minlen.Path, minlen.Limit, minlen.Got
+    // minlen.Keys, minlen.Limit, minlen.Got
 }
 ```
 
-Use the typed pointer struct, or `err.(ggen.Error).Rule()` for the name.
+Use the typed pointer struct, or `errors.AsType[ggen.ValidationError](err)` for
+the rule, path and message.
 `Errors` (from `multierr`) and `CustomError` implement `Unwrap()`.
 
 ## Frozen OneOf slices

@@ -174,8 +174,8 @@ func TestVariant_converterErrorCarriesPathAndPos(t *testing.T) {
 	if !errors.As(err, &pe) {
 		t.Fatalf("got %T %v, want *ggen.ParseError", err, err)
 	}
-	if len(pe.Path) == 0 || pe.Path[0] != "count" {
-		t.Errorf("Path = %v, want [count]", pe.Path)
+	if len(pe.Keys) == 0 || pe.Keys[0] != "count" {
+		t.Errorf("Path = %v, want [count]", pe.Keys)
 	}
 	if pe.Pos <= 0 {
 		t.Errorf("Pos = %d, want a real offset", pe.Pos)
@@ -191,8 +191,8 @@ func TestVariant_converterErrorCarriesPathAndPos(t *testing.T) {
 	if !errors.As(serr, &spe) {
 		t.Fatalf("stream: got %T %v, want *ggen.ParseError", serr, serr)
 	}
-	if len(spe.Path) == 0 || spe.Path[0] != "count" {
-		t.Errorf("stream: Path = %v, want [count]", spe.Path)
+	if len(spe.Keys) == 0 || spe.Keys[0] != "count" {
+		t.Errorf("stream: Path = %v, want [count]", spe.Keys)
 	}
 }
 

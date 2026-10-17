@@ -272,8 +272,8 @@ func TestCrossPkg_unmarshalJSONRungRebasesPos(t *testing.T) {
 		if !ok {
 			t.Fatalf("%s: got %T %v", path, err, err)
 		}
-		if pe.Pos != want || strings.Join(pe.Path, ".") != "w.value" {
-			t.Errorf("%s: Pos=%d Path=%v, want Pos=%d Path=w.value (%v)", path, pe.Pos, pe.Path, want, err)
+		if pe.Pos != want || strings.Join(pe.Keys, ".") != "w.value" {
+			t.Errorf("%s: Pos=%d Path=%v, want Pos=%d Path=w.value (%v)", path, pe.Pos, pe.Keys, want, err)
 		}
 	}
 	_, _, berr := R10WrapHost{}.DecodeFrom([]byte(payload))

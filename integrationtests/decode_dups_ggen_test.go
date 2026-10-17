@@ -34,7 +34,7 @@ func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i i
 			result.Name = ""
 		}
 		if !seenName {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"name"}}
 		}
 		return result, i, nil
 	}
@@ -125,10 +125,10 @@ func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i i
 				}
 				result.N = int(n)
 				if result.N < 0 {
-					return result, i, &ggen.GTEError{Pos: i, Path: []string{"n"}, Limit: int(0), Value: result.N}
+					return result, i, &ggen.GTEError{Pos: i, Keys: []string{"n"}, Limit: int(0), Value: result.N}
 				}
 				if result.N > 100 {
-					return result, i, &ggen.LTEError{Pos: i, Path: []string{"n"}, Limit: int(100), Value: result.N}
+					return result, i, &ggen.LTEError{Pos: i, Keys: []string{"n"}, Limit: int(100), Value: result.N}
 				}
 			}
 		case "name":
@@ -160,14 +160,14 @@ func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i i
 					}
 				}
 				if len(result.Name) < 1 {
-					return result, i, &ggen.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+					return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"name"}, Limit: 1, Got: len(result.Name)}
 				}
 				if len(result.Name) > 20 {
-					return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
+					return result, i, &ggen.MaxLenError{Pos: i, Keys: []string{"name"}, Limit: 20, Got: len(result.Name)}
 				}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -191,7 +191,7 @@ func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i i
 				result.Name = ""
 			}
 			if !seenName {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"name"}}
 			}
 			return result, i, nil
 		}
@@ -226,7 +226,7 @@ func (recv AllowDupsStruct) DecodeFromStream(s *ggen.Stream) (result AllowDupsSt
 			result.Name = ""
 		}
 		if !seenName {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}}
 		}
 		return result, nil
 	}
@@ -256,10 +256,10 @@ func (recv AllowDupsStruct) DecodeFromStream(s *ggen.Stream) (result AllowDupsSt
 				}
 				result.N = int(iv)
 				if result.N < 0 {
-					return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: int(0), Value: result.N}
+					return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"n"}, Limit: int(0), Value: result.N}
 				}
 				if result.N > 100 {
-					return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: int(100), Value: result.N}
+					return result, &ggen.LTEError{Pos: s.Offset(), Keys: []string{"n"}, Limit: int(100), Value: result.N}
 				}
 
 			}
@@ -280,10 +280,10 @@ func (recv AllowDupsStruct) DecodeFromStream(s *ggen.Stream) (result AllowDupsSt
 					return result, ggen.NewParseErr("name", s.Offset(), err)
 				}
 				if len(result.Name) < 1 {
-					return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+					return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 1, Got: len(result.Name)}
 				}
 				if len(result.Name) > 20 {
-					return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
+					return result, &ggen.MaxLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 20, Got: len(result.Name)}
 				}
 
 			}
@@ -293,7 +293,7 @@ func (recv AllowDupsStruct) DecodeFromStream(s *ggen.Stream) (result AllowDupsSt
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -324,7 +324,7 @@ func (recv AllowDupsStruct) DecodeFromStream(s *ggen.Stream) (result AllowDupsSt
 				result.Name = ""
 			}
 			if !seenName {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			return result, nil
 		}

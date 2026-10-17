@@ -34,7 +34,7 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 			result.Name = ""
 		}
 		if !seenName {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"name"}}
 		}
 		return result, i, nil
 	}
@@ -69,7 +69,7 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 		switch key {
 		case "n":
 			if seenN {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"n"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"n"}}
 			}
 			seenN = true
 			neg := false
@@ -122,14 +122,14 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 			}
 			result.N = int(n)
 			if result.N < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Path: []string{"n"}, Limit: int(0), Value: result.N}
+				return result, i, &ggen.GTEError{Pos: i, Keys: []string{"n"}, Limit: int(0), Value: result.N}
 			}
 			if result.N > 100 {
-				return result, i, &ggen.LTEError{Pos: i, Path: []string{"n"}, Limit: int(100), Value: result.N}
+				return result, i, &ggen.LTEError{Pos: i, Keys: []string{"n"}, Limit: int(100), Value: result.N}
 			}
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -153,13 +153,13 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 				}
 			}
 			if len(result.Name) < 1 {
-				return result, i, &ggen.MinLenError{Pos: i, Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 			if len(result.Name) > 20 {
-				return result, i, &ggen.MaxLenError{Pos: i, Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
+				return result, i, &ggen.MaxLenError{Pos: i, Keys: []string{"name"}, Limit: 20, Got: len(result.Name)}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -183,7 +183,7 @@ func (recv HookedStruct) DecodeFrom(data []byte) (result HookedStruct, i int, er
 				result.Name = ""
 			}
 			if !seenName {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"name"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"name"}}
 			}
 			return result, i, nil
 		}
@@ -218,7 +218,7 @@ func (recv HookedStruct) DecodeFromStream(s *ggen.Stream) (result HookedStruct, 
 			result.Name = ""
 		}
 		if !seenName {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}}
 		}
 		return result, nil
 	}
@@ -235,7 +235,7 @@ func (recv HookedStruct) DecodeFromStream(s *ggen.Stream) (result HookedStruct, 
 				return result, ggen.NewParseErr("n", s.Offset(), err)
 			}
 			if seenN {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"n"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"n"}}
 			}
 			seenN = true
 			var iv int64
@@ -245,10 +245,10 @@ func (recv HookedStruct) DecodeFromStream(s *ggen.Stream) (result HookedStruct, 
 			}
 			result.N = int(iv)
 			if result.N < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: int(0), Value: result.N}
+				return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"n"}, Limit: int(0), Value: result.N}
 			}
 			if result.N > 100 {
-				return result, &ggen.LTEError{Pos: s.Offset(), Path: []string{"n"}, Limit: int(100), Value: result.N}
+				return result, &ggen.LTEError{Pos: s.Offset(), Keys: []string{"n"}, Limit: int(100), Value: result.N}
 			}
 		case "name":
 			err = s.ConsumeColon()
@@ -256,7 +256,7 @@ func (recv HookedStruct) DecodeFromStream(s *ggen.Stream) (result HookedStruct, 
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -264,10 +264,10 @@ func (recv HookedStruct) DecodeFromStream(s *ggen.Stream) (result HookedStruct, 
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if len(result.Name) < 1 {
-				return result, &ggen.MinLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 1, Got: len(result.Name)}
+				return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 1, Got: len(result.Name)}
 			}
 			if len(result.Name) > 20 {
-				return result, &ggen.MaxLenError{Pos: s.Offset(), Path: []string{"name"}, Limit: 20, Got: len(result.Name)}
+				return result, &ggen.MaxLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 20, Got: len(result.Name)}
 			}
 		default:
 			ownKey := strings.Clone(key)
@@ -275,7 +275,7 @@ func (recv HookedStruct) DecodeFromStream(s *ggen.Stream) (result HookedStruct, 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -306,7 +306,7 @@ func (recv HookedStruct) DecodeFromStream(s *ggen.Stream) (result HookedStruct, 
 				result.Name = ""
 			}
 			if !seenName {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"name"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}}
 			}
 			return result, nil
 		}

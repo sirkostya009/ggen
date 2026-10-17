@@ -34,7 +34,7 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 			result.Currency = ""
 		}
 		if !seenCurrency {
-			return result, i, &ggen.RequiredError{Pos: i, Path: []string{"currency"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"currency"}}
 		}
 		return result, i, nil
 	}
@@ -69,7 +69,7 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 		switch key {
 		case "amount":
 			if seenAmount {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"amount"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"amount"}}
 			}
 			seenAmount = true
 			neg := false
@@ -123,7 +123,7 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 			result.Amount = n
 		case "currency":
 			if seenCurrency {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"currency"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"currency"}}
 			}
 			seenCurrency = true
 			if i >= len(data) || data[i] != '"' {
@@ -147,13 +147,13 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 				}
 			}
 			if len(result.Currency) != 3 {
-				return result, i, &ggen.LenError{Pos: i, Path: []string{"currency"}, Want: 3, Got: len(result.Currency)}
+				return result, i, &ggen.LenError{Pos: i, Keys: []string{"currency"}, Want: 3, Got: len(result.Currency)}
 			}
 			if !ggen.IsUpper(result.Currency) {
-				return result, i, &ggen.UpperError{Pos: i, Path: []string{"currency"}, Value: result.Currency}
+				return result, i, &ggen.UpperError{Pos: i, Keys: []string{"currency"}, Value: result.Currency}
 			}
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -177,7 +177,7 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 				result.Currency = ""
 			}
 			if !seenCurrency {
-				return result, i, &ggen.RequiredError{Pos: i, Path: []string{"currency"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"currency"}}
 			}
 			return result, i, nil
 		}
@@ -212,7 +212,7 @@ func (recv Money) DecodeFromStream(s *ggen.Stream) (result Money, err error) {
 			result.Currency = ""
 		}
 		if !seenCurrency {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"currency"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"currency"}}
 		}
 		return result, nil
 	}
@@ -229,7 +229,7 @@ func (recv Money) DecodeFromStream(s *ggen.Stream) (result Money, err error) {
 				return result, ggen.NewParseErr("amount", s.Offset(), err)
 			}
 			if seenAmount {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"amount"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"amount"}}
 			}
 			seenAmount = true
 			result.Amount, err = s.Int64()
@@ -242,7 +242,7 @@ func (recv Money) DecodeFromStream(s *ggen.Stream) (result Money, err error) {
 				return result, ggen.NewParseErr("currency", s.Offset(), err)
 			}
 			if seenCurrency {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"currency"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"currency"}}
 			}
 			seenCurrency = true
 			result.Currency, err = s.String(true)
@@ -250,10 +250,10 @@ func (recv Money) DecodeFromStream(s *ggen.Stream) (result Money, err error) {
 				return result, ggen.NewParseErr("currency", s.Offset(), err)
 			}
 			if len(result.Currency) != 3 {
-				return result, &ggen.LenError{Pos: s.Offset(), Path: []string{"currency"}, Want: 3, Got: len(result.Currency)}
+				return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{"currency"}, Want: 3, Got: len(result.Currency)}
 			}
 			if !ggen.IsUpper(result.Currency) {
-				return result, &ggen.UpperError{Pos: s.Offset(), Path: []string{"currency"}, Value: result.Currency}
+				return result, &ggen.UpperError{Pos: s.Offset(), Keys: []string{"currency"}, Value: result.Currency}
 			}
 		default:
 			ownKey := strings.Clone(key)
@@ -261,7 +261,7 @@ func (recv Money) DecodeFromStream(s *ggen.Stream) (result Money, err error) {
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()
@@ -292,7 +292,7 @@ func (recv Money) DecodeFromStream(s *ggen.Stream) (result Money, err error) {
 				result.Currency = ""
 			}
 			if !seenCurrency {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Path: []string{"currency"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"currency"}}
 			}
 			return result, nil
 		}

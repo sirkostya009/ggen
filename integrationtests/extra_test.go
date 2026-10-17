@@ -633,8 +633,8 @@ func TestNestedValidationPath_Complete(t *testing.T) {
 	if !errors.As(err, &le) {
 		t.Fatalf("got %v, want *ggen.LenError", err)
 	}
-	if len(le.Path) != 2 || le.Path[0] != "addr" || le.Path[1] != "zipCode" {
-		t.Errorf("Path = %v, want [addr zipCode]", le.Path)
+	if len(le.Keys) != 2 || le.Keys[0] != "addr" || le.Keys[1] != "zipCode" {
+		t.Errorf("Path = %v, want [addr zipCode]", le.Keys)
 	}
 	// Pos is a full-payload offset on the bytes path too, the cursor just past
 	// the offending value. The nested decoder ran on data[i:], so the call

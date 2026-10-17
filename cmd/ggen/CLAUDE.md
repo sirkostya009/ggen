@@ -1014,9 +1014,9 @@ any`. Every error carries a `Pos int` (byte offset relative to the full
     written at emit time (no post-pass / no `/*ggen-field*/` markers) — each
     `inlineScan*`/dispatch site interpolates the quoted JSON-path literal into its
     `NewParseErr` call. Zero runtime cost on the happy path.
-    `NewParseErr(segment, pos, err)` builds `*ggen.ParseError{Path []string,
-Pos, Err}` for raw sentinels (a one-segment path), prepends the segment onto a `ggen.Error`'s Path (value passes through, reachable via `errors.As`), and **chains** when err is already a `*ParseError` —
-    prepending the segment onto `pe.Path` (deeper `Pos` kept) so nested surfaces
+    `NewParseErr(segment, pos, err)` builds `*ggen.ParseError{Keys []string,
+Pos, Err}` for raw sentinels (a one-segment path), prepends the segment onto a `ggen.ValidationError`'s Keys (value passes through, reachable via `errors.As`), and **chains** when err is already a `*ParseError` —
+    prepending the segment onto `pe.Keys` (deeper `Pos` kept) so nested surfaces
     `Error()`-join to `addr.street`. Empty segment leaves the path untouched.
     `errors.Is(err, ggen.ErrBadString)` works via `Unwrap()`; `ParseError.Error()`
     calls `e.Err.Error()` once so chained prints stay linear.
@@ -1024,9 +1024,11 @@ Pos, Err}` for raw sentinels (a one-segment path), prepends the segment onto a `
     (2026-08): the callee ran on `data[i-_n:]` (the emit advances `i += _n`
     BEFORE the check), so its positional errors — chained `*ParseError`,
     validation typed errors, `ggen.Errors` — are rebased by the value
-    start via `AddPos` before wrapping, making every `Pos` a full-payload
-    offset like the stream path's `s.Offset()`. The multierr drain rebases
-    with `ggen.ShiftPos(verr, i-_n)`. All emitted from ONE helper
+    start (`shiftPos`) before wrapping, making every `Pos` a full-payload
+    offset like the stream path's `s.Offset()`. The multierr drain is one
+    `if err != nil && !errs.Collect(seg, i-_n, err) { return … }`: `Collect`
+    takes a `ValidationError` or a nested `Errors` (stream passes `0` as the
+    shift) and reports false for anything else, which then returns. All emitted from ONE helper
     (`nestedDecodeErrCheck(field, multierr, bytesPath, nVar)`; `nVar` = the
     consumed-count local, `_n`/`_in`) + the alias delegation wrap +
     `ggen.UnmarshalSlice`. Sentinel/foreign errors carry no `Pos` → the

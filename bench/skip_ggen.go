@@ -62,7 +62,7 @@ func (recv SkipEnvelope) DecodeFrom(data []byte) (result SkipEnvelope, i int, er
 		switch key {
 		case "id":
 			if seenID {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"id"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"id"}}
 			}
 			seenID = true
 			neg := false
@@ -181,7 +181,7 @@ func (recv SkipEnvelope) DecodeFromStream(s *ggen.Stream) (result SkipEnvelope, 
 				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 			if seenID {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"id"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"id"}}
 			}
 			seenID = true
 			result.ID, err = s.Int64()

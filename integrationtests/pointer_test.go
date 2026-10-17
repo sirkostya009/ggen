@@ -27,8 +27,8 @@ func TestPointer_parseErrorChainsThroughPointee(t *testing.T) {
 	if !errors.As(err, &pe) {
 		t.Fatalf("err = %T %v, want *ggen.ParseError", err, err)
 	}
-	if strings.Join(pe.Path, ".") != "addr.street" {
-		t.Fatalf("Path = %v; want [addr street]", pe.Path)
+	if strings.Join(pe.Keys, ".") != "addr.street" {
+		t.Fatalf("Path = %v; want [addr street]", pe.Keys)
 	}
 	if !errors.Is(err, ggen.ErrExpectString) {
 		t.Fatalf("errors.Is sentinel mismatch: %v", err)

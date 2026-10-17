@@ -483,14 +483,26 @@ WIDTH second:
 ```go
 var minlen *ggen.MinLenError
 if errors.As(err, &minlen) {
-	// minlen.Path  — root-relative path segments, e.g. ["addr", "zip"]
+	// minlen.Keys  — root-relative path segments, e.g. ["addr", "zip"]
 	// minlen.Limit, minlen.Got
 	// minlen.Pos   — byte offset of the failure
 }
 ```
 
+Without knowing the type, every validation error is a `ggen.ValidationError`:
+`Path()` returns its keys, `Message()` says what is wrong without the path, and
+`Error()` joins the two as `addr.zip: length 3 below minimum 5`. A slice
+element is named by its slice, as in `"tags[]"`. This is enough to put each
+failure next to the form field it is about:
+
+```go
+for _, e := range errs { // a ggen.Errors from a multierr decoder
+	issues = append(issues, Issue{Path: e.Path(), Message: e.Message()})
+}
+```
+
 > [!NOTE] In `-multierr` mode the generated code returns `ggen.Errors`, a
-> `ggen.Error` slice instead of stopping at first failure. A bare `ggen.Errors`
+> `ggen.ValidationError` slice instead of stopping at first failure. A bare `ggen.Errors`
 > means the value was read to its end, so `Array` and `Seq` yield it with the
 > value and go on. A non-multierr struct holding a multierr one stops at its
 > first failure and reports just that one.
@@ -501,10 +513,11 @@ wrapped in `*ggen.ParseError` that also carries some parsing metadata:
 ```go
 var pe *ggen.ParseError
 if errors.As(err, &pe) {
-	// pe.Path  — root-relative path segments, e.g. ["addr", "street"]
+	// pe.Keys  — root-relative path segments, e.g. ["addr", "street"]
 	// pe.Pos   — byte offset where scanning stopped; identical for DecodeFrom
 	//            and DecodeFromStream, whatever the stream's buffer size
 	// pe.Err   — underlying sentinel (ggen.ErrBadString, ggen.ErrBadObject, …)
+	// pe.Path(), pe.Message() — like a validation error's; Message is pe.Err's text
 }
 
 // The wrap is transparent to errors.Is — the underlying scan sentinel

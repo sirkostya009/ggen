@@ -102,8 +102,8 @@ func TestFallibleMod_errorCarriesPathAndPos(t *testing.T) {
 	if !errors.As(err, &pe) {
 		t.Fatalf("got %T %v, want *ggen.ParseError", err, err)
 	}
-	if len(pe.Path) == 0 || pe.Path[0] != "email" {
-		t.Errorf("Path = %v, want [email]", pe.Path)
+	if len(pe.Keys) == 0 || pe.Keys[0] != "email" {
+		t.Errorf("Path = %v, want [email]", pe.Keys)
 	}
 	if pe.Pos <= 0 {
 		t.Errorf("Pos = %d, want a real offset", pe.Pos)
@@ -251,7 +251,7 @@ func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
 	// ["inner","email"]. Outer errors keep a one-segment path.
 	buckets := map[string]int{}
 	for _, e := range leaves {
-		buckets[strings.Join(pathOf(e), ".")]++
+		buckets[strings.Join(e.Path(), ".")]++
 	}
 	for _, want := range []string{"inner.email", "name", "code"} {
 		if buckets[want] == 0 {
@@ -259,7 +259,7 @@ func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
 		}
 	}
 	// Merged inner errors carry offsets into the full payload. The nested
-	// call site shifts each one with ggen.ShiftPos.
+	// call site shifts each one with Errors.Collect.
 	var ce *ggen.ContainsError
 	if !errors.As(err, &ce) {
 		t.Fatalf("no ContainsError leaf: %v", leaves)
@@ -267,29 +267,6 @@ func TestNestedMultierr_drainsInnerValidationErrors(t *testing.T) {
 	if want := bytes.Index(in, []byte(`"abcdef"`)) + len(`"abcdef"`); ce.Pos != want {
 		t.Errorf("inner leaf Pos = %d, want %d (full-payload offset)", ce.Pos, want)
 	}
-}
-
-// pathOf returns the Path of a validation error. It uses the pathSegments
-// interface if the error has it, else a type switch over the error types this
-// test uses.
-func pathOf(e ggen.Error) []string {
-	type pathed interface{ pathSegments() []string }
-	if p, ok := e.(pathed); ok {
-		return p.pathSegments()
-	}
-	switch v := e.(type) {
-	case *ggen.ContainsError:
-		return v.Path
-	case *ggen.MinLenError:
-		return v.Path
-	case *ggen.LTEError:
-		return v.Path
-	case *ggen.GTEError:
-		return v.Path
-	case *ggen.RequiredError:
-		return v.Path
-	}
-	return nil
 }
 
 // An inner parse error returns immediately, wrapped in *ggen.ParseError. It
@@ -445,7 +422,7 @@ func TestMultierr_FailFastParent_HandsUpOneError(t *testing.T) {
 			t.Fatalf("fail-fast parent returned ggen.Errors: %v", err)
 		}
 		me, ok := errors.AsType[*ggen.MinLenError](err)
-		if !ok || strings.Join(me.Path, ".") != "ime.a" {
+		if !ok || strings.Join(me.Keys, ".") != "ime.a" {
 			t.Errorf("want MinLenError at ime.a, got %v", err)
 		}
 	}
@@ -520,7 +497,7 @@ func TestMultierr_UnmarshalSlice_KeepsElementErrors(t *testing.T) {
 		t.Fatalf("want 2 ggen.Errors, got %T: %v", err, err)
 	}
 	me, ok := errors.AsType[*ggen.MinLenError](err)
-	if !ok || strings.Join(me.Path, ".") != "[1].a" {
+	if !ok || strings.Join(me.Keys, ".") != "[1].a" {
 		t.Errorf("want MinLenError at [1].a, got %v", err)
 	}
 	if want := strings.Index(in, `"x"`) + len(`"x"`); me.Pos != want {

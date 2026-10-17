@@ -214,7 +214,7 @@ type StructInfo struct {
 	MultiErr      bool   // collect validation errors instead of stopping at the first
 	AllowDups     bool   // allow duplicate JSON keys, which are an error by default
 	NoValidate    bool   // skip validation rules, required-field checks and mods
-	IgnoreUnknown bool   // skip unknown JSON keys. By default they produce ggen.Error{UnknownKey}
+	IgnoreUnknown bool   // skip unknown JSON keys. By default they produce ggen.UnknownKeyError
 	NullZero      bool   // accept JSON null on every non-pointer field and set the Go zero value. One field opts in alone with the `nullzero` pipe variant
 	NoSort        bool   // keep the declared field order instead of sorting fields by JSON name
 	UseNumber     bool   // decode JSON numbers in `any` fields as json.Number instead of float64

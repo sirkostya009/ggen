@@ -114,7 +114,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 		switch key {
 		case "b":
 			if seenB {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}}
 			}
 			seenB = true
 			result.B, i, err = ggen.Bool(data, i)
@@ -124,7 +124,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 		case "f32":
 			if seenF32 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f32"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"f32"}}
 			}
 			seenF32 = true
 			result.F32, i, err = ggen.Float32(data, i)
@@ -133,7 +133,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 		case "f64":
 			if seenF64 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"f64"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"f64"}}
 			}
 			seenF64 = true
 			result.F64, i, err = ggen.Float64(data, i)
@@ -142,7 +142,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 		case "i":
 			if seenI {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i"}}
 			}
 			seenI = true
 			neg := false
@@ -196,7 +196,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.I = int(n)
 		case "i16":
 			if seenI16 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i16"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i16"}}
 			}
 			seenI16 = true
 			neg := false
@@ -253,7 +253,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.I16 = int16(n)
 		case "i32":
 			if seenI32 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i32"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i32"}}
 			}
 			seenI32 = true
 			neg := false
@@ -310,7 +310,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.I32 = int32(n)
 		case "i64":
 			if seenI64 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i64"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i64"}}
 			}
 			seenI64 = true
 			neg := false
@@ -364,7 +364,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.I64 = n
 		case "i8":
 			if seenI8 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"i8"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i8"}}
 			}
 			seenI8 = true
 			neg := false
@@ -421,7 +421,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.I8 = int8(n)
 		case "str":
 			if seenStr {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"str"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"str"}}
 			}
 			seenStr = true
 			if i >= len(data) || data[i] != '"' {
@@ -446,7 +446,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 		case "u":
 			if seenU {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"u"}}
 			}
 			seenU = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -481,7 +481,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.U = uint(n)
 		case "u16":
 			if seenU16 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u16"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"u16"}}
 			}
 			seenU16 = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -519,7 +519,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.U16 = uint16(n)
 		case "u32":
 			if seenU32 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u32"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"u32"}}
 			}
 			seenU32 = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -557,7 +557,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.U32 = uint32(n)
 		case "u64":
 			if seenU64 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u64"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"u64"}}
 			}
 			seenU64 = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -592,7 +592,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.U64 = n
 		case "u8":
 			if seenU8 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Path: []string{"u8"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"u8"}}
 			}
 			seenU8 = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -629,7 +629,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 			result.U8 = uint8(n)
 		default:
-			return result, i, &ggen.UnknownKeyError{Pos: i, Path: []string{key}}
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
 		}
 		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 			i++
@@ -783,7 +783,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}}
 			}
 			seenB = true
 			result.B, err = s.Bool()
@@ -796,7 +796,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("f32", s.Offset(), err)
 			}
 			if seenF32 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f32"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"f32"}}
 			}
 			seenF32 = true
 			result.F32, err = s.Float32()
@@ -809,7 +809,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("f64", s.Offset(), err)
 			}
 			if seenF64 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"f64"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"f64"}}
 			}
 			seenF64 = true
 			result.F64, err = s.Float64()
@@ -822,7 +822,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i"}}
 			}
 			seenI = true
 			var iv int64
@@ -837,7 +837,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("i16", s.Offset(), err)
 			}
 			if seenI16 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i16"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i16"}}
 			}
 			seenI16 = true
 			var iv int64
@@ -855,7 +855,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("i32", s.Offset(), err)
 			}
 			if seenI32 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i32"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i32"}}
 			}
 			seenI32 = true
 			var iv int64
@@ -873,7 +873,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("i64", s.Offset(), err)
 			}
 			if seenI64 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i64"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i64"}}
 			}
 			seenI64 = true
 			result.I64, err = s.Int64()
@@ -886,7 +886,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("i8", s.Offset(), err)
 			}
 			if seenI8 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"i8"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i8"}}
 			}
 			seenI8 = true
 			var iv int64
@@ -904,7 +904,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("str", s.Offset(), err)
 			}
 			if seenStr {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"str"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"str"}}
 			}
 			seenStr = true
 			result.Str, err = s.String(true)
@@ -917,7 +917,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("u", s.Offset(), err)
 			}
 			if seenU {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"u"}}
 			}
 			seenU = true
 			var uv uint64
@@ -932,7 +932,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("u16", s.Offset(), err)
 			}
 			if seenU16 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u16"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"u16"}}
 			}
 			seenU16 = true
 			var uv uint64
@@ -950,7 +950,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("u32", s.Offset(), err)
 			}
 			if seenU32 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u32"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"u32"}}
 			}
 			seenU32 = true
 			var uv uint64
@@ -968,7 +968,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("u64", s.Offset(), err)
 			}
 			if seenU64 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u64"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"u64"}}
 			}
 			seenU64 = true
 			result.U64, err = s.Uint64()
@@ -981,7 +981,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("u8", s.Offset(), err)
 			}
 			if seenU8 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Path: []string{"u8"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"u8"}}
 			}
 			seenU8 = true
 			var uv uint64
@@ -999,7 +999,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 			if err != nil {
 				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
 			}
-			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Path: []string{ownKey}}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
 		}
 
 		err = s.SkipSpace()

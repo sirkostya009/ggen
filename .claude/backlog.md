@@ -393,7 +393,7 @@ surface pinned by `Decoder[T]`).
   encode plumbing (`CloseJSONString*`, `BytesToString`, `AppendFloat`,
   `AppendUnixSeconds`, `AppendNetipAddr*`, `AppendURL*`, `AppendRFC3339`),
   and glue (`NotEOF`, `Detach`, `CheckUTF8`, `SignedNeg`, `Uint64Limit`,
-  `NewParseErr*`, `ShiftPos`, `BoolEnd` — the bool error-branch give-up
+  `NewParseErr*`, `Errors.Collect`, `BoolEnd` — the bool error-branch give-up
   position, `AnySize`/`AnySizeHTML` — the `any` JSONSize budget,
   `AnyIsEmpty` — the
   `omitempty` predicate for `any`, `Float32`, `ParseRFC3339`; the `Any*`
@@ -520,20 +520,6 @@ surface pinned by `Decoder[T]`).
   (The audit's other two finds SHIPPED: unbounded recursion depth → opt #51;
   value-decoder number grammar → opt #52. Its dup-key find was DECIDED as
   intentional — see Tried Rejected.)
-
-- **Clean up validation error path-completion plumbing.** The 2026-08 path
-  fixes left structural-assertion smell: `PrependPath` is an exported method on
-  every error type but NOT in the `Error` interface, so `ggen.NewParseErr`,
-  `Errors.Append`, and `Errors.PrependPath` each assert
-  `interface{ PrependPath(string) }` inline. (2026-08: `AddPos` joined as a
-  second such method — 29 more one-liners + `interface{ AddPos(int) }`
-  asserts in `NewParseErrShift`/`ShiftPos`/`Errors.AddPos` — strengthening
-  the shared-embedded-base case.) Candidates: put `PrependPath` in
-  the interface outright (external implementors just gain a required method —
-  breaking is fine here), or restructure the ~20 error structs around a shared
-  embedded base (`Pos int; Path []string` + one `PrependPath` impl) which also
-  kills the 20 copy-pasted one-liners. Fold into the CustomError-shape revisit
-  below if both happen at once.
 
 - **Revisit `ggen.CustomError` shape.** Today `{Field, Name string, Cause
   error}` + `Unwrap()`. Rough edges: `Name` doubles as rule identifier and

@@ -11,20 +11,20 @@ import (
 // underlying sentinel, such as ErrBadString, stays reachable through
 // errors.Is and errors.Unwrap.
 //
-// Path lists the keys and indexes from the document root to the failing
+// Keys lists the keys and indexes from the document root to the failing
 // value, one entry per nesting level. Pos is a byte offset. For DecodeFrom it
 // is an offset into data. For DecodeFromStream it is the value of s.Pos.
-// Validation failures are not wrapped. They carry their own Path and keep
+// Validation failures are not wrapped. They carry their own Keys and keep
 // their type, so errors.As finds them.
 type ParseError struct {
-	Path []string
+	Keys []string
 	Pos  int
 	Err  error
 }
 
 // Error renders "parse error[ at <a.b.c>] (pos <n>)[: <cause>]".
 func (e *ParseError) Error() string {
-	field := strings.Join(e.Path, ".")
+	field := strings.Join(e.Keys, ".")
 	buf := make([]byte, 0, 42+len(field))
 	buf = append(buf, "parse error"...)
 	if field != "" {
@@ -43,14 +43,15 @@ func (e *ParseError) Error() string {
 
 func (e *ParseError) Unwrap() error { return e.Err }
 
-// AddPos shifts the error's byte offset by d. Nested decodes on the bytes
-// path use it (see NewParseErrShift). If the wrapped cause carries its own
-// position, such as a ModError from a nested mod, it is shifted too.
-func (e *ParseError) AddPos(d int) {
-	e.Pos += d
-	if ap, ok := e.Err.(interface{ AddPos(d int) }); ok {
-		ap.AddPos(d)
+// Path returns Keys, like [ValidationError.Path].
+func (e *ParseError) Path() []string { return e.Keys }
+
+// Message returns the cause without the path and position.
+func (e *ParseError) Message() string {
+	if e.Err == nil {
+		return "parse error"
 	}
+	return e.Err.Error()
 }
 
 // NewParseErrShift is NewParseErr for nested decodes on the bytes path. The
@@ -64,20 +65,36 @@ func (e *ParseError) AddPos(d int) {
 // The exception is a stream call to UnmarshalJSON, which runs on a captured
 // copy of the value.
 func NewParseErrShift(segment string, pos, n int, err error) error {
-	if ap, ok := err.(interface{ AddPos(d int) }); ok {
-		ap.AddPos(pos - n)
-	}
+	shiftPos(err, pos-n)
 	return NewParseErr(segment, pos, err)
+}
+
+// shiftPos adds d to every position err carries. A *ParseError's cause is
+// shifted too: a ModError from a nested mod arrives already wrapped in one.
+func shiftPos(err error, d int) {
+	switch e := err.(type) {
+	case ValidationError:
+		relocate(e, "", d)
+	case Errors:
+		for _, v := range e {
+			relocate(v, "", d)
+		}
+	case *ParseError:
+		e.Pos += d
+		shiftPos(e.Err, d)
+	case *ModError:
+		e.Pos += d
+	}
 }
 
 // NewParseErr wraps an error returned by a generated decoder:
 //
-//   - An [Error] gets segment added to the front of its path and is returned
+//   - A [ValidationError] gets segment added to the front of its path and is returned
 //     as is, so errors.As still finds it. [Errors] is cut down to its first
 //     entry first, see below.
-//   - A *ParseError gets segment added to the front of its Path. Its Pos
+//   - A *ParseError gets segment added to the front of its Keys. Its Pos
 //     keeps pointing at the deeper failure.
-//   - Any other error is wrapped as &ParseError{Path: {segment}, Pos, Err}.
+//   - Any other error is wrapped as &ParseError{Keys: {segment}, Pos, Err}.
 //
 // An empty segment leaves the path unchanged.
 //
@@ -92,17 +109,15 @@ func NewParseErr(segment string, pos int, err error) error {
 	if es, ok := err.(Errors); ok && len(es) > 0 {
 		err = es[0]
 	}
-	if _, ok := err.(Error); ok {
+	if ve, ok := err.(ValidationError); ok {
 		// Add the segment like the *ParseError case does, so a nested
 		// validation error reports its full path.
-		if p, ok := err.(interface{ PrependPath(segment string) }); ok && segment != "" {
-			p.PrependPath(segment)
-		}
+		relocate(ve, segment, 0)
 		return err
 	}
 	if pe, ok := errors.AsType[*ParseError](err); ok {
 		if segment != "" {
-			pe.Path = prependSegment(pe.Path, segment)
+			pe.Keys = prependSegment(pe.Keys, segment)
 		}
 		return pe
 	}
@@ -110,7 +125,7 @@ func NewParseErr(segment string, pos int, err error) error {
 	if segment != "" {
 		path = []string{segment}
 	}
-	return &ParseError{Path: path, Pos: pos, Err: err}
+	return &ParseError{Keys: path, Pos: pos, Err: err}
 }
 
 // prependSegment returns segment followed by p, in a new backing array.
