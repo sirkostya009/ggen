@@ -57,6 +57,33 @@ func TestAppendNetAddr_matchesString(t *testing.T) {
 	}
 }
 
+func TestParseNetAddr_mappedZoneRejected(t *testing.T) {
+	t.Parallel()
+	for _, s := range []string{"[::ffff:1.2.3.4%eth0]:80", "[0:0:0:0:0:ffff:102:304%x]:1"} {
+		if a, err := ParseNetAddr[net.TCPAddr](s); err == nil {
+			t.Errorf("%s: parsed as %v, which AppendNetAddr refuses", s, a)
+		}
+	}
+	a, err := ParseNetAddr[net.TCPAddr]("[::ffff:1.2.3.4]:80")
+	if err != nil || len(a.IP) != net.IPv4len {
+		t.Errorf("mapped without zone: %v (%v), want IPv4", a, err)
+	}
+}
+
+func TestParseIPNet_oneAlloc(t *testing.T) { //nolint:paralleltest // measures allocations
+	for _, s := range []string{"10.0.0.0/8", "2001:db8::/33"} {
+		if n := testing.AllocsPerRun(100, func() { _, _ = ParseIPNet(s) }); n != 1 {
+			t.Errorf("%s: %v allocs, want 1", s, n)
+		}
+	}
+	// IP is capped, so appending to it cannot overwrite Mask.
+	n, _ := ParseIPNet("10.0.0.0/8")
+	_ = append(n.IP, 0xaa)
+	if n.Mask.String() != "ff000000" {
+		t.Errorf("mask clobbered: %v", n.Mask)
+	}
+}
+
 func TestAppendAny_netTypes(t *testing.T) {
 	t.Parallel()
 	_, n, _ := net.ParseCIDR("10.0.0.0/8")

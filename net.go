@@ -29,7 +29,25 @@ func ParseIPNet(s string) (net.IPNet, error) {
 	}
 	p = p.Masked()
 	a := p.Addr()
-	return net.IPNet{IP: a.AsSlice(), Mask: net.CIDRMask(p.Bits(), a.BitLen())}, nil
+	n := a.BitLen() / 8
+	b := make([]byte, 2*n)
+	ip, mask := b[:n:n], b[n:]
+	if n == net.IPv4len {
+		*(*[4]byte)(ip) = a.As4()
+	} else {
+		*(*[16]byte)(ip) = a.As16()
+	}
+	bits := p.Bits()
+	for i := range mask {
+		if bits >= 8 {
+			mask[i] = 0xff
+			bits -= 8
+		} else {
+			mask[i] = ^byte(0xff >> bits)
+			bits = 0
+		}
+	}
+	return net.IPNet{IP: ip, Mask: mask}, nil
 }
 
 // AppendIPNet appends the CIDR text of n and the closing '"'. The caller
@@ -76,7 +94,8 @@ func AppendIPNet(dst []byte, n net.IPNet) ([]byte, error) {
 // "1.2.3.4:80", "[::1]:80", "[fe80::1%eth0]:80", or ":80" for a value
 // with no IP. "" is the zero value, which is what AppendNetAddr writes for
 // it. Both parts must be numeric. No name or service lookup is done. An
-// IPv4-mapped IPv6 address is read as IPv4, as net.IP treats it. The error
+// IPv4-mapped IPv6 address is read as IPv4, as net.IP treats it, so a zone
+// on one is an error, since AppendNetAddr could not write it back. The error
 // never retains s, so s may alias a buffer that is reused.
 func ParseNetAddr[T net.TCPAddr | net.UDPAddr](s string) (T, error) {
 	if s == "" {
@@ -90,11 +109,12 @@ func ParseNetAddr[T net.TCPAddr | net.UDPAddr](s string) (T, error) {
 		return T(net.TCPAddr{Port: int(port)}), nil
 	}
 	ap, err := netip.ParseAddrPort(s)
-	if err != nil {
-		return T{}, &net.ParseError{Type: "ip:port address", Text: strings.Clone(s)}
-	}
 	a := ap.Addr()
 	zone := a.Zone()
+	// A mapped address is read as IPv4, which cannot carry the zone.
+	if err != nil || zone != "" && a.Is4In6() {
+		return T{}, &net.ParseError{Type: "ip:port address", Text: strings.Clone(s)}
+	}
 	return T(net.TCPAddr{IP: a.WithZone("").Unmap().AsSlice(), Port: int(ap.Port()), Zone: zone}), nil
 }
 

@@ -331,7 +331,16 @@ var helperSource = map[string]string{
   if (host === "") return true;
   if (host[0] !== "[") return ggenIsIPv4(host);
   const addr = host.slice(1, -1);
-  return host.length >= 2 && host.endsWith("]") && ggenIsAddr(addr) && !ggenIsIPv4(addr);
+  if (host.length < 2 || !host.endsWith("]") || !ggenIsAddr(addr) || ggenIsIPv4(addr)) return false;
+  const zone = addr.indexOf("%");
+  if (zone < 0) return true;
+  // Go reads an IPv4-mapped address as IPv4, which cannot carry a zone.
+  const halves = addr.slice(0, zone).split("::");
+  const groups = (h: string) => (h === "" ? [] : h.split(":").flatMap((g) => (g.includes(".") ? [g, g] : [g])));
+  const head = groups(halves[0]);
+  const tail = halves.length === 2 ? groups(halves[1]) : [];
+  const all = [...head, ...Array(8 - head.length - tail.length).fill("0"), ...tail];
+  return !(all.slice(0, 5).every((g) => /^0+$/.test(g)) && /^0*ffff$/i.test(all[5]));
 }`,
 	"ggenIsTime":          isTimeHelper,
 	"ggenTimeEncoder":     timeEncoder,

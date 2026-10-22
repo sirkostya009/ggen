@@ -283,7 +283,7 @@ Sentinels identical on both paths: an unescaped control byte inside a string →
 - `time.Duration` — `format:units` (default, `"1h30m"`), `sec`, `milli`, `micro`, `nano`. Inside `any` the same units string is emitted.
 - `net.IP`, `netip.Addr`, `netip.Prefix` — text form. `""` ↔ zero value (nil `net.IP`); `null` → nil for `net.IP` only.
 - `net.IPNet` — CIDR string `"10.0.0.0/8"` (NOT struct dump — wire divergence from stdlib). `""` ↔ zero value. Decode masks host bits off, as `net.ParseCIDR` does; a mask with no prefix length fails to marshal. `null` only through a pointer.
-- `net.TCPAddr`, `net.UDPAddr` — `"ip:port"` string (NOT struct dump — wire divergence from stdlib): `"1.2.3.4:80"`, `"[::1]:80"`, `"[fe80::1%eth0]:80"`, `":80"` for no IP. `""` ↔ zero value. Both parts numeric, no name or service lookup (`"localhost:80"`, `":http"` rejected). Port outside 0–65535, or a zone without an IPv6 address, fails to marshal. `null` only through a pointer.
+- `net.TCPAddr`, `net.UDPAddr` — `"ip:port"` string (NOT struct dump — wire divergence from stdlib): `"1.2.3.4:80"`, `"[::1]:80"`, `"[fe80::1%eth0]:80"`, `":80"` for no IP. `""` ↔ zero value. Both parts numeric, no name or service lookup (`"localhost:80"`, `":http"` rejected). An IPv4-mapped address decodes as IPv4, so a zone on one is rejected. Port outside 0–65535, or a zone without an IPv6 address, fails to marshal. `null` only through a pointer.
 - `json.RawMessage` / `jsontext.Value` — opaque, zero-copy alias.
 - `net/url.URL` — JSON string (NOT struct dump — wire divergence from stdlib).
 - `math/big.Int` (JSON number), `big.Float` / `big.Rat` (JSON string — wire divergence from stdlib).

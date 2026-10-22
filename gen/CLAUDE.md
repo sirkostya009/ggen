@@ -190,7 +190,7 @@ reference that `Context.Later` reports forward is `z.lazy(() => X)`.
   Go duration strings, `,string` number grammars (plus width ranges for narrow
   integers), the `url` rule as "scheme://rest", `netip.Addr` with an IPv6
   zone, `ip-port` (`ggenIsAddrPort`: `netip.ParseAddrPort` plus the `":port"`
-  form for no IP), and ports of the Go parsers behind text-typed values: `time.Parse`
+  form for no IP, minus a zone on an IPv4-mapped address), and ports of the Go parsers behind text-typed values: `time.Parse`
   for custom layouts, `big.Float.Parse(s, 10)`, `big.Rat.SetString` and
   `url.Parse` (strict colons in http/https hosts, the go1.26+ default).
 - Integers: `z.int()` with the Go width's range; 64-bit stays `z.int()` (safe

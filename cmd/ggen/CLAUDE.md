@@ -783,7 +783,10 @@ import path per pass (see "Foreign type spelling" under Cross-package types).
   `netip.ParseAddrPort` (plus `":port"` for a nil IP, which a listen address
   holds and `ParseAddrPort` refuses), so there is never a DNS or service
   lookup and the grammar matches `netip`'s, which the `gen` schema helpers
-  already port. `ParseIPNet` masks host bits like `net.ParseCIDR`. The writers
+  already port. `ParseNetAddr` unmaps an IPv4-mapped address, as `net.IP`
+  does, so it rejects a zone on one: `AppendNetAddr` refuses an IPv4 zone.
+  `ParseIPNet` masks host bits like `net.ParseCIDR` and backs `IP` and `Mask`
+  with one allocation, `IP` capacity-capped so an append cannot reach `Mask`. The writers
   print what `String()` prints and REFUSE what the parsers could not read back
   (a non-canonical mask, an IP of the wrong length, a port outside
   [0,65535], a zone without an IPv6 address) instead of writing `"<nil>"` or
