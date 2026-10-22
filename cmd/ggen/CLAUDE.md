@@ -209,7 +209,8 @@ Field config is partitioned by role across three tags: `json:` (wire shape),
   opt #87): ggen always writes a struct's object, so the option could only
   ever be a silent no-op there. `omitEmptyCond` covers every remaining kind
   whose empty encoding is not Go-zero-shaped: `net.IP` (`len > 0`),
-  `netip.Addr`/`Prefix` (`IsValid()`), `url.URL` (`!= (url.URL{})` — judged
+  `netip.Addr`/`Prefix` (`IsValid()`), `net.IPNet`/`TCPAddr`/`UDPAddr` (any
+  field set — the zero value is the one written as `""`), `url.URL` (`!= (url.URL{})` — judged
   on ggen's string wire, where the zero URL is `""`), `any` (runtime
   `ggen.AnyIsEmpty`: type switch over nil/string/[]any/map[string]any/
   primitives, reflect for other slices/maps/arrays/pointers, structs never
@@ -771,6 +772,31 @@ import path per pass (see "Foreign type spelling" under Cross-package types).
   `parsePrefixError` retain the input string and quote it in `Error()`, and
   `sv` aliases `s.buf` (same shape as `renderStreamNetIP`'s clone). Pinned by
   `TestNetTypes_emptyIsZero` + `TestNetip_ErrorDetachedFromBuffer`
+- `net.IPNet`, `net.TCPAddr`, `net.UDPAddr` — strings (`KindIPNet`/`KindTCPAddr`/
+  `KindUDPAddr`), CIDR text and `"ip:port"`. None has a marshal method, so
+  before these kinds existed they fell to `encoding/json` and came out as
+  their exported fields (`{"IP":…,"Mask":"<base64>"}`), a shape nobody sends.
+  All work is in the runtime (`net.go`): `ggen.ParseIPNet` /
+  `ggen.AppendIPNet` and `ggen.ParseNetAddr[T]` / `ggen.AppendNetAddr{,HTML}`,
+  generic over the two address types (identical layouts, so one body serves
+  both by conversion). Parsing goes through `netip.ParsePrefix` /
+  `netip.ParseAddrPort` (plus `":port"` for a nil IP, which a listen address
+  holds and `ParseAddrPort` refuses), so there is never a DNS or service
+  lookup and the grammar matches `netip`'s, which the `gen` schema helpers
+  already port. `ParseIPNet` masks host bits like `net.ParseCIDR`. The writers
+  print what `String()` prints and REFUSE what the parsers could not read back
+  (a non-canonical mask, an IP of the wrong length, a port outside
+  [0,65535], a zone without an IPv6 address) instead of writing `"<nil>"` or
+  `"1.2.3.4/ff00ff00"`. `""` ↔ the zero value, as for netip. The parsers'
+  errors clone the text, so the emitters (`renderNetParse` /
+  `renderStreamNetParse`) scan with the aliasing scan / `StringView` even
+  under `-copy`, and value fields, map values and slots all assign the
+  whole value (`m[mk], err = ggen.ParseIPNet(s)`). A field's generated code may
+  never spell `net.` (an IPNet value field calls only `ggen.`), so `net` comes
+  from the body scan, not `collectFieldImports`. `omitempty` tests the fields
+  that make the value non-empty (`len(IP) > 0 || …`, parenthesised, since a
+  pointer guard ANDs it). Pinned by `TestNetAddrs_*` (integ) and
+  `TestAppendIPNet_matchesString` / `TestAppendNetAddr_matchesString` (root)
 - `[]byte` — `format:base64` (default)/`base64url`/`base32`/`base32hex`/
   `base16`(`hex`)/`array` (JSON array of numbers). `null` ↔ `nil`: decode accepts
   `null` → nil, nil marshals as `null` (empty non-nil → `""`/`[]`); no
@@ -871,7 +897,7 @@ import path per pass (see "Foreign type spelling" under Cross-package types).
 
 ## Wire-format divergences from stdlib
 
-Two kinds intentionally diverge from `encoding/json` v1 + v2. ggen marshal output
+These kinds intentionally diverge from `encoding/json` v1 + v2. ggen marshal output
 is _not_ a subset of either for these — feeding through stdlib reshapes the value,
 and decoding stdlib JSON won't work for these fields. Round-trip within ggen is
 fine.
@@ -880,6 +906,8 @@ fine.
 | ------------- | --------------------- | -------------------------------------------------------- |
 | `net/url.URL` | `"https://x/p?q=1"`   | `{"Scheme":"https","Host":"x","Path":"/p", … 11 fields}` |
 | `sql.Null*`   | inner value or `null` | `{"<Inner>":val,"Valid":true}` (plain struct, no hook)   |
+| `net.IPNet`   | `"10.0.0.0/8"`        | `{"IP":"10.0.0.0","Mask":"/wAAAA=="}`                    |
+| `net.TCPAddr`/`UDPAddr` | `"1.2.3.4:80"` | `{"IP":"1.2.3.4","Port":80,"Zone":""}`                |
 
 ## Output file naming + build tags
 
@@ -1045,7 +1073,7 @@ Pos, Err}` for raw sentinels (a one-segment path), prepends the segment onto a `
     structs collapse to `return N`.
 16. **Opening-quote folding.** At struct-field top level, when a value emit begins
     with `"` (string, URL, big.Rat, time/RFC3339, duration/units, base64/hex
-    bytes, net.IP/netip), the opening quote folds into the constant `"key":` →
+    bytes, net.IP/netip/IPNet/TCPAddr/UDPAddr), the opening quote folds into the constant `"key":` →
     `"key":"`; the value emitter writes only body + closing `"`.
 17. **First-element-then-rest slice loop.** First element emitted directly (no
     leading comma); iterate `slice[1:]` with comma-prepend — lifts the per-iter
@@ -1106,16 +1134,18 @@ Pos, Err}` for raw sentinels (a one-segment path), prepends the segment onto a `
     See `.claude/encode.md` for ordering. Outpaces stdjson v1 and jsonv2 on map
     shapes.
 33. **`AppendAny` concrete cases for `json.RawMessage`, `time.Time`,
-    `time.Duration`, pointer-to-primitive.** These pre-empt the `json.Marshaler`
-    branch / `reflect.Pointer` fallback. Concrete cases MUST sit before
-    interface dispatches. `time.Duration` emits the units string a bare
+    `time.Duration`, `net.IPNet`/`TCPAddr`/`UDPAddr`, pointer-to-primitive.**
+    These pre-empt the `json.Marshaler` branch / `reflect.Pointer` fallback.
+    Concrete cases MUST sit before interface dispatches. `time.Duration` emits the units string a bare
     `Duration` field carries by default, so one document holds one shape and
     the any-path form decodes back into a `Duration` field (the reflect Int64
     arm emitted bare nanoseconds; stable jsonv2 has no default Duration
     representation and errors — documented divergence, same as the field
     emitter). `quotableKind` excludes `time.Duration` by type identity so
     `,string` on a reflected Duration field cannot double-wrap the string
-    wire. The walker's other jsonv2-parity rules (pointer-receiver
+    wire. The three net structs take the field emitters' runtime writers for
+    the same one-shape reason, and `structWire` treats them as strings, so
+    `omitempty` drops a zero one. The walker's other jsonv2-parity rules (pointer-receiver
     marshalers reached for values, text-marshaler map keys, omitempty on
     encoded bytes, omitzero via `IsZero()`, the `embed` splice) are in
     .claude/encode.md.
@@ -1193,7 +1223,8 @@ recv` prologue. The named first result homes the value in the caller's return
     `KeyView` scalar prelude). Generated stream decoders use it where the value
     string is consumed before the next stream op and retains no bytes past that
     point: base64/base32/hex `[]byte`, `time.Time`/`time.Duration` text formats,
-    `net.IP`, `netip.Addr`/`Prefix`, `big.Float`/`big.Rat`, cross-pkg
+    `net.IP`, `netip.Addr`/`Prefix`, `net.IPNet`/`TCPAddr`/`UDPAddr`,
+    `big.Float`/`big.Rat`, cross-pkg
     `TextUnmarshaler`. NOT `url.URL` (`url.Parse` slices its input), plain `string`
     fields, map keys, or map/slice string elems — those outlive the scan and keep
     the copying `Stream.String` (itself `StringView` + `strings.Clone`). See

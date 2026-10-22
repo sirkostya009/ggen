@@ -66,7 +66,10 @@ Every rule below mirrors what the generated decoder or encoder does.
   (`notempty`, `minlen>0`, `len≠0`). Rules on a `Type` apply to non-null
   values, which is how a pointer skips them.
 - **Null and zero, output.** A nil-able type is `Nullable`; `net.IP` emits
-  `""` instead, as do `netip.Addr`/`Prefix` and `url.URL` (`Empty`). An enum
+  `""` instead, as do `netip.Addr`/`Prefix`, `net.IPNet`, `net.TCPAddr`/`UDPAddr`
+  and `url.URL` (`Empty`). `net.IPNet` takes `cidr`, the format of
+  `netip.Prefix`, because the runtime parses it with `netip.ParsePrefix`; the
+  two address types take `ip-port`. An enum
   admits the Go zero value (`Enum.Zero`) unless a constant equals it.
   `omitzero` clears all three on the field; `omitempty` clears `Nullable`,
   `Empty` and a string enum's `Zero` (`0` is not JSON-empty). `Strict` /
@@ -186,7 +189,8 @@ reference that `Context.Later` reports forward is `z.lazy(() => X)`.
   lengths, decoded length of binary encodings, padded base64url/base32/hex,
   Go duration strings, `,string` number grammars (plus width ranges for narrow
   integers), the `url` rule as "scheme://rest", `netip.Addr` with an IPv6
-  zone, and ports of the Go parsers behind text-typed values: `time.Parse`
+  zone, `ip-port` (`ggenIsAddrPort`: `netip.ParseAddrPort` plus the `":port"`
+  form for no IP), and ports of the Go parsers behind text-typed values: `time.Parse`
   for custom layouts, `big.Float.Parse(s, 10)`, `big.Rat.SetString` and
   `url.Parse` (strict colons in http/https hosts, the go1.26+ default).
 - Integers: `z.int()` with the Go width's range; 64-bit stays `z.int()` (safe
@@ -215,10 +219,10 @@ Helpers are plain functions where a regex would be unreadable: IPv4, IPv6
 are parsed; the time helper walks the layout the way `time.Parse` does
 (ranges, day of month, day of year); the big-number helpers add the exponent
 limits a regex cannot express. `internal/js` runs every such helper in Node
-against its Go counterpart: `TestIPHelpersMatchGo`, `TestTimeHelperMatchesGo`
-(random times formatted in 25 layouts, then mutated), and
-`TestBigFloatHelperMatchesGo` / `TestRationalHelperMatchesGo` /
-`TestURLHelperMatchesGo` (every string up to four characters over a grammar
+against its Go counterpart: `TestIPHelpersMatchGo`,
+`TestAddrPortHelperMatchesGo`, `TestTimeHelperMatchesGo` (random times
+formatted in 25 layouts, then mutated), and `TestBigFloatHelperMatchesGo` /
+`TestRationalHelperMatchesGo` / `TestURLHelperMatchesGo` (every string up to four characters over a grammar
 alphabet, plus edge cases). A change to a helper must keep these green.
 
 `zod/zod_test.go` compares a requests/responses/shared layout with
@@ -244,8 +248,8 @@ built-ins differ from Go in other places:
   `v.value`/`v.notValue` for `eq`/`neq`, `v.base64()`.
 - Replaced by helpers: dates (`v.isoTimestamp` accepts a space separator and
   `+0100`; the helper also checks the day of month), IPs (`v.ip` accepts an IPv6 zone, which `net.IP` rejects), hex and
-  the other character classes (`v.hexadecimal` accepts `0x`), CIDR (no
-  built-in).
+  the other character classes (`v.hexadecimal` accepts `0x`), CIDR and
+  `ip-port` (no built-in).
 - Floats get `v.finite()`: `v.number()` accepts Infinity, which
   `JSON.parse("1e400")` produces and Go rejects.
 - Objects: `v.strictObject` / `v.object` / `v.objectWithRest(shape, Rest)`;

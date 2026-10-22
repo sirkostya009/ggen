@@ -44,6 +44,8 @@ export type Edges = {
   fixed: string;
   ip: string;
   addr: string;
+  net: string;
+  tcp: string | null;
   ns: string | null;
   raw: unknown;
   lower: "x" | "y" | "";

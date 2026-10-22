@@ -63,6 +63,8 @@ data class Edges(
     val fixed: String,
     val ip: String,
     val addr: String,
+    val net: String,
+    val tcp: String?,
     val ns: String?,
     val raw: JsonElement,
     val lower: String,

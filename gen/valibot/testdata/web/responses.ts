@@ -2,7 +2,7 @@
 
 import * as v from "valibot";
 import { User as money_User } from "../shared/money.ts";
-import { ggenDecoded, ggenFits, ggenHex, ggenInteger, ggenIsAddr, ggenIsDateOnly, ggenIsDateTime, ggenIsDuration, ggenIsIP } from "../shared/ggen.ts";
+import { ggenDecoded, ggenFits, ggenHex, ggenInteger, ggenIsAddr, ggenIsAddrPort, ggenIsDateOnly, ggenIsDateTime, ggenIsDuration, ggenIsIP, ggenIsPrefix } from "../shared/ggen.ts";
 
 function ggenObject<T extends v.GenericSchema<object>>(schema: T) {
   const isObject = (x: unknown) => typeof x === "object" && x !== null && !Array.isArray(x);
@@ -69,6 +69,8 @@ export const Edges = ggenObject(v.objectWithRest({
   fixed: v.pipe(v.string(), v.base64(), v.check((x) => ggenDecoded(x, 6) === 4, "must decode to 4 bytes")),
   ip: v.union([v.pipe(v.string(), v.empty()), v.pipe(v.string(), v.check(ggenIsIP, "must be an IP address"))], "must be empty or an IP address"),
   addr: v.union([v.pipe(v.string(), v.empty()), v.pipe(v.string(), v.check(ggenIsAddr, "must be an IP address"))], "must be empty or an IP address"),
+  net: v.union([v.pipe(v.string(), v.empty()), v.pipe(v.string(), v.check(ggenIsPrefix, "must be an IP prefix"))], "must be empty or an IP prefix"),
+  tcp: v.nullable(v.union([v.pipe(v.string(), v.empty()), v.pipe(v.string(), v.check(ggenIsAddrPort, "must be an IP address and port"))], "must be empty or an IP address and port")),
   ns: v.nullable(v.string()),
   raw: v.unknown(),
   lower: v.picklist(["x", "y", ""]),

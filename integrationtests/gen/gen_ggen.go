@@ -2163,6 +2163,7 @@ func (recv Stdlib) DecodeFrom(data []byte) (result Stdlib, i int, err error) {
 	seenHex := false
 	seenIP := false
 	seenMinB := false
+	seenNet := false
 	seenNG := false
 	seenNI := false
 	seenNS := false
@@ -2171,6 +2172,8 @@ func (recv Stdlib) DecodeFrom(data []byte) (result Stdlib, i int, err error) {
 	seenTDate := false
 	seenTMilli := false
 	seenTUnix := false
+	seenTCP := false
+	seenUDP := false
 	seenURL := false
 	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 		i++
@@ -2211,6 +2214,9 @@ func (recv Stdlib) DecodeFrom(data []byte) (result Stdlib, i int, err error) {
 		if !seenIP {
 			result.IP = nil
 		}
+		if !seenNet {
+			result.Net = (Stdlib{}).Net
+		}
 		if !seenNG {
 			result.NG = (Stdlib{}).NG
 		}
@@ -2234,6 +2240,12 @@ func (recv Stdlib) DecodeFrom(data []byte) (result Stdlib, i int, err error) {
 		}
 		if !seenTUnix {
 			result.TUnix = (Stdlib{}).TUnix
+		}
+		if !seenTCP {
+			result.TCP = (Stdlib{}).TCP
+		}
+		if !seenUDP {
+			result.UDP = nil
 		}
 		if !seenURL {
 			result.URL = (Stdlib{}).URL
@@ -2782,6 +2794,36 @@ func (recv Stdlib) DecodeFrom(data []byte) (result Stdlib, i int, err error) {
 			if len(result.MinB) < 2 {
 				return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"min_b"}, Limit: 2, Got: len(result.MinB)}
 			}
+		case "net":
+			if seenNet {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"net"}}
+			}
+			seenNet = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("net", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("net", i, err)
+				}
+			}
+			result.Net, err = ggen.ParseIPNet(s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("net", i, err)
+			}
 		case "ng":
 			if seenNG {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"ng"}}
@@ -3023,6 +3065,80 @@ func (recv Stdlib) DecodeFrom(data []byte) (result Stdlib, i int, err error) {
 			sec := int64(f)
 			nsec := int64((f - float64(sec)) * 1e9)
 			result.TUnix = time.Unix(sec, nsec)
+		case "tcp":
+			if seenTCP {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"tcp"}}
+			}
+			seenTCP = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("tcp", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("tcp", i, err)
+				}
+			}
+			result.TCP, err = ggen.ParseNetAddr[net.TCPAddr](s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("tcp", i, err)
+			}
+		case "udp":
+			if seenUDP {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"udp"}}
+			}
+			seenUDP = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("udp", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.UDP = nil
+				break
+			}
+			var v net.UDPAddr
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("udp", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("udp", i, err)
+				}
+			}
+			v, err = ggen.ParseNetAddr[net.UDPAddr](s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("udp", i, err)
+			}
+			if result.UDP == nil {
+				result.UDP = new(v)
+			} else {
+				(*result.UDP) = v
+			}
 		case "url":
 			if seenURL {
 				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"url"}}
@@ -3100,6 +3216,9 @@ func (recv Stdlib) DecodeFrom(data []byte) (result Stdlib, i int, err error) {
 			if !seenIP {
 				result.IP = nil
 			}
+			if !seenNet {
+				result.Net = (Stdlib{}).Net
+			}
 			if !seenNG {
 				result.NG = (Stdlib{}).NG
 			}
@@ -3123,6 +3242,12 @@ func (recv Stdlib) DecodeFrom(data []byte) (result Stdlib, i int, err error) {
 			}
 			if !seenTUnix {
 				result.TUnix = (Stdlib{}).TUnix
+			}
+			if !seenTCP {
+				result.TCP = (Stdlib{}).TCP
+			}
+			if !seenUDP {
+				result.UDP = nil
 			}
 			if !seenURL {
 				result.URL = (Stdlib{}).URL
@@ -3168,6 +3293,7 @@ func (recv Stdlib) DecodeFromStream(s *ggen.Stream) (result Stdlib, err error) {
 	seenHex := false
 	seenIP := false
 	seenMinB := false
+	seenNet := false
 	seenNG := false
 	seenNI := false
 	seenNS := false
@@ -3176,6 +3302,8 @@ func (recv Stdlib) DecodeFromStream(s *ggen.Stream) (result Stdlib, err error) {
 	seenTDate := false
 	seenTMilli := false
 	seenTUnix := false
+	seenTCP := false
+	seenUDP := false
 	seenURL := false
 	err = s.ObjectOpen()
 	if err != nil {
@@ -3220,6 +3348,9 @@ func (recv Stdlib) DecodeFromStream(s *ggen.Stream) (result Stdlib, err error) {
 		if !seenIP {
 			result.IP = nil
 		}
+		if !seenNet {
+			result.Net = (Stdlib{}).Net
+		}
 		if !seenNG {
 			result.NG = (Stdlib{}).NG
 		}
@@ -3243,6 +3374,12 @@ func (recv Stdlib) DecodeFromStream(s *ggen.Stream) (result Stdlib, err error) {
 		}
 		if !seenTUnix {
 			result.TUnix = (Stdlib{}).TUnix
+		}
+		if !seenTCP {
+			result.TCP = (Stdlib{}).TCP
+		}
+		if !seenUDP {
+			result.UDP = nil
 		}
 		if !seenURL {
 			result.URL = (Stdlib{}).URL
@@ -3747,6 +3884,24 @@ func (recv Stdlib) DecodeFromStream(s *ggen.Stream) (result Stdlib, err error) {
 			if len(result.MinB) < 2 {
 				return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"min_b"}, Limit: 2, Got: len(result.MinB)}
 			}
+		case "net":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("net", s.Offset(), err)
+			}
+			if seenNet {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"net"}}
+			}
+			seenNet = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("net", s.Offset(), err)
+			}
+			result.Net, err = ggen.ParseIPNet(sv)
+			if err != nil {
+				return result, ggen.NewParseErr("net", s.Offset(), err)
+			}
 		case "ng":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -3950,6 +4105,68 @@ func (recv Stdlib) DecodeFromStream(s *ggen.Stream) (result Stdlib, err error) {
 			sec := int64(f)
 			nsec := int64((f - float64(sec)) * 1e9)
 			result.TUnix = time.Unix(sec, nsec)
+		case "tcp":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("tcp", s.Offset(), err)
+			}
+			if seenTCP {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"tcp"}}
+			}
+			seenTCP = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("tcp", s.Offset(), err)
+			}
+			result.TCP, err = ggen.ParseNetAddr[net.TCPAddr](sv)
+			if err != nil {
+				return result, ggen.NewParseErr("tcp", s.Offset(), err)
+			}
+		case "udp":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("udp", s.Offset(), err)
+			}
+			if seenUDP {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"udp"}}
+			}
+			seenUDP = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("udp", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("udp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("udp", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.UDP = nil
+				break
+			}
+			var v net.UDPAddr
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("udp", s.Offset(), err)
+			}
+			v, err = ggen.ParseNetAddr[net.UDPAddr](sv)
+			if err != nil {
+				return result, ggen.NewParseErr("udp", s.Offset(), err)
+			}
+			if result.UDP == nil {
+				result.UDP = new(v)
+			} else {
+				(*result.UDP) = v
+			}
 		case "url":
 			err = s.ConsumeColon()
 			if err != nil {
@@ -4026,6 +4243,9 @@ func (recv Stdlib) DecodeFromStream(s *ggen.Stream) (result Stdlib, err error) {
 			if !seenIP {
 				result.IP = nil
 			}
+			if !seenNet {
+				result.Net = (Stdlib{}).Net
+			}
 			if !seenNG {
 				result.NG = (Stdlib{}).NG
 			}
@@ -4050,6 +4270,12 @@ func (recv Stdlib) DecodeFromStream(s *ggen.Stream) (result Stdlib, err error) {
 			if !seenTUnix {
 				result.TUnix = (Stdlib{}).TUnix
 			}
+			if !seenTCP {
+				result.TCP = (Stdlib{}).TCP
+			}
+			if !seenUDP {
+				result.UDP = nil
+			}
 			if !seenURL {
 				result.URL = (Stdlib{}).URL
 			}
@@ -4060,7 +4286,7 @@ func (recv Stdlib) DecodeFromStream(s *ggen.Stream) (result Stdlib, err error) {
 }
 
 func (s Stdlib) JSONSize() int {
-	size := 531
+	size := 646
 	if s.Addr.Is4() {
 		size += 15
 	} else {
@@ -4091,6 +4317,17 @@ func (s Stdlib) JSONSize() int {
 		size += 19
 	} else {
 		size += 43
+	}
+	if z := len(s.TCP.Zone); z > 0 {
+		size += 1 + z*2
+	}
+	if s.UDP == nil {
+		size += 4
+	} else {
+		size += 49
+		if z := len((*s.UDP).Zone); z > 0 {
+			size += 1 + z*2
+		}
 	}
 	size += len(s.URL.Scheme) + len(s.URL.Host)*3 + len(s.URL.Path)*3 + len(s.URL.RawQuery)*2 + len(s.URL.Fragment)*3 + len(s.URL.Opaque)*2
 	if s.URL.User != nil {
@@ -4181,6 +4418,10 @@ func (s Stdlib) AppendJSON(dst []byte) ([]byte, error) {
 		dst = base64.StdEncoding.AppendEncode(dst, s.MinB)
 		dst = append(dst, '"')
 	}
+	dst = append(dst, ",\"net\":\""...)
+	if dst, err = ggen.AppendIPNet(dst, s.Net); err != nil {
+		return dst, err
+	}
 	dst = append(dst, ",\"ng\":"...)
 	if !s.NG.Valid {
 		dst = append(dst, "null"...)
@@ -4214,6 +4455,19 @@ func (s Stdlib) AppendJSON(dst []byte) ([]byte, error) {
 	dst = strconv.AppendInt(dst, s.TMilli.UnixMilli(), 10)
 	dst = append(dst, ",\"t_unix\":"...)
 	dst = ggen.AppendUnixSeconds(dst, s.TUnix)
+	dst = append(dst, ",\"tcp\":\""...)
+	if dst, err = ggen.AppendNetAddr(dst, s.TCP); err != nil {
+		return dst, err
+	}
+	dst = append(dst, ",\"udp\":"...)
+	if s.UDP == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '"')
+		if dst, err = ggen.AppendNetAddr(dst, (*s.UDP)); err != nil {
+			return dst, err
+		}
+	}
 	dst = append(dst, ",\"url\":\""...)
 	dst = ggen.AppendURL(dst, s.URL)
 	return append(dst, '}'), nil

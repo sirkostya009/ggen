@@ -32,6 +32,8 @@ export type EdgesInput = {
   fixed?: string;
   ip?: string | null;
   addr?: string;
+  net?: string;
+  tcp?: string | null;
   ns?: string | null;
   raw?: unknown;
   lower?: string;

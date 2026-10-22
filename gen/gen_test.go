@@ -123,6 +123,8 @@ func TestInputShapes(t *testing.T) {
 		{"fixed", false, func(t *Type) bool { return t.Len == 4 && t.Format == FormatBase64 }},
 		{"ip", true, func(t *Type) bool { return t.Empty && t.Format == FormatIP }},
 		{"addr", false, func(t *Type) bool { return t.Empty && t.Format == FormatIPZone }},
+		{"net", false, func(t *Type) bool { return t.Go == IPNet && t.Empty && t.Format == FormatCIDR }},
+		{"tcp", true, func(t *Type) bool { return t.Go == TCPAddr && t.Empty && t.Format == FormatIPPort }},
 		{"ns", true, func(t *Type) bool { return t.Go == String && t.GoType == "sql.NullString" }},
 		{"raw", true, func(t *Type) bool { return t.Wire == WireAny && t.GoType == "json.RawMessage" }},
 		{"lower", false, func(t *Type) bool {

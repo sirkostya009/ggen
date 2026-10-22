@@ -57,6 +57,17 @@ export function ggenIsAddr(s: string): boolean {
   return zone + 1 < s.length && ggenIsIPv6(s.slice(0, zone));
 }
 
+export function ggenIsAddrPort(s: string): boolean {
+  const colon = s.lastIndexOf(":");
+  const port = s.slice(colon + 1);
+  if (colon < 0 || !/^[0-9]+$/.test(port) || Number(port) > 65535) return false;
+  const host = s.slice(0, colon);
+  if (host === "") return true;
+  if (host[0] !== "[") return ggenIsIPv4(host);
+  const addr = host.slice(1, -1);
+  return host.length >= 2 && host.endsWith("]") && ggenIsAddr(addr) && !ggenIsIPv4(addr);
+}
+
 export function ggenIsBigFloat(s: string): boolean {
   const m = /^[+-]?(?:[Ii]nf|(\d*)(?:\.(\d*))?(?:[eEpP]([+-]?\d+))?)$/.exec(s);
   if (m === null) return false;

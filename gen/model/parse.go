@@ -2521,6 +2521,12 @@ func ResolveKind(goType string) TypeKind {
 		return KindNetipAddr
 	case "netip.Prefix":
 		return KindNetipPrefix
+	case "net.IPNet":
+		return KindIPNet
+	case "net.TCPAddr":
+		return KindTCPAddr
+	case "net.UDPAddr":
+		return KindUDPAddr
 	case "[]byte", "[]uint8":
 		return KindBytes
 	case "json.RawMessage", "jsontext.Value":

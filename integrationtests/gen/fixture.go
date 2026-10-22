@@ -95,6 +95,9 @@ type Stdlib struct {
 	IP     net.IP         `json:"ip"`
 	Addr   netip.Addr     `json:"addr"`
 	Prefix netip.Prefix   `json:"prefix"`
+	Net    net.IPNet      `json:"net"`
+	TCP    net.TCPAddr    `json:"tcp"`
+	UDP    *net.UDPAddr   `json:"udp"`
 	URL    url.URL        `json:"url"`
 	BigI   big.Int        `json:"big_i"`
 	BigF   big.Float      `json:"big_f"`

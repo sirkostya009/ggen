@@ -88,6 +88,8 @@ type Edges struct {
 	Fixed  [4]byte           `json:"fixed"`
 	IP     net.IP            `json:"ip"`
 	Addr   netip.Addr        `json:"addr"`
+	Net    net.IPNet         `json:"net"`
+	TCP    *net.TCPAddr      `json:"tcp"`
 	NS     sql.NullString    `json:"ns"`
 	Raw    json.RawMessage   `json:"raw"`
 	Lower  string            `json:"lower"  pipe:"tolower oneof=x|y"`

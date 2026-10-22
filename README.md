@@ -682,6 +682,8 @@ decoding rules:
 | `net.IP`                           | string              | `""` ↔ nil, `null` ↔ nil                                                                                                                                                                                                                                                                                                    |
 | `netip.Addr`                       | string              | `""` ↔ zero value; `null` rejected                                                                                                                                                                                                                                                                                          |
 | `netip.Prefix`                     | string              | `""` ↔ zero value; `null` rejected                                                                                                                                                                                                                                                                                          |
+| `net.IPNet`                        | string              | CIDR text, `"10.0.0.0/8"`; `""` ↔ zero value; a mask with no prefix length fails to marshal. incompatible with stdlib                                                                                                                                                                                                       |
+| `net.TCPAddr`/`net.UDPAddr`        | string              | `"1.2.3.4:80"`, `"[::1]:80"`, `":80"` for no IP; `""` ↔ zero value; numeric only, no name lookup. incompatible with stdlib                                                                                                                                                                                                  |
 | `json.RawMessage`/`jsontext.Value` | passthrough         | —                                                                                                                                                                                                                                                                                                                           |
 | `net/url.URL`                      | string              | `url.Parse` on decode, `String()` on encode. incompatible with stdlib                                                                                                                                                                                                                                                       |
 | `math/big.Int`                     | number              | arbitrary precision                                                                                                                                                                                                                                                                                                         |
@@ -695,14 +697,14 @@ follows jsonv2: a value whose POINTER type carries `MarshalJSON` /
 `MarshalText` / `AppendText` still reaches that method wherever it sits (a
 `big.Rat` / `big.Float` value inside an `any` marshals as `"1/2"` / `"1.5"`),
 a `time.Duration` inside an `any` emits the same `"1m30s"` string a `Duration`
-field does, map keys with a text marshaler are emitted through it, and
+field does, and so do `net.IPNet`/`net.TCPAddr`/`net.UDPAddr` with their strings, map keys with a text marshaler are emitted through it, and
 `omitempty` / `omitzero` on struct fields reached through an `any` apply the
 rules above — including the struct rule: a struct member is written even when
 it comes out `{}`, matching generated code, which refuses the option outright.
 
 #### divergences from stdlib
 
-The `net/url.URL`, `sql.Null*`\*, and `sql.Null[T]` rows above ship a different
+The `net.IPNet`, `net.TCPAddr`/`net.UDPAddr`, `net/url.URL`, `sql.Null*`\*, and `sql.Null[T]` rows above ship a different
 wire shape from `encoding/json` v1/v2 — ggen serializes them the way consumers
 usually expect, diverging from stdlib's exported-field struct dump:
 
@@ -710,6 +712,8 @@ usually expect, diverging from stdlib's exported-field struct dump:
 | ------------------------- | --------------------- | ---------------------------------------------- |
 | `net/url.URL`             | `"https://x/p?q=1"`   | `{"Scheme":"https","Host":"x", ... 11 fields}` |
 | `sql.Null*`/`sql.Null[T]` | inner value or `null` | `{"<Inner>":val,"Valid":true}`                 |
+| `net.IPNet`               | `"10.0.0.0/8"`        | `{"IP":"10.0.0.0","Mask":"/wAAAA=="}`          |
+| `net.TCPAddr`/`UDPAddr`   | `"1.2.3.4:80"`        | `{"IP":"1.2.3.4","Port":80,"Zone":""}`         |
 
 ## examples
 

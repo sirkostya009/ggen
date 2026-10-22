@@ -45,6 +45,8 @@ data class EdgesInput(
     val fixed: String? = null,
     val ip: String? = null,
     val addr: String? = null,
+    val net: String? = null,
+    val tcp: String? = null,
     val ns: String? = null,
     val raw: JsonElement = JsonNull,
     val lower: String = "",

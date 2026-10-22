@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
+	"net"
 	"net/netip"
 	"reflect"
 	"strconv"
@@ -1919,6 +1920,11 @@ func TestAnySize_BoundsAppendAny(t *testing.T) {
 		when, &when, (*time.Time)(nil), time.Duration(math.MinInt64),
 		&ptrStr, (*string)(nil), &ptrInt, (*int)(nil), &ptrF,
 		netip.MustParseAddr("fe80::1:2:3:4%eth0"), netip.MustParsePrefix("2001:db8::/32"),
+		net.IPNet{IP: net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"), Mask: net.CIDRMask(128, 128)},
+		(*net.IPNet)(nil),
+		net.TCPAddr{IP: net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"), Port: 65535, Zone: str},
+		&net.UDPAddr{IP: net.ParseIP("fe80::1"), Port: 65535, Zone: long}, (*net.TCPAddr)(nil),
+		[]net.UDPAddr{{Port: 1}, {}},
 		sizeText{long},
 		sizeJSON{50},
 		myInt(math.MinInt), myStr(long), myBytes(long),

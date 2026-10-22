@@ -91,6 +91,7 @@ const (
 	FormatIP           = "ip"      // IPv4 or IPv6, no zone
 	FormatIPZone       = "ip-zone" // IPv4, or IPv6 with an optional %zone
 	FormatCIDR         = "cidr"
+	FormatIPPort       = "ip-port"       // "ip:port" with a bracketed IPv6 address and an optional %zone, or ":port"
 	FormatURI          = "uri"           // anything url.Parse accepts
 	FormatIntString    = "int-string"    // `,string` signed integer
 	FormatUintString   = "uint-string"   // `,string` unsigned integer
@@ -596,6 +597,15 @@ func (l *lowerer) stdKind(t *Type, key string, c *fieldCtx) (handled, nilable bo
 		return true, false
 	case "net/netip.Prefix":
 		t.Go, t.Wire, t.Format, t.Empty = Prefix, WireString, FormatCIDR, true
+		return true, false
+	case "net.IPNet":
+		t.Go, t.Wire, t.Format, t.Empty = IPNet, WireString, FormatCIDR, true
+		return true, false
+	case "net.TCPAddr", "net.UDPAddr":
+		t.Go, t.Wire, t.Format, t.Empty = TCPAddr, WireString, FormatIPPort, true
+		if key == "net.UDPAddr" {
+			t.Go = UDPAddr
+		}
 		return true, false
 	case "net/url.URL":
 		t.Go, t.Wire, t.Format, t.Empty = URL, WireString, FormatURI, true

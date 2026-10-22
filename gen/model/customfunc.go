@@ -556,7 +556,7 @@ func kindShapeBytes(k TypeKind, format string) []string {
 	//exhaustive:ignore not every kind applies here
 	switch k {
 	case KindString, KindTime, KindDuration, KindNetIP, KindNetipAddr,
-		KindNetipPrefix, KindURL, KindBigFloat, KindBigRat:
+		KindNetipPrefix, KindIPNet, KindTCPAddr, KindUDPAddr, KindURL, KindBigFloat, KindBigRat:
 		return []string{"'\"'"}
 	case KindBytes:
 		if format == "array" {

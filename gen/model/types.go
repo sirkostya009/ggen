@@ -40,6 +40,9 @@ const (
 	KindBigRat      // math/big.Rat, a JSON string "num/denom"
 	KindSQLNull     // database/sql.NullX, a JSON value or null, see SQLNullSpec
 	KindAny         // any or interface{}, decoded to the same shapes encoding/json produces
+	KindIPNet       // net.IPNet, a JSON string in CIDR form
+	KindTCPAddr     // net.TCPAddr, a JSON string "ip:port"
+	KindUDPAddr     // net.UDPAddr, a JSON string "ip:port"
 )
 
 type ValidationRule struct {

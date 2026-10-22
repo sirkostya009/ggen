@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { User as money_User } from "../shared/money.ts";
-import { ggenDecoded, ggenFits, ggenHex, ggenInteger, ggenIsAddr, ggenIsDateOnly, ggenIsDuration } from "../shared/ggen.ts";
+import { ggenDecoded, ggenFits, ggenHex, ggenInteger, ggenIsAddr, ggenIsAddrPort, ggenIsDateOnly, ggenIsDuration } from "../shared/ggen.ts";
 
 export const Role = z.enum(["admin", "member"]);
 export type Role = z.output<typeof Role>;
@@ -54,6 +54,8 @@ export const Edges = z.object({
   fixed: z.base64().refine((x) => ggenDecoded(x, 6) === 4, "must decode to 4 bytes"),
   ip: z.literal("").or(z.ipv4()).or(z.ipv6()),
   addr: z.literal("").or(z.string().refine(ggenIsAddr, "must be an IP address")),
+  net: z.literal("").or(z.cidrv4()).or(z.cidrv6()),
+  tcp: z.literal("").or(z.string().refine(ggenIsAddrPort, "must be an IP address and port")).nullable(),
   ns: z.string().nullable(),
   raw: z.unknown(),
   lower: z.enum(["x", "y", ""]),

@@ -406,6 +406,12 @@ func (e *Emitter) str(t *gen.Type) (string, kind) {
 			return `z.literal("").or(` + addr + ")", other
 		}
 		return addr, str
+	case t.Format == gen.FormatIPPort:
+		addr := "z.string().refine(" + e.helpers.Use("ggenIsAddrPort") + `, "must be an IP address and port")`
+		if t.Empty {
+			return `z.literal("").or(` + addr + ")", other
+		}
+		return addr, str
 	case strings.HasPrefix(t.Format, gen.FormatTimeLayoutPrefix):
 		layout := strings.TrimPrefix(t.Format, gen.FormatTimeLayoutPrefix)
 		name, oneArg := e.helpers.TimeCheck(layout)

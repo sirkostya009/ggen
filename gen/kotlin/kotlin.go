@@ -323,7 +323,7 @@ func (e *Emitter) zero(t *gen.Type, typ string) string {
 	}
 	//exhaustive:ignore not every kind applies here
 	switch t.Go {
-	case gen.Time, gen.Duration, gen.IP, gen.Addr, gen.Prefix, gen.URL, gen.BigInt, gen.BigFloat, gen.BigRat:
+	case gen.Time, gen.Duration, gen.IP, gen.Addr, gen.Prefix, gen.IPNet, gen.TCPAddr, gen.UDPAddr, gen.URL, gen.BigInt, gen.BigFloat, gen.BigRat:
 		return "" // a formatted zero is not the type's own zero literal
 	case gen.Bytes:
 		if t.Len > 0 || t.Wire == gen.WireString {

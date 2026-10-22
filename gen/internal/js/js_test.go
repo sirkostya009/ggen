@@ -100,6 +100,30 @@ func TestIPHelpersMatchGo(t *testing.T) {
 	})
 }
 
+// ggen.ParseNetAddr's grammar, minus "" (the schema's Empty arm): ":port", or
+// whatever netip.ParseAddrPort accepts. The gen module does not import the
+// runtime, so this spells the same two branches.
+func TestAddrPortHelperMatchesGo(t *testing.T) {
+	t.Parallel()
+	inputs := append(enumerate("1:[]%.f", 4),
+		"1.2.3.4:80", "1.2.3.4:65535", "1.2.3.4:65536", "1.2.3.4:080", "1.2.3.4:+80", "1.2.3.4:", "1.2.3.4",
+		"[::1]:80", "[::1]", "::1:80", "[1.2.3.4]:80", "[::ffff:1.2.3.4]:80", "[fe80::1%eth0]:80",
+		"[fe80::1%]:80", "1.2.3.4%eth0:80", "[fe80::1%a:b]:1", "[fe80::1%a]b]:1", ":80", ":", ":99999",
+		":0", "[]:80", "[:80", "localhost:80", "1.2.3.4:http", "01.2.3.4:1", "1.2.3.4:00000000000000000080",
+	)
+	matchGo(t, inputs, "ggenIsAddrPort(s)", func(s string) string {
+		if s == "" {
+			return "false"
+		}
+		if s[0] == ':' {
+			_, err := strconv.ParseUint(s[1:], 10, 16)
+			return strconv.FormatBool(err == nil)
+		}
+		_, err := netip.ParseAddrPort(s)
+		return strconv.FormatBool(err == nil)
+	})
+}
+
 // enumerate returns every string over alphabet up to n characters long.
 func enumerate(alphabet string, n int) []string {
 	out := []string{""}

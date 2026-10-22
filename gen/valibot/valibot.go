@@ -454,6 +454,8 @@ func (e *Emitter) str(t *gen.Type) schema {
 		return predicate(e.helpers.Use("ggenIsAddr"), "must be an IP address")
 	case t.Format == gen.FormatCIDR:
 		return predicate(e.helpers.Use("ggenIsPrefix"), "must be an IP prefix")
+	case t.Format == gen.FormatIPPort:
+		return predicate(e.helpers.Use("ggenIsAddrPort"), "must be an IP address and port")
 	case t.Format == gen.FormatDateTime:
 		return pipe("v.string()", str, "v.check("+e.helpers.Use("ggenIsDateTime")+`, "must be an RFC 3339 date-time")`)
 	case strings.HasPrefix(t.Format, gen.FormatTimeLayoutPrefix):

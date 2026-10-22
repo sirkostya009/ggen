@@ -47,6 +47,9 @@ const (
 	IP       // net.IP
 	Addr     // netip.Addr
 	Prefix   // netip.Prefix
+	IPNet    // net.IPNet
+	TCPAddr  // net.TCPAddr
+	UDPAddr  // net.UDPAddr
 	URL      // net/url.URL
 	BigInt   // math/big.Int
 	BigFloat // math/big.Float
@@ -64,7 +67,7 @@ var goKindNames = [...]string{
 	String: "string", Bool: "bool", Int: "int", Int8: "int8", Int16: "int16", Int32: "int32", Int64: "int64",
 	Uint: "uint", Uint8: "uint8", Uint16: "uint16", Uint32: "uint32", Uint64: "uint64",
 	Float32: "float32", Float64: "float64", Time: "time", Duration: "duration", Bytes: "bytes",
-	IP: "ip", Addr: "addr", Prefix: "prefix", URL: "url", BigInt: "bigint", BigFloat: "bigfloat",
+	IP: "ip", Addr: "addr", Prefix: "prefix", IPNet: "ipnet", TCPAddr: "tcpaddr", UDPAddr: "udpaddr", URL: "url", BigInt: "bigint", BigFloat: "bigfloat",
 	BigRat: "bigrat", RawJSON: "rawjson", Number: "number", Slice: "slice", Array: "array",
 	Map: "map", Struct: "struct", Any: "any",
 }

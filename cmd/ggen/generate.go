@@ -424,6 +424,9 @@ func scanBodiesForStdImports(bodies [][]byte, add func(string)) {
 		{[]byte("bytes."), "bytes"},
 		{[]byte("fmt."), "fmt"},
 		{[]byte("time."), "time"},
+		// A net.IPNet field is spelled only where a body declares one, such
+		// as a pointer temp. The runtime calls name nothing from net.
+		{[]byte("net."), "net"},
 		// Element type names in prealloc constants and element temps can
 		// name these even when no method body does. Structs in test files
 		// are parsed from the AST only, so TypeImports cannot cover them.
@@ -598,7 +601,7 @@ func collectFieldImports(f model.FieldInfo, addImport func(model.TypeImport)) {
 				// imports.
 				collectFieldImports(peelSliceField(f), addImport)
 			case model.KindTime, model.KindDuration, model.KindBytes, model.KindRawJSON, model.KindNetIP, model.KindNetipAddr,
-				model.KindNetipPrefix, model.KindURL, model.KindBigInt, model.KindBigFloat, model.KindBigRat, model.KindSQLNull, model.KindAny, model.KindMap:
+				model.KindNetipPrefix, model.KindIPNet, model.KindTCPAddr, model.KindUDPAddr, model.KindURL, model.KindBigInt, model.KindBigFloat, model.KindBigRat, model.KindSQLNull, model.KindAny, model.KindMap:
 				// An element with a dedicated kind uses the field emitters, so
 				// it needs the same imports as a field of that kind.
 				collectFieldImports(sliceElemField(f), addImport)
@@ -1396,6 +1399,10 @@ func fieldSkipExpr(f model.FieldInfo, ref string) string {
 				emitConds = append(emitConds, ref+" != nil")
 			case model.KindNetipAddr, model.KindNetipPrefix:
 				emitConds = append(emitConds, ref+".IsValid()")
+			case model.KindIPNet:
+				emitConds = append(emitConds, fmt.Sprintf("(%[1]s.IP != nil || %[1]s.Mask != nil)", ref))
+			case model.KindTCPAddr, model.KindUDPAddr:
+				emitConds = append(emitConds, fmt.Sprintf(`(%[1]s.IP != nil || %[1]s.Port != 0 || %[1]s.Zone != "")`, ref))
 			case model.KindAny:
 				emitConds = append(emitConds, ref+" != nil")
 			case model.KindSQLNull:
@@ -1445,6 +1452,11 @@ func omitEmptyCond(f model.FieldInfo, ref string) string {
 		return fmt.Sprintf("len(%s) > 0", ref)
 	case model.KindNetipAddr, model.KindNetipPrefix:
 		return ref + ".IsValid()"
+	case model.KindIPNet:
+		// The zero IPNet is the only one written as "".
+		return fmt.Sprintf("(len(%[1]s.IP) > 0 || len(%[1]s.Mask) > 0)", ref)
+	case model.KindTCPAddr, model.KindUDPAddr:
+		return fmt.Sprintf(`(len(%[1]s.IP) > 0 || %[1]s.Port != 0 || %[1]s.Zone != "")`, ref)
 	case model.KindURL:
 		return fmt.Sprintf("%s != (%s{})", ref, f.GoType)
 	case model.KindAny:
@@ -1822,6 +1834,10 @@ func renderAppendValue(b *bytes.Buffer, f model.FieldInfo, ref string) {
 if dst, err = %s.AppendText(dst); err != nil { return dst, err }
 dst = append(dst, '"')
 `, ref)
+	case model.KindIPNet, model.KindTCPAddr, model.KindUDPAddr:
+		fmt.Fprintf(b, `dst = append(dst, '"')
+if dst, err = %s(dst, %s); err != nil { return dst, err }
+`, appendNetFn(f), ref)
 	case model.KindNetipAddr:
 		// An address with an IPv6 zone may need escaping.
 		// ggen.AppendNetipAddr handles it.
@@ -2247,6 +2263,19 @@ func appendURLFn(htmlEscape bool) string {
 	return "ggen.AppendURL"
 }
 
+// appendNetFn names the runtime writer for a net.IPNet, net.TCPAddr or
+// net.UDPAddr. Only a TCP or UDP zone can hold bytes that HTML escaping
+// changes.
+func appendNetFn(f model.FieldInfo) string {
+	switch {
+	case f.Kind == model.KindIPNet:
+		return "ggen.AppendIPNet"
+	case f.HTMLEscape:
+		return "ggen.AppendNetAddrHTML"
+	}
+	return "ggen.AppendNetAddr"
+}
+
 func appendNetipAddrFn(htmlEscape bool) string {
 	if htmlEscape {
 		return "ggen.AppendNetipAddrHTML"
@@ -2326,6 +2355,8 @@ dst = append(dst, '"')
 		// An address with an IPv6 zone may need escaping.
 		// ggen.AppendNetipAddr handles it.
 		return prefix + `"`, fmt.Sprintf("dst = %s(dst, %s)\n", appendNetipAddrFn(f.HTMLEscape), ref), true
+	case model.KindIPNet, model.KindTCPAddr, model.KindUDPAddr:
+		return prefix + `"`, fmt.Sprintf("if dst, err = %s(dst, %s); err != nil { return dst, err }\n", appendNetFn(f), ref), true
 	case model.KindBytes:
 		// No fold. A nil []byte writes `null`, which has no opening quote.
 	case model.KindURL:
@@ -2473,6 +2504,13 @@ func sizeContribKind(f model.FieldInfo, ref string) (int, string) {
 	case model.KindNetipPrefix:
 		// The address plus /N. The worst case "/128" adds 4.
 		return 2, fmt.Sprintf("if %s.Addr().Is4() { size += 19 } else { size += 43 }\n", ref)
+	case model.KindIPNet:
+		// The quotes, an IPv6 address and "/128".
+		return 45, ""
+	case model.KindTCPAddr, model.KindUDPAddr:
+		// The quotes, a bracketed IPv6 address and ":65535". A zone is
+		// budgeted as in netip.Addr.
+		return 49, fmt.Sprintf("if z := len(%s.Zone); z > 0 { size += 1 + z*%d }\n", ref, strMult(f.HTMLEscape))
 	case model.KindRawJSON:
 		return 0, fmt.Sprintf("if n := len(%s); n > 0 { size += n } else { size += 4 }\n", ref)
 	case model.KindURL:
@@ -4551,6 +4589,29 @@ if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 `, ref, posVar, field)
 }
 
+// renderNetParse reads a net.IPNet, net.TCPAddr or net.UDPAddr through the
+// runtime parser. The parse copies what it keeps and its error detaches the
+// text, so the scanned string can alias the input even under -copy.
+func renderNetParse(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
+	field := fieldLit(f)
+	b.WriteString("var s string\n")
+	inlineScanString(b, posVar, "s", posVar, field, false, !f.AllowInvalidUTF8)
+	fmt.Fprintf(b, `%[1]s, err = %[4]s(s)
+if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
+`, ref, posVar, field, netParseFn(f.Kind))
+}
+
+func netParseFn(k model.TypeKind) string {
+	//exhaustive:ignore only the net kinds reach here
+	switch k {
+	case model.KindTCPAddr:
+		return "ggen.ParseNetAddr[net.TCPAddr]"
+	case model.KindUDPAddr:
+		return "ggen.ParseNetAddr[net.UDPAddr]"
+	}
+	return "ggen.ParseIPNet"
+}
+
 // elemAsField reshapes f so its element looks like the field itself. The
 // fallback code for types from other packages needs this view when a slice,
 // array or map element has such a type. Element-level pipes are left out,
@@ -5739,6 +5800,8 @@ if err != nil { return result, %[2]s, ggen.NewParseErr(%[3]s, %[2]s, err) }
 		renderNetipAddr(b, f, ref, posVar)
 	case model.KindNetipPrefix:
 		renderNetipPrefix(b, f, ref, posVar)
+	case model.KindIPNet, model.KindTCPAddr, model.KindUDPAddr:
+		renderNetParse(b, f, ref, posVar)
 	case model.KindRawJSON:
 		renderRawJSON(b, f, ref, posVar)
 	case model.KindURL:
@@ -6566,7 +6629,8 @@ func truncSentinel(k model.TypeKind) string {
 	case model.KindBool:
 		return "ggen.ErrBadBool"
 	case model.KindString, model.KindBytes, model.KindTime, model.KindDuration, model.KindNetIP,
-		model.KindNetipAddr, model.KindNetipPrefix, model.KindURL, model.KindBigFloat, model.KindBigRat:
+		model.KindNetipAddr, model.KindNetipPrefix, model.KindIPNet, model.KindTCPAddr, model.KindUDPAddr,
+		model.KindURL, model.KindBigFloat, model.KindBigRat:
 		return "ggen.ErrExpectString"
 	case model.KindMap, model.KindStruct:
 		return "ggen.ErrBadObject"
@@ -6865,6 +6929,15 @@ func renderStreamNetipAddr(b *bytes.Buffer, f model.FieldInfo, ref string) {
 
 func renderStreamNetipPrefix(b *bytes.Buffer, f model.FieldInfo, ref string) {
 	renderStreamNetipParse(b, f, ref, "netip.ParsePrefix", "netip.Prefix{}")
+}
+
+// renderStreamNetParse is renderNetParse for the stream path. StringView is
+// safe for the same reason the bytes path may alias.
+func renderStreamNetParse(b *bytes.Buffer, f model.FieldInfo, ref string) {
+	fmt.Fprintf(b, `var sv string
+sv, err = s.StringView(`+vArg(f)+`)
+%[2]s%[1]s, err = %[3]s(sv)
+%[2]s`, ref, streamErrCheck(fieldLit(f)), netParseFn(f.Kind))
 }
 
 // renderStreamNetipParse scans with StringView. netip.Addr and netip.Prefix
@@ -7356,6 +7429,8 @@ func renderStreamField(f model.FieldInfo, ref, posVar string) string {
 		renderStreamNetipAddr(b, f, ref)
 	case model.KindNetipPrefix:
 		renderStreamNetipPrefix(b, f, ref)
+	case model.KindIPNet, model.KindTCPAddr, model.KindUDPAddr:
+		renderStreamNetParse(b, f, ref)
 	case model.KindRawJSON:
 		renderStreamRawJSON(b, f, ref, posVar)
 	case model.KindURL:

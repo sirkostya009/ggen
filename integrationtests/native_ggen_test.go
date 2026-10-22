@@ -15,6 +15,18 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_NetAddrs_Deep_net_IPNet = (min((80/max(int(unsafe.Sizeof(*new(net.IPNet))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(net.IPNet))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(net.IPNet))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(net.IPNet))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_NetAddrs_Nets_net_IPNet = (min((80/max(int(unsafe.Sizeof(*new(net.IPNet))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(net.IPNet))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(net.IPNet))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(net.IPNet))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_NetAddrs_PAddrs_net_UDPAddr = (min((80/max(int(unsafe.Sizeof(*new(net.UDPAddr))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(net.UDPAddr))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(net.UDPAddr))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(net.UDPAddr))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_NetAddrs_PAddrs_Ptrnet_UDPAddr = (min((80/max(int(unsafe.Sizeof(*new(*net.UDPAddr))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(*net.UDPAddr))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(*net.UDPAddr))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(*net.UDPAddr))), 1)), 1)
+
 func (recv NativeTypes) DecodeFrom(data []byte) (result NativeTypes, i int, err error) {
 	result = recv
 	if result.Blob != nil {
@@ -3688,4 +3700,2961 @@ func (s R10Time) AppendJSON(dst []byte) ([]byte, error) {
 		return dst, err
 	}
 	return append(dst, "\"}"...), nil
+}
+
+func (recv NetAddrs) DecodeFrom(data []byte) (result NetAddrs, i int, err error) {
+	result = recv
+	if result.ByName != nil {
+		clear(result.ByName)
+	}
+	if result.Nets != nil {
+		result.Nets = result.Nets[:0]
+	}
+	if result.PAddrs != nil {
+		result.PAddrs = result.PAddrs[:0]
+	}
+	seenByName := false
+	seenDeep := false
+	seenNet := false
+	seenNets := false
+	seenOPUDP := false
+	seenOTCP := false
+	seenPAddrs := false
+	seenPByKey := false
+	seenPNet := false
+	seenPTCP := false
+	seenTCP := false
+	seenTuple := false
+	seenUDP := false
+	seenWide := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenDeep {
+			clear(result.Deep)
+		}
+		if !seenNet {
+			result.Net = (NetAddrs{}).Net
+		}
+		if !seenOPUDP {
+			result.OPUDP = nil
+		}
+		if !seenOTCP {
+			result.OTCP = (NetAddrs{}).OTCP
+		}
+		if !seenPByKey {
+			clear(result.PByKey)
+		}
+		if !seenPNet {
+			result.PNet = nil
+		}
+		if !seenPTCP {
+			result.PTCP = nil
+		}
+		if !seenTCP {
+			result.TCP = (NetAddrs{}).TCP
+		}
+		if !seenTuple {
+			result.Tuple = (NetAddrs{}).Tuple
+		}
+		if !seenUDP {
+			result.UDP = (NetAddrs{}).UDP
+		}
+		if !seenWide {
+			clear(result.Wide)
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "byname":
+			if seenByName {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"byname"}}
+			}
+			seenByName = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("byname", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.ByName = nil
+				break
+			}
+			if i >= len(data) || data[i] != '{' {
+				return result, i, ggen.NewParseErr("byname", i, ggen.ErrBadObject)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == '}' {
+				if result.ByName == nil {
+					result.ByName = map[string]net.TCPAddr{}
+				}
+			} else {
+				if result.ByName == nil {
+					result.ByName = make(map[string]net.TCPAddr)
+				}
+			}
+			if i < len(data) && data[i] != '}' {
+				for {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("byname", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("byname", i, err)
+						}
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, ggen.NewParseErr("byname", i, ggen.ErrBadObject)
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					{
+						var mv net.TCPAddr
+						var s string
+						if i >= len(data) || data[i] != '"' {
+							return result, i, ggen.NewParseErr("byname.value", i, ggen.ErrExpectString)
+						}
+						ke := i + 1
+						kew := ke + 32
+						if kew > len(data) {
+							kew = len(data)
+						}
+						for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+							ke++
+						}
+						if ke < len(data) && data[ke] == '"' {
+							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							s, i, err = ggen.String(data, i, true)
+							if err != nil {
+								return result, i, ggen.NewParseErr("byname.value", i, err)
+							}
+						}
+						mv, err = ggen.ParseNetAddr[net.TCPAddr](s)
+						if err != nil {
+							return result, i, ggen.NewParseErr("byname.value", i, err)
+						}
+						result.ByName[mk] = mv
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, ggen.NewParseErr("byname", i, ggen.ErrBadObject)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != '}' {
+				return result, i, ggen.NewParseErr("byname", i, ggen.ErrBadObject)
+			}
+			i++
+		case "deep":
+			if seenDeep {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"deep"}}
+			}
+			seenDeep = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.Deep = nil
+				break
+			}
+			if i >= len(data) || data[i] != '{' {
+				return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadObject)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			carried := result.Deep
+			reuse := len(carried) != 0
+			result.Deep = make(map[string][]net.IPNet, len(carried))
+			if i < len(data) && data[i] != '}' {
+				for {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("deep", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("deep", i, err)
+						}
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadObject)
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					{
+						var mv []net.IPNet
+						if reuse {
+							mv = carried[mk][:0]
+						}
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("deep.value", i, ggen.ErrBadLiteral)
+							}
+							i += 4
+							mv = nil
+						} else {
+							if i >= len(data) || data[i] != '[' {
+								return result, i, ggen.NewParseErr("deep.value", i, ggen.ErrBadArray)
+							}
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ']' {
+								if mv == nil {
+									mv = []net.IPNet{}
+								}
+							} else {
+								if mv == nil {
+									mv = make([]net.IPNet, 0, ggenCap_NetAddrs_Deep_net_IPNet)
+								}
+							}
+							if i < len(data) && data[i] != ']' {
+								for {
+									mv = append(mv, net.IPNet{})
+									var s string
+									if i >= len(data) || data[i] != '"' {
+										return result, i, ggen.NewParseErr("deep.value[]", i, ggen.ErrExpectString)
+									}
+									ke := i + 1
+									kew := ke + 32
+									if kew > len(data) {
+										kew = len(data)
+									}
+									for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+										ke++
+									}
+									if ke < len(data) && data[ke] == '"' {
+										s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+										i = ke + 1
+									} else {
+										s, i, err = ggen.String(data, i, true)
+										if err != nil {
+											return result, i, ggen.NewParseErr("deep.value[]", i, err)
+										}
+									}
+									mv[len(mv)-1], err = ggen.ParseIPNet(s)
+									if err != nil {
+										return result, i, ggen.NewParseErr("deep.value[]", i, err)
+									}
+									for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+										i++
+									}
+									if i < len(data) && data[i] == ',' {
+										i++
+										for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+											i++
+										}
+										if i >= len(data) || data[i] == ']' {
+											return result, i, ggen.NewParseErr("deep.value", i, ggen.ErrBadArray)
+										}
+										continue
+									}
+									break
+								}
+							}
+							if i >= len(data) || data[i] != ']' {
+								return result, i, ggen.NewParseErr("deep.value", i, ggen.ErrBadArray)
+							}
+							i++
+						}
+						result.Deep[mk] = mv
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadObject)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != '}' {
+				return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadObject)
+			}
+			i++
+		case "net":
+			if seenNet {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"net"}}
+			}
+			seenNet = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("net", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("net", i, err)
+				}
+			}
+			result.Net, err = ggen.ParseIPNet(s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("net", i, err)
+			}
+		case "nets":
+			if seenNets {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"nets"}}
+			}
+			seenNets = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("nets", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.Nets = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, ggen.NewParseErr("nets", i, ggen.ErrBadArray)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.Nets == nil {
+					result.Nets = []net.IPNet{}
+				}
+			} else {
+				if result.Nets == nil {
+					result.Nets = make([]net.IPNet, 0, ggenCap_NetAddrs_Nets_net_IPNet)
+				}
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.Nets = append(result.Nets, net.IPNet{})
+					var s string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("nets[]", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						s, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("nets[]", i, err)
+						}
+					}
+					result.Nets[len(result.Nets)-1], err = ggen.ParseIPNet(s)
+					if err != nil {
+						return result, i, ggen.NewParseErr("nets[]", i, err)
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, ggen.NewParseErr("nets", i, ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, ggen.NewParseErr("nets", i, ggen.ErrBadArray)
+			}
+			i++
+		case "opudp":
+			if seenOPUDP {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"opudp"}}
+			}
+			seenOPUDP = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("opudp", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.OPUDP = nil
+				break
+			}
+			var v net.UDPAddr
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("opudp", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("opudp", i, err)
+				}
+			}
+			v, err = ggen.ParseNetAddr[net.UDPAddr](s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("opudp", i, err)
+			}
+			if result.OPUDP == nil {
+				result.OPUDP = new(v)
+			} else {
+				(*result.OPUDP) = v
+			}
+		case "otcp":
+			if seenOTCP {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"otcp"}}
+			}
+			seenOTCP = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("otcp", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("otcp", i, err)
+				}
+			}
+			result.OTCP, err = ggen.ParseNetAddr[net.TCPAddr](s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("otcp", i, err)
+			}
+		case "paddrs":
+			if seenPAddrs {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"paddrs"}}
+			}
+			seenPAddrs = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("paddrs", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.PAddrs = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, ggen.NewParseErr("paddrs", i, ggen.ErrBadArray)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			var slab0 []net.UDPAddr
+			if i < len(data) && data[i] == ']' {
+				if result.PAddrs == nil {
+					result.PAddrs = []*net.UDPAddr{}
+				}
+			} else {
+				if result.PAddrs == nil {
+					result.PAddrs = make([]*net.UDPAddr, 0, ggenCap_NetAddrs_PAddrs_Ptrnet_UDPAddr)
+				}
+				slab0 = make([]net.UDPAddr, 0, ggenCap_NetAddrs_PAddrs_net_UDPAddr)
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							return result, i, ggen.NewParseErr("paddrs", i, ggen.ErrBadLiteral)
+						}
+						i += 4
+						result.PAddrs = append(result.PAddrs, nil)
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, ggen.NewParseErr("paddrs", i, ggen.ErrBadArray)
+							}
+							continue
+						}
+						break
+					}
+					slab0 = append(slab0, net.UDPAddr{})
+					var s string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("paddrs[]", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						s, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("paddrs[]", i, err)
+						}
+					}
+					slab0[len(slab0)-1], err = ggen.ParseNetAddr[net.UDPAddr](s)
+					if err != nil {
+						return result, i, ggen.NewParseErr("paddrs[]", i, err)
+					}
+					result.PAddrs = append(result.PAddrs, &slab0[len(slab0)-1])
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, ggen.NewParseErr("paddrs", i, ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, ggen.NewParseErr("paddrs", i, ggen.ErrBadArray)
+			}
+			i++
+		case "pbykey":
+			if seenPByKey {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"pbykey"}}
+			}
+			seenPByKey = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("pbykey", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.PByKey = nil
+				break
+			}
+			if i >= len(data) || data[i] != '{' {
+				return result, i, ggen.NewParseErr("pbykey", i, ggen.ErrBadObject)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			carried := result.PByKey
+			reuse := len(carried) != 0
+			result.PByKey = make(map[string]*net.IPNet, len(carried))
+			if i < len(data) && data[i] != '}' {
+				for {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("pbykey", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("pbykey", i, err)
+						}
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, ggen.NewParseErr("pbykey", i, ggen.ErrBadObject)
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					{
+						var mv *net.IPNet
+						if reuse {
+							mv = carried[mk]
+						}
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("pbykey.value", i, ggen.ErrBadLiteral)
+							}
+							i += 4
+							mv = nil
+						} else {
+							var v net.IPNet
+							var s string
+							if i >= len(data) || data[i] != '"' {
+								return result, i, ggen.NewParseErr("pbykey.value", i, ggen.ErrExpectString)
+							}
+							ke := i + 1
+							kew := ke + 32
+							if kew > len(data) {
+								kew = len(data)
+							}
+							for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+								ke++
+							}
+							if ke < len(data) && data[ke] == '"' {
+								s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+								i = ke + 1
+							} else {
+								s, i, err = ggen.String(data, i, true)
+								if err != nil {
+									return result, i, ggen.NewParseErr("pbykey.value", i, err)
+								}
+							}
+							v, err = ggen.ParseIPNet(s)
+							if err != nil {
+								return result, i, ggen.NewParseErr("pbykey.value", i, err)
+							}
+							if mv == nil {
+								mv = new(v)
+							} else {
+								(*mv) = v
+							}
+						}
+						result.PByKey[mk] = mv
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, ggen.NewParseErr("pbykey", i, ggen.ErrBadObject)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != '}' {
+				return result, i, ggen.NewParseErr("pbykey", i, ggen.ErrBadObject)
+			}
+			i++
+		case "pnet":
+			if seenPNet {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"pnet"}}
+			}
+			seenPNet = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("pnet", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.PNet = nil
+				break
+			}
+			var v net.IPNet
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("pnet", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("pnet", i, err)
+				}
+			}
+			v, err = ggen.ParseIPNet(s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("pnet", i, err)
+			}
+			if result.PNet == nil {
+				result.PNet = new(v)
+			} else {
+				(*result.PNet) = v
+			}
+		case "ptcp":
+			if seenPTCP {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"ptcp"}}
+			}
+			seenPTCP = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("ptcp", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.PTCP = nil
+				break
+			}
+			var v net.TCPAddr
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("ptcp", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("ptcp", i, err)
+				}
+			}
+			v, err = ggen.ParseNetAddr[net.TCPAddr](s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("ptcp", i, err)
+			}
+			if result.PTCP == nil {
+				result.PTCP = new(v)
+			} else {
+				(*result.PTCP) = v
+			}
+		case "tcp":
+			if seenTCP {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"tcp"}}
+			}
+			seenTCP = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("tcp", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("tcp", i, err)
+				}
+			}
+			result.TCP, err = ggen.ParseNetAddr[net.TCPAddr](s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("tcp", i, err)
+			}
+		case "tuple":
+			if seenTuple {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"tuple"}}
+			}
+			seenTuple = true
+			if i >= len(data) || data[i] != '[' {
+				return result, i, ggen.NewParseErr("tuple", i, ggen.ErrBadArray)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			var idx0 int
+			if i < len(data) && data[i] != ']' {
+				for {
+					if idx0 >= 2 {
+						return result, i, &ggen.LenError{Pos: i, Keys: []string{"tuple"}, Want: 2, Got: 3, AtLeast: true}
+					}
+					var s string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("tuple[]", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						s, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("tuple[]", i, err)
+						}
+					}
+					result.Tuple[idx0], err = ggen.ParseNetAddr[net.UDPAddr](s)
+					if err != nil {
+						return result, i, ggen.NewParseErr("tuple[]", i, err)
+					}
+					idx0++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, ggen.NewParseErr("tuple", i, ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, ggen.NewParseErr("tuple", i, ggen.ErrBadArray)
+			}
+			if idx0 != 2 {
+				return result, i, &ggen.LenError{Pos: i, Keys: []string{"tuple"}, Want: 2, Got: idx0}
+			}
+			i++
+		case "udp":
+			if seenUDP {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"udp"}}
+			}
+			seenUDP = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("udp", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("udp", i, err)
+				}
+			}
+			result.UDP, err = ggen.ParseNetAddr[net.UDPAddr](s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("udp", i, err)
+			}
+		case "wide":
+			if seenWide {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"wide"}}
+			}
+			seenWide = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("wide", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.Wide = nil
+				break
+			}
+			if i >= len(data) || data[i] != '{' {
+				return result, i, ggen.NewParseErr("wide", i, ggen.ErrBadObject)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			carried := result.Wide
+			reuse := len(carried) != 0
+			result.Wide = make(map[string]*net.UDPAddr, len(carried))
+			if i < len(data) && data[i] != '}' {
+				for {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("wide", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("wide", i, err)
+						}
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, ggen.NewParseErr("wide", i, ggen.ErrBadObject)
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					{
+						var mv *net.UDPAddr
+						if reuse {
+							mv = carried[mk]
+						}
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("wide.value", i, ggen.ErrBadLiteral)
+							}
+							i += 4
+							mv = nil
+						} else {
+							var v net.UDPAddr
+							var s string
+							if i >= len(data) || data[i] != '"' {
+								return result, i, ggen.NewParseErr("wide.value", i, ggen.ErrExpectString)
+							}
+							ke := i + 1
+							kew := ke + 32
+							if kew > len(data) {
+								kew = len(data)
+							}
+							for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+								ke++
+							}
+							if ke < len(data) && data[ke] == '"' {
+								s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+								i = ke + 1
+							} else {
+								s, i, err = ggen.String(data, i, true)
+								if err != nil {
+									return result, i, ggen.NewParseErr("wide.value", i, err)
+								}
+							}
+							v, err = ggen.ParseNetAddr[net.UDPAddr](s)
+							if err != nil {
+								return result, i, ggen.NewParseErr("wide.value", i, err)
+							}
+							if mv == nil {
+								mv = new(v)
+							} else {
+								(*mv) = v
+							}
+						}
+						result.Wide[mk] = mv
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, ggen.NewParseErr("wide", i, ggen.ErrBadObject)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != '}' {
+				return result, i, ggen.NewParseErr("wide", i, ggen.ErrBadObject)
+			}
+			i++
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenDeep {
+				clear(result.Deep)
+			}
+			if !seenNet {
+				result.Net = (NetAddrs{}).Net
+			}
+			if !seenOPUDP {
+				result.OPUDP = nil
+			}
+			if !seenOTCP {
+				result.OTCP = (NetAddrs{}).OTCP
+			}
+			if !seenPByKey {
+				clear(result.PByKey)
+			}
+			if !seenPNet {
+				result.PNet = nil
+			}
+			if !seenPTCP {
+				result.PTCP = nil
+			}
+			if !seenTCP {
+				result.TCP = (NetAddrs{}).TCP
+			}
+			if !seenTuple {
+				result.Tuple = (NetAddrs{}).Tuple
+			}
+			if !seenUDP {
+				result.UDP = (NetAddrs{}).UDP
+			}
+			if !seenWide {
+				clear(result.Wide)
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv NetAddrs) DecodeFromStream(s *ggen.Stream) (result NetAddrs, err error) {
+	result = recv
+	if result.ByName != nil {
+		clear(result.ByName)
+	}
+	if result.Deep != nil {
+		clear(result.Deep)
+	}
+	if result.Nets != nil {
+		result.Nets = result.Nets[:0]
+	}
+	if result.PAddrs != nil {
+		result.PAddrs = result.PAddrs[:0]
+	}
+	if result.PByKey != nil {
+		clear(result.PByKey)
+	}
+	if result.Wide != nil {
+		clear(result.Wide)
+	}
+	seenByName := false
+	seenDeep := false
+	seenNet := false
+	seenNets := false
+	seenOPUDP := false
+	seenOTCP := false
+	seenPAddrs := false
+	seenPByKey := false
+	seenPNet := false
+	seenPTCP := false
+	seenTCP := false
+	seenTuple := false
+	seenUDP := false
+	seenWide := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenNet {
+			result.Net = (NetAddrs{}).Net
+		}
+		if !seenOPUDP {
+			result.OPUDP = nil
+		}
+		if !seenOTCP {
+			result.OTCP = (NetAddrs{}).OTCP
+		}
+		if !seenPNet {
+			result.PNet = nil
+		}
+		if !seenPTCP {
+			result.PTCP = nil
+		}
+		if !seenTCP {
+			result.TCP = (NetAddrs{}).TCP
+		}
+		if !seenTuple {
+			result.Tuple = (NetAddrs{}).Tuple
+		}
+		if !seenUDP {
+			result.UDP = (NetAddrs{}).UDP
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "byname":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("byname", s.Offset(), err)
+			}
+			if seenByName {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"byname"}}
+			}
+			seenByName = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("byname", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("byname", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("byname", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("byname", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.ByName = nil
+				break
+			}
+			err = s.ObjectOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("byname", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("byname", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("byname", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == '}' {
+				if result.ByName == nil {
+					result.ByName = map[string]net.TCPAddr{}
+				}
+			} else {
+				if result.ByName == nil {
+					result.ByName = make(map[string]net.TCPAddr)
+				}
+			}
+			for s.Bytes()[s.Pos] != '}' {
+				var mk string
+				mk, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("byname", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("byname", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("byname", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] != ':' {
+					return result, ggen.NewParseErr("byname", s.Offset(), ggen.ErrBadObject)
+				}
+				s.Pos++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("byname", s.Offset(), err)
+				}
+				{
+					var mv net.TCPAddr
+					var sv string
+					sv, err = s.StringView(true)
+					if err != nil {
+						return result, ggen.NewParseErr("byname.value", s.Offset(), err)
+					}
+					mv, err = ggen.ParseNetAddr[net.TCPAddr](sv)
+					if err != nil {
+						return result, ggen.NewParseErr("byname.value", s.Offset(), err)
+					}
+					result.ByName[mk] = mv
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("byname", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("byname", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("byname", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, ggen.NewParseErr("byname", s.Offset(), ggen.ErrBadObject)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != '}' {
+				return result, ggen.NewParseErr("byname", s.Offset(), ggen.ErrBadObject)
+			}
+			s.Pos++
+		case "deep":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("deep", s.Offset(), err)
+			}
+			if seenDeep {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"deep"}}
+			}
+			seenDeep = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("deep", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("deep", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("deep", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("deep", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Deep = nil
+				break
+			}
+			err = s.ObjectOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("deep", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("deep", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("deep", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == '}' {
+				if result.Deep == nil {
+					result.Deep = map[string][]net.IPNet{}
+				}
+			} else {
+				if result.Deep == nil {
+					result.Deep = make(map[string][]net.IPNet)
+				}
+			}
+			for s.Bytes()[s.Pos] != '}' {
+				var mk string
+				mk, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("deep", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("deep", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("deep", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] != ':' {
+					return result, ggen.NewParseErr("deep", s.Offset(), ggen.ErrBadObject)
+				}
+				s.Pos++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("deep", s.Offset(), err)
+				}
+				{
+					var mv []net.IPNet
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("deep.value", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("deep.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, ggen.NewParseErr("deep.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, ggen.NewParseErr("deep.value", s.Offset(), ggen.ErrBadLiteral)
+							}
+						}
+						s.Pos += 4
+						mv = nil
+					} else {
+						err = s.ArrayOpen()
+						if err != nil {
+							return result, ggen.NewParseErr("deep.value", s.Offset(), err)
+						}
+						err = s.SkipSpace()
+						if err != nil {
+							return result, ggen.NewParseErr("deep.value", s.Offset(), err)
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("deep.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+							}
+						}
+						if s.Bytes()[s.Pos] == ']' {
+							if mv == nil {
+								mv = []net.IPNet{}
+							}
+						} else {
+							if mv == nil {
+								mv = make([]net.IPNet, 0, ggenCap_NetAddrs_Deep_net_IPNet)
+							}
+						}
+						for s.Bytes()[s.Pos] != ']' {
+							mv = append(mv, net.IPNet{})
+							var sv string
+							sv, err = s.StringView(true)
+							if err != nil {
+								return result, ggen.NewParseErr("deep.value[]", s.Offset(), err)
+							}
+							mv[len(mv)-1], err = ggen.ParseIPNet(sv)
+							if err != nil {
+								return result, ggen.NewParseErr("deep.value[]", s.Offset(), err)
+							}
+							err = s.SkipSpace()
+							if err != nil {
+								return result, ggen.NewParseErr("deep.value", s.Offset(), err)
+							}
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, ggen.NewParseErr("deep.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+								}
+							}
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
+								if err != nil {
+									return result, ggen.NewParseErr("deep.value", s.Offset(), err)
+								}
+								if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+									return result, ggen.NewParseErr("deep.value", s.Offset(), ggen.ErrBadArray)
+								}
+								continue
+							}
+							break
+						}
+						if s.Bytes()[s.Pos] != ']' {
+							return result, ggen.NewParseErr("deep.value", s.Offset(), ggen.ErrBadArray)
+						}
+						s.Pos++
+					}
+					result.Deep[mk] = mv
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("deep", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("deep", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("deep", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, ggen.NewParseErr("deep", s.Offset(), ggen.ErrBadObject)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != '}' {
+				return result, ggen.NewParseErr("deep", s.Offset(), ggen.ErrBadObject)
+			}
+			s.Pos++
+		case "net":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("net", s.Offset(), err)
+			}
+			if seenNet {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"net"}}
+			}
+			seenNet = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("net", s.Offset(), err)
+			}
+			result.Net, err = ggen.ParseIPNet(sv)
+			if err != nil {
+				return result, ggen.NewParseErr("net", s.Offset(), err)
+			}
+		case "nets":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("nets", s.Offset(), err)
+			}
+			if seenNets {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"nets"}}
+			}
+			seenNets = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("nets", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("nets", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("nets", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("nets", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Nets = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("nets", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("nets", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("nets", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.Nets == nil {
+					result.Nets = []net.IPNet{}
+				}
+			} else {
+				if result.Nets == nil {
+					result.Nets = make([]net.IPNet, 0, ggenCap_NetAddrs_Nets_net_IPNet)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				result.Nets = append(result.Nets, net.IPNet{})
+				var sv string
+				sv, err = s.StringView(true)
+				if err != nil {
+					return result, ggen.NewParseErr("nets[]", s.Offset(), err)
+				}
+				result.Nets[len(result.Nets)-1], err = ggen.ParseIPNet(sv)
+				if err != nil {
+					return result, ggen.NewParseErr("nets[]", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("nets", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("nets", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("nets", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, ggen.NewParseErr("nets", s.Offset(), ggen.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, ggen.NewParseErr("nets", s.Offset(), ggen.ErrBadArray)
+			}
+			s.Pos++
+		case "opudp":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("opudp", s.Offset(), err)
+			}
+			if seenOPUDP {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"opudp"}}
+			}
+			seenOPUDP = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("opudp", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("opudp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("opudp", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.OPUDP = nil
+				break
+			}
+			var v net.UDPAddr
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("opudp", s.Offset(), err)
+			}
+			v, err = ggen.ParseNetAddr[net.UDPAddr](sv)
+			if err != nil {
+				return result, ggen.NewParseErr("opudp", s.Offset(), err)
+			}
+			if result.OPUDP == nil {
+				result.OPUDP = new(v)
+			} else {
+				(*result.OPUDP) = v
+			}
+		case "otcp":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("otcp", s.Offset(), err)
+			}
+			if seenOTCP {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"otcp"}}
+			}
+			seenOTCP = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("otcp", s.Offset(), err)
+			}
+			result.OTCP, err = ggen.ParseNetAddr[net.TCPAddr](sv)
+			if err != nil {
+				return result, ggen.NewParseErr("otcp", s.Offset(), err)
+			}
+		case "paddrs":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("paddrs", s.Offset(), err)
+			}
+			if seenPAddrs {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"paddrs"}}
+			}
+			seenPAddrs = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("paddrs", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("paddrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("paddrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("paddrs", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.PAddrs = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("paddrs", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("paddrs", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("paddrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			var slab0 []net.UDPAddr
+			if s.Bytes()[s.Pos] == ']' {
+				if result.PAddrs == nil {
+					result.PAddrs = []*net.UDPAddr{}
+				}
+			} else {
+				if result.PAddrs == nil {
+					result.PAddrs = make([]*net.UDPAddr, 0, ggenCap_NetAddrs_PAddrs_Ptrnet_UDPAddr)
+				}
+				slab0 = make([]net.UDPAddr, 0, ggenCap_NetAddrs_PAddrs_net_UDPAddr)
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("paddrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("paddrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr("paddrs", s.Offset(), ggen.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.PAddrs = append(result.PAddrs, nil)
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("paddrs", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("paddrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, ggen.NewParseErr("paddrs", s.Offset(), err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, ggen.NewParseErr("paddrs", s.Offset(), ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+				slab0 = append(slab0, net.UDPAddr{})
+				var sv string
+				sv, err = s.StringView(true)
+				if err != nil {
+					return result, ggen.NewParseErr("paddrs[]", s.Offset(), err)
+				}
+				slab0[len(slab0)-1], err = ggen.ParseNetAddr[net.UDPAddr](sv)
+				if err != nil {
+					return result, ggen.NewParseErr("paddrs[]", s.Offset(), err)
+				}
+				result.PAddrs = append(result.PAddrs, &slab0[len(slab0)-1])
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("paddrs", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("paddrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("paddrs", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, ggen.NewParseErr("paddrs", s.Offset(), ggen.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, ggen.NewParseErr("paddrs", s.Offset(), ggen.ErrBadArray)
+			}
+			s.Pos++
+		case "pbykey":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("pbykey", s.Offset(), err)
+			}
+			if seenPByKey {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"pbykey"}}
+			}
+			seenPByKey = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("pbykey", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("pbykey", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("pbykey", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("pbykey", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.PByKey = nil
+				break
+			}
+			err = s.ObjectOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("pbykey", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("pbykey", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("pbykey", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == '}' {
+				if result.PByKey == nil {
+					result.PByKey = map[string]*net.IPNet{}
+				}
+			} else {
+				if result.PByKey == nil {
+					result.PByKey = make(map[string]*net.IPNet)
+				}
+			}
+			for s.Bytes()[s.Pos] != '}' {
+				var mk string
+				mk, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("pbykey", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("pbykey", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("pbykey", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] != ':' {
+					return result, ggen.NewParseErr("pbykey", s.Offset(), ggen.ErrBadObject)
+				}
+				s.Pos++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("pbykey", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("pbykey.value", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("pbykey.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr("pbykey.value", s.Offset(), ggen.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.PByKey[mk] = nil
+				} else {
+					var v net.IPNet
+					var sv string
+					sv, err = s.StringView(true)
+					if err != nil {
+						return result, ggen.NewParseErr("pbykey.value", s.Offset(), err)
+					}
+					v, err = ggen.ParseIPNet(sv)
+					if err != nil {
+						return result, ggen.NewParseErr("pbykey.value", s.Offset(), err)
+					}
+					result.PByKey[mk] = new(v)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("pbykey", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("pbykey", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("pbykey", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, ggen.NewParseErr("pbykey", s.Offset(), ggen.ErrBadObject)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != '}' {
+				return result, ggen.NewParseErr("pbykey", s.Offset(), ggen.ErrBadObject)
+			}
+			s.Pos++
+		case "pnet":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("pnet", s.Offset(), err)
+			}
+			if seenPNet {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"pnet"}}
+			}
+			seenPNet = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("pnet", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("pnet", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("pnet", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.PNet = nil
+				break
+			}
+			var v net.IPNet
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("pnet", s.Offset(), err)
+			}
+			v, err = ggen.ParseIPNet(sv)
+			if err != nil {
+				return result, ggen.NewParseErr("pnet", s.Offset(), err)
+			}
+			if result.PNet == nil {
+				result.PNet = new(v)
+			} else {
+				(*result.PNet) = v
+			}
+		case "ptcp":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("ptcp", s.Offset(), err)
+			}
+			if seenPTCP {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"ptcp"}}
+			}
+			seenPTCP = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("ptcp", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("ptcp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("ptcp", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.PTCP = nil
+				break
+			}
+			var v net.TCPAddr
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("ptcp", s.Offset(), err)
+			}
+			v, err = ggen.ParseNetAddr[net.TCPAddr](sv)
+			if err != nil {
+				return result, ggen.NewParseErr("ptcp", s.Offset(), err)
+			}
+			if result.PTCP == nil {
+				result.PTCP = new(v)
+			} else {
+				(*result.PTCP) = v
+			}
+		case "tcp":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("tcp", s.Offset(), err)
+			}
+			if seenTCP {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"tcp"}}
+			}
+			seenTCP = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("tcp", s.Offset(), err)
+			}
+			result.TCP, err = ggen.ParseNetAddr[net.TCPAddr](sv)
+			if err != nil {
+				return result, ggen.NewParseErr("tcp", s.Offset(), err)
+			}
+		case "tuple":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("tuple", s.Offset(), err)
+			}
+			if seenTuple {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"tuple"}}
+			}
+			seenTuple = true
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("tuple", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("tuple", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("tuple", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			var idx0 int
+			for s.Bytes()[s.Pos] != ']' {
+				if idx0 >= 2 {
+					return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{"tuple"}, Want: 2, Got: 3, AtLeast: true}
+				}
+				var sv string
+				sv, err = s.StringView(true)
+				if err != nil {
+					return result, ggen.NewParseErr("tuple[]", s.Offset(), err)
+				}
+				result.Tuple[idx0], err = ggen.ParseNetAddr[net.UDPAddr](sv)
+				if err != nil {
+					return result, ggen.NewParseErr("tuple[]", s.Offset(), err)
+				}
+				idx0++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("tuple", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("tuple", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("tuple", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, ggen.NewParseErr("tuple", s.Offset(), ggen.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, ggen.NewParseErr("tuple", s.Offset(), ggen.ErrBadArray)
+			}
+			if idx0 != 2 {
+				return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{"tuple"}, Want: 2, Got: idx0}
+			}
+			s.Pos++
+		case "udp":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("udp", s.Offset(), err)
+			}
+			if seenUDP {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"udp"}}
+			}
+			seenUDP = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("udp", s.Offset(), err)
+			}
+			result.UDP, err = ggen.ParseNetAddr[net.UDPAddr](sv)
+			if err != nil {
+				return result, ggen.NewParseErr("udp", s.Offset(), err)
+			}
+		case "wide":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("wide", s.Offset(), err)
+			}
+			if seenWide {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"wide"}}
+			}
+			seenWide = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("wide", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("wide", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("wide", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("wide", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Wide = nil
+				break
+			}
+			err = s.ObjectOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("wide", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("wide", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("wide", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == '}' {
+				if result.Wide == nil {
+					result.Wide = map[string]*net.UDPAddr{}
+				}
+			} else {
+				if result.Wide == nil {
+					result.Wide = make(map[string]*net.UDPAddr)
+				}
+			}
+			for s.Bytes()[s.Pos] != '}' {
+				var mk string
+				mk, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("wide", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("wide", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("wide", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] != ':' {
+					return result, ggen.NewParseErr("wide", s.Offset(), ggen.ErrBadObject)
+				}
+				s.Pos++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("wide", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("wide.value", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("wide.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr("wide.value", s.Offset(), ggen.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Wide[mk] = nil
+				} else {
+					var v net.UDPAddr
+					var sv string
+					sv, err = s.StringView(true)
+					if err != nil {
+						return result, ggen.NewParseErr("wide.value", s.Offset(), err)
+					}
+					v, err = ggen.ParseNetAddr[net.UDPAddr](sv)
+					if err != nil {
+						return result, ggen.NewParseErr("wide.value", s.Offset(), err)
+					}
+					result.Wide[mk] = new(v)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("wide", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("wide", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("wide", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, ggen.NewParseErr("wide", s.Offset(), ggen.ErrBadObject)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != '}' {
+				return result, ggen.NewParseErr("wide", s.Offset(), ggen.ErrBadObject)
+			}
+			s.Pos++
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenNet {
+				result.Net = (NetAddrs{}).Net
+			}
+			if !seenOPUDP {
+				result.OPUDP = nil
+			}
+			if !seenOTCP {
+				result.OTCP = (NetAddrs{}).OTCP
+			}
+			if !seenPNet {
+				result.PNet = nil
+			}
+			if !seenPTCP {
+				result.PTCP = nil
+			}
+			if !seenTCP {
+				result.TCP = (NetAddrs{}).TCP
+			}
+			if !seenTuple {
+				result.Tuple = (NetAddrs{}).Tuple
+			}
+			if !seenUDP {
+				result.UDP = (NetAddrs{}).UDP
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s NetAddrs) JSONSize() int {
+	size := 270
+	size += len(s.ByName) * 4
+	for k, v := range s.ByName {
+		size += len(k) * 2
+		size += 49
+		if z := len(v.Zone); z > 0 {
+			size += 1 + z*2
+		}
+	}
+	size += len(s.Deep) * 4
+	for k, v := range s.Deep {
+		size += len(k) * 2
+		size += 4
+		if n := len(v); n > 0 {
+			size += n - 1
+		}
+		size += len(v) * 45
+	}
+	if n := len(s.Nets); n > 0 {
+		size += n - 1
+	}
+	size += len(s.Nets) * 45
+	if s.OPUDP != nil && (len((*s.OPUDP).IP) > 0 || (*s.OPUDP).Port != 0 || (*s.OPUDP).Zone != "") {
+		size += 58
+		if z := len((*s.OPUDP).Zone); z > 0 {
+			size += 1 + z*2
+		}
+	}
+	if s.OTCP.IP != nil || s.OTCP.Port != 0 || s.OTCP.Zone != "" {
+		size += 57
+		if z := len(s.OTCP.Zone); z > 0 {
+			size += 1 + z*2
+		}
+	}
+	if n := len(s.PAddrs); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.PAddrs {
+		if s.PAddrs[i0] == nil {
+			size += 4
+		} else {
+			size += 49
+			if z := len((*s.PAddrs[i0]).Zone); z > 0 {
+				size += 1 + z*2
+			}
+		}
+	}
+	size += len(s.PByKey) * 4
+	for k, v := range s.PByKey {
+		size += len(k) * 2
+		if v == nil {
+			size += 4
+		} else {
+			size += 45
+		}
+	}
+	if s.PNet == nil {
+		size += 4
+	} else {
+		size += 45
+	}
+	if s.PTCP == nil {
+		size += 4
+	} else {
+		size += 49
+		if z := len((*s.PTCP).Zone); z > 0 {
+			size += 1 + z*2
+		}
+	}
+	if z := len(s.TCP.Zone); z > 0 {
+		size += 1 + z*2
+	}
+	if n := len(s.Tuple); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Tuple {
+		size += 49
+		if z := len(s.Tuple[i0].Zone); z > 0 {
+			size += 1 + z*2
+		}
+	}
+	if z := len(s.UDP.Zone); z > 0 {
+		size += 1 + z*2
+	}
+	size += len(s.Wide) * 4
+	for k, v := range s.Wide {
+		size += len(k) * 2
+		if v == nil {
+			size += 4
+		} else {
+			size += 49
+			if z := len((*v).Zone); z > 0 {
+				size += 1 + z*2
+			}
+		}
+	}
+	return size
+}
+
+func (s NetAddrs) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, '{')
+	start := len(dst)
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"byname\":"...)
+	if s.ByName == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '{')
+		firstByName := true
+		for k, v := range s.ByName {
+			if firstByName {
+				firstByName = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
+			}
+			dst = ggen.AppendStringNoHTML(dst, k)
+			dst = append(dst, ":\""...)
+			if dst, err = ggen.AppendNetAddr(dst, v); err != nil {
+				return dst, err
+			}
+		}
+		dst = append(dst, '}')
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"deep\":"...)
+	if s.Deep == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '{')
+		firstDeep := true
+		for k, v := range s.Deep {
+			if firstDeep {
+				firstDeep = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
+			}
+			dst = ggen.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			if v == nil {
+				dst = append(dst, "null"...)
+			} else {
+				dst = append(dst, '[')
+				if len(v) > 0 {
+					dst = append(dst, '"')
+					if dst, err = ggen.AppendIPNet(dst, v[0]); err != nil {
+						return dst, err
+					}
+					for _, v0 := range v[1:] {
+						dst = append(dst, ",\""...)
+						if dst, err = ggen.AppendIPNet(dst, v0); err != nil {
+							return dst, err
+						}
+					}
+				}
+				dst = append(dst, ']')
+			}
+		}
+		dst = append(dst, '}')
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"net\":\""...)
+	if dst, err = ggen.AppendIPNet(dst, s.Net); err != nil {
+		return dst, err
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"nets\":"...)
+	if s.Nets == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Nets) > 0 {
+			dst = append(dst, '"')
+			if dst, err = ggen.AppendIPNet(dst, s.Nets[0]); err != nil {
+				return dst, err
+			}
+			for _, v0 := range s.Nets[1:] {
+				dst = append(dst, ",\""...)
+				if dst, err = ggen.AppendIPNet(dst, v0); err != nil {
+					return dst, err
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	if s.OPUDP != nil && (len((*s.OPUDP).IP) > 0 || (*s.OPUDP).Port != 0 || (*s.OPUDP).Zone != "") {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, "\"opudp\":\""...)
+		if dst, err = ggen.AppendNetAddr(dst, (*s.OPUDP)); err != nil {
+			return dst, err
+		}
+	}
+	if s.OTCP.IP != nil || s.OTCP.Port != 0 || s.OTCP.Zone != "" {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, "\"otcp\":\""...)
+		if dst, err = ggen.AppendNetAddr(dst, s.OTCP); err != nil {
+			return dst, err
+		}
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"paddrs\":"...)
+	if s.PAddrs == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.PAddrs) > 0 {
+			if s.PAddrs[0] == nil {
+				dst = append(dst, "null"...)
+			} else {
+				dst = append(dst, '"')
+				if dst, err = ggen.AppendNetAddr(dst, (*s.PAddrs[0])); err != nil {
+					return dst, err
+				}
+			}
+			for _, v0 := range s.PAddrs[1:] {
+				dst = append(dst, ',')
+				if v0 == nil {
+					dst = append(dst, "null"...)
+				} else {
+					dst = append(dst, '"')
+					if dst, err = ggen.AppendNetAddr(dst, (*v0)); err != nil {
+						return dst, err
+					}
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"pbykey\":"...)
+	if s.PByKey == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '{')
+		firstPByKey := true
+		for k, v := range s.PByKey {
+			if firstPByKey {
+				firstPByKey = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
+			}
+			dst = ggen.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			if v == nil {
+				dst = append(dst, "null"...)
+			} else {
+				dst = append(dst, '"')
+				if dst, err = ggen.AppendIPNet(dst, (*v)); err != nil {
+					return dst, err
+				}
+			}
+		}
+		dst = append(dst, '}')
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"pnet\":"...)
+	if s.PNet == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '"')
+		if dst, err = ggen.AppendIPNet(dst, (*s.PNet)); err != nil {
+			return dst, err
+		}
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"ptcp\":"...)
+	if s.PTCP == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '"')
+		if dst, err = ggen.AppendNetAddr(dst, (*s.PTCP)); err != nil {
+			return dst, err
+		}
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"tcp\":\""...)
+	if dst, err = ggen.AppendNetAddr(dst, s.TCP); err != nil {
+		return dst, err
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"tuple\":["...)
+	if len(s.Tuple) > 0 {
+		dst = append(dst, '"')
+		if dst, err = ggen.AppendNetAddr(dst, s.Tuple[0]); err != nil {
+			return dst, err
+		}
+		for _, v0 := range s.Tuple[1:] {
+			dst = append(dst, ",\""...)
+			if dst, err = ggen.AppendNetAddr(dst, v0); err != nil {
+				return dst, err
+			}
+		}
+	}
+	dst = append(dst, ']')
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"udp\":\""...)
+	if dst, err = ggen.AppendNetAddr(dst, s.UDP); err != nil {
+		return dst, err
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"wide\":"...)
+	if s.Wide == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '{')
+		firstWide := true
+		for k, v := range s.Wide {
+			if firstWide {
+				firstWide = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
+			}
+			dst = ggen.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			if v == nil {
+				dst = append(dst, "null"...)
+			} else {
+				dst = append(dst, '"')
+				if dst, err = ggen.AppendNetAddr(dst, (*v)); err != nil {
+					return dst, err
+				}
+			}
+		}
+		dst = append(dst, '}')
+	}
+	return append(dst, '}'), nil
+}
+
+func (recv NetAddrsHTML) DecodeFrom(data []byte) (result NetAddrsHTML, i int, err error) {
+	result = recv
+	seenTCP := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenTCP {
+			result.TCP = (NetAddrsHTML{}).TCP
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "tcp":
+			if seenTCP {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"tcp"}}
+			}
+			seenTCP = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("tcp", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("tcp", i, err)
+				}
+			}
+			result.TCP, err = ggen.ParseNetAddr[net.TCPAddr](s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("tcp", i, err)
+			}
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenTCP {
+				result.TCP = (NetAddrsHTML{}).TCP
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv NetAddrsHTML) DecodeFromStream(s *ggen.Stream) (result NetAddrsHTML, err error) {
+	result = recv
+	seenTCP := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenTCP {
+			result.TCP = (NetAddrsHTML{}).TCP
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "tcp":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("tcp", s.Offset(), err)
+			}
+			if seenTCP {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"tcp"}}
+			}
+			seenTCP = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("tcp", s.Offset(), err)
+			}
+			result.TCP, err = ggen.ParseNetAddr[net.TCPAddr](sv)
+			if err != nil {
+				return result, ggen.NewParseErr("tcp", s.Offset(), err)
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenTCP {
+				result.TCP = (NetAddrsHTML{}).TCP
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s NetAddrsHTML) JSONSize() int {
+	size := 57
+	if z := len(s.TCP.Zone); z > 0 {
+		size += 1 + z*6
+	}
+	return size
+}
+
+func (s NetAddrsHTML) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"tcp\":\""...)
+	if dst, err = ggen.AppendNetAddrHTML(dst, s.TCP); err != nil {
+		return dst, err
+	}
+	return append(dst, '}'), nil
 }

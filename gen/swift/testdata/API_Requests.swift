@@ -34,6 +34,8 @@ struct EdgesInput: Codable, Hashable {
     var fixed: Data?
     var ip: String?
     var addr: String?
+    var net: String?
+    var tcp: String?
     var ns: String?
     var raw: JSONValue?
     var lower: String?
@@ -54,6 +56,8 @@ struct EdgesInput: Codable, Hashable {
         case fixed
         case ip
         case addr
+        case net
+        case tcp
         case ns
         case raw
         case lower

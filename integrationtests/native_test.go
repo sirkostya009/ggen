@@ -9,6 +9,7 @@ import (
 	"errors"
 	"net"
 	"net/netip"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -581,5 +582,248 @@ func TestTime_RFC3339StrictParity(t *testing.T) {
 	}
 	if !got.T.Equal(in.T) || !got.S.Equal(in.S) {
 		t.Errorf("roundtrip: got %v want %v", got, in)
+	}
+}
+
+// NetAddrs holds net.IPNet, net.TCPAddr and net.UDPAddr at every position.
+// Each is a JSON string: CIDR text for an IPNet, "ip:port" for an address,
+// "" for the zero value.
+//
+//ggen:generate
+type NetAddrs struct {
+	Net    net.IPNet               `json:"net"`
+	TCP    net.TCPAddr             `json:"tcp"`
+	UDP    net.UDPAddr             `json:"udp"`
+	PNet   *net.IPNet              `json:"pnet"`
+	PTCP   *net.TCPAddr            `json:"ptcp"`
+	Nets   []net.IPNet             `json:"nets"`
+	PAddrs []*net.UDPAddr          `json:"paddrs"`
+	ByName map[string]net.TCPAddr  `json:"byname"`
+	PByKey map[string]*net.IPNet   `json:"pbykey"`
+	Tuple  [2]net.UDPAddr          `json:"tuple"`
+	OTCP   net.TCPAddr             `json:"otcp,omitzero"`
+	OPUDP  *net.UDPAddr            `json:"opudp,omitempty"`
+	Deep   map[string][]net.IPNet  `json:"deep"`
+	Wide   map[string]*net.UDPAddr `json:"wide"`
+}
+
+// NetAddrsHTML checks that a zone holding <, > or & is escaped under
+// htmlescape.
+//
+//ggen:generate htmlescape
+type NetAddrsHTML struct {
+	TCP net.TCPAddr `json:"tcp"`
+}
+
+func mustCIDR(s string) net.IPNet {
+	_, n, err := net.ParseCIDR(s)
+	if err != nil {
+		panic(err)
+	}
+	return *n
+}
+
+func TestNetAddrs_wire(t *testing.T) {
+	t.Parallel()
+	pn := mustCIDR("2001:db8::/32")
+	v := NetAddrs{
+		Net:    mustCIDR("10.0.0.0/8"),
+		TCP:    net.TCPAddr{IP: net.ParseIP("1.2.3.4"), Port: 80},
+		UDP:    net.UDPAddr{IP: net.ParseIP("fe80::1"), Port: 53, Zone: "eth0"},
+		PNet:   &pn,
+		PTCP:   &net.TCPAddr{Port: 8080},
+		Nets:   []net.IPNet{mustCIDR("192.168.0.0/16"), mustCIDR("::/0")},
+		PAddrs: []*net.UDPAddr{{IP: net.ParseIP("::1"), Port: 1}, nil},
+		ByName: map[string]net.TCPAddr{"a": {IP: net.ParseIP("127.0.0.1"), Port: 65535}},
+		PByKey: map[string]*net.IPNet{"n": nil},
+		Tuple:  [2]net.UDPAddr{{IP: net.ParseIP("10.0.0.1"), Port: 0}, {}},
+		Deep:   map[string][]net.IPNet{"d": {mustCIDR("172.16.0.0/12")}},
+		Wide:   map[string]*net.UDPAddr{"w": {IP: net.ParseIP("2001:db8::1"), Port: 443}},
+	}
+	out, err := ggen.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"byname":{"a":"127.0.0.1:65535"},"deep":{"d":["172.16.0.0/12"]},"net":"10.0.0.0/8",` +
+		`"nets":["192.168.0.0/16","::/0"],"paddrs":["[::1]:1",null],"pbykey":{"n":null},` +
+		`"pnet":"2001:db8::/32","ptcp":":8080","tcp":"1.2.3.4:80","tuple":["10.0.0.1:0",""],` +
+		`"udp":"[fe80::1%eth0]:53","wide":{"w":"[2001:db8::1]:443"}}`
+	if string(out) != want {
+		t.Fatalf("marshal:\n got  %s\n want %s", out, want)
+	}
+	if n := v.JSONSize(); n < len(out) {
+		t.Errorf("JSONSize %d < %d written", n, len(out))
+	}
+	// The text is what the types' String methods print.
+	for _, s := range []string{v.Net.String(), v.TCP.String(), v.UDP.String(), v.PTCP.String()} {
+		if !strings.Contains(string(out), `"`+s+`"`) {
+			t.Errorf("%q missing from output", s)
+		}
+	}
+	got, _, err := (NetAddrs{}).DecodeFrom(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := ggen.Marshal(got)
+	if err != nil || !bytes.Equal(again, out) {
+		t.Fatalf("round trip:\n got  %s (%v)\n want %s", again, err, out)
+	}
+	for _, chunk := range []int{1, 3, 64} {
+		var s ggen.Stream
+		s.Reset(&chunkReader{data: out, max: chunk}, make([]byte, 0, 16))
+		sgot, err := s.Value[NetAddrs]()
+		if err != nil {
+			t.Fatalf("stream chunk %d: %v", chunk, err)
+		}
+		if sout, _ := ggen.Marshal(sgot); !bytes.Equal(sout, out) {
+			t.Errorf("stream chunk %d:\n got  %s\n want %s", chunk, sout, out)
+		}
+	}
+}
+
+func TestNetAddrs_zeroAndOmit(t *testing.T) {
+	t.Parallel()
+	out, err := ggen.Marshal(NetAddrs{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"byname":null,"deep":null,"net":"","nets":null,"paddrs":null,"pbykey":null,"pnet":null,` +
+		`"ptcp":null,"tcp":"","tuple":["",""],"udp":"","wide":null}`
+	if string(out) != want {
+		t.Fatalf("zero:\n got  %s\n want %s", out, want)
+	}
+	carried := NetAddrs{Net: mustCIDR("10.0.0.0/8"), TCP: net.TCPAddr{IP: net.ParseIP("1.1.1.1"), Port: 1}}
+	got, _, err := carried.DecodeFrom([]byte(`{"net":"","tcp":"","udp":":0"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.Net, net.IPNet{}) || !reflect.DeepEqual(got.TCP, net.TCPAddr{}) || !reflect.DeepEqual(got.UDP, net.UDPAddr{}) {
+		t.Errorf("\"\" must decode to the zero value: %+v %+v %+v", got.Net, got.TCP, got.UDP)
+	}
+	set, err := ggen.Marshal(NetAddrs{
+		OTCP:  net.TCPAddr{Port: 1},
+		OPUDP: &net.UDPAddr{},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A pointer to a zero value is written as "", so omitempty drops it.
+	for _, w := range []string{`"otcp":":1"`} {
+		if !strings.Contains(string(set), w) {
+			t.Errorf("%s missing from %s", w, set)
+		}
+	}
+	if strings.Contains(string(set), `"opudp"`) {
+		t.Errorf("omitempty kept a zero pointee: %s", set)
+	}
+}
+
+func TestNetAddrs_decodeRejects(t *testing.T) {
+	t.Parallel()
+	for _, p := range []string{
+		`{"net":"10.0.0.0"}`,
+		`{"net":"10.0.0.0/33"}`,
+		`{"net":"10.0.0.0/08"}`,
+		`{"net":"fe80::/10%eth0"}`,
+		`{"net":null}`,
+		`{"net":8}`,
+		`{"tcp":"localhost:80"}`,
+		`{"tcp":"1.2.3.4"}`,
+		`{"tcp":"1.2.3.4:"}`,
+		`{"tcp":"1.2.3.4:http"}`,
+		`{"tcp":"1.2.3.4:65536"}`,
+		`{"tcp":"1.2.3.4:-1"}`,
+		`{"tcp":"::1:80"}`,
+		`{"tcp":"[1.2.3.4]:80"}`,
+		`{"tcp":"1.2.3.4%eth0:80"}`,
+		`{"tcp":":"}`,
+		`{"tcp":null}`,
+		`{"udp":"[::1]"}`,
+	} {
+		bErr, sErr := decodeBothChunked[NetAddrs](p, 3)
+		if bErr == nil || sErr == nil {
+			t.Errorf("%s: bytes %v, stream %v", p, bErr, sErr)
+		}
+	}
+	// What the parser accepts beyond the obvious forms.
+	for p, want := range map[string]NetAddrs{
+		`{"net":"10.1.2.3/8"}`:           {Net: mustCIDR("10.0.0.0/8")},
+		`{"tcp":"[::ffff:1.2.3.4]:080"}`: {TCP: net.TCPAddr{IP: net.IPv4(1, 2, 3, 4), Port: 80}},
+		`{"udp":":65535"}`:               {UDP: net.UDPAddr{Port: 65535}},
+	} {
+		got, _, err := (NetAddrs{}).DecodeFrom([]byte(p))
+		if err != nil {
+			t.Errorf("%s: %v", p, err)
+			continue
+		}
+		if !got.Net.IP.Equal(want.Net.IP) || got.Net.String() != want.Net.String() ||
+			got.TCP.String() != want.TCP.String() || got.UDP.String() != want.UDP.String() {
+			t.Errorf("%s: got %+v", p, got)
+		}
+	}
+}
+
+func TestNetAddrs_marshalRejects(t *testing.T) {
+	t.Parallel()
+	for name, v := range map[string]NetAddrs{
+		"port_high":     {TCP: net.TCPAddr{Port: 65536}},
+		"port_negative": {UDP: net.UDPAddr{IP: net.ParseIP("::1"), Port: -1}},
+		"ip_length":     {TCP: net.TCPAddr{IP: net.IP{1, 2, 3}, Port: 1}},
+		"zone_on_ipv4":  {TCP: net.TCPAddr{IP: net.ParseIP("1.2.3.4"), Zone: "eth0"}},
+		"zone_no_ip":    {UDP: net.UDPAddr{Zone: "eth0"}},
+		"mask_not_cidr": {Net: net.IPNet{IP: net.IPv4(10, 0, 0, 0), Mask: net.IPv4Mask(255, 0, 255, 0)}},
+		"mask_missing":  {Net: net.IPNet{IP: net.IPv4(10, 0, 0, 0)}},
+		"ip_missing":    {Net: net.IPNet{Mask: net.CIDRMask(8, 32)}},
+	} {
+		if out, err := ggen.Marshal(v); err == nil {
+			t.Errorf("%s: wrote %s", name, out)
+		}
+	}
+}
+
+func TestNetAddrs_zoneEscaped(t *testing.T) {
+	t.Parallel()
+	a := net.TCPAddr{IP: net.ParseIP("fe80::1"), Port: 1, Zone: `a"<b`}
+	out, err := ggen.Marshal(NetAddrs{TCP: a})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), `"tcp":"[fe80::1%a\"<b]:1"`) {
+		t.Fatalf("zone not escaped: %s", out)
+	}
+	got, _, err := (NetAddrs{}).DecodeFrom(out)
+	if err != nil || got.TCP.Zone != a.Zone {
+		t.Fatalf("round trip: %+v, %v", got.TCP, err)
+	}
+	h, err := ggen.Marshal(NetAddrsHTML{TCP: a})
+	if err != nil || string(h) != `{"tcp":"[fe80::1%a\"\u003cb]:1"}` {
+		t.Fatalf("htmlescape: %s, %v", h, err)
+	}
+	if n := (NetAddrsHTML{TCP: a}).JSONSize(); n < len(h) {
+		t.Errorf("JSONSize %d < %d written", n, len(h))
+	}
+}
+
+// The parse error keeps the bad text. The stream scan aliases its buffer, so
+// the error must hold a copy that survives the buffer being reused.
+func TestNetAddrs_errorDetachedFromBuffer(t *testing.T) {
+	t.Parallel()
+	buf := make([]byte, 0, 64)
+	var s ggen.Stream
+	for _, c := range [][2]string{
+		{`{"net":"10.0.0.0/99"}`, `{"net":"ZZ.0.0.0/77"}`},
+		{`{"tcp":"1.2.3.4:99999"}`, `{"tcp":"X.Y.Z.W:00000"}`},
+	} {
+		s.Reset(strings.NewReader(c[0]), buf)
+		_, err := s.Value[NetAddrs]()
+		if _, ok := errors.AsType[*net.ParseError](err); !ok {
+			t.Fatalf("%s: %v, want a *net.ParseError", c[0], err)
+		}
+		before := err.Error()
+		s.Reset(strings.NewReader(c[1]), buf)
+		s.Value[NetAddrs]()
+		if after := err.Error(); after != before {
+			t.Errorf("error text changed after buffer reuse:\n before %q\n after  %q", before, after)
+		}
 	}
 }

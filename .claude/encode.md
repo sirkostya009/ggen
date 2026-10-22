@@ -206,7 +206,11 @@ that would otherwise catch them:
    (bare digits), `time.Time` (AppendText), `time.Duration` (`"` +
    `esc(x.String())` — the units string a bare Duration field emits by
    default, so one document holds one shape of the type; the reflect Int64
-   arm emitted bare nanoseconds), pointer-to-primitive
+   arm emitted bare nanoseconds), `net.IPNet`/`net.TCPAddr`/`net.UDPAddr` and
+   their pointers (`AppendIPNet` / `appendAnyNetAddr`, which escapes a zone
+   with the walker's `esc`; they have no marshal methods, so reflect would
+   write their fields as an object — `structWire` also lists them, so
+   `omitempty` can drop a zero one), pointer-to-primitive
    (`*string`/`*bool`/`*int*`/`*uint*`/`*float*`, nil → `null`). MUST sit
    before `case json.Marshaler`. **`big.Int` is there because go1.24 gave it an
    `AppendText`**, so the `encoding.TextAppender` dispatch started QUOTING its

@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"math/big"
+	"net"
 	"reflect"
 	"strconv"
 	"strings"
@@ -39,6 +40,17 @@ func AppendAnyHTML(dst []byte, v any) ([]byte, error) {
 // escapeFn is AppendString or AppendStringNoHTML. It is passed down the whole
 // walk, so every nested string and map key uses the same escaping.
 type escapeFn = func([]byte, string) []byte
+
+// appendAnyNetAddr writes a as AppendNetAddr does, escaping a zone with esc.
+func appendAnyNetAddr(dst []byte, a net.TCPAddr, esc escapeFn) ([]byte, error) {
+	dst = append(dst, '"')
+	from := len(dst)
+	dst, err := appendNetAddrRaw(dst, a)
+	if err != nil || a.Zone == "" {
+		return dst, err
+	}
+	return esc(dst[:from], string(dst[from:len(dst)-1])), nil
+}
 
 func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 	if depth > maxDepth {
@@ -252,6 +264,29 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 	case time.Duration:
 		dst = append(dst, '"')
 		return esc(dst, x.String()), nil
+	// Generated fields write these as strings. They have no marshal
+	// methods, so without a case they would be reflected into objects.
+	case net.IPNet:
+		return AppendIPNet(append(dst, '"'), x)
+	case *net.IPNet:
+		if x == nil {
+			return append(dst, 'n', 'u', 'l', 'l'), nil
+		}
+		return AppendIPNet(append(dst, '"'), *x)
+	case net.TCPAddr:
+		return appendAnyNetAddr(dst, x, esc)
+	case *net.TCPAddr:
+		if x == nil {
+			return append(dst, 'n', 'u', 'l', 'l'), nil
+		}
+		return appendAnyNetAddr(dst, *x, esc)
+	case net.UDPAddr:
+		return appendAnyNetAddr(dst, net.TCPAddr(x), esc)
+	case *net.UDPAddr:
+		if x == nil {
+			return append(dst, 'n', 'u', 'l', 'l'), nil
+		}
+		return appendAnyNetAddr(dst, net.TCPAddr(*x), esc)
 	// Pointers to primitives. A nil pointer writes null.
 	case *string:
 		if x == nil {
@@ -911,6 +946,9 @@ func quotableKind(t reflect.Type) bool {
 var (
 	numberType   = reflect.TypeFor[json.Number]()
 	durationType = reflect.TypeFor[time.Duration]()
+	ipNetType    = reflect.TypeFor[net.IPNet]()
+	tcpAddrType  = reflect.TypeFor[net.TCPAddr]()
+	udpAddrType  = reflect.TypeFor[net.UDPAddr]()
 )
 
 func hasTagOpt(opts, want string) bool {
@@ -941,7 +979,7 @@ func emptyWire(b []byte) bool {
 // never drops a struct field, and the generator rejects the option on one. So
 // a struct whose members are all omitted is still written as {}. Pointers and
 // interfaces are followed. A nil one is not a struct, so omitempty can still
-// drop it.
+// drop it. The net structs appendAny writes as strings are not either.
 func structWire(v reflect.Value) bool {
 	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
 		if v.IsNil() {
@@ -949,7 +987,14 @@ func structWire(v reflect.Value) bool {
 		}
 		v = v.Elem()
 	}
-	return v.Kind() == reflect.Struct
+	if v.Kind() != reflect.Struct {
+		return false
+	}
+	switch v.Type() {
+	case ipNetType, tcpAddrType, udpAddrType:
+		return false
+	}
+	return true
 }
 
 // fieldValue returns the value of f in rv. ok is false when omitzero drops
@@ -1207,6 +1252,22 @@ func anySize(v any, mult, depth int) int {
 		return anySizeTime
 	case time.Duration:
 		return anySizeDuration
+	case net.IPNet, *net.IPNet:
+		return 45
+	case net.TCPAddr:
+		return 49 + len(x.Zone)*mult
+	case *net.TCPAddr:
+		if x == nil {
+			return 4
+		}
+		return 49 + len(x.Zone)*mult
+	case net.UDPAddr:
+		return 49 + len(x.Zone)*mult
+	case *net.UDPAddr:
+		if x == nil {
+			return 4
+		}
+		return 49 + len(x.Zone)*mult
 	case *string:
 		if x == nil {
 			return 4
