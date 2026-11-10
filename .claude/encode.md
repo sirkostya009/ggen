@@ -10,6 +10,10 @@ buffer-append helpers generated code calls, and the `AppendAny` walker for `any`
 - `any.go` — `AppendAny` walker + concrete-type fast paths, and its sizing twin `AnySize`.
 - `url.go` — net/url.URL helpers.
 - `netip_addr.go` — `AppendNetipAddr` (zone-aware netip.Addr string emit).
+- `net.go` — `AppendIPNet` / `AppendNetAddr{,HTML}`, the writers of
+  `net.IPNet`/`TCPAddr`/`UDPAddr`, taking the fields as parts, plus the
+  decode twins `ParseIPNet`/`ParseNetAddr` (.claude/scan.md) and their
+  `AddrError`. The package imports no `net` (cmd/ggen/CLAUDE.md #89).
 - `rfc3339.go` — `AppendRFC3339` (+ the decode twin `ParseRFC3339`, .claude/scan.md).
 - `empty.go` — `AnyIsEmpty`, the `omitempty` predicate for `any` fields.
 
@@ -35,10 +39,14 @@ func AppendNetipAddr(dst []byte, a netip.Addr) []byte // addr text + closing `"`
 func AppendNetipAddrHTML(dst []byte, a netip.Addr) []byte // htmlescape variant
 func AppendURL(dst []byte, u url.URL) []byte          // wire-form text + closing `"`, re-escapes when needed; byte-for-byte url.URL.String() — path presence is tracked explicitly (hasPath := raw || u.Path != ""), so a Path starting with a NUL byte still gets the authority/path '/'
 func AppendURLHTML(dst []byte, u url.URL) []byte      // htmlescape variant
+func AppendIPNet(dst, ip, mask []byte) ([]byte, error) // CIDR text of an IPNet's IP + Mask + closing `"`, what (*net.IPNet).String prints, "" for neither part. Refuses a value String would print without a prefix length (non-canonical mask, IP/mask mismatch)
+func AppendNetAddr(dst, ip []byte, port int, zone string) ([]byte, error) // "ip:port" of a TCPAddr/UDPAddr + closing `"`, what String prints, "%zone" appended by hand (WithZone would intern it), "" for the zero value. Refuses a port outside [0,65535], an IP neither 4 nor 16 bytes, a zone without an IPv6 address. Zoned text goes through the escape check
+func AppendNetAddrHTML(dst, ip []byte, port int, zone string) ([]byte, error) // htmlescape variant
+type AddrError struct{ Type, Text string }            // bad net text ("IP address" / "CIDR address" / "ip:port address"). Text is always a copy. Error() = "invalid " + Type + ": " + strconv.Quote(Text)
 func AppendRFC3339(dst []byte, t time.Time, layout string) ([]byte, error) // RFC3339/RFC3339Nano AppendFormat + the year ∈ [0,9999] / zone hour < 24 check time.Time.AppendText and jsonv2 apply — a bare AppendFormat wrote strings no RFC 3339 parser reads back
-func AnySize(v any) int                              // upper bound on len(AppendAny(nil, v)): generator's per-kind constants for typed leaves, walks dynamic shapes, generated values report JSONSize, text/JSON marshalers are run; mirrors appendAny's dispatch order + maxDepth
+func AnySize(v any) int                              // upper bound on len(AppendAny(nil, v)): generator's per-kind constants for typed leaves (the net structs through netSize), walks dynamic shapes, generated values report JSONSize, text/JSON marshalers are run; mirrors appendAny's dispatch order + maxDepth
 func AnySizeHTML(v any) int                          // AnySize under AppendAnyHTML's 6× string escapes
-func AnyIsEmpty(v any) bool                          // omitempty for `any`: nil / "" / empty []any / empty map[string]any by type switch, other slices/maps/arrays/nil pointers by reflect; structs never inspected
+func AnyIsEmpty(v any) bool                          // omitempty for `any`: nil / "" / empty []any / empty map[string]any by type switch, other slices/maps/arrays/nil pointers by reflect; structs never inspected, except net.IPNet/TCPAddr/UDPAddr, empty when they write ""
 func CloseJSONString(dst []byte, from int) []byte     // close raw-appended text (TextAppender output), re-escaping iff dirty
 func CloseJSONStringHTML(dst []byte, from int) []byte // htmlescape variant
 func AppendStringNoHTML(dst []byte, s string) []byte // jsonv2-default variant
@@ -206,12 +214,10 @@ that would otherwise catch them:
    (bare digits), `time.Time` (AppendText), `time.Duration` (`"` +
    `esc(x.String())` — the units string a bare Duration field emits by
    default, so one document holds one shape of the type; the reflect Int64
-   arm emitted bare nanoseconds), `net.IPNet`/`net.TCPAddr`/`net.UDPAddr` and
-   their pointers (`AppendIPNet` / `appendAnyNetAddr`, which escapes a zone
-   with the walker's `esc`; they have no marshal methods, so reflect would
-   write their fields as an object — `structWire` also lists them, so
-   `omitempty` can drop a zero one), pointer-to-primitive
-   (`*string`/`*bool`/`*int*`/`*uint*`/`*float*`, nil → `null`). MUST sit
+   arm would write bare nanoseconds), pointer-to-primitive
+   (`*string`/`*bool`/`*int*`/`*uint*`/`*float*`, nil → `null`). The net
+   structs have no case here: the reflect fallback recognizes them by name
+   (step 6). MUST sit
    before `case json.Marshaler`. **`big.Int` is there because go1.24 gave it an
    `AppendText`**, so the `encoding.TextAppender` dispatch started QUOTING its
    digits while v1, jsonv2 and ggen's own `KindBigInt` field wire all emit a
@@ -244,6 +250,36 @@ that would otherwise catch them:
    path. The `reflect.Map` walk reuses two addressable scratch `reflect.Value`s
    via `Value.SetIterKey`/`SetIterValue` (vs `iter.Key()`/`iter.Value()` which
    allocate a fresh Value per entry). Only `any` fields reach this.
+
+   **The net structs.** The package does not import `net`
+   (cmd/ggen/CLAUDE.md #89), so `net.IPNet`/`TCPAddr`/`UDPAddr` cannot be
+   type-switch cases. `netKindOf` recognizes them by reflect name (PkgPath
+   `net`, Name `IPNet`/`TCPAddr`/`UDPAddr`) and `appendNetValue` reads their
+   fields by index (`IP`, `Mask` / `IP`, `Port`, `Zone`, the order
+   `TestNetLayout` pins) into `AppendIPNet` / `appendNetAddrRaw`, the field
+   emitters' writers, so one document holds one shape and the `json:",embed"`
+   catch-all reads them back. The reflect fallback checks them before
+   `needsAddr`, since they have no marshal methods and reflect would write
+   their fields as an object. A pointer to one is written in place
+   (`netElemKind`), and `appendReflectValue` writes a slice, array or map
+   element in place, without boxing a copy. A zone is escaped through
+   `closeText` with the walker's `esc`, which copies only when a byte needs
+   escaping. `structWire` uses `netKindOf`, so `omitempty` drops one that
+   writes `""`. `AnyIsEmpty` counts them empty on the same test (`netEmpty`:
+   an IPNet with IP and Mask empty, an address with IP empty, Port 0 and
+   Zone `""`), and reads a pointed-to one in place through `netElemKind`, so
+   an `omitempty` `any` holding a net pointer costs no allocation in
+   generated `AppendJSON` / `JSONSize`.
+   `AnySize` budgets them through `netSize` (IPNet 20/45, addresses 23/49 by IPv4 vs
+   IPv6 text, quotes included, plus `1 + len×mult` for a zone's `%` and
+   bytes). A named type over one (`type A net.TCPAddr`) is a struct of its
+   own and is written as one. Pinned by `TestAppendAny_netTypes`,
+   `TestAnySize_BoundsAppendAny`, `TestAnyIsEmpty`,
+   `TestAnyIsEmpty_netNoAlloc`, and `TestAppendAny_netNoAlloc` (no allocation
+   from `AppendAny` / `AppendAnyHTML` into a presized buffer, or from
+   `AnySize` / `AnySizeHTML`, for net slices, pointers and values whose zone
+   needs no escaping, and a map allocates the same at one entry as at eight).
+
    The struct walk's flattened field list (`cachedStructInfo`/`collectFields`)
    guards anonymous-embed recursion with a stack-set visited map (found+fixed
    2026-08, round 7): `type Node struct { *Node; X int }` used to recurse
@@ -348,6 +384,16 @@ pointer-to-primitive precedes `case reflect.Pointer` (else the fallback boxes vi
   (`TestAppendURL_Construction`, `String()` parity over hand-built structs),
   netip.Addr, nil-pointer handling.
 - `empty_test.go` — `AnyIsEmpty`, cross-checked against `AppendAny`'s output.
+  A value `AppendAny` refuses (a mask-only or IP-only IPNet, a zone-only
+  address) must not count as empty, and a net value behind a pointer is
+  read with no allocation.
+- `net_test.go` — the net writers against `String()` (every prefix length
+  vs `net.ParseCIDR` too), their refusal tables (each refused value's
+  `String()` fails to parse), zone escaping in both escape modes, the
+  parsers' differentials against netip with parse → write → parse
+  invariants, `AddrError` quoting and detaching, `AppendAny` over the net
+  structs and its allocation pin, the field layout pin, and
+  `TestRuntimeDoesNotImportNet`.
 - `rfc3339_test.go` — `AppendRFC3339` rejects unrepresentable / matches
-  `AppendFormat`, `ParseRFC3339` jsonv2 parity.
+  `AppendFormat`, `ParseRFC3339` jsonv2 parity and detached error text.
 - `encode_simd_test.go` — escape-scan tier parity + benches (goexperiment.simd).

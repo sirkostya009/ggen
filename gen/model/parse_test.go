@@ -766,3 +766,145 @@ var _ = http.StatusOK
 		t.Errorf("imported consts = %v", cs)
 	}
 }
+
+// A type written through an `=` alias is classified as the type it names, at
+// every position. The fields of a struct alias keep the kinds of their named
+// types, as on a struct field: net.IP is not looked through to its []byte.
+func TestParsePackage_eqAliasKinds(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.27\n")
+	writeFile(t, dir, "m.go", `package m
+
+import (
+	"encoding/json"
+	"net"
+	"time"
+)
+
+type Level string
+
+type (
+	Addr  = net.TCPAddr
+	Dur   = time.Duration
+	IDs   = []string
+	IntP  = *int
+	Count = int
+	Lvl   = Level
+)
+
+//ggen:generate
+type S struct {
+	A  Addr            `+"`json:\"a\"`"+`
+	PA *Addr           `+"`json:\"pa\"`"+`
+	SD []Dur           `+"`json:\"sd\"`"+`
+	MD map[string]Dur  `+"`json:\"md\"`"+`
+	I  IDs             `+"`json:\"i\"`"+`
+	P  IntP            `+"`json:\"p\"`"+`
+	C  Count           `+"`json:\"c\"`"+`
+	L  []Lvl           `+"`json:\"l\"`"+`
+	R  json.RawMessage `+"`json:\"r\"`"+`
+}
+
+//ggen:generate
+type CIDR net.IPNet
+`)
+	pkg, err := ParsePackage(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]FieldInfo{}
+	for _, s := range pkg.Structs {
+		for _, f := range s.Fields {
+			got[s.Name+"."+f.GoName] = f
+		}
+	}
+	for _, c := range []struct {
+		field, goType string
+		kind          TypeKind
+		pointer       bool
+		elemType      string
+		elemKind      TypeKind
+	}{
+		{"S.A", "net.TCPAddr", KindTCPAddr, false, "", 0},
+		{"S.PA", "*net.TCPAddr", KindTCPAddr, true, "", 0},
+		{"S.SD", "[]time.Duration", KindSlice, false, "time.Duration", KindDuration},
+		{"S.MD", "map[string]time.Duration", KindMap, false, "time.Duration", KindDuration},
+		{"S.I", "[]string", KindSlice, false, "string", KindString},
+		{"S.P", "*int", KindInt, true, "", 0},
+		{"S.C", "int", KindInt, false, "", 0},
+		{"S.L", "[]Level", KindSlice, false, "Level", KindStruct},
+		{"S.R", "json.RawMessage", KindRawJSON, false, "", 0},
+		{"CIDR.IP", "net.IP", KindNetIP, false, "", 0},
+		{"CIDR.Mask", "net.IPMask", KindStruct, false, "", 0},
+	} {
+		f, ok := got[c.field]
+		if !ok {
+			t.Errorf("%s missing", c.field)
+			continue
+		}
+		if f.GoType != c.goType || f.Kind != c.kind || f.Pointer != c.pointer || f.ElemType != c.elemType || f.ElemKind != c.elemKind {
+			t.Errorf("%s = {%q %v pointer=%v elem %q %v}, want {%q %v pointer=%v elem %q %v}", c.field,
+				f.GoType, f.Kind, f.Pointer, f.ElemType, f.ElemKind, c.goType, c.kind, c.pointer, c.elemType, c.elemKind)
+		}
+	}
+	if imps := got["S.A"].TypeImports; len(imps) != 1 || imps[0].Path != "net" {
+		t.Errorf("S.A imports %v, want net", imps)
+	}
+	if k, ok := got["S.L"].NamedPrims["Level"]; !ok || k != KindString {
+		t.Errorf("S.L named primitives %v, want Level as a string", got["S.L"].NamedPrims)
+	}
+}
+
+// A generic type with several type arguments is spelled as Go writes it at
+// every position, a type argument from a package imported under another name
+// included.
+func TestParsePackage_multiArgGenerics(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	writeFile(t, dir, "go.mod", "module example.com/m\n\ngo 1.27\n")
+	if err := os.Mkdir(filepath.Join(dir, "leaf"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, dir, "leaf/leaf.go", "package leaf\n\ntype Name string\n")
+	writeFile(t, dir, "m.go", `package m
+
+import lf "example.com/m/leaf"
+
+type Pair[K comparable, V any] struct {
+	Key K
+	Val V
+}
+
+//ggen:generate
+type S struct {
+	V Pair[string, int]            `+"`json:\"v\"`"+`
+	L []Pair[string, int]          `+"`json:\"l\"`"+`
+	P *Pair[string, int]           `+"`json:\"p\"`"+`
+	M map[string]Pair[string, int] `+"`json:\"m\"`"+`
+	Q []Pair[lf.Name, int]         `+"`json:\"q\"`"+`
+}
+`)
+	pkg, err := ParsePackage(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]FieldInfo{}
+	for _, f := range pkg.Structs[0].Fields {
+		got[f.GoName] = f
+	}
+	for _, c := range []struct{ field, goType, elemType string }{
+		{"V", "Pair[string, int]", ""},
+		{"L", "[]Pair[string, int]", "Pair[string, int]"},
+		{"P", "*Pair[string, int]", ""},
+		{"M", "map[string]Pair[string, int]", "Pair[string, int]"},
+		{"Q", "[]Pair[leaf.Name, int]", "Pair[leaf.Name, int]"},
+	} {
+		if f := got[c.field]; f.GoType != c.goType || f.ElemType != c.elemType {
+			t.Errorf("%s = %q elem %q, want %q elem %q", c.field, f.GoType, f.ElemType, c.goType, c.elemType)
+		}
+	}
+	if p := got["P"]; p.PointeeType != "Pair[string, int]" {
+		t.Errorf("P pointee = %q", p.PointeeType)
+	}
+}

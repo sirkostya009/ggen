@@ -103,7 +103,7 @@ func renderAliasSize(s model.StructInfo) string {
 		// fixed number would be too small for large containers and too big
 		// for small ones.
 		f := aliasContainerField(s)
-		n, code := sizeContrib(f, "s")
+		n, code := sizeContrib(f, "s", 0)
 		return fmt.Sprintf("size := %d\n%sreturn size\n", n, code)
 	case model.KindStruct:
 		switch {
@@ -335,15 +335,15 @@ func renderAliasContainerDecode(b *bytes.Buffer, s model.StructInfo, stream bool
 		if stream {
 			renderStreamSlice(b, f, "result", posVar)
 		} else {
-			emitByteSliceRead(b, f, "result", posVar, 0, true)
+			emitByteSliceRead(b, f, "result", posVar, true)
 		}
 	case model.KindArray:
 		// emitByteSliceRead and emitStreamSliceRead handle both slices and
 		// arrays, using f.Kind and f.ArrayLen.
 		if stream {
-			emitStreamSliceRead(b, f, "result", posVar, 0)
+			emitStreamSliceRead(b, f, "result", posVar)
 		} else {
-			emitByteSliceRead(b, f, "result", posVar, 0, true)
+			emitByteSliceRead(b, f, "result", posVar, true)
 		}
 	case model.KindMap:
 		if stream {

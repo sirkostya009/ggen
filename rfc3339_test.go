@@ -84,3 +84,28 @@ func TestParseRFC3339_JSONv2Parity(t *testing.T) {
 		}
 	}
 }
+
+// ParseRFC3339's own errors hold a copy of the text, as time.Parse's do, so
+// an error from a view of a reusable buffer keeps its message.
+func TestParseRFC3339_ErrorDetached(t *testing.T) {
+	t.Parallel()
+	for _, s := range []string{
+		"2020-01-01T1:04:05Z",
+		"2020-01-01T00:00:00,123Z",
+		"2020-01-01T00:00:00+24:00",
+		"2020-01-01T00:00:00+23:60",
+	} {
+		b := []byte(s)
+		_, err := ParseRFC3339(BytesToString(b))
+		if err == nil {
+			t.Fatalf("%q accepted", s)
+		}
+		before := err.Error()
+		for i := range b {
+			b[i] = 'Z'
+		}
+		if after := err.Error(); after != before {
+			t.Errorf("%q: error text changed with the input:\n before %q\n after  %q", s, before, after)
+		}
+	}
+}

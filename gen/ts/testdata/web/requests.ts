@@ -34,6 +34,7 @@ export type EdgesInput = {
   addr?: string;
   net?: string;
   tcp?: string | null;
+  udp?: string;
   ns?: string | null;
   raw?: unknown;
   lower?: string;
@@ -41,3 +42,9 @@ export type EdgesInput = {
   conv?: number | string | null;
   tags?: TagsInput;
 } & Record<string, unknown>;
+
+/** AddressView delegates to the generated Address. */
+export type AddressViewInput = AddressInput;
+
+/** Token delegates to the text methods of Secret. */
+export type TokenInput = string;

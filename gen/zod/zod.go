@@ -344,7 +344,14 @@ func (e *Emitter) base(ctx *gen.Context, s *gen.Shape, t *gen.Type, where string
 		return "z.array(" + elem + ")", arr
 	case gen.WireObject:
 		if t.Go == gen.Map {
-			return "z.record(" + e.typ(ctx, s, t.Key, where) + ", " + e.typ(ctx, s, t.Elem, where) + ")", other
+			key := e.typ(ctx, s, t.Key, where)
+			elem := e.typ(ctx, s, t.Elem, where)
+			if t.Key.Enum != nil {
+				// A record keyed by an enum or a literal requires every member,
+				// where Go checks only the keys present.
+				return "z.partialRecord(" + key + ", " + elem + ")", other
+			}
+			return "z.record(" + key + ", " + elem + ")", other
 		}
 		return "z.record(z.string(), z.unknown())", other
 	}
@@ -381,6 +388,13 @@ func integer(t *gen.Type) string {
 }
 
 func (e *Emitter) str(t *gen.Type) (string, kind) {
+	predicate := func(fn, msg string) (string, kind) {
+		s := "z.string().refine(" + e.helpers.Use(fn) + ", " + js.Quote(msg) + ")"
+		if t.Empty {
+			return `z.literal("").or(` + s + ")", other
+		}
+		return s, str
+	}
 	switch {
 	case t.Format == gen.FormatDateTime:
 		return "z.iso.datetime({ offset: true })", str
@@ -396,22 +410,13 @@ func (e *Emitter) str(t *gen.Type) (string, kind) {
 		}
 		return "z.ipv4().or(z.ipv6())", other
 	case t.Format == gen.FormatCIDR:
-		if t.Empty {
-			return `z.literal("").or(z.cidrv4()).or(z.cidrv6())`, other
-		}
-		return "z.cidrv4().or(z.cidrv6())", other
+		// z.cidrv6() accepts a prefix length such as 64.5 or NaN, which Go
+		// rejects.
+		return predicate("ggenIsPrefix", "must be an IP prefix")
 	case t.Format == gen.FormatIPZone:
-		addr := "z.string().refine(" + e.helpers.Use("ggenIsAddr") + `, "must be an IP address")`
-		if t.Empty {
-			return `z.literal("").or(` + addr + ")", other
-		}
-		return addr, str
+		return predicate("ggenIsAddr", "must be an IP address")
 	case t.Format == gen.FormatIPPort:
-		addr := "z.string().refine(" + e.helpers.Use("ggenIsAddrPort") + `, "must be an IP address and port")`
-		if t.Empty {
-			return `z.literal("").or(` + addr + ")", other
-		}
-		return addr, str
+		return predicate("ggenIsAddrPort", "must be an IP address and port")
 	case strings.HasPrefix(t.Format, gen.FormatTimeLayoutPrefix):
 		layout := strings.TrimPrefix(t.Format, gen.FormatTimeLayoutPrefix)
 		name, oneArg := e.helpers.TimeCheck(layout)

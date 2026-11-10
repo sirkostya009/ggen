@@ -167,10 +167,46 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   plus jsonv2's four post-checks that `time.Parse` skips (two-digit hour, `.`
   fraction separator, zone hour < 24, zone minute < 60), checked in the order
   that keeps every index in range. Generated default / `format:RFC3339` /
-  `RFC3339Nano` time sites call it on both paths; the stream path parses from
-  `StringView` (no copy), and the checks are byte compares on the
-  already-validated string. `AppendRFC3339` is the encode twin
-  (.claude/encode.md). Pinned by `TestParseRFC3339_JSONv2Parity`.
+  `RFC3339Nano` time sites call it on both paths, and the stream path parses
+  from `StringView` (no copy). The checks are byte compares on the
+  already-validated string. Its own four errors are `*time.ParseError` values
+  built by `rfc3339Error`, which clones `s` once and takes `Value` and
+  `ValueElem` from that copy. `time.Parse`'s `newParseError` clones what it
+  keeps too. So a `time.Time` decode error never keeps the input: not the
+  `StringView` alias on the stream, and not `data` on the bytes path.
+  `AppendRFC3339` is the encode twin (.claude/encode.md). Pinned by
+  `TestParseRFC3339_JSONv2Parity`, `TestParseRFC3339_ErrorDetached` and
+  `TestTime_ErrorDetachedFromBuffer` (integ, `R10Time`: four bad texts across
+  the default and `RFC3339` layouts).
+- **`ParseIPNet(s)` / `ParseNetAddr(s)` (`net.go`)** — the parsers of
+  `net.IPNet` and `net.TCPAddr`/`UDPAddr` text. They return the PARTS
+  (`ip, mask []byte` / `ip []byte, port int, zone string`), which generated
+  code assigns into the fields, because the package imports no `net`
+  (cmd/ggen/CLAUDE.md #89). `""` is the zero value. `ParseIPNet` is
+  `netip.ParsePrefix` + `Masked()`: it rejects any `%` up front (a prefix has
+  no zone, and netip would intern one before refusing it), builds the mask
+  with word-wide shifts (`PutUint32`, two `PutUint64`), and backs IP and
+  Mask with one allocation, IP's capacity ending where Mask starts.
+  `ParseNetAddr` cuts the port at the last `:` (`ParseUint(…, 10, 16)`, so
+  netip's port grammar: leading zeros pass, a sign does not), takes `":port"`
+  as a nil IP, and parses the host with `netip.ParseAddr` after splitting
+  the zone off itself, so the zone never goes through package `unique`. The
+  zone is `strings.Clone`d, one allocation per zoned address. A bracketed
+  host must be IPv6, and an IPv4-mapped one is read as IPv4 (as `net.IP`
+  does), so a zone on it is an error: the writer could not put it back. An
+  unbracketed host must be IPv4, with no `%`.
+  Grammar parity with `netip.ParseAddrPort` / `netip.ParsePrefix` (plus the
+  `":port"` form and the mapped-zone rule) is pinned by
+  `TestParseNetAddr_matchesNetip` / `TestParseIPNet_matchesNetip` over
+  enumerated and random corpora, with parse → write → parse invariants. A
+  bad text is `&AddrError{Type: "CIDR address" | "ip:port address", Text:
+  strings.Clone(s)}`: the error holds its own copy and quotes it in
+  `Error()`, so a stream decode may hand them a `StringView` alias and a
+  bytes decode an alias of `data`, `-copy` included.
+  `TestAddrError_quotesAndDetaches` covers both of `ParseIPNet`'s error
+  sites, the up-front `%` rejection included. `TestNetParsers_zoneNotInterned`
+  runs bracketed, unbracketed and CIDR text with a new zone on every call, at
+  no more than 2 allocations each.
 - **`String()` zero-copy alias** via `unsafe.String(unsafe.SliceData(data[start:]),
   len)` when no escapes; falls back to `stringSlow` (`utf8.AppendRune` for `\uXXXX` +
   surrogates). `bytes.IndexByte` (SIMD) finds the closing `"`; a second IndexByte
@@ -278,7 +314,14 @@ Primitives: `SkipSpace`, `String`, `Int64`, `Uint64`, `Float64`, `Bool`,
   backing array under GC — reached `-copy` retained values via
   `AnyCopy`/`AnyNumberCopy` keys). Pinned by `TestDetach` (value +
   scribble-survival for aliased & owned inputs, the alloc contract: clone iff
-  aliasing, and the empty-alias pointer-range check).
+  aliasing, and the empty-alias pointer-range check). Generated code also
+  detaches error text with `Detach`. The bytes-path `net.IP` emitter always passes
+  `Detach(s, data)` as `AddrError.Text`. Under `-copy` the error branch of
+  `time.ParseDuration`, `netip.ParseAddr` and `netip.ParsePrefix` parses
+  `Detach(s, data)` again (`copyErrReparse`), because those errors keep the
+  string they were given (pinned by `TestNetIP_AddrErrorTextDetachedOnBytes`
+  / `TestCopy_ParseErrorTextDecouples`, integ). Without `-copy` those three
+  errors may alias `data`, like every other bytes-path string.
 - **`StringAVX`/`StringAVX2`/`StringAVX512` — fused SIMD siblings of `String`**
   (`simd_amd64.go`, `//go:build goexperiment.simd`, `simd/archsimd`). One
   vector pass per 16/32/64 bytes classifies closing `"`, `\`, and control
@@ -756,10 +799,21 @@ is **fully consumed before the next stream op AND retains none of its bytes past
 point**:
 
 - base64/base32/hex `[]byte` (decoded into independent dst by `AppendDecode`)
-- `time.Time`/`time.Duration` text formats (parse → value; error builds fresh string)
-- `net.IP` (`ParseIP` copies; the `&net.ParseError{Text:…}` error literal
-  detaches via `strings.Clone(sv)` — `string(sv)` of a string is an identity
-  conversion, NOT a copy, a round-9 find)
+- `time.Time` text formats (`time.Parse` and `ParseRFC3339` copy the text
+  into their errors. `TestTime_ErrorDetachedFromBuffer` pins
+  `ParseRFC3339`'s own errors)
+- `time.Duration` units text, the default format (the parsed value keeps
+  nothing, but `time.ParseDuration` returns a `*time.parseDurationError`
+  that keeps its input string and quotes it in `Error()`, so the error
+  branch re-parses a detached `strings.Clone(sv)`, as the netip arm below
+  does — pinned by `TestDuration_ErrorDetachedFromBuffer` over a field, an
+  `=` alias field and a catch-all value)
+- `net.IP` (`ParseIP` copies; the `&ggen.AddrError{Type: "IP address",
+  Text: …}` error literal detaches via `strings.Clone(sv)` — `string(sv)` of
+  a string is an identity conversion, NOT a copy, a round-9 find)
+- `net.IPNet`/`net.TCPAddr`/`net.UDPAddr` (`ParseIPNet`/`ParseNetAddr` copy
+  what they keep — IP and Mask into a fresh allocation, the zone through
+  `strings.Clone` — and their `*AddrError` holds a clone of the text)
 - `netip.Addr`/`netip.Prefix` (value types, zones deep-copied by `unique`;
   the error branch re-parses a detached `strings.Clone(sv)` like `net.IP`'s
   clone, because `parseAddrError`/`parsePrefixError` retain the input string
@@ -972,7 +1026,12 @@ compacting `ReadMore` memmoves on the same backing.
   (surrogate, malformed tail).
 - `decode_test.go` — walkers, parse-error shapes, min-alloc pins, depth cap,
   `BoolEnd`.
-- `rfc3339_test.go` — `ParseRFC3339`/`AppendRFC3339` jsonv2 accept/reject parity.
+- `rfc3339_test.go` — `ParseRFC3339`/`AppendRFC3339` jsonv2 accept/reject
+  parity, and `ParseRFC3339`'s detached error text.
+- `net_test.go` — `ParseIPNet`/`ParseNetAddr` differentials against netip
+  (and `net.ParseCIDR` at every prefix length), the single allocation and
+  capped IP, the zone allocation pin, `AddrError` quoting and detaching. The
+  writer half is in .claude/encode.md.
 - `simd_test.go`, `simd_skip_test.go`, `simd_utf8_test.go` — per-tier parity
   and benches, one file per kernel family (goexperiment.simd); simd_test also
   carries the stream string tier error-position pin.

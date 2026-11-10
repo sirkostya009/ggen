@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { User as money_User } from "../shared/money.ts";
-import { ggenDecoded, ggenFits, ggenHex, ggenInteger, ggenIsAddr, ggenIsAddrPort, ggenIsDateOnly, ggenIsDuration } from "../shared/ggen.ts";
+import { ggenDecoded, ggenFits, ggenHex, ggenInteger, ggenIsAddr, ggenIsAddrPort, ggenIsDateOnly, ggenIsDuration, ggenIsPrefix } from "../shared/ggen.ts";
 
 export const Role = z.enum(["admin", "member"]);
 export type Role = z.output<typeof Role>;
@@ -54,8 +54,9 @@ export const Edges = z.object({
   fixed: z.base64().refine((x) => ggenDecoded(x, 6) === 4, "must decode to 4 bytes"),
   ip: z.literal("").or(z.ipv4()).or(z.ipv6()),
   addr: z.literal("").or(z.string().refine(ggenIsAddr, "must be an IP address")),
-  net: z.literal("").or(z.cidrv4()).or(z.cidrv6()),
+  net: z.literal("").or(z.string().refine(ggenIsPrefix, "must be an IP prefix")),
   tcp: z.literal("").or(z.string().refine(ggenIsAddrPort, "must be an IP address and port")).nullable(),
+  udp: z.literal("").or(z.string().refine(ggenIsAddrPort, "must be an IP address and port")),
   ns: z.string().nullable(),
   raw: z.unknown(),
   lower: z.enum(["x", "y", ""]),
@@ -64,3 +65,22 @@ export const Edges = z.object({
   tags: Tags,
 }).catchall(z.string());
 export type Edges = z.output<typeof Edges>;
+
+/**
+ * Keyed restricts the keys of its maps. A keys: step applies to the field's
+ * own map only, not to a map inside it.
+ */
+export const Keyed = z.strictObject({
+  two: z.partialRecord(z.enum(["ab", "cd"]), z.int()).nullable(),
+  one: z.partialRecord(z.literal("ab"), z.int()).nullable(),
+  nested: z.partialRecord(z.enum(["ab", "cd"]), z.record(z.string(), z.int()).nullable()).nullable(),
+});
+export type Keyed = z.output<typeof Keyed>;
+
+/** AddressView delegates to the generated Address. */
+export const AddressView = Address;
+export type AddressView = z.output<typeof AddressView>;
+
+/** Token delegates to the text methods of Secret. */
+export const Token = z.string();
+export type Token = z.output<typeof Token>;

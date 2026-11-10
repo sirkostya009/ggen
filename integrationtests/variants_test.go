@@ -6,7 +6,9 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 	"testing"
 	"testing/iotest"
 
@@ -199,10 +201,13 @@ func TestVariant_converterErrorCarriesPathAndPos(t *testing.T) {
 // R10Score checks that converter input types resolve the way a field of that
 // type would. A pointer input is scanned as a pointer, so null gives nil and
 // the variant also matches a value starting with 'n'. A named primitive with
-// no annotation resolves through its underlying kind. Neither may match the
-// object shape `{` and fall back to encoding/json, or the JSON number the
-// converter exists for would match no variant.
+// no annotation resolves through its underlying kind, and an `=` alias such
+// as R10Text through the type it names. None may match the object shape `{`
+// and fall back to encoding/json, or the JSON number or string the converter
+// exists for would match no variant.
 type R10Score int
+
+type R10Text = string
 
 //ggen:generate
 type R10Money struct {
@@ -225,11 +230,25 @@ func R10PtrLabel(p *int) string {
 	return "ptr"
 }
 
+func R10FromText(s R10Text) (R10Money, error) {
+	n, err := strconv.ParseInt(s, 10, 64)
+	return R10Money{Cents: n}, err
+}
+
+func R10FromTextPtr(p *R10Text) (R10Money, error) {
+	if p == nil {
+		return R10Money{Cents: -1}, nil
+	}
+	return R10FromText(*p)
+}
+
 //ggen:generate
 type R10ConvInputs struct {
 	Named R10Money `json:"named" pipe:"@R10FromScore/nullzero"`
 	Ptr   R10Money `json:"ptr"   pipe:"@R10FromPtr/."`
 	Label string   `json:"label" pipe:". / @R10PtrLabel"`
+	Text  R10Money `json:"text"  pipe:"@R10FromText/nullzero"`
+	TextP R10Money `json:"textp" pipe:"@R10FromTextPtr/."`
 }
 
 func TestVariants_R10ConverterInputs(t *testing.T) {
@@ -240,10 +259,12 @@ func TestVariants_R10ConverterInputs(t *testing.T) {
 		named int64
 		ptr   int64
 		label string
+		text  int64
+		textp int64
 	}{
-		{"numbers", `{"named":5,"ptr":7,"label":9}`, 500, 7, "ptr"},
-		{"nulls", `{"named":null,"ptr":null,"label":null}`, 0, -1, "nil"},
-		{"natives", `{"named":-2,"ptr":{"cents":3},"label":"x"}`, -200, 3, "x"},
+		{"numbers", `{"named":5,"ptr":7,"label":9,"text":"12","textp":"8"}`, 500, 7, "ptr", 12, 8},
+		{"nulls", `{"named":null,"ptr":null,"label":null,"text":null,"textp":null}`, 0, -1, "nil", 0, -1},
+		{"natives", `{"named":-2,"ptr":{"cents":3},"label":"x","text":"-4","textp":{"cents":6}}`, -200, 3, "x", -4, 6},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -252,9 +273,11 @@ func TestVariants_R10ConverterInputs(t *testing.T) {
 				if err != nil {
 					t.Fatalf("%s: %v", path, err)
 				}
-				if got.Named.Cents != c.named || got.Ptr.Cents != c.ptr || got.Label != c.label {
-					t.Errorf("%s: got {%d %d %q}, want {%d %d %q}", path,
-						got.Named.Cents, got.Ptr.Cents, got.Label, c.named, c.ptr, c.label)
+				if got.Named.Cents != c.named || got.Ptr.Cents != c.ptr || got.Label != c.label || got.Text.Cents != c.text ||
+					got.TextP.Cents != c.textp {
+					t.Errorf("%s: got {%d %d %q %d %d}, want {%d %d %q %d %d}", path,
+						got.Named.Cents, got.Ptr.Cents, got.Label, got.Text.Cents, got.TextP.Cents,
+						c.named, c.ptr, c.label, c.text, c.textp)
 				}
 			}
 			got, _, err := R10ConvInputs{}.DecodeFrom([]byte(c.in))
@@ -313,6 +336,44 @@ func TestVariants_pointerFieldValueSteps(t *testing.T) {
 		sgot, err := R10BConvPtr{}.DecodeFromStream(&s)
 		if (err == nil) != c.ok || (c.want != nil && err == nil && !c.want(sgot)) {
 			t.Errorf("stream %s: %+v (%v), want ok=%v", c.in, sgot, err, c.ok)
+		}
+	}
+}
+
+// ConvStrictMoney is a multierr converter input with a rule of its own.
+//
+//ggen:generate multierr
+type ConvStrictMoney struct {
+	Amount int `json:"amount" pipe:"lte=100"`
+}
+
+func FromStrictMoney(m ConvStrictMoney) int { return m.Amount }
+
+// ConvMultiErr collects a failure inside its converter input like one inside
+// a struct field, and goes on to the fields after it.
+//
+//ggen:generate multierr
+type ConvMultiErr struct {
+	A     int `json:"a"     pipe:"lte=1"`
+	Price int `json:"price" pipe:". / @FromStrictMoney"`
+	Z     int `json:"z"     pipe:"lte=1"`
+}
+
+func TestVariants_multierrConverterInput(t *testing.T) {
+	t.Parallel()
+	bErr, sErr := decodeBothPaths[ConvMultiErr](`{"a":5,"price":{"amount":500},"z":5}`)
+	for path, err := range map[string]error{"bytes": bErr, "stream": sErr} {
+		leaves, ok := err.(ggen.Errors)
+		if !ok {
+			t.Errorf("%s: err = %T %v, want ggen.Errors", path, err, err)
+			continue
+		}
+		var got []string
+		for _, e := range leaves {
+			got = append(got, strings.Join(e.Path(), "."))
+		}
+		if want := []string{"a", "price.amount", "z"}; !slices.Equal(got, want) {
+			t.Errorf("%s: paths %q, want %q", path, got, want)
 		}
 	}
 }

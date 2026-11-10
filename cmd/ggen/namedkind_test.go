@@ -82,11 +82,13 @@ func TestNamedPrimitive_RulesResolveUnderlying(t *testing.T) {
 
 // zeroLit is used by `nullzero` and when a slice grows by one element before
 // decoding into it. A named primitive is not a composite type, so `Pri{}`
-// does not compile.
+// does not compile. A named type not known to be a struct, array, slice or
+// map, such as one with its own text codec or an interface, gets `*new(T)`.
 func TestNamedPrimitive_ZeroLit(t *testing.T) {
-	prev := namedKinds
+	prevKinds, prevLits := namedKinds, litTypes
 	namedKinds = map[string]model.TypeKind{"Pri": model.KindString, "Cnt": model.KindInt, "Flag": model.KindBool}
-	defer func() { namedKinds = prev }()
+	litTypes = map[string]struct{}{"Item": {}}
+	defer func() { namedKinds, litTypes = prevKinds, prevLits }()
 
 	for _, tc := range []struct {
 		typ  string
@@ -98,7 +100,11 @@ func TestNamedPrimitive_ZeroLit(t *testing.T) {
 		{"Flag", model.KindStruct, "Flag(false)"},
 		{"string", model.KindString, `""`},
 		{"int", model.KindInt, "0"},
-		{"Other", model.KindStruct, "Other{}"},
+		{"Item", model.KindStruct, "Item{}"},
+		{"Other", model.KindStruct, "*new(Other)"},
+		{"interface{ M() }", model.KindStruct, "*new(interface{ M() })"},
+		{"time.Time", model.KindTime, "time.Time{}"},
+		{"[3]int", model.KindArray, "[3]int{}"},
 		{"[]int", model.KindSlice, "nil"},
 	} {
 		if got := zeroLit(tc.typ, tc.kind); got != tc.want {

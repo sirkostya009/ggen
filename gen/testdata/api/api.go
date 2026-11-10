@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"strconv"
 	"time"
 
@@ -90,6 +91,7 @@ type Edges struct {
 	Addr   netip.Addr        `json:"addr"`
 	Net    net.IPNet         `json:"net"`
 	TCP    *net.TCPAddr      `json:"tcp"`
+	UDP    net.UDPAddr       `json:"udp"`
 	NS     sql.NullString    `json:"ns"`
 	Raw    json.RawMessage   `json:"raw"`
 	Lower  string            `json:"lower"  pipe:"tolower oneof=x|y"`
@@ -149,4 +151,85 @@ type Awkward struct {
 type Collides struct {
 	Id int `json:"id"`
 	ID int `json:"ID"`
+}
+
+// Omits leaves fields out of the output, each by its own guard.
+//
+//ggen:generate
+type Omits struct {
+	Peer   *net.TCPAddr    `json:"peer,omitzero"`
+	Count  **int           `json:"count,omitzero"`
+	Role   *Role           `json:"role,omitzero"`
+	Net    net.IPNet       `json:"net,omitzero"`
+	Addr   netip.Addr      `json:"addr,omitzero"`
+	NS     sql.NullString  `json:"ns,omitzero"`
+	Raw    json.RawMessage `json:"raw,omitzero"`
+	Any    any             `json:"any,omitzero"`
+	Ints   []int           `json:"ints,omitzero"`
+	URL    url.URL         `json:"url,omitempty"`
+	Prefix net.IPNet       `json:"prefix,omitempty"`
+	Depth  **int           `json:"depth,omitempty"`
+	Name   **string        `json:"name,omitempty"`
+}
+
+// Nulls decodes null as the zero value of a field with no null of its own.
+//
+//ggen:generate nullzero
+type Nulls struct {
+	Name  string      `json:"name"`
+	Code  string      `json:"code"  pipe:"minlen=1"`
+	Kind  string      `json:"kind"  pipe:"oneof=a|b"`
+	Count int         `json:"count" pipe:"gte=0 lte=9"`
+	Pos   int         `json:"pos"   pipe:"gt=0"`
+	Level int         `json:"level" pipe:"clamp=1|5 gte=1"`
+	Eq    int         `json:"eq"    pipe:"eq=0"`
+	Neq   int         `json:"neq"   pipe:"neq=0"`
+	Alnum string      `json:"alnum" pipe:"alphanum"`
+	Pair  [2]int      `json:"pair"  pipe:"maxlen=1"`
+	Fixed [4]byte     `json:"fixed"`
+	List  []string    `json:"list"  pipe:"notempty"`
+	Peer  net.TCPAddr `json:"peer"`
+	Ints  []int       `json:"ints"  pipe:"@Ints ~"`
+	Conv  []int       `json:"conv"  pipe:"nullzero / @Ints ~ minlen=1"`
+}
+
+// Keyed restricts the keys of its maps. A keys: step applies to the field's
+// own map only, not to a map inside it.
+//
+//ggen:generate
+type Keyed struct {
+	Two    map[string]int            `json:"two"    pipe:"keys:oneof=ab|cd"`
+	One    map[string]int            `json:"one"    pipe:"keys:oneof=ab"`
+	Nested map[string]map[string]int `json:"nested" pipe:"keys:(tolower oneof=ab|cd)"`
+}
+
+// AddressView delegates to the generated Address.
+//
+//ggen:generate
+type AddressView Address
+
+// Secret encodes itself as text and has no exported fields.
+type Secret struct{ v string }
+
+func (s Secret) MarshalText() ([]byte, error) { return []byte(s.v), nil }
+
+func (s *Secret) UnmarshalText(b []byte) error {
+	s.v = string(b)
+	return nil
+}
+
+// Token delegates to the text methods of Secret.
+//
+//ggen:generate
+type Token Secret
+
+// TokenView delegates to Token, so it is the string Token is.
+//
+//ggen:generate
+type TokenView Token
+
+// Ints is a converter into a type that has a null of its own.
+func Ints(s string) ([]int, error) {
+	n, err := strconv.Atoi(s)
+	return []int{n}, err
 }

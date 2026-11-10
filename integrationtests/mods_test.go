@@ -643,6 +643,184 @@ func TestMods_pointerCustomStepDeclaredOrder(t *testing.T) {
 	}
 }
 
+// PtrElemPipe checks `inner:` steps on pointer elements against the pointer
+// field contract: an `@Func` step takes the element's `*T`, a built-in step
+// the value it points to, all in declared order, and a `null` element still
+// reaches the `@Func` steps. I, A, S, G, C and Z decode through the `[]*T` /
+// `[N]*T` slab, PP and MV through the pointer code of `[]**T` and map values.
+// P is the pointer field twin of Z.
+//
+//ggen:generate
+type PtrElemPipe struct {
+	I  []*int          `json:"i"  pipe:"inner:(@zpAdd1 gte=2 @peSet)"`
+	A  [2]*int         `json:"a"  pipe:"inner:(@zpAdd1 gte=2 @peSet)"`
+	S  []*string       `json:"s"  pipe:"inner:(toupper @peOr)"`
+	G  []*PtrElemLeaf  `json:"g"  pipe:"inner:@peLeaf"`
+	C  []*int          `json:"c"  pipe:"inner:@peCapped"`
+	Z  []*int          `json:"z"  pipe:"inner:(@peNilIfZero gte=1)"`
+	P  *int            `json:"p"  pipe:"@peNilIfZero gte=1"`
+	PP []**int         `json:"pp" pipe:"inner:(@pePositive2 @peAbs2)"`
+	MV map[string]*int `json:"mv" pipe:"inner:(@pePositive @peAbs)"`
+}
+
+//ggen:generate
+type PtrElemLeaf struct {
+	N int `json:"n"`
+}
+
+//ggen:generate multierr
+type PtrElemPipeME struct {
+	I []*int `json:"i" pipe:"inner:(@zpAdd1 gte=2 @peSet)"`
+}
+
+// peSet rejects a nil element, so a test sees a `null` reach it.
+func peSet(p *int) error {
+	if p == nil {
+		return errors.New("nil element")
+	}
+	return nil
+}
+
+// peOr fills in a nil element.
+func peOr(p *string) *string {
+	if p == nil {
+		s := "none"
+		return &s
+	}
+	return p
+}
+
+func peLeaf(p *PtrElemLeaf) error {
+	if p == nil || p.N < 0 {
+		return errors.New("bad leaf")
+	}
+	return nil
+}
+
+func peCapped(p *int) (*int, error) {
+	if p != nil && *p > 9 {
+		return nil, errors.New("over 9")
+	}
+	return p, nil
+}
+
+// peNilIfZero turns 0 into nil, which the built-in step after it must not
+// dereference.
+func peNilIfZero(p *int) *int {
+	if p != nil && *p == 0 {
+		return nil
+	}
+	return p
+}
+
+func pePositive(p *int) error {
+	if p != nil && *p <= 0 {
+		return errors.New("not positive")
+	}
+	return nil
+}
+
+func peAbs(p *int) *int {
+	if p == nil || *p >= 0 {
+		return p
+	}
+	n := -*p
+	return &n
+}
+
+func pePositive2(p **int) error {
+	if p == nil {
+		return nil
+	}
+	return pePositive(*p)
+}
+
+func peAbs2(p **int) **int {
+	if p == nil {
+		return nil
+	}
+	q := peAbs(*p)
+	return &q
+}
+
+func TestMods_pointerElemCustomSteps(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		in   string
+		ok   bool
+		want func(p PtrElemPipe) bool
+	}{
+		{`{"i":[1,5]}`, true, func(p PtrElemPipe) bool { return *p.I[0] == 2 && *p.I[1] == 6 }},
+		{`{"i":[0]}`, false, nil},
+		{`{"i":[1,null]}`, false, nil},
+		{`{"a":[1,5]}`, true, func(p PtrElemPipe) bool { return *p.A[0] == 2 && *p.A[1] == 6 }},
+		{`{"a":[0,1]}`, false, nil},
+		{`{"a":[1,null]}`, false, nil},
+		{`{"s":["ab",null]}`, true, func(p PtrElemPipe) bool { return *p.S[0] == "AB" && *p.S[1] == "none" }},
+		{`{"g":[{"n":1}]}`, true, func(p PtrElemPipe) bool { return p.G[0].N == 1 }},
+		{`{"g":[{"n":-1}]}`, false, nil},
+		{`{"g":[null]}`, false, nil},
+		{`{"c":[9,null]}`, true, func(p PtrElemPipe) bool { return *p.C[0] == 9 && p.C[1] == nil }},
+		{`{"c":[10]}`, false, nil},
+		{`{"z":[0,2]}`, true, func(p PtrElemPipe) bool { return p.Z[0] == nil && *p.Z[1] == 2 }},
+		{`{"z":[-1]}`, false, nil},
+		{`{"p":0}`, true, func(p PtrElemPipe) bool { return p.P == nil }},
+		{`{"p":-1}`, false, nil},
+		{`{"pp":[2,null]}`, true, func(p PtrElemPipe) bool { return **p.PP[0] == 2 && p.PP[1] == nil }},
+		{`{"mv":{"k":2}}`, true, func(p PtrElemPipe) bool { return *p.MV["k"] == 2 }},
+		// The validator runs before the mod that would make -1 pass.
+		{`{"pp":[-1]}`, false, nil},
+		{`{"mv":{"k":-1}}`, false, nil},
+	}
+	for _, c := range cases {
+		got, _, err := PtrElemPipe{}.DecodeFrom([]byte(c.in))
+		if (err == nil) != c.ok || (c.want != nil && err == nil && !c.want(got)) {
+			t.Errorf("bytes %s: %+v (%v), want ok=%v", c.in, got, err, c.ok)
+		}
+		sgot, err := ggen.NewStream(strings.NewReader(c.in), nil).Value[PtrElemPipe]()
+		if (err == nil) != c.ok || (c.want != nil && err == nil && !c.want(sgot)) {
+			t.Errorf("stream %s: %+v (%v), want ok=%v", c.in, sgot, err, c.ok)
+		}
+	}
+	// A null element hands the `@Func` step a nil *int, at the same position
+	// on both paths.
+	for _, in := range []string{`{"i":[1,null]}`, `{"a":[1,null]}`} {
+		for _, chunk := range []int{1, 3, 64} {
+			berr, serr := decodeBothChunked[PtrElemPipe](in, chunk)
+			bce, bok := errors.AsType[*ggen.CustomError](berr)
+			sce, sok := errors.AsType[*ggen.CustomError](serr)
+			if !bok || !sok {
+				t.Fatalf("%s chunk=%d: bytes=%v stream=%v, want CustomErrors", in, chunk, berr, serr)
+			}
+			if p, ok := bce.Value.(*int); !ok || p != nil || bce.Name != "peSet" {
+				t.Errorf("%s: %s got %#v, want a nil *int", in, bce.Name, bce.Value)
+			}
+			if want := strings.Index(in, "null") + len("null"); bce.Pos != want || sce.Pos != want {
+				t.Errorf("%s chunk=%d: Pos bytes=%d stream=%d, want %d", in, chunk, bce.Pos, sce.Pos, want)
+			}
+		}
+	}
+	// multierr collects both failures and decodes every element: 0+1 fails
+	// gte=2, the null fails @peSet, 1+1 passes.
+	in := `{"i":[0,null,1]}`
+	got, _, err := PtrElemPipeME{}.DecodeFrom([]byte(in))
+	sgot, serr := ggen.NewStream(strings.NewReader(in), nil).Value[PtrElemPipeME]()
+	for _, r := range []struct {
+		v   PtrElemPipeME
+		err error
+	}{{got, err}, {sgot, serr}} {
+		errs, ok := r.err.(ggen.Errors)
+		_, gte := errors.AsType[*ggen.GTEError](r.err)
+		_, custom := errors.AsType[*ggen.CustomError](r.err)
+		if !ok || len(errs) != 2 || !gte || !custom {
+			t.Errorf("multierr %s: %v, want a GTEError and a CustomError", in, r.err)
+		}
+		if len(r.v.I) != 3 || *r.v.I[0] != 1 || r.v.I[1] != nil || *r.v.I[2] != 2 {
+			t.Errorf("multierr %s: decoded %v", in, r.v.I)
+		}
+	}
+}
+
 // R10BBigBounds checks numeric bounds above the range where float64 holds
 // every integer exactly. The bound must be reported as written. The error's
 // Limit, Of and Want carry the field's own kind, so nothing is rounded on the

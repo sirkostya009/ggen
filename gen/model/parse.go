@@ -661,9 +661,9 @@ func (s *structSet) reachable(wanted []string, allowExpand func(string) bool) ([
 			// would get no generated methods. It would fall back to the
 			// reflection-based json.Unmarshal, which is silently more
 			// lenient.
-			switch ts.Type.(type) {
+			switch rhs := s.unaliasExpr(ts.Type); rhs.(type) {
 			case *ast.ArrayType, *ast.MapType, *ast.StarExpr:
-				if ref := referencedStructName(ts.Type, s.structs); ref != "" {
+				if ref := referencedStructName(rhs, s.structs); ref != "" {
 					expand(ref)
 				}
 			}
@@ -700,7 +700,7 @@ func (s *structSet) structRefs(st *ast.StructType, seen map[string]struct{}, vis
 			s.structRefs(sub, seen, visit)
 			continue
 		}
-		if ref := referencedStructName(f.Type, s.structs); ref != "" {
+		if ref := referencedStructName(s.unaliasExpr(f.Type), s.structs); ref != "" {
 			visit(ref)
 		}
 	}
@@ -1280,6 +1280,18 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 				}
 			}
 		}
+		// A right-hand side written through an `=` alias is the type it names,
+		// and is spelled as that type when this package can name it.
+		if a, ok := underlyingNamed.(*types.Alias); ok {
+			underlyingNamed = types.Unalias(a)
+			if n, ok := s.unalias(a).(*types.Named); ok && n.TypeArgs().Len() == 0 {
+				info.AliasUnderlying = types.TypeString(n, s.pkgQualifier())
+				info.AliasUnderlyingImport = TypeImport{}
+				if p := n.Obj().Pkg(); p != nil && p != s.typesPkg {
+					info.AliasUnderlyingImport = s.typeImport(p)
+				}
+			}
+		}
 		if underlyingNamed != nil {
 			info.AliasIface = s.inspect(underlyingNamed)
 		}
@@ -1288,8 +1300,8 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 		// sees them once an earlier run has written them. So the method set
 		// cannot be trusted here, or the first run would emit the alias in
 		// full and every later run would delegate to the underlying.
-		if id, ok := rhs.(*ast.Ident); ok {
-			if _, inPass := s.passTypes()[id.Name]; inPass {
+		if n, ok := underlyingNamed.(*types.Named); ok && n.Obj().Pkg() == s.typesPkg {
+			if _, inPass := s.passTypes()[n.Obj().Name()]; inPass {
 				info.AliasIface.AppendJSON, info.AliasIface.JSONSize = true, true
 				info.AliasIface.ByteDecoder, info.AliasIface.StreamDecoder = true, true
 			}
@@ -1360,7 +1372,7 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 	case *types.Slice:
 		info.AliasKind = KindSlice
 		info.AliasUnderlying = s.spell(rhs)
-		f := s.aliasContainerField(tt.Elem(), 0)
+		f := s.aliasContainerField(tt.Elem())
 		if elemKindIsBytes(f.ElemType) {
 			// `type Bytes []byte` becomes KindBytes, encoded as base64.
 			info.AliasKind = KindBytes
@@ -1368,6 +1380,7 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 			return info, nil
 		}
 		f.Kind = KindSlice
+		f.ElemArrayLen = ArrayLenFromType(f.ElemType)
 		info.AliasField = f
 		return info, nil
 	case *types.Map:
@@ -1376,16 +1389,17 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 		}
 		info.AliasKind = KindMap
 		info.AliasUnderlying = s.spell(rhs)
-		f := s.aliasContainerField(tt.Elem(), 0)
+		f := s.aliasContainerField(tt.Elem())
 		f.Kind = KindMap
 		info.AliasField = f
 		return info, nil
 	case *types.Array:
 		info.AliasKind = KindArray
 		info.AliasUnderlying = s.spell(rhs)
-		f := s.aliasContainerField(tt.Elem(), int(tt.Len()))
+		f := s.aliasContainerField(tt.Elem())
 		f.Kind = KindArray
 		f.ArrayLen = int(tt.Len())
+		f.ElemArrayLen = ArrayLenFromType(f.ElemType)
 		// [N]byte becomes base64, as it does for a field. An alias has no
 		// struct tag, so `format:array` cannot turn this off here.
 		foldByteArray(&f)
@@ -1400,9 +1414,11 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 }
 
 // aliasContainerField builds a partial FieldInfo for the element type of a
-// container alias. The caller sets ArrayLen for arrays.
-func (s *structSet) aliasContainerField(elem types.Type, _ int) FieldInfo {
+// container alias. A slice or array caller sets ElemArrayLen, and ArrayLen for
+// an array.
+func (s *structSet) aliasContainerField(elem types.Type) FieldInfo {
 	fi := FieldInfo{}
+	elem = s.unalias(elem)
 	if pe, ok := elem.(*types.Pointer); ok {
 		fi.ElemPointer = true
 		elem = pe.Elem()
@@ -1483,6 +1499,149 @@ func (s *structSet) spell(expr ast.Expr) string {
 		}
 		return s.qualifierFor(pn.Imported()), true
 	})
+}
+
+// unaliasExpr returns the type expression expr with every `=` alias it names
+// replaced by the alias's target, read back from the written-out type. The
+// AST code then sees the shape and the name of the type itself: a field of
+// `type IDs = []string` is a slice, one of `type Addr = net.TCPAddr` is a
+// net.TCPAddr. expr comes back as is when it names no alias unalias resolves,
+// and in the AST-only mode.
+func (s *structSet) unaliasExpr(expr ast.Expr) ast.Expr {
+	if s.typesInfo == nil {
+		return expr
+	}
+	tv, ok := s.typesInfo.Types[expr]
+	if !ok {
+		return expr
+	}
+	u := s.unalias(tv.Type)
+	if u == tv.Type {
+		return expr
+	}
+	resolved, err := parser.ParseExpr(types.TypeString(u, s.pkgQualifier()))
+	if err != nil {
+		return expr
+	}
+	return unparenType(resolved)
+}
+
+// unalias replaces every `=` alias in t, at any depth, with the type it
+// names, so a type written through an alias gets the kind, spelling and
+// imports of the type itself. An alias whose own name ggen already knows
+// stays: any, and json.RawMessage, which Go 1.27 declares as an alias of
+// jsontext.Value. So does one whose target generated code here could not
+// write: an unexported type of another package, a type in an internal package
+// this one cannot import, or a struct literal, which is a different type when
+// it comes from another package.
+func (s *structSet) unalias(t types.Type) types.Type {
+	switch x := t.(type) {
+	case *types.Alias:
+		if ResolveKind(types.TypeString(x, s.pkgQualifier())) != KindStruct {
+			return x
+		}
+		if u := s.unalias(types.Unalias(x)); s.canSpell(u) {
+			return u
+		}
+	case *types.Pointer:
+		if e := s.unalias(x.Elem()); e != x.Elem() {
+			return types.NewPointer(e)
+		}
+	case *types.Slice:
+		if e := s.unalias(x.Elem()); e != x.Elem() {
+			return types.NewSlice(e)
+		}
+	case *types.Array:
+		if e := s.unalias(x.Elem()); e != x.Elem() {
+			return types.NewArray(e, x.Len())
+		}
+	case *types.Map:
+		k, e := s.unalias(x.Key()), s.unalias(x.Elem())
+		if k != x.Key() || e != x.Elem() {
+			return types.NewMap(k, e)
+		}
+	case *types.Named:
+		targs := x.TypeArgs()
+		args := make([]types.Type, targs.Len())
+		changed := false
+		for i := range args {
+			args[i] = s.unalias(targs.At(i))
+			changed = changed || args[i] != targs.At(i)
+		}
+		if changed {
+			if inst, err := types.Instantiate(nil, x.Origin(), args, false); err == nil {
+				return inst
+			}
+		}
+	}
+	return t
+}
+
+// canSpell reports whether generated code in this package can write t.
+func (s *structSet) canSpell(t types.Type) bool {
+	switch x := t.(type) {
+	case *types.Basic, *types.Signature, *types.Chan:
+		// A func or a chan is rejected as a field type however it is
+		// written, so spelling one out only brings that error forward.
+		return true
+	case *types.Interface:
+		return x.Empty()
+	case *types.Alias:
+		return s.canName(x.Obj()) && s.canSpellAll(x.TypeArgs())
+	case *types.Named:
+		return s.canName(x.Obj()) && s.canSpellAll(x.TypeArgs())
+	case *types.Pointer:
+		return s.canSpell(x.Elem())
+	case *types.Slice:
+		return s.canSpell(x.Elem())
+	case *types.Array:
+		return s.canSpell(x.Elem())
+	case *types.Map:
+		return s.canSpell(x.Key()) && s.canSpell(x.Elem())
+	}
+	return false
+}
+
+func (s *structSet) canSpellAll(l *types.TypeList) bool {
+	for t := range l.Types() {
+		if !s.canSpell(t) {
+			return false
+		}
+	}
+	return true
+}
+
+// canName reports whether generated code in this package can refer to the
+// type name obj: a predeclared or same-package type, or one another package
+// exports and this one may import.
+func (s *structSet) canName(obj *types.TypeName) bool {
+	p := obj.Pkg()
+	if p == nil || p == s.typesPkg {
+		return true
+	}
+	from := s.pkgPath
+	if s.xtest {
+		// The go command judges an external test package's imports as the
+		// imports of the package under test.
+		from = strings.TrimSuffix(from, "_test")
+	}
+	return obj.Exported() && importable(p.Path(), from)
+}
+
+// importable applies Go's internal-package rule: path, when it has an
+// `internal` element, may be imported only from the tree rooted at that
+// element's parent. A path that starts with `internal`, such as the standard
+// library's own, counts as never importable.
+func importable(path, from string) bool {
+	i := strings.LastIndex("/"+path+"/", "/internal/")
+	switch {
+	case i < 0:
+		return true
+	case i == 0:
+		return false
+	}
+	parent := path[:i-1]
+	return from == parent || strings.HasPrefix(from, parent+"/")
 }
 
 // inspect checks the methods of t. A package this run generates is judged
@@ -1612,17 +1771,18 @@ func isSupportedAliasPrimitive(k TypeKind) bool {
 }
 
 // extractFieldFromTypes builds a FieldInfo from go/types data only. It is
-// the go/types version of extractField, used for the fields of a struct
-// alias whose underlying is foreign or has no methods, where there is no
-// *ast.Field.
+// used for the fields of a struct alias whose underlying is foreign or has no
+// methods, where there is no *ast.Field. The field's type is written out and
+// read back as an AST, so extractField classifies it exactly as the same type
+// written in a struct here: a named type such as net.IP keeps the kind of its
+// name instead of being looked through to its underlying []byte.
 func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, tag string) (FieldInfo, error) {
 	fi := FieldInfo{GoName: field.Name(), StructName: structName}
-	rt := reflect.StructTag(tag)
-	jsonName, opts, ignored, err := parseJSONTag(rt.Get("json"))
-	if err != nil {
+	_, _, ignored, err := parseJSONTag(reflect.StructTag(tag).Get("json"))
+	switch {
+	case err != nil:
 		return fi, fmt.Errorf("field %s: %w", field.Name(), err)
-	}
-	if ignored {
+	case ignored:
 		fi.Ignored = true
 		return fi, nil
 	}
@@ -1632,95 +1792,91 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 		// in the source being generated.
 		return fi, errors.New(unsupportedTypeMsg(field.Name(), what))
 	}
-	qualifier := s.pkgQualifier()
-	fi.GoType = types.TypeString(field.Type(), qualifier)
-	fi.Type = field.Type()
-	fi.NotComparable = !types.Comparable(field.Type())
-	fi.UnderlyingStruct = underlyingStruct(field.Type())
-
-	if jsonName != "" {
-		fi.JSONName = jsonName
-	} else {
-		fi.JSONName = fi.GoName
+	var lit *ast.BasicLit
+	if tag != "" {
+		lit = &ast.BasicLit{Kind: token.STRING, Value: "`" + tag + "`"}
 	}
-	fi.OmitEmpty = opts.OmitEmpty
-	fi.OmitZero = opts.OmitZero
-	fi.String = opts.String
-	fi.Format = opts.Format
-	fi.Embed = opts.Embed
-
-	if err := applyPipeTags(&fi, rt, fi.GoName); err != nil {
+	t := s.unalias(field.Type())
+	if !s.canSpell(t) {
+		fi, err = s.opaqueField(structName, field, lit, t)
+		if err != nil {
+			setPosOnAll(err, s.fileSet.Position(field.Pos()))
+		}
 		return fi, err
 	}
-
-	t := field.Type()
-	if ptr, ok := t.(*types.Pointer); ok {
-		fi.Pointer = true
-		fi.PointeeType = types.TypeString(ptr.Elem(), qualifier)
-		fi.Kind = ResolveKind(fi.PointeeType)
-		// Remove every pointer level. The container switch below fills
-		// ElemType and ElemKind, and it matches nothing on a pointer. A
-		// `**[]T` with one level left would keep ElemKind at its zero
-		// value, KindString, and emit a string decode into a T slot.
-		for {
-			p, ok := t.(*types.Pointer)
-			if !ok {
-				break
-			}
-			t = p.Elem()
-		}
-	} else {
-		fi.Kind = ResolveKind(fi.GoType)
+	expr, err := parser.ParseExpr(types.TypeString(t, s.pkgQualifier()))
+	if err != nil {
+		return fi, fmt.Errorf("field %s: %w", field.Name(), err)
 	}
-
-	switch tt := t.Underlying().(type) {
-	case *types.Map:
-		if basic, ok := tt.Key().Underlying().(*types.Basic); !ok || basic.Kind() != types.String {
-			return fi, fmt.Errorf("map key must be string, got %s", tt.Key())
-		}
-		fi.Kind = KindMap
-		fi.ElemType = types.TypeString(tt.Elem(), qualifier)
-		fi.ElemKind = ResolveKind(fi.ElemType)
-		fi.ElemIface = s.inspect(tt.Elem())
-	case *types.Slice:
-		// ResolveKind already made `[]byte` and `[]uint8` KindBytes.
-		// Keep that, so the base64, hex and array formats still apply.
-		if fi.Kind != KindBytes {
-			fi.Kind = KindSlice
-			elem := tt.Elem()
-			if pe, ok := elem.(*types.Pointer); ok {
-				fi.ElemPointer = true
-				elem = pe.Elem()
-			}
-			fi.ElemType = types.TypeString(elem, qualifier)
-			fi.ElemKind = ResolveKind(fi.ElemType)
-			fi.ElemIface = s.inspect(elem)
-		}
-	case *types.Array:
-		if fi.Kind != KindBytes {
-			fi.Kind = KindArray
-			fi.ArrayLen = int(tt.Len())
-			elem := tt.Elem()
-			if pe, ok := elem.(*types.Pointer); ok {
-				fi.ElemPointer = true
-				elem = pe.Elem()
-			}
-			fi.ElemType = types.TypeString(elem, qualifier)
-			fi.ElemKind = ResolveKind(fi.ElemType)
-			fi.ElemIface = s.inspect(elem)
+	af := &ast.Field{Names: []*ast.Ident{ast.NewIdent(field.Name())}, Type: unparenType(expr), Tag: lit}
+	fi, err = extractField(structName, field.Name(), af, exprToString)
+	if err == nil {
+		s.typeField(&fi, field.Type())
+		foldByteArray(&fi)
+		err = checkRuleApplicability(fi, true)
+		if inner, imps, ok := s.sqlNullGenericInfo(structName, t, &fi); ok {
+			fi.Kind = KindSQLNull
+			fi.SQLNullInner = inner
+			fi.SQLNullImports = imps
 		}
 	}
-	foldByteArray(&fi)
-
-	if fi.Embed && (fi.Kind != KindMap || fi.Pointer) {
-		return fi, embedKindError(fi.Pointer, fi.GoType)
+	if err != nil {
+		setPosOnAll(err, s.fileSet.Position(field.Pos()))
 	}
+	return fi, err
+}
 
-	fi.Iface = s.inspect(field.Type())
-	if err := checkRuleApplicability(fi, false); err != nil {
-		return fi, attachPosition(err, s.fileSet.Position(field.Pos()))
+// opaqueField reads a struct alias field whose type t generated code here
+// cannot write: an unexported type of another package, or one from an internal
+// package this one cannot import. The field is one opaque value. The emitted
+// code only ever refers to it as `result.X`, and encoding/json reads and
+// writes it whole, or the type's own methods do when it is not a pointer.
+func (s *structSet) opaqueField(structName string, field *types.Var, tag *ast.BasicLit, t types.Type) (FieldInfo, error) {
+	fi, err := fieldFromTag(structName, field.Name(), tag)
+	if err != nil {
+		return fi, err
 	}
-	return fi, nil
+	fi.GoType = types.TypeString(t, s.pkgQualifier())
+	if fi.Embed {
+		return fi, fmt.Errorf("field %s: a json:\",embed\" catch-all needs generated code that names %s, which this package cannot", field.Name(), fi.GoType)
+	}
+	if len(fi.Levels) > 0 || len(fi.KeyPipe) > 0 || fi.HintLen >= 0 || len(fi.HintLevels) > 0 {
+		return fi, fmt.Errorf(
+			"field %s: generated code cannot name %s, so the field is decoded whole and `inner:`, `keys:` and `hint:` cannot apply",
+			field.Name(),
+			fi.GoType,
+		)
+	}
+	fi.UnderlyingStruct = underlyingStruct(t)
+	// There is no emptiness test for a value whose type the code cannot name.
+	// A number or a bool is never empty, and a struct is rejected below.
+	if b, ok := t.Underlying().(*types.Basic); fi.OmitEmpty && !fi.UnderlyingStruct && (!ok || b.Info()&(types.IsNumeric|types.IsBoolean) == 0) {
+		return fi, fmt.Errorf("field %s: `omitempty` cannot be honoured: generated code cannot name %s to test it for emptiness", field.Name(), fi.GoType)
+	}
+	fi.Kind = KindStruct
+	fi.Type = field.Type()
+	// `!= (T{})` would name the type, so omitzero takes the reflect check.
+	fi.NotComparable = true
+	fi.Iface = FieldInterfaces{Resolved: true}
+	if _, ptr := t.Underlying().(*types.Pointer); !ptr {
+		fi.Iface = s.inspect(t)
+	}
+	return fi, checkRuleApplicability(fi, true)
+}
+
+// typeField records what go/types knows about a field whose type is t. Type
+// keeps t as written. The rest is read from t with its aliases resolved,
+// which is the type the field's spelling names, and that type is returned.
+func (s *structSet) typeField(fi *FieldInfo, t types.Type) types.Type {
+	fi.Type = t
+	t = s.unalias(t)
+	fi.NotComparable = !types.Comparable(t)
+	fi.UnderlyingStruct = underlyingStruct(t)
+	fi.Iface = s.inspect(t)
+	fi.ElemIface = s.elemIface(t)
+	fi.TypeImports = s.foreignImports(t)
+	fi.NamedPrims = s.namedPrims(t)
+	return t
 }
 
 // attachPosition sets pos on every *RichError in the error tree, since an
@@ -1849,11 +2005,18 @@ func (s *structSet) extractStructSeen(name string, st *ast.StructType, seen map[
 			info.Fields = append(info.Fields, sub...)
 			continue
 		}
+		// A type written through an `=` alias is read as the type it names.
+		resolved := field
+		if expr := s.unaliasExpr(field.Type); expr != field.Type {
+			cp := *field
+			cp.Type = expr
+			resolved = &cp
+		}
 		for _, ident := range field.Names {
 			if !ident.IsExported() {
 				continue
 			}
-			fi, extractErr := extractField(name, ident.Name, field, s.spell)
+			fi, extractErr := extractField(name, ident.Name, resolved, s.spell)
 			fi.Doc, fi.Directives = splitDoc(field.Doc)
 			if fi.Doc == "" && field.Comment != nil {
 				fi.Doc = strings.TrimSpace(field.Comment.Text())
@@ -1874,14 +2037,7 @@ func (s *structSet) extractStructSeen(name string, st *ast.StructType, seen map[
 			if s.typesInfo != nil {
 				if expr, ok := s.fieldExpr[name+"."+ident.Name]; ok {
 					if tv, ok := s.typesInfo.Types[expr]; ok {
-						fieldType = tv.Type
-						fi.Type = tv.Type
-						fi.NotComparable = !types.Comparable(fieldType)
-						fi.UnderlyingStruct = underlyingStruct(fieldType)
-						fi.Iface = s.inspect(fieldType)
-						fi.ElemIface = s.elemIface(fieldType)
-						fi.TypeImports = s.foreignImports(fieldType)
-						fi.NamedPrims = s.namedPrims(fieldType)
+						fieldType = s.typeField(&fi, tv.Type)
 						// Named primitives are only resolved now. Run the rule
 						// checks again, so a rule of the wrong kind on a
 						// `type P string` field is rejected here instead of
@@ -1901,7 +2057,7 @@ func (s *structSet) extractStructSeen(name string, st *ast.StructType, seen map[
 			// as 0 from the AST. Resolve it with go/types or report an error.
 			// A silent 0 would emit a fixed length-0 array check that rejects
 			// every input.
-			if hasNonLiteralArrayLen(field.Type) && !s.fixConstArrayLens(&fi, fieldType) {
+			if hasNonLiteralArrayLen(resolved.Type) && !s.fixConstArrayLens(&fi, fieldType) {
 				errs = append(errs, attachPosition(fmt.Errorf(
 					"%s.%s: fixed-array length must be an integer literal here (constant lengths need type info, and pointer-wrapped const-length arrays are unsupported)",
 					name,
@@ -2117,37 +2273,9 @@ func checkTagReadable(tag reflect.StructTag, goName string) error {
 // expressions. It is structSet.spell with type information and exprToString
 // without.
 func extractField(structName, goName string, field *ast.Field, spell func(ast.Expr) string) (FieldInfo, error) {
-	// HintLen -1 means unset. A field without tags must not read as an
-	// explicit hint:"0"
-	fi := FieldInfo{GoName: goName, StructName: structName, HintLen: -1}
-
-	if field.Tag != nil {
-		tag := reflect.StructTag(strings.Trim(field.Tag.Value, "`"))
-		if err := checkTagReadable(tag, goName); err != nil {
-			return fi, err
-		}
-		jsonName, opts, ignored, err := parseJSONTag(tag.Get("json"))
-		if err != nil {
-			return fi, fmt.Errorf("field %s: %w", goName, err)
-		}
-		if ignored {
-			fi.Ignored = true
-			return fi, nil
-		}
-		if jsonName != "" {
-			fi.JSONName = jsonName
-		}
-		fi.OmitEmpty = opts.OmitEmpty
-		fi.OmitZero = opts.OmitZero
-		fi.String = opts.String
-		fi.Format = opts.Format
-		fi.Embed = opts.Embed
-		if err := applyPipeTags(&fi, tag, goName); err != nil {
-			return fi, err
-		}
-	}
-	if fi.JSONName == "" {
-		fi.JSONName = goName
+	fi, err := fieldFromTag(structName, goName, field.Tag)
+	if err != nil || fi.Ignored {
+		return fi, err
 	}
 
 	if what := unsupportedTypeExpr(field.Type); what != "" {
@@ -2192,6 +2320,9 @@ func extractField(structName, goName string, field *ast.Field, spell func(ast.Ex
 	if fi.Embed && (fi.Kind != KindMap || fi.Pointer) {
 		return fi, embedKindError(fi.Pointer, goType)
 	}
+	if err := embedTagError(fi); err != nil {
+		return fi, err
+	}
 
 	// ResolveKind made `[]byte` and `[]uint8` KindBytes. Keep that, so they
 	// use the base64, hex and array formats and not the plain slice code.
@@ -2230,6 +2361,44 @@ func extractField(structName, goName string, field *ast.Field, spell func(ast.Ex
 
 	if err := checkRuleApplicability(fi, false); err != nil {
 		return fi, err
+	}
+	return fi, nil
+}
+
+// fieldFromTag starts a FieldInfo from the field's tag: the JSON name and
+// options, the pipe and the prealloc hints.
+func fieldFromTag(structName, goName string, lit *ast.BasicLit) (FieldInfo, error) {
+	// HintLen -1 means unset. A field without tags must not read as an
+	// explicit hint:"0"
+	fi := FieldInfo{GoName: goName, StructName: structName, HintLen: -1}
+
+	if lit != nil {
+		tag := reflect.StructTag(strings.Trim(lit.Value, "`"))
+		if err := checkTagReadable(tag, goName); err != nil {
+			return fi, err
+		}
+		jsonName, opts, ignored, err := parseJSONTag(tag.Get("json"))
+		if err != nil {
+			return fi, fmt.Errorf("field %s: %w", goName, err)
+		}
+		if ignored {
+			fi.Ignored = true
+			return fi, nil
+		}
+		if jsonName != "" {
+			fi.JSONName = jsonName
+		}
+		fi.OmitEmpty = opts.OmitEmpty
+		fi.OmitZero = opts.OmitZero
+		fi.String = opts.String
+		fi.Format = opts.Format
+		fi.Embed = opts.Embed
+		if err := applyPipeTags(&fi, tag, goName); err != nil {
+			return fi, err
+		}
+	}
+	if fi.JSONName == "" {
+		fi.JSONName = goName
 	}
 	return fi, nil
 }
@@ -2371,16 +2540,20 @@ func exprToStringQ(expr ast.Expr, pkgQual func(*ast.Ident) (string, bool)) strin
 	case *ast.IndexExpr:
 		// A generic type with one type argument, such as sql.Null[int].
 		return sub(e.X) + "[" + sub(e.Index) + "]"
+	case *ast.IndexListExpr:
+		args := make([]string, len(e.Indices))
+		for i, idx := range e.Indices {
+			args[i] = sub(idx)
+		}
+		return sub(e.X) + "[" + strings.Join(args, ", ") + "]"
 	case *ast.MapType:
 		return "map[" + sub(e.Key) + "]" + sub(e.Value)
 	case *ast.InterfaceType:
 		if e.Methods == nil || len(e.Methods.List) == 0 {
 			return "any"
 		}
-		return fmt.Sprintf("%T", expr)
-	default:
-		return fmt.Sprintf("%T", expr)
 	}
+	return types.ExprString(expr)
 }
 
 // embedKindError says what `json:",embed"` needs. It mentions pointers only
@@ -2392,11 +2565,37 @@ func embedKindError(pointer bool, goType string) error {
 	return fmt.Errorf("json:\",embed\" requires a map[string]T field, got %s", goType)
 }
 
+// embedTagError rejects a `pipe:` or `hint:` tag on a catch-all map. Its
+// entries splice into the parent object, so it has no key of its own to
+// require, no value of its own for a decode variant or a step, and no size
+// known ahead of the unknown keys.
+func embedTagError(fi FieldInfo) error {
+	if !fi.Embed {
+		return nil
+	}
+	desc := fi.StructName + "." + fi.GoName
+	switch {
+	case fi.Presence != PresenceDefault || len(fi.Variants) > 0 || len(fi.Pipe) > 0 || len(fi.KeyPipe) > 0 || len(fi.Levels) > 0:
+		return &RichError{
+			Msg:      desc + ": `pipe:` does not apply to a json:\",embed\" catch-all map",
+			CodeSpan: "pipe:",
+			BotHint:  "catch-all entries run no pipe steps",
+			UserHint: "declare the keys you expect as fields to give them rules, or check the map after decoding",
+		}
+	case fi.HintLen >= 0 || len(fi.HintLevels) > 0:
+		return &RichError{
+			Msg:      desc + ": `hint:` does not apply to a json:\",embed\" catch-all map",
+			CodeSpan: "hint:",
+			BotHint:  "the catch-all map is not preallocated",
+			UserHint: "drop the hint",
+		}
+	}
+	return nil
+}
+
 // unsupportedTypeExpr names the first type literal in expr that ggen cannot
 // generate code for: an anonymous struct, a func or a chan. It returns ""
-// when the whole expression is usable. exprToString has no case for any of
-// the three, and its %T fallback would put a Go AST type name into the
-// emitted file.
+// when the whole expression is usable.
 func unsupportedTypeExpr(expr ast.Expr) string {
 	switch e := expr.(type) {
 	case *ast.StructType:
@@ -2619,17 +2818,6 @@ func (s *structSet) sqlNullGenericInfo(structName string, t types.Type, parent *
 	if err != nil {
 		return nil, nil, false // the inner type cannot be described, so use the fallback
 	}
-	// extractFieldFromTypes looks through a named type to its underlying
-	// type, so uuid.UUID becomes [16]byte. The AST path keeps a named type
-	// as KindStruct unless ResolveKind knows the name. Do the same here: use
-	// ResolveKind on the name and drop the element data that does not apply.
-	if _, isNamed := innerType.(*types.Named); isNamed {
-		inner.Kind = ResolveKind(inner.GoType)
-		inner.ElemType, inner.ElemKind = "", 0
-		inner.ArrayLen, inner.ElemArrayLen = 0, 0
-		inner.ElemPointer = false
-		inner.ElemIface = FieldInterfaces{}
-	}
 	inner.JSONName = parent.JSONName
 	return &inner, s.foreignImports(innerType), true
 }
@@ -2741,6 +2929,14 @@ func (s *structSet) collectTypeImports(t types.Type, out map[string]TypeImport) 
 	switch x := t.(type) {
 	case *types.Named:
 		if obj := x.Obj(); obj != nil && obj.Pkg() != nil && obj.Pkg() != s.typesPkg {
+			out[obj.Pkg().Path()] = s.typeImport(obj.Pkg())
+		}
+		for t := range x.TypeArgs().Types() {
+			s.collectTypeImports(t, out)
+		}
+	case *types.Alias:
+		// An alias unalias kept is written by its own name.
+		if obj := x.Obj(); obj.Pkg() != nil && obj.Pkg() != s.typesPkg {
 			out[obj.Pkg().Path()] = s.typeImport(obj.Pkg())
 		}
 		for t := range x.TypeArgs().Types() {

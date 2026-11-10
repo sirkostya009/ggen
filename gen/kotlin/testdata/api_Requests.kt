@@ -47,6 +47,7 @@ data class EdgesInput(
     val addr: String? = null,
     val net: String? = null,
     val tcp: String? = null,
+    val udp: String? = null,
     val ns: String? = null,
     val raw: JsonElement = JsonNull,
     val lower: String = "",
@@ -54,3 +55,9 @@ data class EdgesInput(
     val conv: JsonElement = JsonNull,
     val tags: TagsInput? = null,
 )
+
+/** AddressView delegates to the generated Address. */
+typealias AddressViewInput = AddressInput
+
+/** Token delegates to the text methods of Secret. */
+typealias TokenInput = String

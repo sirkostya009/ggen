@@ -154,7 +154,7 @@ type FieldInfo struct {
 	// U+FFFD, the replacement character
 	AllowInvalidUTF8 bool
 	Ignored          bool
-	NotComparable    bool // the field type is not comparable, so omitzero needs a reflect zero check because `!= (T{})` would not compile
+	NotComparable    bool // the field type is not comparable or cannot be named here, so omitzero needs a reflect zero check because `!= (T{})` would not compile
 	// the field's own type, with pointers not removed, has a struct as its
 	// underlying type. Only go/types can tell a struct apart from named
 	// containers and foreign array types, which also read as KindStruct

@@ -30,10 +30,10 @@ func nativeVariantField(f model.FieldInfo) model.FieldInfo {
 
 // converterInputField builds a synthetic FieldInfo for a converter's input
 // type W, so renderField and renderStreamField can scan it into a temporary.
-// It looks like a field of type W. A pointer input takes the pointer path:
-// null gives nil, anything else gives a fresh value. The temporary is a local
-// known to be nil, which is why TargetNil is set. NamedPrims carries how W's
-// named primitive types resolve.
+// It looks like a field of type W, with the parent's struct flags. A pointer
+// input takes the pointer path: null gives nil, anything else gives a fresh
+// value. The temporary is a local known to be nil, which is why TargetNil is
+// set. NamedPrims carries how W's named primitive types resolve.
 func converterInputField(f model.FieldInfo, v model.Variant) model.FieldInfo {
 	in := model.FieldInfo{
 		GoName:           f.GoName,
@@ -42,6 +42,11 @@ func converterInputField(f model.FieldInfo, v model.Variant) model.FieldInfo {
 		GoType:           v.InType,
 		Kind:             v.InKind,
 		NamedPrims:       f.NamedPrims,
+		MultiErr:         f.MultiErr,
+		NoValidate:       f.NoValidate,
+		AllowDups:        f.AllowDups,
+		UseNumber:        f.UseNumber,
+		HTMLEscape:       f.HTMLEscape,
 		Copy:             f.Copy,
 		AllowInvalidUTF8: f.AllowInvalidUTF8,
 	}

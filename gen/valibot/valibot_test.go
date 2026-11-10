@@ -44,6 +44,9 @@ func render(t *testing.T) (string, *gen.Output) {
 	requests.Place(set.Type(api, "Address").In(), "AddressInput")
 	requests.Place(set.Type(api, "Edges").In(), "EdgesInput")
 	requests.Place(set.Type(api, "Tags").In(), "TagsInput")
+	requests.Place(set.Type(api, "Keyed").In(), "KeyedInput")
+	requests.Place(set.Type(api, "AddressView").In(), "AddressViewInput")
+	requests.Place(set.Type(api, "Token").In(), "TokenInput")
 
 	responses := out.File("web/responses.ts", e)
 	responses.Place(set.Type(api, "User").Out().StrictFields("role"), "User")
@@ -51,6 +54,9 @@ func render(t *testing.T) (string, *gen.Output) {
 	responses.Place(set.Type(api, "Role").Out(), "Role")
 	responses.Place(set.Type(api, "Edges").Out(), "Edges")
 	responses.Place(set.Type(api, "Tags").Out(), "Tags")
+	responses.Place(set.Type(api, "Keyed").Out(), "Keyed")
+	responses.Place(set.Type(api, "AddressView").Out(), "AddressView")
+	responses.Place(set.Type(api, "Token").Out(), "Token")
 
 	out.File("shared/money.ts", e).Place(set.Type(other, "Money").Out(), "User")
 
@@ -145,11 +151,32 @@ func TestRuntime(t *testing.T) {
 		{"web/requests.ts", "EdgesInput", `{"fixed":"AQID"}`, false},
 		{"web/requests.ts", "EdgesInput", `{"ip":"","addr":"fe80::1%eth0"}`, true},
 		{"web/requests.ts", "EdgesInput", `{"ip":"fe80::1%eth0"}`, false},
+		{"web/requests.ts", "EdgesInput", `{"net":"","tcp":"","udp":""}`, true},
+		{"web/requests.ts", "EdgesInput", `{"net":"::/64","tcp":"[fe80::1%eth0]:80","udp":":0"}`, true},
+		{"web/requests.ts", "EdgesInput", `{"net":"::/64.5"}`, false},
+		{"web/requests.ts", "EdgesInput", `{"net":"::/NaN"}`, false},
+		{"web/requests.ts", "EdgesInput", `{"udp":"[::ffff:1.2.3.4%eth0]:1"}`, false},
 		{"web/requests.ts", "EdgesInput", `{"lower":"X"}`, true},
 		{"web/requests.ts", "EdgesInput", `{"lower":"Z"}`, false},
 		{"web/requests.ts", "EdgesInput", `{"conv":"12","nz":null}`, true},
 		{"web/requests.ts", "EdgesInput", `{"zzz":"s"}`, true},
 		{"web/requests.ts", "EdgesInput", `{"zzz":1}`, false},
+		{"web/requests.ts", "KeyedInput", `{"two":{},"one":{}}`, true},
+		{"web/requests.ts", "KeyedInput", `{"two":{"ab":1},"one":{"ab":1}}`, true},
+		{"web/requests.ts", "KeyedInput", `{"two":{"ef":1}}`, false},
+		{"web/requests.ts", "KeyedInput", `{"one":{"cd":1}}`, false},
+		{"web/requests.ts", "KeyedInput", `{"nested":{"AB":{"x":1}}}`, true},
+		{"web/requests.ts", "KeyedInput", `{"nested":{"ef":{}}}`, false},
+		{"web/requests.ts", "AddressViewInput", `{"city":"x"}`, true},
+		{"web/requests.ts", "AddressViewInput", `{}`, false},
+		{"web/requests.ts", "AddressViewInput", `1`, false},
+		{"web/requests.ts", "TokenInput", `"t"`, true},
+		{"web/requests.ts", "TokenInput", `1`, false},
+		{"web/responses.ts", "Keyed", `{"two":{"ab":1},"one":{},"nested":{"cd":{"x":1}}}`, true},
+		{"web/responses.ts", "Keyed", `{"two":null,"one":null,"nested":null}`, true},
+		{"web/responses.ts", "Keyed", `{"two":{"":1},"one":{},"nested":{}}`, false},
+		{"web/responses.ts", "AddressView", `{"city":"x","zip":""}`, true},
+		{"web/responses.ts", "Token", `"t"`, true},
 		{"web/responses.ts", "User", user(``), true},
 		{"web/responses.ts", "User", user(`,"manager":` + user(``)), true},
 		{"web/responses.ts", "User", strings.Replace(user(``), `"role":"admin"`, `"role":""`, 1), false},

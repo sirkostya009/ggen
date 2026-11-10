@@ -1,7 +1,9 @@
-// Package thirdparty2 holds a ggen-annotated struct in its own package. It
+// Package thirdparty2 holds ggen-annotated structs in their own package. It
 // tests the cross-package fast path: code generated in the main package calls
 // this package's generated methods directly instead of using encoding/json.
 package thirdparty2
+
+import "time"
 
 //go:generate ../../ggen .
 
@@ -25,4 +27,12 @@ func (w *Wrap) UnmarshalJSON(b []byte) error {
 	v, _, err := External2{}.DecodeFrom(b)
 	w.In = v
 	return err
+}
+
+// Lease has no marshal hooks, and its Duration is written as a units string
+// that only its generated decoder reads.
+//
+//ggen:generate
+type Lease struct {
+	TTL time.Duration `json:"ttl"`
 }

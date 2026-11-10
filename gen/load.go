@@ -147,14 +147,18 @@ func isAnnotation(directive string) bool {
 	return directive == "ggen:generate" || strings.HasPrefix(directive, "ggen:generate ") || strings.HasPrefix(directive, "ggen:generate\t")
 }
 
-func (s *Set) pkg(tp *types.Package) *Package {
+func (s *Set) pkg(tp *types.Package) *Package { return s.pkgOf(tp.Path(), tp.Name()) }
+
+// pkgOf returns the package with the import path, creating it under name on
+// first use.
+func (s *Set) pkgOf(path, name string) *Package {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if p, ok := s.pkgs[tp.Path()]; ok {
+	if p, ok := s.pkgs[path]; ok {
 		return p
 	}
-	p := &Package{Path: tp.Path(), Name: tp.Name()}
-	s.pkgs[tp.Path()] = p
+	p := &Package{Path: path, Name: name}
+	s.pkgs[path] = p
 	return p
 }
 

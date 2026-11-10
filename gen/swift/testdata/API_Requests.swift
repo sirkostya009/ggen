@@ -36,6 +36,7 @@ struct EdgesInput: Codable, Hashable {
     var addr: String?
     var net: String?
     var tcp: String?
+    var udp: String?
     var ns: String?
     var raw: JSONValue?
     var lower: String?
@@ -58,6 +59,7 @@ struct EdgesInput: Codable, Hashable {
         case addr
         case net
         case tcp
+        case udp
         case ns
         case raw
         case lower
@@ -66,3 +68,9 @@ struct EdgesInput: Codable, Hashable {
         case tags
     }
 }
+
+/// AddressView delegates to the generated Address.
+typealias AddressViewInput = AddressInput
+
+/// Token delegates to the text methods of Secret.
+typealias TokenInput = String

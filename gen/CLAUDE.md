@@ -53,31 +53,61 @@ target themselves; the core has no opinion about syntax.
   constant becomes an enum `TypeDecl`, created when a loaded type first
   references it. `Load` lowers every type once in both modes so `Enums()` is
   complete and recursion is known before the script runs.
+- Only annotations shape the description. `Load` takes no flags and never
+  applies `model.Flags`, so the struct annotations (`nullzero`,
+  `ignoreunknown`, `novalidate`) are read from `StructInfo` directly, and a
+  decoder generated with the CLI's `-nullzero`, `-ignoreunknown` or
+  `-novalidate` is described as if the flag were off.
 
 ### Lowering rules
 
 Every rule below mirrors what the generated decoder or encoder does.
 
 - **Presence.** Input: a key is optional unless `required` (or the struct is
-  `novalidate`). Output: optional exactly under `omitempty` / `omitzero`.
+  `novalidate`, which drops the rules of every level, as the decoder does).
+  Output: optional exactly under `omitempty` / `omitzero`.
 - **Null, input.** Pointers, `sql.Null*`, `any`, raw JSON accept null. A nil
-  container (slice, map, `[]byte`, `net.IP`) decodes null as empty and then
-  meets its rules, so it is `Nullable` only when no rule rejects empty
-  (`notempty`, `minlen>0`, `len≠0`). Rules on a `Type` apply to non-null
-  values, which is how a pointer skips them.
+  container (slice, map, `[]byte`, `net.IP`) decodes null as its empty
+  value. `nullzero` (the pipe variant, or the struct annotation) decodes it
+  to the Go zero value only where cmd/ggen's `nullZeroApplies` adds a null
+  branch: a non-pointer whose kind has no null of its own (not a slice,
+  map, `[]byte`/`[N]byte`, `net.IP`, raw JSON, `sql.Null*` or `any`).
+  Either way the decoder then runs the field's rules on that value, so the
+  type is `Nullable` only when the zero value passes them. `zeroPasses`
+  answers both cases: it runs every built-in rule on the zero value
+  (`notempty`, `minlen>0`, `len≠0` reject an empty container, `gt=0` or
+  `minlen=1` a zero scalar), lets `clamp` move it first, and assumes an
+  `@Func` passes. Rules on a `Type` apply to non-null values, which is how a
+  pointer skips them.
 - **Null and zero, output.** A nil-able type is `Nullable`; `net.IP` emits
   `""` instead, as do `netip.Addr`/`Prefix`, `net.IPNet`, `net.TCPAddr`/`UDPAddr`
   and `url.URL` (`Empty`). `net.IPNet` takes `cidr`, the format of
   `netip.Prefix`, because the runtime parses it with `netip.ParsePrefix`; the
   two address types take `ip-port`. An enum
   admits the Go zero value (`Enum.Zero`) unless a constant equals it.
-  `omitzero` clears all three on the field; `omitempty` clears `Nullable`,
-  `Empty` and a string enum's `Zero` (`0` is not JSON-empty). `Strict` /
-  `StrictFields` clear them at every depth on script request.
+  `omitempty` / `omitzero` clear a widening only where the encoder's guard
+  (cmd/ggen `fieldSkipExpr` / `omitEmptyCond`) skips every value that
+  carries it. A pointer field with either option writes what its pointee
+  writes, since both guards drop only the outer nil: `Empty`, `Enum.Zero`
+  and an inner null (`**T`, `*[]T`, `*sql.Null*`, `*json.RawMessage`) stay.
+  `omitzero` on a value drops only the Go zero value: `Nullable` goes except
+  for raw JSON and `any`, `Empty` goes only for `netip.Addr`/`Prefix` (a
+  non-nil empty `net.IP`, `IPNet`, `TCPAddr` or `UDPAddr`, or a non-zero
+  `url.URL` with empty text, is written as `""`), `Enum.Zero` goes, and a
+  `database/sql` Null type keeps both (an invalid one holding a value is
+  written as `null`). `omitempty` clears what the leaf's empty test skips,
+  nil pointers on the way included. That is `Nullable` and a string enum's
+  `Zero` for a string, `Nullable` and `Empty` for a slice, map, `[]byte`,
+  `[0]T` or an IP-like kind, and only `Nullable` for `url.URL` and
+  `sql.Null*`. Raw JSON
+  and `any` keep `Nullable`, and a kind with no test (numbers, bool, time,
+  `[N]T`) keeps everything (`0` is not JSON-empty). `Strict` /
+  `StrictFields` clear the widenings at every depth on script request.
 - **`oneof`.** Narrows the type to an `Enum` (no `Decl`, no `Ref`) when no
   transform precedes it in input, and always in output with the zero widening;
   after a transform in input it stays a `OneOf` rule. Every other rule is
-  input-only.
+  input-only. A map key's enum (`keys:oneof`) gets no zero widening, because
+  a map writes only the keys it holds.
 - **Enums from constants** are a closed set in both modes, although the
   decoder accepts any value of the underlying type: the closed set is the
   script's assertion, same as `Strict`.
@@ -86,13 +116,32 @@ Every rule below mirrors what the generated decoder or encoder does.
   text methods → `External`, wire `String`; a plain foreign struct →
   `External`, wire `Object`; a named primitive or container without codec
   methods → its underlying shape with `Name`/`Pkg` kept.
+- **`=` aliases** are seen through (`types.Unalias`), and the Go side
+  matches it (cmd/ggen/CLAUDE.md #90): a field written through an alias,
+  and each field of a struct alias, lowers as the type it names. A defined
+  type whose right-hand side is an alias (`type L AliasOfTime`) delegates to
+  the target, so `delegatingAlias` receives the target's spelling and
+  import, reaches `stdKind`, and lowers it as a time string.
+- **Delegating struct aliases.** `//ggen:generate type V T`, whose methods
+  call T's, lowers as a `Ref` to T when T is a loaded generated type, with
+  T's `Pkg` and `File`. Its wire is an object, or T's own wire when T is
+  itself a generated alias (`aliasWire`, as for any reference). Any other T
+  lowers as `External`, named T in T's package, which is the alias's own
+  package when `AliasUnderlyingImport` is empty: `stdKind` gives a
+  standard-library T its shape, a T with only text methods is a string, and
+  the rest are wire `Any`. So every `External` type carries a `Pkg`.
 - **Converters.** Each `@Conv` input shape is appended to `OneOf` (without
-  rules — they run after conversion); `nullzero` sets `Nullable`.
+  rules — they run after conversion). Null comes only from the field's own
+  `nullzero` variant, when the zero value passes the rules, or from a
+  pointer input: the struct annotation does not reach a converter field,
+  and a field with no native variant does not take the native type's null.
 - **`json.Number`** is a number in output. In input it also carries the
   quoted spelling in `OneOf` and is `Nullable`, because the decoder hands the
   span to `encoding/json`, which reads `"12"` and null.
 - **Pointers do not open a pipe level**; slices, arrays and maps do. Map key
-  rules come from `keys:`.
+  rules come from `keys:` and lower only onto the field's own map, through
+  any pointers (`*map`, `**map`), never onto a map nested in its values, as
+  the decoder applies them.
 - `,string` keeps the Go kind (width) and switches the wire to string with an
   `int-string` / `uint-string` / `number-string` format.
 
@@ -181,15 +230,19 @@ reference that `Context.Later` reports forward is `z.lazy(() => X)`.
 - Objects: `z.strictObject` (reject), `z.object` (ignore: zod strips),
   `.catchall(Rest)` (collect); `Optional` is `.optional()`, `Nullable`
   `.nullable()` after the rules (rules apply to non-null values). An `unknown`
-  shape is never made nullable.
+  shape is never made nullable. A map whose key is an `Enum` (`keys:oneof`)
+  is `z.partialRecord`, because `z.record` with an enum or literal key
+  requires every member, where Go checks only the keys present.
 - Built-ins only where probing showed they match Go: `z.iso.datetime({ offset:
   true })` (strict RFC 3339), `z.base64()` (padded), `z.ipv4()`/`z.ipv6()`
-  (no zone — `net.IP`), `z.cidrv4()`/`z.cidrv6()`. Everything else comes from
+  (no zone — `net.IP`). Everything else comes from
   `internal/js` helpers, pulled into a file on use: UTF-8 byte and rune
   lengths, decoded length of binary encodings, padded base64url/base32/hex,
   Go duration strings, `,string` number grammars (plus width ranges for narrow
   integers), the `url` rule as "scheme://rest", `netip.Addr` with an IPv6
-  zone, `ip-port` (`ggenIsAddrPort`: `netip.ParseAddrPort` plus the `":port"`
+  zone, `cidr` (`ggenIsPrefix`, as in valibot: `z.cidrv6()` accepts a prefix
+  length such as `64.5`, `NaN` or `1e-7`, which `netip.ParsePrefix`
+  rejects), `ip-port` (`ggenIsAddrPort`: `netip.ParseAddrPort` plus the `":port"`
   form for no IP, minus a zone on an IPv4-mapped address), and ports of the Go parsers behind text-typed values: `time.Parse`
   for custom layouts, `big.Float.Parse(s, 10)`, `big.Rat.SetString` and
   `url.Parse` (strict colons in http/https hosts, the go1.26+ default).
@@ -220,7 +273,9 @@ are parsed; the time helper walks the layout the way `time.Parse` does
 (ranges, day of month, day of year); the big-number helpers add the exponent
 limits a regex cannot express. `internal/js` runs every such helper in Node
 against its Go counterpart: `TestIPHelpersMatchGo`,
-`TestAddrPortHelperMatchesGo`, `TestTimeHelperMatchesGo` (random times
+`TestAddrPortHelperMatchesGo` (including a non-zero group before the `ffff`
+of a zoned IPv4-mapped address, at each position the mapped prefix spans),
+`TestTimeHelperMatchesGo` (random times
 formatted in 25 layouts, then mutated), and `TestBigFloatHelperMatchesGo` /
 `TestRationalHelperMatchesGo` / `TestURLHelperMatchesGo` (every string up to four characters over a grammar
 alphabet, plus edge cases). A change to a helper must keep these green.
@@ -431,13 +486,25 @@ curl, tar and unzip or python3 on Linux x86_64 or aarch64; arguments go to
 
 `gen_test.go` loads `testdata/api` + `testdata/other` and pins loading, every
 lowering rule above in both modes, `Strict`, file ordering, reference
-resolution, every placement error, the all-or-nothing write and the report. It
+resolution, every placement error, the all-or-nothing write and the report.
+Among the lowering rules, it pins the output omit guards on `Omits` in
+`TestOutputShapes` (raw JSON and `any` keep `Nullable` under `omitzero`,
+`[]int` does not), the struct-level `nullzero` on `Nulls` in `TestNullZero`
+(`eq=0` lets null through, `neq=0` and `alphanum` do not), the `udp` row of
+`TestInputShapes`, the `keys:` steps of `Keyed` in `TestKeySteps`, and the
+delegating aliases `AddressView`, `Token` and `TokenView` in
+`TestDelegatingAlias`. It
 also pins what `Output` refuses before writing anything (a path leaving the
 output directory, a nil emitter, a type no pattern loaded), a generated alias
 that is also a closed set, and a reference cycle: one spanning two files fails
 `Write`, one inside a file is what `Context.Cyclic` reports. `internal/js` and
 `internal/names` test their own printers, and every runtime helper that has a
 Go counterpart runs in Node against it.
+
+Every emitter's golden layout places the delegating aliases `AddressView` and
+`Token`, and the zod and valibot layouts place `Keyed`, whose `TestRuntime`
+cases cover empty and partial maps, a key outside the set, the inner keys of
+a nested map and a `""` key, which the output rejects.
 
 `model/*_test.go` are the parser tests that moved with the code;
 `TestParsePackage_docsDirectivesConsts` pins the consumer-facing additions.

@@ -36,6 +36,8 @@ func TestTypes(t *testing.T) {
 	requests.Place(set.Type(api, "Address").In(), "AddressInput")
 	requests.Place(set.Type(api, "Edges").In(), "EdgesInput")
 	requests.Place(set.Type(api, "Tags").In(), "TagsInput")
+	requests.Place(set.Type(api, "AddressView").In(), "AddressViewInput")
+	requests.Place(set.Type(api, "Token").In(), "TokenInput")
 
 	responses := out.File("web/responses.ts", e)
 	responses.Place(set.Type(api, "User").Out().StrictFields("role"), "User")
@@ -43,6 +45,8 @@ func TestTypes(t *testing.T) {
 	responses.Place(set.Type(api, "Role").Out(), "Role")
 	responses.Place(set.Type(api, "Edges").Out(), "Edges")
 	responses.Place(set.Type(api, "Tags").Out(), "Tags")
+	responses.Place(set.Type(api, "AddressView").Out(), "AddressView")
+	responses.Place(set.Type(api, "Token").Out(), "Token")
 
 	// Placed under a name that collides with User in responses.ts.
 	out.File("shared/money.ts", e).Place(set.Type(other, "Money").Out(), "User")

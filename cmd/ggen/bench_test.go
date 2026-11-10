@@ -11,8 +11,7 @@ import (
 // BenchmarkGenerate parses integrationtests/shared_test.go once and runs
 // generate() on it in a loop.
 func BenchmarkGenerate(b *testing.B) {
-	wd, _ := os.Getwd()
-	src := filepath.Join(wd, "integrationtests", "shared_test.go")
+	src := filepath.Join("..", "..", "integrationtests", "shared_test.go")
 	if _, err := os.Stat(src); err != nil {
 		b.Skipf("no shared_test.go at %s: %v", src, err)
 	}

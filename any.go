@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"math/big"
-	"net"
 	"reflect"
 	"strconv"
 	"strings"
@@ -41,15 +40,53 @@ func AppendAnyHTML(dst []byte, v any) ([]byte, error) {
 // walk, so every nested string and map key uses the same escaping.
 type escapeFn = func([]byte, string) []byte
 
-// appendAnyNetAddr writes a as AppendNetAddr does, escaping a zone with esc.
-func appendAnyNetAddr(dst []byte, a net.TCPAddr, esc escapeFn) ([]byte, error) {
+// netKind tells apart the package net structs that encode as strings, the
+// way generated fields of those types do. The package does not import net,
+// so they are recognized by name. Their exported fields are, in order, IP and
+// Mask for net.IPNet, and IP, Port and Zone for net.TCPAddr and net.UDPAddr.
+type netKind uint8
+
+const (
+	netNone netKind = iota
+	netIPNet
+	netAddr // net.TCPAddr or net.UDPAddr
+)
+
+func netKindOf(t reflect.Type) netKind {
+	if t.Kind() != reflect.Struct || t.PkgPath() != "net" {
+		return netNone
+	}
+	switch t.Name() {
+	case "IPNet":
+		return netIPNet
+	case "TCPAddr", "UDPAddr":
+		return netAddr
+	}
+	return netNone
+}
+
+// netElemKind is netKindOf of the struct a pointer in rv points to.
+func netElemKind(rv reflect.Value) netKind {
+	if rv.Kind() != reflect.Pointer {
+		return netNone
+	}
+	return netKindOf(rv.Type().Elem())
+}
+
+// appendNetValue writes the net value in rv as AppendIPNet or AppendNetAddr
+// does, escaping a zone with esc.
+func appendNetValue(dst []byte, rv reflect.Value, k netKind, esc escapeFn) ([]byte, error) {
 	dst = append(dst, '"')
+	if k == netIPNet {
+		return AppendIPNet(dst, rv.Field(0).Bytes(), rv.Field(1).Bytes())
+	}
 	from := len(dst)
-	dst, err := appendNetAddrRaw(dst, a)
-	if err != nil || a.Zone == "" {
+	zone := rv.Field(2).String()
+	dst, err := appendNetAddrRaw(dst, rv.Field(0).Bytes(), int(rv.Field(1).Int()), zone)
+	if err != nil || zone == "" {
 		return dst, err
 	}
-	return esc(dst[:from], string(dst[from:len(dst)-1])), nil
+	return closeText(dst[:len(dst)-1], from, esc), nil
 }
 
 func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
@@ -264,29 +301,6 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 	case time.Duration:
 		dst = append(dst, '"')
 		return esc(dst, x.String()), nil
-	// Generated fields write these as strings. They have no marshal
-	// methods, so without a case they would be reflected into objects.
-	case net.IPNet:
-		return AppendIPNet(append(dst, '"'), x)
-	case *net.IPNet:
-		if x == nil {
-			return append(dst, 'n', 'u', 'l', 'l'), nil
-		}
-		return AppendIPNet(append(dst, '"'), *x)
-	case net.TCPAddr:
-		return appendAnyNetAddr(dst, x, esc)
-	case *net.TCPAddr:
-		if x == nil {
-			return append(dst, 'n', 'u', 'l', 'l'), nil
-		}
-		return appendAnyNetAddr(dst, *x, esc)
-	case net.UDPAddr:
-		return appendAnyNetAddr(dst, net.TCPAddr(x), esc)
-	case *net.UDPAddr:
-		if x == nil {
-			return append(dst, 'n', 'u', 'l', 'l'), nil
-		}
-		return appendAnyNetAddr(dst, net.TCPAddr(*x), esc)
 	// Pointers to primitives. A nil pointer writes null.
 	case *string:
 		if x == nil {
@@ -379,6 +393,11 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 	}
 	// Types the type switch above does not match go through reflect.
 	rv := reflect.ValueOf(v)
+	// Generated fields write the net structs as strings. They have no
+	// marshal methods, so without this they would be reflected into objects.
+	if k := netKindOf(rv.Type()); k != netNone {
+		return appendNetValue(dst, rv, k, esc)
+	}
 	// The marshaler is declared only on *T. Call it through a pointer to a
 	// copy, because v is never addressable here. jsonv2 also calls such
 	// methods whether or not the value is addressable.
@@ -390,6 +409,11 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 	case reflect.Pointer, reflect.Interface:
 		if rv.IsNil() {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
+		}
+		// A pointer to a net value is written in place instead of boxing a
+		// copy of the struct.
+		if k := netElemKind(rv); k != netNone {
+			return appendNetValue(dst, rv.Elem(), k, esc)
 		}
 		return appendAny(dst, rv.Elem().Interface(), esc, depth+1)
 	// Named primitive types such as `type MyEnum int` end up here. The type
@@ -656,6 +680,10 @@ func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind, addr bo
 		return appendAny(dst, addrOf(rv), esc, depth)
 	}
 	if t := rv.Type(); t.PkgPath() != "" {
+		// A net element is written in place, without boxing a copy.
+		if k := netKindOf(t); k != netNone {
+			return appendNetValue(dst, rv, k, esc)
+		}
 		return appendAny(dst, rv.Interface(), esc, depth)
 	}
 	//exhaustive:ignore not every kind applies here
@@ -946,9 +974,6 @@ func quotableKind(t reflect.Type) bool {
 var (
 	numberType   = reflect.TypeFor[json.Number]()
 	durationType = reflect.TypeFor[time.Duration]()
-	ipNetType    = reflect.TypeFor[net.IPNet]()
-	tcpAddrType  = reflect.TypeFor[net.TCPAddr]()
-	udpAddrType  = reflect.TypeFor[net.UDPAddr]()
 )
 
 func hasTagOpt(opts, want string) bool {
@@ -987,14 +1012,7 @@ func structWire(v reflect.Value) bool {
 		}
 		v = v.Elem()
 	}
-	if v.Kind() != reflect.Struct {
-		return false
-	}
-	switch v.Type() {
-	case ipNetType, tcpAddrType, udpAddrType:
-		return false
-	}
-	return true
+	return v.Kind() == reflect.Struct && netKindOf(v.Type()) == netNone
 }
 
 // fieldValue returns the value of f in rv. ok is false when omitzero drops
@@ -1146,7 +1164,31 @@ const (
 	anySizeFloat    = 25
 	anySizeTime     = 37 // quoted RFC3339Nano
 	anySizeDuration = 27 // quoted "-2562047h47m16.854775808s"
+	anySizeIPNet4   = 20 // quoted "255.255.255.255/32"
+	anySizeIPNet6   = 45 // quoted IPv6 address and "/128"
+	anySizeAddr4    = 23 // quoted "255.255.255.255:65535"
+	anySizeAddr6    = 49 // quoted "[IPv6 address]:65535"
 )
+
+// netSize is the budget of the net value in rv. A zone adds its '%'
+// separator and its escaped bytes.
+func netSize(rv reflect.Value, k netKind, mult int) int {
+	v4 := ipv4(rv.Field(0).Bytes()) != nil
+	if k == netIPNet {
+		if v4 {
+			return anySizeIPNet4
+		}
+		return anySizeIPNet6
+	}
+	n := anySizeAddr6
+	if v4 {
+		n = anySizeAddr4
+	}
+	if z := rv.Field(2).Len(); z > 0 {
+		n += 1 + z*mult
+	}
+	return n
+}
 
 // AnySize returns an upper bound on len(AppendAny(nil, v)), assuming the same
 // escape growth for strings as JSONSize. Scalars use the generator's fixed
@@ -1252,22 +1294,6 @@ func anySize(v any, mult, depth int) int {
 		return anySizeTime
 	case time.Duration:
 		return anySizeDuration
-	case net.IPNet, *net.IPNet:
-		return 45
-	case net.TCPAddr:
-		return 49 + len(x.Zone)*mult
-	case *net.TCPAddr:
-		if x == nil {
-			return 4
-		}
-		return 49 + len(x.Zone)*mult
-	case net.UDPAddr:
-		return 49 + len(x.Zone)*mult
-	case *net.UDPAddr:
-		if x == nil {
-			return 4
-		}
-		return 49 + len(x.Zone)*mult
 	case *string:
 		if x == nil {
 			return 4
@@ -1313,6 +1339,9 @@ func anySize(v any, mult, depth int) int {
 		return len(b)
 	}
 	rv := reflect.ValueOf(v)
+	if k := netKindOf(rv.Type()); k != netNone {
+		return netSize(rv, k, mult)
+	}
 	if needsAddr(rv.Type()) {
 		return anySize(addrOf(rv), mult, depth)
 	}
@@ -1321,6 +1350,9 @@ func anySize(v any, mult, depth int) int {
 	case reflect.Pointer, reflect.Interface:
 		if rv.IsNil() {
 			return 4
+		}
+		if k := netElemKind(rv); k != netNone {
+			return netSize(rv.Elem(), k, mult)
 		}
 		return anySize(rv.Elem().Interface(), mult, depth+1)
 	case reflect.Bool:
@@ -1372,7 +1404,10 @@ func reflectValueSize(rv reflect.Value, kind reflect.Kind, addr bool, mult, dept
 	if addr {
 		return anySize(addrOf(rv), mult, depth)
 	}
-	if rv.Type().PkgPath() != "" {
+	if t := rv.Type(); t.PkgPath() != "" {
+		if k := netKindOf(t); k != netNone {
+			return netSize(rv, k, mult)
+		}
 		return anySize(rv.Interface(), mult, depth)
 	}
 	//exhaustive:ignore not every kind applies here

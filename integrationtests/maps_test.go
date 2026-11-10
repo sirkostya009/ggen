@@ -235,12 +235,17 @@ func TestMap_NamedPrimitiveValuesRoundTrip(t *testing.T) {
 // NestedMaps pins map-of-map decode. Each nesting level must name its own key
 // and value locals. If the inner level shadowed the outer ones, its store
 // would index the inner value with itself and the file would not compile.
+// The array-held maps pin the same for an array value read inside an array
+// slot: a shared slot counter would store the map into the wrong slot.
 //
 //ggen:generate
 type NestedMaps struct {
 	Counts map[string]map[string]int     `json:"counts"`
 	Inners map[string]map[string]Address `json:"inners"`
 	Lists  map[string]map[string][]int   `json:"lists"`
+	Slots  [2]map[string][3]int          `json:"slots"`
+	PSlots [2]map[string]*[3]int         `json:"pslots"`
+	MPtrs  [2]*map[string][3]int         `json:"mptrs"`
 }
 
 func TestNestedMaps_roundtripAndReset(t *testing.T) {
@@ -249,6 +254,9 @@ func TestNestedMaps_roundtripAndReset(t *testing.T) {
 		Counts: map[string]map[string]int{"a": {"x": 1, "y": 2}},
 		Inners: map[string]map[string]Address{"b": {"z": {Street: "s", City: "c", ZipCode: "12345"}}},
 		Lists:  map[string]map[string][]int{"c": {"w": {1, 2, 3}}},
+		Slots:  [2]map[string][3]int{{"a": {1, 2, 3}}, {}},
+		PSlots: [2]map[string]*[3]int{nil, {"b": {4, 5, 6}, "n": nil}},
+		MPtrs:  [2]*map[string][3]int{{"c": {7, 8, 9}}, nil},
 	}
 	out, err := ggen.Marshal(in)
 	if err != nil {
@@ -302,7 +310,8 @@ func TestNestedMaps_innerValuesRecycled(t *testing.T) {
 // The stream path decodes nested maps identically.
 func TestNestedMaps_stream(t *testing.T) {
 	t.Parallel()
-	payload := []byte(`{"counts":{"a":{"x":1,"y":2}},"lists":{"c":{"w":[1,2]}}}`)
+	payload := []byte(`{"counts":{"a":{"x":1,"y":2}},"lists":{"c":{"w":[1,2]}},` +
+		`"slots":[{},{"a":[1,2,3]}],"pslots":[{"b":[4,5,6],"n":null},null],"mptrs":[null,{"c":[7,8,9]}]}`)
 	var s ggen.Stream
 	s.Reset(bytes.NewReader(payload), make([]byte, 0, 16))
 	got, err := NestedMaps{}.DecodeFromStream(&s)
@@ -311,5 +320,14 @@ func TestNestedMaps_stream(t *testing.T) {
 	}
 	if got.Counts["a"]["y"] != 2 || !reflect.DeepEqual(got.Lists["c"]["w"], []int{1, 2}) {
 		t.Errorf("stream nested decode wrong: %+v", got)
+	}
+	if !reflect.DeepEqual(got.Slots, [2]map[string][3]int{{}, {"a": {1, 2, 3}}}) {
+		t.Errorf("slots = %v", got.Slots)
+	}
+	if !reflect.DeepEqual(got.PSlots, [2]map[string]*[3]int{{"b": {4, 5, 6}, "n": nil}, nil}) {
+		t.Errorf("pslots = %v", got.PSlots)
+	}
+	if !reflect.DeepEqual(got.MPtrs, [2]*map[string][3]int{nil, {"c": {7, 8, 9}}}) {
+		t.Errorf("mptrs = %v", got.MPtrs)
 	}
 }

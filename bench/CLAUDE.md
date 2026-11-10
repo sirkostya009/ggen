@@ -458,3 +458,33 @@ About −2.5% on stream skip. All eight target measurements are negative while
 the bytes rows from the same two binaries stay within ±0.3% on pass 2, which
 makes a layout shift between the builds unlikely. Mega_Reader (does not reach
 `skipNumber`) flat. B/op and allocs unchanged.
+
+## Net kinds without package `net` (2026-10)
+
+The part-wise net runtime (cmd/ggen/CLAUDE.md #89: no `net` import, zones
+kept out of package `unique`, IPv4/IPv6 `JSONSize` split, `AppendAny` writing
+net values in place) against `eae8c20`. No repo bench carries the net kinds,
+so this ran in a scratch module over
+`struct{TCP net.TCPAddr; UDP *net.UDPAddr; Net net.IPNet; Nets []net.IPNet; Peers []net.TCPAddr}`
+with 16 entries per slice. `v4` holds IPv4 values, `v6` full-form IPv6 with
+zone `eth0` on every address. Two `go test -c` binaries, core 24,
+`GOMAXPROCS=1`, `-benchtime=200000x`, count=1, one pass per side after a
+discarded warmup. The control is jsonv2 over a struct of the same texts.
+
+| row | before | after | control |
+| --- | --- | --- | --- |
+| Marshal v4 | 1069 ns · 1792 B | 985 ns (−8%) · 896 B | −1.0% |
+| Marshal v6 | 4197 ns | 3033 ns (−28%) | +0.7% |
+| AppendAny v4 | 2442 ns · 1560 B · 33 allocs | 2487 ns (flat) · 24 B · 1 alloc | +0.2% |
+| AppendAny v6 | 6237 ns · 51 allocs | 4756 ns (−24%) · 1 alloc | +1.0% |
+| Unmarshal v6 | 6120 ns · 40 allocs | 4776 ns (−22%) · 58 allocs | −9% |
+| Unmarshal v4 | — | within the control drift | — |
+
+Marshal v4 halves its B/op because `JSONSize` budgets IPv4 text at its own
+width, which halves the presized buffer. `AppendAny` drops to one
+allocation: net elements are written without boxing a copy, and a zone is
+escaped without copying the text. Unmarshal v6 gains one
+allocation per zoned address (18 here), the cloned zone that replaces
+netip's interning. Its jsonv2 control drifted −9% between the binaries
+(binary layout), past the 3% gate, so only the direction of the −22% holds,
+not its size.

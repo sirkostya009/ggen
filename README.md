@@ -251,12 +251,12 @@ lists the known ones.
 | `-unmarshal`        | `unmarshal`        | also emit an `UnmarshalJSON` hook for `encoding/json.Unmarshaler`                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `-multierr`         | `multierr`         | accumulate every validation failure into `ggen.Errors` instead of returning on the first one                                                                                                                                                                                                                                                                                                                                                                         |
 | `-allowdups`        | `allowdups`        | accept duplicate JSON keys with first-wins semantics — the first occurrence is parsed, later ones are skipped via `ggen.SkipValue` without being decoded (default: error on the second hit)                                                                                                                                                                                                                                                                          |
-| `-novalidate`       | `novalidate`       | drop validation, required-field checks, and mods entirely — fastest decode path                                                                                                                                                                                                                                                                                                                                                                                      |
+| `-novalidate`       | `novalidate`       | drop validation, required-field checks, and mods entirely, at every level (`inner:` and `keys:` steps included) — fastest decode path                                                                                                                                                                                                                                                                                                                                |
 | `-ignoreunknown`    | `ignoreunknown`    | silently drop unknown JSON keys (default: error). overridden by an embedded fallback map field                                                                                                                                                                                                                                                                                                                                                                       |
 | `-nullzero`         | `nullzero`         | accept an explicit JSON `null` on every non-pointer value field, decoding it to the Go zero value (default: error). a per-field `nullzero` decode variant in `pipe:` opts in a single field                                                                                                                                                                                                                                                                          |
 | `-nosortkeys`       | `nosortkeys`       | emit struct fields in declaration order (default: alphabetical by JSON name, compresses better)                                                                                                                                                                                                                                                                                                                                                                      |
-| `-usenumber`        | `usenumber`        | decode numbers in `any` fields as `json.Number` instead of `float64`                                                                                                                                                                                                                                                                                                                                                                                                 |
-| `-htmlescape`       | `htmlescape`       | escape `<`, `>`, `&` to `\uXXXX` for safe embedding in HTML (default: literal, matches `encoding/json` v2 — v2 dropped HTML escaping as a default)                                                                                                                                                                                                                                                                                                                   |
+| `-usenumber`        | `usenumber`        | decode numbers in `any` values as `json.Number` instead of `float64`: `any` fields, and `any` elements and map values at any container depth                                                                                                                                                                                                                                                                                                                         |
+| `-htmlescape`       | `htmlescape`       | escape `<`, `>`, `&` to `\uXXXX` for safe embedding in HTML (default: literal, matches `encoding/json` v2 — v2 dropped HTML escaping as a default). Reaches strings at any container depth and inside `sql.Null*` values                                                                                                                                                                                                                                             |
 | `-allowinvalidutf8` | `allowinvalidutf8` | skip decode-side UTF-8 validation for this struct: invalid bytes flow into string fields / keys / raw spans untouched — inside `any` values and the `,embed` catch-all too — and unpaired `\uXXXX` surrogates decode to U+FFFD (default: reject with `ggen.ErrInvalidUTF8`, jsonv2 parity). Grammar checks unaffected. Decode-only                                                                                                                                   |
 | `-copy`             | `copy`             | copy decoded strings and `json.RawMessage` (and strings inside `any` fields) out of the input buffer instead of aliasing it, so you may reuse or mutate the input after `DecodeFrom` returns (default: zero-copy aliasing — faster, but the input must stay alive and unmodified for as long as the decoded values are used). Decode-only; allocates more                                                                                                            |
 | `-dry`              | —                  | parse and validate every annotated struct, surface every error, emit no file. Useful in CI/pre-commit to fail fast on broken tags or annotations. Rejects `-o` / `-pkg`                                                                                                                                                                                                                                                                                              |
@@ -279,15 +279,23 @@ payloads into `UnknownKeyError` — and a misspelled option (`omitEmpty`,
 - `json:",embed"` — the field becomes a catch-all map for unknown keys. The Go
   type must be a plain string-keyed map — literally `map[string]V`, not a
   pointer to one and not a named map type; V can be `any`, a primitive, a
-  ggen-annotated struct, or any other concrete type. Typed values are decoded
-  directly through the elem's fast
-  path when one exists (string scan, generated `DecodeFrom`), or via
-  `encoding/json` unmarshal of the captured span otherwise. Overrides
+  ggen-annotated struct, or any other concrete type. The map reads back what
+  it writes. `time.Duration`, `net.IPNet` / `net.TCPAddr` / `net.UDPAddr`,
+  `[N]byte` and generated-struct values, alone, behind a pointer or inside a
+  container, are written and read in the form a field of their type uses. A
+  struct ggen does not generate, such as one from another package, is
+  written the way a `map[string]V` field writes it: through its own JSON or
+  text methods, else `encoding/json` (so a `time.Duration` inside it is a
+  number of nanoseconds). The one value that does not read back is a
+  `[N]byte` nested in a container (a `map[string][][16]byte` catch-all). Overrides
   `-ignoreunknown`; on marshal the entries are spliced into the parent object
   after every named field, wherever the catch-all is declared — the same
   order for a struct reached inside an `any` value. One catch-all per struct: a
   struct's own beats one promoted from an embedded struct, and two declared
-  side by side are a generate-time error.
+  side by side are a generate-time error. A `pipe:` or `hint:` tag on the
+  catch-all is a generate-time error as well. Catch-all entries run no pipe
+  steps and the map takes no capacity hint, so declare the keys you expect as
+  fields to give them rules.
 - `json:"name,omitempty"` — skipped on marshal when the value ENCODES as
   `null`, `""` or `[]`, or is an empty map: an empty string, an `any` holding
   an empty value, a nil pointer, and a pointer to any of these are omitted;
@@ -350,7 +358,10 @@ Separate multiple with a slash /:
 - `@Conv` — any converter of signature `func(W) T` / `func(W) (T, error)` /
   `func(W) (T, bool)`. `W` may be a primitive **or a ggen-decodable struct**,
   a pointer to either (the variant then accepts `null` too and hands the
-  converter `nil`), or a named type over a primitive from the same package.
+  converter `nil`), a named type over a primitive from the same package, or
+  an `=` alias of one of these. A `W` from another package is a generate-time
+  error, and so is an `=` alias of one, since an alias counts as the type it
+  names.
 
 ```go
 // number natively, OR a string-encoded number; then range-checked
@@ -419,10 +430,15 @@ All that isn't paired with `inner:` applies to struct field container value dire
 `inner:` needs a slice, array or map — a `[]byte` / `[N]byte` decodes as one
 base64 string and has no elements (`format:array` gives it some).
 
+Groups nest through maps the same way, at any depth. `keys:` applies to the
+outer map's keys only.
+
 ```go
 Tags []string `json:"tags" pipe:"inner:(trim maxlen=20) maxlen=100"`
 //                               per-element trim+bound then whole-slice cap
 Lookup map[string]int `json:"lookup" pipe:"keys:minrunes=2 inner:gte=0"`
+Groups map[string][]string `json:"groups" pipe:"inner:(maxlen=10 inner:(trim notempty))"`
+//                                          at most 10 strings per value, each trimmed then non-empty
 ```
 
 #### custom funcs
@@ -443,6 +459,14 @@ at codegen time and are invoked directly from within the generated methods.
 
 The bool forms can additionally take an inline message: `@MustBeEven:'value must be even'`.
 
+For a pointer, `T` in the table above is the pointer type: a `*int` field
+takes `func(*int) …`, and so does an `inner:` step on a `[]*int` or
+`[N]*int` element or a `map[string]*int` value (a `[]**int` element takes
+`func(**int) …`). A JSON `null` reaches the func as `nil`. Built-in steps
+act on the pointed-to value, in the same declared order. They are skipped
+for a nil pointer, including one an earlier `@Func` mod returned, and do
+not run for a `null` at all.
+
 ```go
 //ggen:generate
 type Box struct {
@@ -461,7 +485,9 @@ generated code binds its own import names.
 ### `hint:"..."`
 
 `hint:"N"` tells ggen to preallocate the target slice or map with N capacity,
-overriding every default below. Can pair with `inner` mechanics described above.
+overriding every default below. Can pair with `inner` mechanics described above,
+through maps too: `hint:"inner:8"` on a `map[string][]T` gives every value a
+capacity of 8.
 Setting N to 0 disables preallocation completely. Negative values are not
 allowed, nor is anything above 2147483647 — the largest capacity that is a
 legal `int` on a 32-bit target. The same ceiling applies to `len=N` /
@@ -525,6 +551,21 @@ if errors.As(err, &pe) {
 if errors.Is(err, ggen.ErrBadString) { ... }
 ```
 
+A `net.IP`, `net.IPNet`, `net.TCPAddr` or `net.UDPAddr` string that does not
+parse is a `*ggen.AddrError` inside the `*ggen.ParseError`. `Type` names the
+expected form (`"IP address"`, `"CIDR address"`, `"ip:port address"`) and
+`Text` holds a copy of the rejected text, so it stays valid when the input
+buffer is reused. The message quotes it
+(`invalid CIDR address: "10.0.0.0/33"`), so control bytes from a payload
+never reach a log line raw.
+
+Other parse errors that quote the bad text follow the lifetime of decoded
+strings. On the stream path, and on the bytes path under `-copy`, the text a
+`time.Duration`, `netip.Addr`, `netip.Prefix` or `url.URL` error quotes is a
+copy, so the error stays valid after the input buffer is reused. On the bytes
+path without `-copy`, such an error may point into the input, as a decoded
+string does. A `time.Time` error holds a copy on every path.
+
 Sentinels are the same on both paths too: an unescaped control byte inside a
 string is `ggen.ErrBadString` with `Pos` on the control byte itself, closing
 quote or not (`"ab\x01}` → 3); an `n` / `t` / `f` that does not spell its
@@ -557,7 +598,7 @@ re-encode.
 | --------- | ---------------------------------------------------------------- | ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | primitive | `string`, `bool`, `int*`, `uint*`, `float*`                      | scalar        | `*T` for any of these — `null` ↔ `nil`; multi-level `**T`/… also supported. `float32` decodes with a single rounding, bit-identical to `encoding/json`                                                                                                                            |
 | slice     | `[]T`                                                            | array         | nil → `null`; `[]*T` decodes into a single contiguous `[]T` slab. `[]**T`/… also supported                                                                                                                                                                                        |
-| array     | `[N]T`                                                           | tuple         | strict element count — mismatch → `ggen.LenError`; `[N]*T` uses a fixed `[N]T` slab; `[N][]byte` is a tuple of base64 strings                                                                                                                                                     |
+| array     | `[N]T`                                                           | tuple         | strict element count at any depth (`[][][2]float64` too) — mismatch → `ggen.LenError`; `[N]*T` uses a fixed `[N]T` slab; `[N][]byte` is a tuple of base64 strings                                                                                                                 |
 | array     | `[0]T`                                                           | `[]`          | marshals as `[]` and decodes only `[]` (anything else → `ggen.LenError`), in every position — field, slice element, array slot, map value                                                                                                                                         |
 | array     | `[N]byte`, `*[N]byte`                                            | base64 string | jsonv2 parity (v1 emits a number array); strict decoded length, `null` ↔ `nil` for the pointer. `format:array` for the v1 shape, and the rest of the `format:` set applies at any pointer depth                                                                                   |
 | map       | `map[string]V`                                                   | object        | string keys only. `map[string]*V` / `**V` / … values decode natively, `null` ↔ `nil`                                                                                                                                                                                              |
@@ -576,7 +617,17 @@ its type. Interface fields are fine: `any` / `interface{}` gets the stdlib
 decode shape (see _stdlib types_), and an interface WITH methods
 (`io.Reader`, a literal `interface{ M() }`) behaves as it does under
 `encoding/json` — it marshals its dynamic value, and only `null` decodes
-into it.
+into it. So a `net.Addr` field holding a `*net.TCPAddr` is written as the
+`encoding/json` object, not the `"ip:port"` string that a `net.TCPAddr` field
+or an `any` holding one writes.
+
+A field whose type is a Go `=` alias (`type Addr = net.TCPAddr`) has the
+wire shape of the type the alias names wherever it sits: as a value, behind
+a pointer, as a slice or array element, as a map value. That holds for
+aliases declared in other packages and for generic ones. An alias whose
+target your package cannot spell out (an unexported type, one in an internal
+package, an anonymous struct) keeps the `encoding/json` fallback, and an
+alias of a func or chan type is refused like the type itself.
 
 ### cross-package interfaces
 
@@ -618,7 +669,7 @@ from the underlying type's shape and method set:
 | flavor                           | example                 | strategy                                                                                                                                                                                                                                                           |
 | -------------------------------- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | primitive                        | `type Count int`        | scan + cast; `htmlescape`/`marshal`/`unmarshal` annotations still apply                                                                                                                                                                                            |
-| struct (exported fields)         | `type Comment Inner`    | field introspection — treats the alias like a regular struct, `@Func` steps and `@Conv` variants in the underlying's tags included (they resolve in the alias's package)                                                                                           |
+| struct (exported fields)         | `type Comment Inner`    | field introspection — treats the alias like a regular struct: field types classify as in a struct declared here, and `@Func` steps and `@Conv` variants in the underlying's tags resolve in the alias's package                                                    |
 | struct (has `DecodeFrom`)        | `type X HasGgenMethods` | cast & delegate to the underlying's existing ggen methods — also when they are generated in the same run — unless the alias carries its own annotation (`multierr`, `allowdups`, …), which a delegating cast can't honour, so it falls back to field introspection |
 | struct (opaque + Marshaler/Text) | `type Local time.Time`  | delegate to underlying's `MarshalJSON`/`AppendText`                                                                                                                                                                                                                |
 | container                        | `type Tags []string`    | same emitters as slice/map/array fields — all field-level features apply                                                                                                                                                                                           |
@@ -626,16 +677,40 @@ from the underlying type's shape and method set:
 Aliases of channels, interfaces, and functions are rejected at generate time (no
 sensible JSON shape for those). So are generic types (`type Box[T any]
 struct{…}` — wrap an instantiation in a defined type, `type IntBox Box[int]`)
-and `=` alias declarations (`type Foo = time.Time`), which cannot carry methods.
+and annotated `=` alias declarations (`type Foo = time.Time`), which cannot
+carry methods. A field whose type is an `=` alias is fine
+(see _supported kinds_).
+
+Field introspection reads each field by its own type, as a struct declaring
+those fields would: `//ggen:generate type CIDR net.IPNet` writes
+`{"IP":"10.0.0.0","Mask":"/wAAAA=="}` (`net.IP` as text, `net.IPMask` as
+base64), exactly what `encoding/json` writes for a `net.IPNet`, and a map
+field keyed by anything but plain `string` is refused, as on a struct field.
+
+Under field introspection, a field whose type the alias's package cannot name
+is read and written whole. That is an unexported type of another package
+(the underlying's), a type from an internal package the alias's package may
+not import, or a pointer, slice, array or map of one. A non-pointer type with
+its own JSON or text methods goes through them, anything else through
+`encoding/json`, where a `null` leaves the zero value. `omitzero` works on
+such a field. `omitempty` (unless the type is a number or a bool), `inner:`,
+`keys:`, `hint:` and `json:",embed"` are generate-time errors there, because
+honouring them would need code that names the type. Built-in value rules and
+mods (`gte=`, `oneof=`, `trim`, …), `,string` and `format:` are refused there
+too, because ggen does not know the field's kind.
 
 A named type over a primitive does NOT need the annotation to be fast: as a
 field, element, map value or pointee it is scanned as its underlying type and
-converted, at any alias depth (`type B S; type S string`). Annotate it when you
-want the METHODS on the type itself, or when you want per-type behaviour —
-an alias carrying its own `htmlescape` / `copy` / `allowinvalidutf8` keeps its
-own encoder and decoder, which is what makes the tip below work. A named type
-from ANOTHER package that has ggen methods always goes through them, since this
-package cannot see which flags it was generated with.
+converted, at any alias depth (`type B S; type S string`). The elements of a
+container alias annotated with `//ggen:generate` (`type Codes []Code`) are the
+exception. Unless the named type is annotated too, they may go through
+`encoding/json`, which is slower and reads a `null` element as the zero value.
+Annotate it when you want the METHODS on the type itself, or when you want
+per-type behaviour — an alias carrying its own `htmlescape` / `copy` /
+`allowinvalidutf8` keeps its own encoder and decoder, which is what makes the
+tip below work. A named type from ANOTHER package that has ggen methods always
+goes through them, since this package cannot see which flags it was generated
+with.
 
 > [!TIP]
 > Pairing a primitive alias with `htmlescape` is a cheap way to split

@@ -58,7 +58,10 @@ func TestLoad(t *testing.T) {
 	for _, d := range s.Package(apiPath).Types {
 		names = append(names, d.Name)
 	}
-	if want := []string{"CreateUser", "User", "Edges", "Tags", "Kind", "Tree", "Awkward", "Collides", "Address", "Leaf"}; !slices.Equal(names, want) {
+	if want := []string{
+		"CreateUser", "User", "Edges", "Tags", "Kind", "Tree", "Awkward", "Collides", "Omits", "Nulls", "Keyed", "AddressView", "Token",
+		"TokenView", "Address", "Leaf",
+	}; !slices.Equal(names, want) {
 		t.Errorf("api types = %v, want %v", names, want)
 	}
 	cu := s.Type(apiPath, "CreateUser")
@@ -125,6 +128,7 @@ func TestInputShapes(t *testing.T) {
 		{"addr", false, func(t *Type) bool { return t.Empty && t.Format == FormatIPZone }},
 		{"net", false, func(t *Type) bool { return t.Go == IPNet && t.Empty && t.Format == FormatCIDR }},
 		{"tcp", true, func(t *Type) bool { return t.Go == TCPAddr && t.Empty && t.Format == FormatIPPort }},
+		{"udp", false, func(t *Type) bool { return t.Go == UDPAddr && t.Empty && t.Format == FormatIPPort }},
 		{"ns", true, func(t *Type) bool { return t.Go == String && t.GoType == "sql.NullString" }},
 		{"raw", true, func(t *Type) bool { return t.Wire == WireAny && t.GoType == "json.RawMessage" }},
 		{"lower", false, func(t *Type) bool {
@@ -196,6 +200,106 @@ func TestOutputShapes(t *testing.T) {
 	}
 	if nz := field(t, e, "nz").Type; nz.Nullable || nz.OneOf != nil {
 		t.Errorf("output nz: %+v", nz)
+	}
+
+	// An omitted field keeps the widenings of every value its guard still
+	// writes: omitzero drops only a nil pointer or the Go zero value.
+	o := s.Type(apiPath, "Omits").Out()
+	for _, c := range []struct {
+		field           string
+		nullable, empty bool
+	}{
+		{"peer", false, true},
+		{"count", true, false},
+		{"net", false, true},
+		{"addr", false, false},
+		{"ns", true, false},
+		{"raw", true, false},
+		{"any", true, false},
+		{"ints", false, false},
+		{"url", false, true},
+		{"prefix", false, false},
+		{"depth", true, false},
+		{"name", false, false},
+	} {
+		f := field(t, o, c.field)
+		if !f.Optional || f.Type.Nullable != c.nullable || f.Type.Empty != c.empty {
+			t.Errorf("output %s: optional=%v nullable=%v empty=%v, want nullable=%v empty=%v",
+				c.field, f.Optional, f.Type.Nullable, f.Type.Empty, c.nullable, c.empty)
+		}
+	}
+	if r := field(t, o, "role").Type; r.Nullable || r.Enum == nil || !r.Enum.Zero {
+		t.Errorf("output role: a non-nil pointer to the zero value is written: %+v", r)
+	}
+}
+
+// TestNullZero pins the struct annotation: null decodes to the zero value of
+// a field with no null of its own, and that value then meets the rules. A
+// converter dispatch takes null only through its own nullzero variant.
+func TestNullZero(t *testing.T) {
+	t.Parallel()
+	s := load(t)
+	in := s.Type(apiPath, "Nulls").In()
+	for name, nullable := range map[string]bool{
+		"name": true, "code": false, "kind": false, "count": true, "pos": false, "level": true,
+		"eq": true, "neq": false, "alnum": false,
+		"pair": false, "fixed": false, "list": false, "peer": true, "ints": false, "conv": false,
+	} {
+		if got := field(t, in, name).Type.Nullable; got != nullable {
+			t.Errorf("%s: nullable=%v, want %v", name, got, nullable)
+		}
+	}
+	if field(t, s.Type(apiPath, "Nulls").Out(), "name").Type.Nullable {
+		t.Error("nullzero does not change the output")
+	}
+}
+
+// TestKeySteps pins that keys: steps describe the field's own map only, and
+// that a key has no zero widening: a map writes only the keys it holds.
+func TestKeySteps(t *testing.T) {
+	t.Parallel()
+	s := load(t)
+	for _, m := range []Mode{In, Out} {
+		sh := s.Type(apiPath, "Keyed").shape(m)
+		for name, want := range map[string][]string{"two": {`"ab"`, `"cd"`}, "one": {`"ab"`}} {
+			if k := field(t, sh, name).Type.Key; k.Enum == nil || !slices.Equal(enumValues(k.Enum), want) || k.Enum.Zero {
+				t.Errorf("%s %s key: %+v %+v", m, name, k, k.Enum)
+			}
+		}
+		nested := field(t, sh, "nested").Type
+		if inner := nested.Elem.Key; inner.Enum != nil || len(inner.Rules) != 0 {
+			t.Errorf("%s nested inner key: %+v", m, inner)
+		}
+		outer := nested.Key
+		if m == In && !slices.Equal(ops(outer.Rules), []string{"tolower", "oneofab|cd"}) ||
+			m == Out && (outer.Enum == nil || outer.Enum.Zero || len(outer.Rules) != 0) {
+			t.Errorf("%s nested outer key: %+v", m, outer)
+		}
+	}
+}
+
+// TestDelegatingAlias pins a struct alias whose methods delegate to a type of
+// its own package: a generated target is a reference to it, and a target with
+// codec methods is external, named by that package.
+func TestDelegatingAlias(t *testing.T) {
+	t.Parallel()
+	s := load(t)
+	pkg := s.Package(apiPath)
+	for _, m := range []Mode{In, Out} {
+		view := s.Type(apiPath, "AddressView").shape(m).Alias
+		if view == nil || view.Ref != s.Type(apiPath, "Address") || view.External || view.Go != Struct || view.Wire != WireObject ||
+			view.Pkg != pkg || filepath.Base(view.File) != "api.go" {
+			t.Errorf("%s AddressView: %+v", m, view)
+		}
+		tok := s.Type(apiPath, "Token").shape(m).Alias
+		if tok == nil || tok.Ref != nil || !tok.External || tok.Pkg != pkg || tok.Name != "Secret" || tok.Wire != WireString {
+			t.Errorf("%s Token: %+v", m, tok)
+		}
+		// A generated alias decides its own wire shape.
+		tv := s.Type(apiPath, "TokenView").shape(m).Alias
+		if tv == nil || tv.Ref != s.Type(apiPath, "Token") || tv.External || tv.Wire != WireString {
+			t.Errorf("%s TokenView: %+v", m, tv)
+		}
 	}
 }
 

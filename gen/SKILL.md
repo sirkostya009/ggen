@@ -106,7 +106,9 @@ Patterns are directories or `...` patterns relative to working directory. Test-f
 | `Type.Nullable`  | null accepted                            | null can be emitted                       |
 | `Type.Rules`     | validation + transforms, declared order  | always empty                              |
 | `Type.OneOf`     | extra shapes a `@Conv` converter accepts | empty                                     |
-| `Enum.Zero`      | false                                    | true when Go zero value not a constant    |
+| `Enum.Zero`      | false                                    | true when Go zero value not a constant, never on a map key (`keys:oneof`) |
+
+Output widenings follow the omit guard exactly: `omitempty`/`omitzero` clear `Nullable`/`Empty`/`Enum.Zero` only where the encoder drops every value carrying them. A non-nil pointer under either option still writes what its pointee writes (`""`, the zero enum, an inner `null`), and `Empty` survives `omitzero` for IP, IPNet, TCPAddr, UDPAddr and URL (a non-nil empty IP, or a non-zero URL with empty text, is written as `""`). Input `Nullable` under `nullzero` (the pipe variant or `//ggen:generate nullzero`) is set only when the Go zero value passes the field's rules, because the decoder runs them on it. Pointers and kinds with a null of their own (slices, maps, `[]byte`, `[N]byte`, `net.IP`, raw JSON, `sql.Null*`, `any`) are not changed by it.
 
 `Shape`: `Decl`, `Mode`, `Fields` (struct) or `Alias` (alias/enum type), `Recursive`, `Unknown` + `Rest`, `Field(jsonName)`.
 
@@ -128,6 +130,10 @@ Patterns are directories or `...` patterns relative to working directory. Test-f
 | `GoType`, `Name`, `Pkg`, `File` | Go spelling and origin, for error messages and mappings                                                                                                                                                                                                                  |
 
 `Rule`: `Op` (`MinLen`, `GTE`, `OneOf`, `Trim`, `ToLower`, `Replace`, `Clamp`, `Func`, …), `Args`, `Transform` (changes value vs checks it), and for `Op == Func`: `Func`, `FuncPkg`, `Msg`.
+
+`keys:` rules land on the `Key` of the field's own map only, through any pointers. A map inside its values gets none, as the decoder applies none there.
+
+A type written through a Go `=` alias is described as the type it names, at every position and for each field of a struct alias, which is how the generated Go code reads it. A defined type over an alias (`type L AliasOfTime`) is described as its target too (a time string here). A struct alias that delegates to its target (`//ggen:generate type V T`, whose methods call T's) is a `Ref` to T when T is a loaded generated type, otherwise an `External` named T in T's package.
 
 Object policy for undeclared keys is `Shape.Unknown`: `Reject`, `Ignore`, or `Collect` (then `Shape.Rest` is the `json:",embed"` map's value type).
 
@@ -194,6 +200,8 @@ Same option set, same declaration shape. `zod.New(opts...)` emit `export const X
 
 Built-ins used only where probing showed they match Go; everything else comes from generated helpers that port the Go parser (time layouts, `big.Float`, `big.Rat`, `url.Parse`, IP/CIDR, ip:port, durations, `,string` grammars). Unmapped `@Func` and unmapped external types are reported, not guessed.
 
+zod renders a map whose `Key` carries an `Enum` (from `keys:oneof`) as `z.partialRecord`: `z.record` with an enum key requires every member, where Go checks only the keys present.
+
 ### kotlin — kotlinx.serialization
 
 `kotlin.New("com.example.api", opts...)`. Data classes, types only.
@@ -240,6 +248,7 @@ Returning an error from any method aborts the whole write, so nothing half-writt
 ## Pitfalls
 
 - **Enum closed set is an assertion, not a decoder fact.** Generated Go decoder accept any value of the underlying type; the schema rejects. Same class as `Strict()`. Deliberate.
+- **gen reads annotations, not CLI flags.** `gen.Load` has no flags. A decoder generated with `ggen -nullzero`, `-ignoreunknown` or `-novalidate` is described as if the flag were off. When the schema must match, put the same token on the struct (`//ggen:generate nullzero`) instead of passing the flag.
 - **`Set.Unloaded()` is not noise.** A ggen type in an unloaded package lower as external with no fields. Load its package.
 - **Input and output differ.** Placing `t.In()` where you meant `t.Out()` compiles and produces wrong schema. Name the placements accordingly (`CreateUser` vs `CreateUserInput`).
 - **A catch-all (`json:",embed"`) types as `X & Record<string, Rest>` in TypeScript**, so declared fields must fit `Rest` too. Kotlin and Swift have no catch-all at all and report it.

@@ -510,6 +510,69 @@ func TestNetip_ErrorDetachedFromBuffer(t *testing.T) {
 	}
 }
 
+// NetIPErrs is decoded without -copy, so the bytes path aliases the input.
+//
+//ggen:generate
+type NetIPErrs struct {
+	IP  net.IP            `json:"ip"`
+	IPs []net.IP          `json:"ips"`
+	M   map[string]net.IP `json:"m"`
+}
+
+// AddrError.Text is a copy on every path, so it survives the input being
+// reused even where decoded strings alias it.
+func TestNetIP_AddrErrorTextDetachedOnBytes(t *testing.T) {
+	t.Parallel()
+	const bad = "not-an-ip-at-all"
+	for _, in := range []string{`{"ip":"` + bad + `"}`, `{"ips":["10.0.0.1","` + bad + `"]}`, `{"m":{"k":"` + bad + `"}}`} {
+		src := []byte(in)
+		_, _, err := NetIPErrs{}.DecodeFrom(src)
+		ae, ok := errors.AsType[*ggen.AddrError](err)
+		if !ok {
+			t.Fatalf("%s: %v, want a *ggen.AddrError", in, err)
+		}
+		for i := range src {
+			src[i] = 'Z'
+		}
+		if ae.Text != bad {
+			t.Errorf("%s: after scribble Text = %q, want %q", in, ae.Text, bad)
+		}
+	}
+}
+
+type DurAlias = time.Duration
+
+// DurErrs holds a Duration in each position that parses one from text: a
+// field, an `=` alias field and a catch-all value.
+//
+//ggen:generate
+type DurErrs struct {
+	D     time.Duration            `json:"d"`
+	A     DurAlias                 `json:"a"`
+	Extra map[string]time.Duration `json:",embed"`
+}
+
+// time.ParseDuration keeps the text it was given in its error, and the stream
+// scan aliases the Stream's buffer, so the error must hold a copy.
+func TestDuration_ErrorDetachedFromBuffer(t *testing.T) {
+	t.Parallel()
+	buf := make([]byte, 0, 64)
+	var s ggen.Stream
+	for _, key := range []string{"d", "a", "k"} {
+		s.Reset(strings.NewReader(`{"`+key+`":"badbadbad"}`), buf)
+		_, err := s.Value[DurErrs]()
+		if err == nil {
+			t.Fatalf("%s: accepted", key)
+		}
+		before := err.Error()
+		s.Reset(strings.NewReader(`{"`+key+`":"ZZZZZZZZZ"}`), buf)
+		s.Value[DurErrs]()
+		if after := err.Error(); after != before {
+			t.Errorf("%s: error text changed after buffer reuse:\n before %q\n after  %q", key, before, after)
+		}
+	}
+}
+
 // R10Time pins the RFC 3339 checks that jsonv2 applies and time.Parse does
 // not, on both RFC 3339 layouts. Encode refuses a year outside [0,9999] and a
 // zone hour of 24 or more, because no RFC 3339 parser could read the result
@@ -585,6 +648,32 @@ func TestTime_RFC3339StrictParity(t *testing.T) {
 	}
 }
 
+// The RFC 3339 checks quote the text in their errors, and the stream scan
+// aliases the Stream's buffer, so the error must hold a copy.
+func TestTime_ErrorDetachedFromBuffer(t *testing.T) {
+	t.Parallel()
+	buf := make([]byte, 0, 64)
+	var s ggen.Stream
+	for _, c := range [][2]string{
+		{"t", "2020-01-01T1:04:05Z"},
+		{"t", "2020-01-01T00:00:00+24:00"},
+		{"s", "2020-01-01T00:00:00,123Z"},
+		{"s", "2020-01-01T00:00:00+23:60"},
+	} {
+		s.Reset(strings.NewReader(`{"`+c[0]+`":"`+c[1]+`"}`), buf)
+		_, err := s.Value[R10Time]()
+		if err == nil {
+			t.Fatalf("%s %q: accepted", c[0], c[1])
+		}
+		before := err.Error()
+		s.Reset(strings.NewReader(`{"`+c[0]+`":"`+strings.Repeat("Z", len(c[1]))+`"}`), buf)
+		s.Value[R10Time]()
+		if after := err.Error(); after != before {
+			t.Errorf("%s %q: error text changed after buffer reuse:\n before %q\n after  %q", c[0], c[1], before, after)
+		}
+	}
+}
+
 // NetAddrs holds net.IPNet, net.TCPAddr and net.UDPAddr at every position.
 // Each is a JSON string: CIDR text for an IPNet, "ip:port" for an address,
 // "" for the zero value.
@@ -603,6 +692,9 @@ type NetAddrs struct {
 	Tuple  [2]net.UDPAddr          `json:"tuple"`
 	OTCP   net.TCPAddr             `json:"otcp,omitzero"`
 	OPUDP  *net.UDPAddr            `json:"opudp,omitempty"`
+	ONet   *net.IPNet              `json:"onet,omitempty"`
+	ZNet   net.IPNet               `json:"znet,omitzero"`
+	EUDP   *net.UDPAddr            `json:"eudp,omitempty"`
 	Deep   map[string][]net.IPNet  `json:"deep"`
 	Wide   map[string]*net.UDPAddr `json:"wide"`
 }
@@ -700,21 +792,32 @@ func TestNetAddrs_zeroAndOmit(t *testing.T) {
 	if !reflect.DeepEqual(got.Net, net.IPNet{}) || !reflect.DeepEqual(got.TCP, net.TCPAddr{}) || !reflect.DeepEqual(got.UDP, net.UDPAddr{}) {
 		t.Errorf("\"\" must decode to the zero value: %+v %+v %+v", got.Net, got.TCP, got.UDP)
 	}
+	// omitempty drops what is written as "": a pointer to a zero value, or an
+	// IP that is set but empty. omitzero keeps the latter, which is not Go's
+	// zero value.
 	set, err := ggen.Marshal(NetAddrs{
 		OTCP:  net.TCPAddr{Port: 1},
 		OPUDP: &net.UDPAddr{},
+		ONet:  &net.IPNet{IP: net.IP{}, Mask: net.IPMask{}},
+		ZNet:  net.IPNet{IP: net.IP{}},
+		EUDP:  &net.UDPAddr{IP: net.IP{}},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A pointer to a zero value is written as "", so omitempty drops it.
-	for _, w := range []string{`"otcp":":1"`} {
+	for _, w := range []string{`"otcp":":1"`, `"znet":""`} {
 		if !strings.Contains(string(set), w) {
 			t.Errorf("%s missing from %s", w, set)
 		}
 	}
-	if strings.Contains(string(set), `"opudp"`) {
-		t.Errorf("omitempty kept a zero pointee: %s", set)
+	for _, k := range []string{`"opudp"`, `"onet"`, `"eudp"`} {
+		if strings.Contains(string(set), k) {
+			t.Errorf("omitempty kept %s: %s", k, set)
+		}
+	}
+	set, err = ggen.Marshal(NetAddrs{ONet: new(mustCIDR("10.0.0.0/8")), EUDP: &net.UDPAddr{Port: 53}})
+	if err != nil || !strings.Contains(string(set), `"onet":"10.0.0.0/8"`) || !strings.Contains(string(set), `"eudp":":53"`) {
+		t.Errorf("omitempty dropped a set value: %s (%v)", set, err)
 	}
 }
 
@@ -812,12 +915,14 @@ func TestNetAddrs_errorDetachedFromBuffer(t *testing.T) {
 	var s ggen.Stream
 	for _, c := range [][2]string{
 		{`{"net":"10.0.0.0/99"}`, `{"net":"ZZ.0.0.0/77"}`},
+		{`{"net":"fe80::%eth0/10"}`, `{"net":"ZZZZ::%YYYY/77"}`},
 		{`{"tcp":"1.2.3.4:99999"}`, `{"tcp":"X.Y.Z.W:00000"}`},
+		{`{"udp":":99999"}`, `{"udp":":77777"}`},
 	} {
 		s.Reset(strings.NewReader(c[0]), buf)
 		_, err := s.Value[NetAddrs]()
-		if _, ok := errors.AsType[*net.ParseError](err); !ok {
-			t.Fatalf("%s: %v, want a *net.ParseError", c[0], err)
+		if _, ok := errors.AsType[*ggen.AddrError](err); !ok {
+			t.Fatalf("%s: %v, want a *ggen.AddrError", c[0], err)
 		}
 		before := err.Error()
 		s.Reset(strings.NewReader(c[1]), buf)

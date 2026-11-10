@@ -45,6 +45,7 @@ export const EdgesInput = ggenObject(v.objectWithRest({
   addr: v.optional(v.union([v.pipe(v.string(), v.empty()), v.pipe(v.string(), v.check(ggenIsAddr, "must be an IP address"))], "must be empty or an IP address")),
   net: v.optional(v.union([v.pipe(v.string(), v.empty()), v.pipe(v.string(), v.check(ggenIsPrefix, "must be an IP prefix"))], "must be empty or an IP prefix")),
   tcp: v.optional(v.nullable(v.union([v.pipe(v.string(), v.empty()), v.pipe(v.string(), v.check(ggenIsAddrPort, "must be an IP address and port"))], "must be empty or an IP address and port"))),
+  udp: v.optional(v.union([v.pipe(v.string(), v.empty()), v.pipe(v.string(), v.check(ggenIsAddrPort, "must be an IP address and port"))], "must be empty or an IP address and port")),
   ns: v.optional(v.nullable(v.string())),
   raw: v.optional(v.unknown()),
   lower: v.optional(v.pipe(v.string(), v.transform((x) => ggenToLower(x)), v.picklist(["x", "y"]))),
@@ -53,3 +54,22 @@ export const EdgesInput = ggenObject(v.objectWithRest({
   tags: v.optional(TagsInput),
 }, v.string()));
 export type EdgesInput = v.InferOutput<typeof EdgesInput>;
+
+/**
+ * Keyed restricts the keys of its maps. A keys: step applies to the field's
+ * own map only, not to a map inside it.
+ */
+export const KeyedInput = ggenObject(v.strictObject({
+  two: v.optional(v.nullable(ggenObject(v.record(v.picklist(["ab", "cd"]), v.pipe(v.number(), v.safeInteger()))))),
+  one: v.optional(v.nullable(ggenObject(v.record(v.literal("ab"), v.pipe(v.number(), v.safeInteger()))))),
+  nested: v.optional(v.nullable(ggenObject(v.record(v.pipe(v.string(), v.transform((x) => ggenToLower(x)), v.picklist(["ab", "cd"])), v.nullable(ggenObject(v.record(v.string(), v.pipe(v.number(), v.safeInteger())))))))),
+}));
+export type KeyedInput = v.InferOutput<typeof KeyedInput>;
+
+/** AddressView delegates to the generated Address. */
+export const AddressViewInput = AddressInput;
+export type AddressViewInput = v.InferOutput<typeof AddressViewInput>;
+
+/** Token delegates to the text methods of Secret. */
+export const TokenInput = v.string();
+export type TokenInput = v.InferOutput<typeof TokenInput>;

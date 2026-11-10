@@ -5,6 +5,7 @@ package integrationtests
 import (
 	"bytes"
 	"errors"
+	"net/netip"
 	"reflect"
 	"strings"
 	"testing"
@@ -268,12 +269,15 @@ type PtrSliceStruct struct {
 
 // NPtrContainersStruct pins multi-level pointers inside containers. Slice
 // elements, array elements and map values each decode their own pointer chain.
-// They use no slab and no encoding/json fallback.
+// They use no slab and no encoding/json fallback. APA's leaf is itself an
+// array, whose slot counter must not shadow the slot counter of the array
+// that holds it.
 //
 //ggen:generate
 type NPtrContainersStruct struct {
 	SPP  []**int             `json:"spp"`
 	APP  [3]**int            `json:"app"`
+	APA  [2]**[3]int         `json:"apa"`
 	NSPP [][]**int           `json:"nspp"`
 	MP   map[string]*int     `json:"mp"`
 	MPP  map[string]**int    `json:"mpp"`
@@ -283,7 +287,7 @@ type NPtrContainersStruct struct {
 func TestNPtr_containersRoundtrip(t *testing.T) {
 	t.Parallel()
 	in := []byte(
-		`{"spp":[1,null,3],"app":[null,5,null],"nspp":[[7,null]],"mp":{"a":1,"b":null},"mpp":{"x":7,"y":null},"mpa":{"k":{"street":"Main 1","city":"Lviv","zipCode":"79000"},"n":null}}`,
+		`{"spp":[1,null,3],"app":[null,5,null],"apa":[[1,2,3],null],"nspp":[[7,null]],"mp":{"a":1,"b":null},"mpp":{"x":7,"y":null},"mpa":{"k":{"street":"Main 1","city":"Lviv","zipCode":"79000"},"n":null}}`,
 	)
 	got, n, err := NPtrContainersStruct{}.DecodeFrom(in)
 	if err != nil {
@@ -297,6 +301,9 @@ func TestNPtr_containersRoundtrip(t *testing.T) {
 	}
 	if got.APP[0] != nil || **got.APP[1] != 5 || got.APP[2] != nil {
 		t.Errorf("APP = %v", got.APP)
+	}
+	if got.APA[0] == nil || **got.APA[0] != [3]int{1, 2, 3} || got.APA[1] != nil {
+		t.Errorf("APA = %v", got.APA)
 	}
 	if len(got.NSPP) != 1 || **got.NSPP[0][0] != 7 || got.NSPP[0][1] != nil {
 		t.Errorf("NSPP = %v", got.NSPP)
@@ -333,7 +340,7 @@ func TestNPtr_containersRoundtrip(t *testing.T) {
 
 func TestNPtr_containersStream(t *testing.T) {
 	t.Parallel()
-	in := []byte(`{"spp":[1,null],"app":[9,null,2],"mp":{"a":4},"mpp":{"z":null}}`)
+	in := []byte(`{"spp":[1,null],"app":[9,null,2],"apa":[null,[4,5,6]],"mp":{"a":4},"mpp":{"z":null}}`)
 	var s ggen.Stream
 	s.Reset(bytes.NewReader(in), make([]byte, 16))
 	got, err := NPtrContainersStruct{}.DecodeFromStream(&s)
@@ -345,6 +352,9 @@ func TestNPtr_containersStream(t *testing.T) {
 	}
 	if **got.APP[0] != 9 || got.APP[1] != nil || **got.APP[2] != 2 {
 		t.Errorf("APP = %v", got.APP)
+	}
+	if got.APA[0] != nil || got.APA[1] == nil || **got.APA[1] != [3]int{4, 5, 6} {
+		t.Errorf("APA = %v", got.APA)
 	}
 	if *got.MP["a"] != 4 {
 		t.Errorf("MP = %v", got.MP)
@@ -370,6 +380,10 @@ type PtrContainers struct {
 	M3    ***map[string]int             `json:"m3"`
 	Elems *[]PtrContainerElem           `json:"elems"`
 	MElem **map[string]PtrContainerElem `json:"melem"`
+	// A pointer inside the pointee decodes through a temp of its own, so it
+	// does not shadow the outer temp its target indexes.
+	PElems *[]**string         `json:"pelems"`
+	PVals  *map[string]*string `json:"pvals"`
 }
 
 //ggen:generate
@@ -442,7 +456,9 @@ func TestPtrContainer_OmittedKeyClears(t *testing.T) {
 // and a `**[]T` would scan a string into a T slot.
 func TestPtrContainer_DeepDecodes(t *testing.T) {
 	t.Parallel()
-	v, _, err := PtrContainers{}.DecodeFrom([]byte(`{"deep":[4,5],"m3":{"k":7},"melem":{"q":{"k":"q"}}}`))
+	v, _, err := PtrContainers{}.DecodeFrom([]byte(
+		`{"deep":[4,5],"m3":{"k":7},"melem":{"q":{"k":"q"}},"pelems":["a",null],"pvals":{"k":"v","n":null}}`,
+	))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,6 +471,12 @@ func TestPtrContainer_DeepDecodes(t *testing.T) {
 	if got := **v.MElem; got["q"].K != "q" {
 		t.Errorf("**map[string]struct: %v", got)
 	}
+	if got := *v.PElems; len(got) != 2 || got[0] == nil || **got[0] != "a" || got[1] != nil {
+		t.Errorf("*[]**string: %v", got)
+	}
+	if got := *v.PVals; len(got) != 2 || got["k"] == nil || *got["k"] != "v" || got["n"] != nil {
+		t.Errorf("*map[string]*string: %v", got)
+	}
 	out, err := v.AppendJSON(nil)
 	if err != nil {
 		t.Fatal(err)
@@ -463,8 +485,69 @@ func TestPtrContainer_DeepDecodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("round-trip %s: %v", out, err)
 	}
-	if !reflect.DeepEqual(***back.Deep, ***v.Deep) {
-		t.Errorf("round-trip mismatch: %v vs %v", ***back.Deep, ***v.Deep)
+	if !reflect.DeepEqual(back, v) {
+		t.Errorf("round-trip mismatch:\n got %+v\nwant %+v", back, v)
+	}
+	var s ggen.Stream
+	s.Reset(&chunkReader{data: out, max: 3}, make([]byte, 0, 16))
+	sv, err := s.Value[PtrContainers]()
+	if err != nil {
+		t.Fatalf("stream %s: %v", out, err)
+	}
+	if !reflect.DeepEqual(sv, v) {
+		t.Errorf("stream mismatch:\n got %+v\nwant %+v", sv, v)
+	}
+}
+
+// PtrContainerElems holds pointers to containers as container elements, so
+// a pointee's loop runs inside the loop over the outer container. An inner
+// index that reused the outer one would read the wrong element, and panic
+// when an outer length is below an inner one or a slot is nil.
+//
+//ggen:generate
+type PtrContainerElems struct {
+	SA []*[2]string            `json:"sa"`
+	SS []*[]string             `json:"ss"`
+	AA [2]*[3]netip.Addr       `json:"aa"`
+	SI []*[]Address            `json:"si"`
+	MA map[string]*[2]string   `json:"ma"`
+	MS map[string][]*[2]string `json:"ms"`
+	NA [][]*[2]string          `json:"na"`
+}
+
+func TestPtrContainerElems_roundtrip(t *testing.T) {
+	t.Parallel()
+	addr := Address{Street: "Main 1", City: "Lviv", ZipCode: "79000"}
+	in := PtrContainerElems{
+		SA: []*[2]string{{"a", "bb"}, nil},
+		SS: []*[]string{nil, {"a", "b", "c"}},
+		AA: [2]*[3]netip.Addr{nil, {netip.MustParseAddr("10.0.0.1"), netip.MustParseAddr("::1"), netip.MustParseAddr("fe80::1%eth0")}},
+		SI: []*[]Address{{addr, addr}},
+		MA: map[string]*[2]string{"k": {"x", "y"}, "n": nil},
+		MS: map[string][]*[2]string{"k": {{"x", "y"}}, "j": {nil, {"z", "w"}, {"v", "u"}}},
+		NA: [][]*[2]string{{{"a", "b"}}, {nil, {"c", "d"}, {"e", "f"}}},
+	}
+	out, err := ggen.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _, err := PtrContainerElems{}.DecodeFrom(out)
+	if err != nil {
+		t.Fatalf("decode %s: %v", out, err)
+	}
+	if !reflect.DeepEqual(got, in) {
+		t.Errorf("bytes round trip:\n got %+v\nwant %+v", got, in)
+	}
+	for _, chunk := range []int{1, 3, 64} {
+		var s ggen.Stream
+		s.Reset(&chunkReader{data: out, max: chunk}, make([]byte, 0, 16))
+		sgot, err := s.Value[PtrContainerElems]()
+		if err != nil {
+			t.Fatalf("stream chunk %d: %v", chunk, err)
+		}
+		if !reflect.DeepEqual(sgot, in) {
+			t.Errorf("stream chunk %d:\n got %+v\nwant %+v", chunk, sgot, in)
+		}
 	}
 }
 

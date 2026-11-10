@@ -14,11 +14,15 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"net/netip"
 	"net/url"
 	"slices"
 	"sort"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/sirkostya009/ggen"
 )
 
 //ggen:generate copy
@@ -292,9 +296,9 @@ func TestCopy_NetIPErrorTextDecouples(t *testing.T) {
 	t.Parallel()
 	src := []byte(`{"ip":"not-an-ip-at-all"}`)
 	_, _, err := CopyIPDoc{}.DecodeFrom(src)
-	var pe *net.ParseError
+	var pe *ggen.AddrError
 	if !errors.As(err, &pe) {
-		t.Fatalf("got %T %v, want *net.ParseError", err, err)
+		t.Fatalf("got %T %v, want *ggen.AddrError", err, err)
 	}
 	// Compare against a literal, never against a string read out of pe before
 	// the scribble. That string shares the same bytes, so both sides would
@@ -308,5 +312,32 @@ func TestCopy_NetIPErrorTextDecouples(t *testing.T) {
 	}
 	if pe.Text != want {
 		t.Errorf("after scribble: Text = %q, want %q", pe.Text, want)
+	}
+}
+
+//ggen:generate copy
+type CopyParseErrDoc struct {
+	D time.Duration `json:"d"`
+	A netip.Addr    `json:"a"`
+	P netip.Prefix  `json:"p"`
+}
+
+// time.ParseDuration and the netip parsers keep the text they were given in
+// their errors. Under -copy that text must not alias the input either.
+func TestCopy_ParseErrorTextDecouples(t *testing.T) {
+	t.Parallel()
+	for _, in := range []string{`{"d":"badbadbad"}`, `{"a":"1.2.3"}`, `{"p":"10.0.0.0/99"}`} {
+		src := []byte(in)
+		_, _, err := CopyParseErrDoc{}.DecodeFrom(src)
+		if err == nil {
+			t.Fatalf("%s accepted", in)
+		}
+		before := err.Error()
+		for i := range src {
+			src[i] = 'Z'
+		}
+		if after := err.Error(); after != before {
+			t.Errorf("error text changed after scribble:\n before %q\n after  %q", before, after)
+		}
 	}
 }

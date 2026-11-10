@@ -172,7 +172,8 @@ func classifyValueFunc(ref string, wt types.Type, file *ast.File, pkg *types.Pac
 // parameter W is the type ggen decodes from JSON, and its JSON shape decides
 // which input this variant handles. It returns W. W must be a builtin or
 // same-package type, optionally behind pointers. A `*W` input handles W's
-// shape plus null. Types from other packages are not supported.
+// shape plus null. Types from other packages are not supported, written
+// through an `=` alias or not.
 func classifyConverter(ref string, fieldType types.Type, file *ast.File, pkg *types.Package) (cf customFunc, w types.Type, boolForm bool, err error) {
 	fn, pkgImp, pkgName, err := lookupFunc(ref, file, pkg)
 	if err != nil {
@@ -193,10 +194,14 @@ func classifyConverter(ref string, fieldType types.Type, file *ast.File, pkg *ty
 		return customFunc{}, nil, false, errors.New("converter must take exactly one parameter (the scanned input)")
 	}
 	w = sig.Params().At(0).Type()
-	// Remove pointer levels first, so `*[]int` or `*other.T` cannot slip past
-	// the checks below. A container behind a pointer still emits broken code.
-	base := w
+	// Remove pointer levels and `=` aliases first, so `*[]int`, `*other.T` or
+	// an alias of other.T cannot slip past the checks below. A container
+	// behind a pointer still emits broken code.
+	base, aliased := w, false
 	for {
+		if u := types.Unalias(base); u != base {
+			base, aliased = u, true
+		}
 		p, isPtr := base.(*types.Pointer)
 		if !isPtr {
 			break
@@ -204,7 +209,11 @@ func classifyConverter(ref string, fieldType types.Type, file *ast.File, pkg *ty
 		base = p.Elem()
 	}
 	if named, isNamed := base.(*types.Named); isNamed && named.Obj().Pkg() != nil && named.Obj().Pkg() != pkg {
-		return customFunc{}, nil, false, fmt.Errorf("converter input %s is from another package; only builtin or same-package input types are supported", w)
+		in := w.String()
+		if aliased {
+			in += " names " + base.String() + ", which"
+		}
+		return customFunc{}, nil, false, fmt.Errorf("converter input %s is from another package; only builtin or same-package input types are supported", in)
 	}
 	// The input must be a primitive or a struct ggen can decode. A container
 	// input would get a FieldInfo with no element shape, and the emitted code
@@ -402,8 +411,13 @@ func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldTy
 		v.FuncName = cf.FuncName
 		v.Fallible = cf.Fallible
 		v.BoolForm = boolForm
-		v.InType = types.TypeString(w, qualifier)
 		v.In = w
+		// W written through an alias is scanned as the type it names, when
+		// writing that out needs no import of its own.
+		if u := s.unalias(w); len(s.foreignImports(u)) == 0 {
+			w = u
+		}
+		v.InType = types.TypeString(w, qualifier)
 		base := w
 		for {
 			p, isPtr := base.(*types.Pointer)

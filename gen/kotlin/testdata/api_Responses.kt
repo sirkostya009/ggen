@@ -65,6 +65,7 @@ data class Edges(
     val addr: String,
     val net: String,
     val tcp: String?,
+    val udp: String,
     val ns: String?,
     val raw: JsonElement,
     val lower: String,
@@ -72,3 +73,9 @@ data class Edges(
     val conv: Long,
     val tags: Tags,
 )
+
+/** AddressView delegates to the generated Address. */
+typealias AddressView = Address
+
+/** Token delegates to the text methods of Secret. */
+typealias Token = String

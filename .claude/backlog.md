@@ -367,6 +367,27 @@ surface pinned by `Decoder[T]`).
   integration file would need its own `//go:generate ../ggen -simd avx512
   $GOFILE` line and a `GOEXPERIMENT=simd` test invocation in the suite.
 
+- **integrationtests/gen: the converter divergence keys on `OneOf` (2026-10).**
+  The "a converter's own checks run only in Go" predicate matches only when
+  `len(c.t.OneOf) > 0`, so a converter-only field (no native variant: `t` is
+  `converted[0]` and `OneOf` is empty) is not covered and would fail
+  TestDifferential. `c.t.Converted` is the accurate marker. Such fields stay
+  out of the fixture and are pinned in gen_test.go instead.
+
+- **integrationtests/gen compares little below the first container level
+  (2026-10).** The only rule below the first container level is
+  `Containers.Nested` (`inner:(inner:lte=1)` on a `[][]float64`). No subject
+  has a step below a map value, a step on a pointer element or the
+  `novalidate` annotation, and the only catch-all, `Containers.Extra`, is a
+  `map[string]string`, so those decoder paths and the routed catch-all values
+  are never compared with gen. The unknown-key probe `zzz` gets no type even
+  when the subject has `Shape.Rest`, so no divergence predicate can match a
+  catch-all value. The enum closed-set divergence and the TS lane's
+  `outsideEnum` look only at the top-level type, so a `[]Role` or
+  `map[string]Level` field reports a documented divergence as unexplained. Add
+  a trimmed set of nested and catch-all subjects, type `zzz` by `Shape.Rest`,
+  and walk `Elem` / `Key` in both enum checks.
+
 - **Add more CLI flags.** Candidates: `-out-dir` for shared output (vs
   next-to-source), per-struct selectors beyond the trailing-name filter
   (`-only=Foo,Bar`), explicit `-tag <tag>` to scope one build-tag bucket. None
@@ -532,28 +553,27 @@ surface pinned by `Decoder[T]`).
   byte offset). Open if ever wanted: a `Snippet []byte` around the failure offset
   (rejected for now — the caller has the input + `Pos`).
 
-- **`pipe:` tag follow-ups.** Foreign-package converter inputs (import
-  plumbing — `classifyConverter` still spells W via `types.RelativeTo`, the
-  full import path for a foreign W; the type-side `pkgQualifier` +
-  `TypeImport` table from the round-10 qualifier work is the natural
-  carrier); `@pkg.Func` references (`customfunc.go` `lookupFunc` → `PkgName`)
-  still spell the DECLARED package name and import by path, while the
-  type-side qualifier table renames a package to `leaf2` when two packages
-  of the pass share a declared name — a converter/validator from such a
-  package would mismatch its import line (route `PkgName` through
-  `structSet.qualifierFor` if anyone hits it); converter pointer inputs
-  deeper than one level (`func(**int) T`) take the multi-level pointer field
-  path but are untested (only `*int`/`*int64` are pinned); top-level
+- **`pipe:` tag follow-ups.** Foreign-package converter inputs
+  (`classifyConverter` refuses a W declared in another package, an `=` alias
+  of one included. `resolvePipeCustoms` already spells W through
+  `pkgQualifier`, and the `var convN W` temp would then need W's package in
+  the field's `TypeImports`); `@pkg.Func` references (`customfunc.go`
+  `lookupFunc` → `PkgName`) still spell the DECLARED package name and import
+  by path, while the type-side qualifier table renames a package to `leaf2`
+  when two packages of the pass share a declared name — a converter/validator
+  from such a package would mismatch its import line (route `PkgName` through
+  `structSet.qualifierFor` if anyone hits it); converter pointer inputs deeper
+  than one level (`func(**int) T`) take the multi-level pointer field path but
+  are untested (only single-level pointer inputs are pinned); top-level
   alias-type `pipe:` support (needs a non-dispatch null branch in the alias
   renderers); CONTAINER converter inputs (`@Conv` with W = []T/map) —
   currently rejected at parse (2026-08, was silently-broken codegen before),
   to support: populate converterInputField's ElemType/ElemKind/ElemIface from
   go/types — the dedicated-kind element delegation (R3/R4, cbf0949/816fd3c)
   makes the emit side workable now. Cosmetic: `checkVariantShapes`'
-  diagnostics come out double-qualified ("Doc.M: Doc.M: decode variants …
-  both claim the same JSON shape") — the message already carries
-  Struct.Field and `resolvePipeCustoms`' caller prefixes it again via
-  `qualifyRichErrors`.
+  diagnostics come out double-qualified ("Doc.M: Doc.M: decode variants … both
+  claim the same JSON shape") — the message already carries Struct.Field and
+  `resolvePipeCustoms`' caller prefixes it again via `qualifyRichErrors`.
 
 - **`nullzero` follow-up.** Extend the per-field `nullzero` decode variant to
   top-level alias types (needs a non-dispatch null branch in the alias renderers).
@@ -646,7 +666,13 @@ surface pinned by `Decoder[T]`).
   zero-length array (then it is a `[]` tuple, diverging from v2) or teach the
   byte-array emitters N==0; degenerate shape. `[N][M]byte` elements resolve
   as KindArray and take the numeric-tuple route rather than base64, unlike a
-  `[M]byte` field — worth a look if anyone uses that shape.
+  `[M]byte` field — worth a look if anyone uses that shape. Map values and
+  slice elements of `[N]byte` do the same (2026-10): `map[string][2]byte`
+  writes `{"a":[255,1]}` where jsonv2 and a `[2]byte` field write `"/wE="`.
+  ggen round-trips its own output, but the `inner:` levels below a map
+  (cmd/ggen opt #91) then apply to the single bytes, and inside a
+  `json:",embed"` catch-all container the shape does not round-trip (the
+  catch-all residuals item below).
 
 - **Output-name residuals (2026-09).** `emitScope` maps every non-alnum rune
   to `_` via `sanitizeIdent`, so `a-b.go` and `a_b.go` in one package still
@@ -689,20 +715,15 @@ surface pinned by `Decoder[T]`).
   `AnySize` is not a drop-in: those fields marshal through `encoding/json`,
   whose default HTML escaping expands `<>&` 6× where `AnySize`'s non-HTML
   factor is 2×. Needs a `json.Marshal`-shaped sizer, or `AnySizeHTML` as a
-  conservative stand-in.
+  conservative stand-in. A `json:",embed"` catch-all value of such a struct
+  (the `embedViaFields` route) shares the budget: `thirdparty.Endpoint` with
+  a long IPv6 zone writes 156 bytes.
 
 - **`Float64` surfaces `*strconv.NumError` (ErrRange) for an out-of-range
   float64 (`1e400`) while `Float32` maps the same condition to
   `ggen.ErrNumberOverflow`** (the identity `TestNarrowFloatOverflow` pins).
   Unifying `Float64` on `ErrNumberOverflow` is a small breaking change worth
   doing if error identity is ever tidied.
-
-- **Generated `strings` import for a container ALIAS of `net.IP`/`netip`
-  elements.** The netip error clone relies on the same plumbing as
-  `renderStreamNetIP`'s clone — every non-alias struct adds `strings` for
-  `streamUnknownKey`; a container alias of those elements that emits a
-  stream decoder might lack the import. Pre-existing class, not verified,
-  cheap to probe.
 
 - **archsimd masked byte loads — re-audit trigger.** If archsimd ever exposes
   a fault-suppressing k-masked byte load from memory (VMOVDQU8 with a
@@ -714,16 +735,15 @@ surface pinned by `Decoder[T]`).
   `LoadUint8x16Part`/`LoadInt8x32Part` stay safe (scalar 8/4/2/1-byte
   element loads).
 
-- **A NAMED func or channel field type is silently broken (2026-09,
-  unfixed).** A field whose type is `type Handler func()` is not rejected —
-  the parse-level refusal covers type LITERALS, and a named type stops the
-  walk — but every reset site emits `result.H = Handler{}` and the generated
-  file does not compile, even when the named type carries a
-  `MarshalJSON`/`UnmarshalJSON` pair. The fix is in the emitter, not the
-  parser: the zero-value form already emitted for interfaces,
-  `(Recv{}).Field`. Once that lands, the parse-time rejection of func/chan
-  LITERALS could be revisited too — and the diagnostic's remedy hint could
-  offer "declare a named type", which today it must not.
+- **A NAMED func or channel field type without codec methods is accepted
+  (2026-09).** The parse-level refusal covers type LITERALS, and a named type
+  stops the walk, so a `type Handler func()` field compiles (its zero is
+  spelled `*new(Handler)` or `(Recv{}).H`) and then fails in `AppendJSON` for
+  every value through the `encoding/json` rung, the defect the literal refusal
+  exists for. With a `MarshalJSON`/`UnmarshalJSON` or text pair it works.
+  Refuse a named func or chan type that has no codec methods. The literal's
+  diagnostic could then offer "declare a named type with its own codec" as a
+  remedy, which today it must not.
 
 - **gc internal compiler error on a dead store into a zero-length array
   (Go 1.27.1, worth filing upstream).** Assigning into an element of a
@@ -732,6 +752,197 @@ surface pinned by `Decoder[T]`).
   dead-storing it. Nothing in ggen is blocked (the `[0]T` readers have no
   element loop at all, cmd/ggen opt #85), but the toolchain bug stands.
   Minimal repro (two shapes, array-variable and call-result RHS) with a drafted upstream report at `~/audit-round10/ice/REPORT.md`.
+
+Found during the 2026-10 review and its fixes, all unfixed:
+
+- **Interpreted-string struct tags are ignored.** `A string "json:\"alpha\""`
+  gets key `A` where `encoding/json` uses `alpha`: `gen/model/parse.go` reads
+  a tag by trimming the backticks off its literal, with no `strconv.Unquote`,
+  in `jsonTag` and `fieldFromTag`.
+
+- **A foreign package named like a generated local is shadowed.** A field
+  `P *result.Rec` from a package named `result` fails "result.Rec is not a
+  type": `structSet.qualifierFor` avoids package-level identifiers only, not
+  the emitter's locals (`result`, `s`, `data`, `dst`, `v`, `mv`, `i`, `err`,
+  `recv`, …). A sibling, theoretical hole in the import scan: a selector
+  followed by `.` (`.Field.`) counts as a qualifier, so a foreign package
+  named like a field could be imported for nothing.
+
+- **`json:",embed"` catch-all residuals.** (a) Values `embedValueRoute` leaves
+  on `embedViaAny`, such as numbers, bools, `time.Time`, netip, `big.*`,
+  `url.URL`, `sql.Null*` and named primitives, decode through `SkipValue` +
+  `encoding/json` v1, which reads `null` into the zero value, and encode
+  through `AppendAny`, which writes `url.URL` and `sql.Null*` as struct
+  objects. gen's `Shape.Rest` lowers every catch-all value in the field form,
+  so the exported schemas reject the `null` Go accepts and the objects Go
+  writes, and accept the URL text Go rejects. `JSONSize` budgets the field
+  form too, so it undersizes `url.URL` / `sql.Null*` values and containers of
+  them (`url.URL` 94 reserved vs 188 written, `sql.NullString` 25 vs 44,
+  `sql.NullTime` 56 vs 68, `[]url.URL` 98 vs 190), one buffer growth per
+  Marshal. Either decode and encode these values with the field emitters
+  (`url.URL` / `sql.Null*` through `embedViaFields` is a wire change), or make
+  `Shape.Rest` mirror the route (nullable for every non-pointer value
+  `encoding/json` reads, `url.URL` / `sql.Null*` as their v1 objects) and
+  budget `AppendAny`-written values with `AnySize`. (b) A `[N]byte` nested in
+  a catch-all container (`[][16]byte`, a `map[string][4]byte` value,
+  `[]*[4]byte`) does not round-trip: `AppendAny` writes base64, while
+  `encoding/json`, which reads it, and the container emitters both expect a
+  number array.
+
+- **A cross-package generated struct below the first container level loses its
+  method set.** At depth 1 (`[]sub.T`, `map[string]sub.T`) an element takes
+  `sub.T`'s own `DecodeFrom` / `AppendJSON`, but `[][]sub.T`, `[N][]sub.T`,
+  `map[string][]sub.T` and a catch-all `map[string][]thirdparty2.External2`
+  read and write it through `encoding/json`: `peelSliceField` builds the inner
+  level with no `Iface` / `ElemIface`, and `sliceElemField` keeps the outer
+  value's `ElemIface`, which describes the container. One type then has two
+  wire shapes (a `time.Duration` member as nanoseconds, a `net.TCPAddr` as an
+  object), and its own `DecodeFrom` cannot read the deeper one. Needs
+  per-level `FieldInterfaces` from the parser.
+
+- **`encoding/json`'s fallback reads a named `[]byte` without a codec in two
+  forms.** A `net.IPMask` in a plain struct or a struct alias also accepts a
+  JSON number array (`[1,2]`), while gen lowers it as a base64 string, so the
+  schemas reject the array. Found with `type Subnet net.IPNet` as a
+  TestDifferential subject, which was dropped rather than pinned as a
+  divergence.
+
+- **A defined named container without a codec goes through `encoding/json` in
+  Go, but gen lowers its underlying shape.** `type Durs []time.Duration` or
+  `type Peers []net.TCPAddr` (also `url.URL`, `sql.Null*` or `[N]byte`
+  elements) is `KindStruct` in the model, so cmd/ggen reads and writes it with
+  `encoding/json`: durations as int64 nanoseconds, a `TCPAddr` as an
+  `{"IP","Port","Zone"}` object. gen lowers it through its underlying type
+  (duration strings, `ip:port` strings), so the schemas and Go disagree both
+  ways. An `=` alias (`type DursAlias = []time.Duration`) takes the native
+  code and agrees. Decode and encode unannotated named containers natively, as
+  `inlineNamedPrim` does for named primitives, or lower them in gen as
+  `External` values with `encoding/json` semantics.
+
+- **Struct aliases and embedded fields.** `//ggen:generate type OA Outer` over
+  `type Outer struct{ Inner; B int }` writes `{"B":2,"Inner":{"A":1}}` where
+  `encoding/json` writes `{"A":1,"B":2}`: `extractAliasFromTypes` treats the
+  embedded field as named and does not promote it. An embedded `=` alias
+  field (`type AA = Inner; struct{ AA; B int }`) is rejected ("embedded type
+  AA in Emb not found in this package") where `encoding/json` promotes
+  `Inner`'s fields.
+
+- **`sql.Null[T]` whose `T` holds `sql.Null` elements does not compile.**
+  `X sql.Null[[]sql.Null[string]]` gives `cannot assign to nv[len(nv) - 1]`
+  on both paths: `renderSQLNull`/`renderStreamSQLNull` name their temp `nv`
+  at every level, so the element's `var nv string` shadows the outer slice.
+  Fix it like `ptrNest`, with a nesting counter for the name.
+
+- **`sql.Null[T]` with a non-primitive `T` below a field goes through
+  `encoding/json`.** A field resolves `sql.Null[T]` through go/types
+  (`sqlNullGenericInfo` → `SQLNullInner`) and writes the inner value or `null`
+  for any `T`. A slice or array element, a map value or a pointee is resolved
+  by its spelling (`ResolveKind`), where `isSupportedSQLNullInner` admits only
+  primitives and `time.Time`, so `[]sql.Null[net.IPNet]` or
+  `*sql.Null[time.Duration]` is `KindStruct` and writes the
+  `{"V":…,"Valid":…}` struct dump. One struct then carries two shapes of one
+  Go type, and `AppendAny` writes a third (`{"V":"10.0.0.0/8","Valid":true}`).
+  Resolve those positions through go/types like `sqlNullGenericInfo`.
+
+- **`inner:` below a `[]byte` level is a silent no-op.** `map[string][]byte`,
+  `[][]byte` and `[]map[string][]byte` with `inner:(inner:lte=5)` are
+  accepted: the applicability walk (`peelTypeOnce`) and `resolvePipeCustoms`
+  (`diveElemType`) peel `[]byte` to `byte`, but `[]byte` decodes as one
+  base64 string with no element loop. Top-level `inner:` on `[]byte` is
+  rejected, and the deeper levels need the same rejection.
+
+- **Pointer map values are judged inconsistently at generate time.**
+  `map[string]*int` with `inner:gte=0` is rejected ("`gte` is inapplicable
+  to *int") while a `*int` field, `[]*int` elements and
+  `map[string]map[string]*int` with `inner:(inner:gte=0)` accept the rule and
+  apply it to the pointee. `map[string]*NamedInt` passes because `eff`
+  strips stars only for the named-primitive lookup. `map[string]*[]int` and
+  `[]**[]int` with two `inner:` levels fail "no element at that depth":
+  `peelTypeOnce` does not strip a leading pointer before peeling, while
+  `diveElemType` does. Both are loud, not silent, and aligning them touches
+  the gen export too.
+
+- **`omitempty` on a non-struct `KindStruct` type is a silent no-op.**
+  `omitEmptyCond` has no `KindStruct` arm, and the struct-field rejection
+  (cmd/ggen opt #87) fires only when the underlying type is a struct. So a
+  named container (`N dep.Names` with `type Names []string`, or a same-package
+  one), an interface such as `error`, and every foreign type in AST-only mode
+  are written even when they encode as `null`, `[]` or `{}`. Reject it, or
+  emit a guard that does not name the type (`!ggen.AnyIsEmpty(ref)`, or
+  `len(ref) > 0` from the go/types underlying), which would also let
+  `opaqueField`'s `omitempty` rejection go.
+
+- **`collectNamedPrims` has no `*types.Alias` arm.** An `=` alias kept under
+  its own name because this package cannot spell its target
+  (`other.KindA = other/internal/k.Kind`, a string) loses its named-primitive
+  kind: string rules on it are rejected at generate time ("inapplicable to
+  other.KindA") and it decodes through `encoding/json`, although generated
+  code could convert through the alias name. Loud, not silent.
+
+- **A container alias of a plain named primitive decodes its elements through
+  `encoding/json`.** `//ggen:generate type Codes []Code` over a plain
+  `type Code string` that no struct field of the pass names (`NPAliasList` /
+  `NPAliasPair` in integrationtests) unmarshals and marshals each element with
+  `encoding/json`: `aliasContainerField` sets no `NamedPrims`, and
+  `seedNamedKinds` does not read `AliasField.NamedPrims`, so `Code` never
+  reaches `namedKinds`. Correct, but slower than the inline path a `[]Code`
+  struct field takes.
+
+- **A pointer pipe on `null` skips built-ins after a nil-filling `@Func`
+  mod (contract question).** On a JSON `null` only the `@Func` half of a
+  pointer pipe runs, so `pipe:"@DefaultZero gte=1"` on a `*int` (or the same
+  steps under `inner:` on a `[]*int`) accepts `null` as 0 while rejecting an
+  explicit 0. Deliberate today (the built-ins have no leaf on a `null`), but
+  arguably not declared order.
+
+- **Stream map keys validate a literal `mk` (harmless today).**
+  `renderStreamMap` calls `keyValidateAndModStream(b, f, "mk")` where the bytes
+  `renderMap` passes `mkVar`. A nested stream map's key is `mk1`, so key
+  rules reaching a nested map would check the outer key. None do:
+  `sliceElemField` clears `KeyValidation`/`KeyMods`/`KeyPipe`.
+
+- **gen describes annotations, not CLI flags.** `gen.Load` never applies
+  `model.Flags`, so a decoder generated with `-nullzero`, `-ignoreunknown`
+  or `-novalidate` is described as if the flag were off (documented in
+  gen/SKILL.md). If a consumer needs it, `Load` could take the flags and
+  apply them.
+
+- **gen output `Optional` over-approximates `omitempty` (harmless).** Out
+  mode sets `Field.Optional` for `omitempty` on kinds with no empty test
+  (numbers, bool, time, `[N]T`, a pointer to such a leaf past its nil
+  check), which the encoder never omits: a superset, inexact against
+  "encoder may omit".
+
+- **`nullzero` in the schemas skips the transforms Go runs on the zero
+  value.** A `nullzero` field (the variant or the struct annotation) is
+  `Nullable` when `zeroPasses`, and zod / valibot render `Nullable` after the
+  rules, so a `null` stays `null` in the parsed value. Go turns it into the
+  zero value and then runs the field's mods: `clamp=1|5` yields 1, `trim` /
+  `toupper` yield `""`. Render the null branch as null → zero piped into the
+  field's own schema (zod `z.null().transform(() => zero).pipe(inner)`, or the
+  valibot equivalent), and pin it in the differential fixture.
+
+- **gen's `delegatingAlias` has two minor gaps.** A delegating alias over a
+  codec target ggen does not generate (`Token` over `Secret` in
+  `gen/testdata/api`, or a foreign uuid-like type) leaves `Type.File` empty:
+  the delegating path has no `types.Object` for the target. On the foreign
+  path a package seen first through an alias is created with `Name` =
+  `AliasUnderlyingImport.Name`, the generated code's qualifier, which can be a
+  rename such as `leaf2` rather than the declared name.
+
+- **Kotlin: an optional output field with a zero-literal pointee
+  (unverified).** `*string` / `*int` under `omitzero` render with a default
+  (`String = ""`), so the `""` Go writes for a non-nil pointer to `""` is
+  dropped on re-encode and Go reads back nil. Needs a kotlinc run
+  (gen/test-toolchains.sh).
+
+- **A very wide struct is expensive to compile.** Every field of a struct
+  decodes inline in one function, so a struct of about 100 fields covering
+  every container shape generated a 50k-line `DecodeFromStream` and a 43k-line
+  `DecodeFrom`, and gc needed more than 34 GB to compile it (observed in the
+  2026-10 review). Splitting the per-field decode of very wide structs into
+  helper functions would bound compile memory. Measure the runtime cost first
+  (house-rule A/B).
 
 # Tried Rejected
 

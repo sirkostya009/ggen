@@ -442,7 +442,8 @@ type Baz = Local
 		writeFixture(
 			t,
 			filepath.Join(pkg, "pkg.go"),
-			"package pkg\n\n//ggen:generate\ntype Inner struct {\n\tX int `json:\"x\"`\n}\n\n//ggen:generate\ntype Local Inner\n\n// Reached only as a dependency, still generated in the pass.\ntype Dep struct {\n\tX int `json:\"x\"`\n}\n\n//ggen:generate\ntype Root struct {\n\tD Dep `json:\"d\"`\n}\n\n//ggen:generate\ntype LocalDep Dep\n",
+			"package pkg\n\n//ggen:generate\ntype Inner struct {\n\tX int `json:\"x\"`\n}\n\n//ggen:generate\ntype Local Inner\n\n// Reached only as a dependency, still generated in the pass.\ntype Dep struct {\n\tX int `json:\"x\"`\n}\n\n//ggen:generate\ntype Root struct {\n\tD Dep `json:\"d\"`\n}\n\n//ggen:generate\ntype LocalDep Dep\n\n"+
+				"// The underlying written through an `=` alias is judged as Inner.\ntype InnerAlias = Inner\n\n//ggen:generate\ntype LocalViaAlias InnerAlias\n",
 		)
 		var runs [2]string
 		for i := range runs {
@@ -458,6 +459,9 @@ type Baz = Local
 			if !strings.Contains(runs[0], want) {
 				t.Errorf("first run must already delegate (%q missing):\n%s", want, runs[0])
 			}
+		}
+		if n := strings.Count(runs[0], "return Inner(s).JSONSize()"); n != 2 {
+			t.Errorf("Local and LocalViaAlias must both delegate to Inner, got %d delegations:\n%s", n, runs[0])
 		}
 		if out, err := runGo(t, base, nil, "vet", "./pkg"); err != nil {
 			t.Errorf("go vet: %v\n%s", err, out)
@@ -618,6 +622,255 @@ type Doc struct {
 		}
 		if out, err := runGo(t, base, nil, "vet", "./doc"); err != nil {
 			t.Errorf("go vet ./doc: %v\n%s", err, out)
+		}
+	})
+
+	// A field type written through an `=` alias is the type the alias names:
+	// it gets that type's kind, its spelling and its package's import, and a
+	// struct reached only through an alias is generated, also when a container
+	// alias is the only route to it. An alias whose target this package cannot
+	// write, an unexported type or one in an internal package it may not
+	// import, keeps its own name, as does an alias of a struct literal. An
+	// external test package may name what the package it tests may.
+	t.Run("EqAliasFields_ResolveToTarget", func(t *testing.T) {
+		t.Parallel()
+		base := t.TempDir()
+		writeGgenModule(t, base, "example.com/eq")
+		writeFixture(t, filepath.Join(base, "sub", "internal", "hid", "hid.go"), "package hid\n\ntype T struct{ B int }\n")
+		writeFixture(t, filepath.Join(base, "sub", "sub.go"), `package sub
+
+import (
+	"time"
+
+	"example.com/eq/sub/internal/hid"
+)
+
+type Dur = time.Duration
+
+type Box[T any] struct{ V T }
+
+type priv struct{ A int }
+
+type Priv = priv
+
+type Hidden = hid.T
+`)
+		writeFixture(t, filepath.Join(base, "doc", "doc.go"), `package doc
+
+import (
+	"example.com/eq/doc/internal/k"
+	"example.com/eq/sub"
+)
+
+type KindA = k.Kind
+
+type Inner struct {
+	X int `+"`json:\"x\" pipe:\"gte=1\"`"+`
+}
+
+type (
+	InnerAlias = Inner
+	Words      = []string
+	IntPtr     = *int
+	Point      = struct{ X int }
+)
+
+//ggen:generate
+type Doc struct {
+	D  sub.Dur            `+"`json:\"d\"`"+`
+	Ds []sub.Dur          `+"`json:\"ds\"`"+`
+	Bs []sub.Box[sub.Dur] `+"`json:\"bs\"`"+`
+	P  sub.Priv           `+"`json:\"p\"`"+`
+	Ps []sub.Priv         `+"`json:\"ps\"`"+`
+	H  sub.Hidden         `+"`json:\"h\"`"+`
+	Hs []sub.Hidden       `+"`json:\"hs\"`"+`
+	In InnerAlias         `+"`json:\"in\"`"+`
+	W  Words              `+"`json:\"w\"`"+`
+	PI IntPtr             `+"`json:\"pi\"`"+`
+	Pt Point              `+"`json:\"pt\"`"+`
+}
+`)
+		writeFixture(t, filepath.Join(base, "doc", "doc_test.go"), `package doc
+
+import (
+	"errors"
+	"testing"
+	"time"
+
+	"github.com/sirkostya009/ggen"
+)
+
+func TestDoc(t *testing.T) {
+	in := `+"`"+`{"bs":[{"V":7}],"d":"1s","ds":["2m0s"],"h":{"B":2},"hs":[{"B":8}],"in":{"x":3},"p":{"A":1},"pi":4,"ps":[{"A":5}],"pt":{"X":6},"w":["a"]}`+"`"+`
+	v, _, err := Doc{}.DecodeFrom([]byte(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v.D != time.Second || v.Ds[0] != 2*time.Minute || *v.PI != 4 || v.W[0] != "a" {
+		t.Errorf("decoded %+v", v)
+	}
+	if out, err := ggen.Marshal(v); err != nil || string(out) != in {
+		t.Errorf("marshal = %s %v, want %s", out, err, in)
+	}
+	var gte *ggen.GTEError
+	if _, _, err := (Doc{}).DecodeFrom([]byte(`+"`"+`{"in":{"x":0}}`+"`"+`)); !errors.As(err, &gte) {
+		t.Errorf("Inner's own rule must run, got %v", err)
+	}
+}
+`)
+		writeFixture(t, filepath.Join(base, "doc", "internal", "k", "k.go"), "package k\n\ntype Kind string\n")
+		// The external test package resolves KindA to doc's internal k.Kind,
+		// so the oneof rule applies to its string.
+		writeFixture(t, filepath.Join(base, "doc", "kinds_test.go"), `package doc_test
+
+import (
+	"errors"
+	"testing"
+
+	"example.com/eq/doc"
+	"github.com/sirkostya009/ggen"
+)
+
+//ggen:generate
+type Kinds struct {
+	K []doc.KindA `+"`json:\"k\" pipe:\"inner:oneof=x|y\"`"+`
+}
+
+func TestKinds(t *testing.T) {
+	var oneOf *ggen.OneOfError
+	if _, _, err := (Kinds{}).DecodeFrom([]byte(`+"`"+`{"k":["x","z"]}`+"`"+`)); !errors.As(err, &oneOf) {
+		t.Errorf("want OneOfError, got %v", err)
+	}
+}
+`)
+		// Rows and RowsByKey are the only route to Row.
+		writeFixture(t, filepath.Join(base, "items", "items.go"), `package items
+
+type Row struct {
+	X int `+"`json:\"x\" pipe:\"gte=1\"`"+`
+}
+
+type RowAlias = Row
+
+//ggen:generate
+type Rows []RowAlias
+
+//ggen:generate
+type RowsByKey map[string]*RowAlias
+`)
+		writeFixture(t, filepath.Join(base, "items", "items_test.go"), `package items
+
+import (
+	"errors"
+	"testing"
+
+	"github.com/sirkostya009/ggen"
+)
+
+func TestItems(t *testing.T) {
+	var gte *ggen.GTEError
+	if _, _, err := (Rows{}).DecodeFrom([]byte(`+"`"+`[{"x":0}]`+"`"+`)); !errors.As(err, &gte) {
+		t.Errorf("Rows: Row's rule must run, got %v", err)
+	}
+	if _, _, err := (RowsByKey{}).DecodeFrom([]byte(`+"`"+`{"a":{"x":0}}`+"`"+`)); !errors.As(err, &gte) {
+		t.Errorf("RowsByKey: Row's rule must run, got %v", err)
+	}
+}
+`)
+		writeFixture(t, filepath.Join(base, "only", "only.go"), `package only
+
+import "example.com/eq/sub"
+
+//ggen:generate
+type Only struct {
+	D sub.Dur `+"`json:\"d\"`"+`
+}
+`)
+		for _, dir := range []string{"./doc", "./only", "./items"} {
+			if out, err := runCLI(t, bin, base, dir); err != nil {
+				t.Fatalf("ggen %s: %v\n%s", dir, err, out)
+			}
+		}
+		body := mustReadOutput(t, filepath.Join(base, "doc", "doc_ggen.go"))
+		if !strings.Contains(body, "func (recv Inner) DecodeFrom(") {
+			t.Errorf("Inner, reached through InnerAlias, not generated:\n%s", body)
+		}
+		if strings.Contains(body, "sub.Dur") || strings.Contains(body, "InnerAlias") || !strings.Contains(body, "sub.Priv") ||
+			!strings.Contains(body, "sub.Box[time.Duration]") || !strings.Contains(body, "[]sub.Hidden") ||
+			strings.Contains(body, "internal/hid") {
+			t.Errorf("a resolvable alias must be spelled as its target and only an unresolvable one kept:\n%s", body)
+		}
+		if items := mustReadOutput(t, filepath.Join(base, "items", "items_ggen.go")); !strings.Contains(items, "func (recv Row) DecodeFrom(") {
+			t.Errorf("Row, reached only through the container aliases, not generated:\n%s", items)
+		}
+		only := mustReadOutput(t, filepath.Join(base, "only", "only_ggen.go"))
+		if strings.Contains(only, `"example.com/eq/sub"`) || !strings.Contains(only, "\t\"time\"\n") {
+			t.Errorf("the alias's package must give way to its target's:\n%s", only)
+		}
+		if out, err := runGo(t, base, nil, "vet", "./..."); err != nil {
+			t.Errorf("go vet: %v\n%s", err, out)
+		}
+		if out, err := runGo(t, base, nil, "test", "./doc", "./items"); err != nil {
+			t.Errorf("go test: %v\n%s", err, out)
+		}
+
+		// A func written through an alias is still a func.
+		writeFixture(
+			t,
+			filepath.Join(base, "bad", "bad.go"),
+			"package bad\n\ntype Handler = func()\n\n//ggen:generate\ntype Bad struct {\n\tH Handler `json:\"h\"`\n}\n",
+		)
+		out, err := runCLI(t, bin, base, "./bad")
+		if err == nil {
+			t.Fatalf("func-typed alias field accepted:\n%s", out)
+		}
+		for _, want := range []string{"bad.go:7:2:", "func field types are not supported"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("want %q in:\n%s", want, out)
+			}
+		}
+	})
+
+	// A struct alias reads a field whose type it cannot name as one value that
+	// encoding/json reads and writes whole. A tag that needs more than that is
+	// rejected rather than dropped.
+	t.Run("StructAlias_UnnameableFieldTags_Rejected", func(t *testing.T) {
+		t.Parallel()
+		base := t.TempDir()
+		writeGgenModule(t, base, "example.com/opq")
+		writeFixture(t, filepath.Join(base, "dep", "dep.go"), `package dep
+
+type level string
+
+type Embed struct {
+	Rest map[string]level `+"`json:\",embed\"`"+`
+}
+
+type Inner struct {
+	Levels []level `+"`json:\"levels\" pipe:\"inner:minlen=1\"`"+`
+}
+
+type Hint struct {
+	Levels []level `+"`json:\"levels\" hint:\"4\"`"+`
+}
+
+type Omit struct {
+	P *level `+"`json:\"p,omitempty\"`"+`
+}
+`)
+		for pkg, want := range map[string]string{
+			"Embed": "type A: field Rest: a json:\",embed\" catch-all needs generated code that names map[string]dep.level",
+			"Inner": "type A: field Levels: generated code cannot name []dep.level, so the field is decoded whole",
+			"Hint":  "type A: field Levels: generated code cannot name []dep.level, so the field is decoded whole",
+			"Omit":  "type A: field P: `omitempty` cannot be honoured: generated code cannot name *dep.level",
+		} {
+			dir := "./" + strings.ToLower(pkg)
+			writeFixture(t, filepath.Join(base, dir, "a.go"), "package "+strings.ToLower(pkg)+
+				"\n\nimport \"example.com/opq/dep\"\n\n//ggen:generate\ntype A dep."+pkg+"\n")
+			out, err := runCLI(t, bin, base, dir)
+			if err == nil || !strings.Contains(out, want) {
+				t.Errorf("%s: want %q, got %v:\n%s", pkg, want, err, out)
+			}
 		}
 	})
 }

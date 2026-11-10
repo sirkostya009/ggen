@@ -2720,7 +2720,7 @@ func (recv R10OmitEmpty) DecodeFrom(data []byte) (result R10OmitEmpty, i int, er
 				return result, i, ggen.NewParseErr("addr", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 48
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2804,7 +2804,7 @@ func (recv R10OmitEmpty) DecodeFrom(data []byte) (result R10OmitEmpty, i int, er
 				return result, i, ggen.NewParseErr("ip", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 48
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2825,7 +2825,7 @@ func (recv R10OmitEmpty) DecodeFrom(data []byte) (result R10OmitEmpty, i int, er
 			} else {
 				result.IP = net.ParseIP(s)
 				if result.IP == nil {
-					return result, i, ggen.NewParseErr("ip", i, &net.ParseError{Type: "IP address", Text: s})
+					return result, i, ggen.NewParseErr("ip", i, &ggen.AddrError{Type: "IP address", Text: ggen.Detach(s, data)})
 				}
 			}
 		case "pfx":
@@ -2847,7 +2847,7 @@ func (recv R10OmitEmpty) DecodeFrom(data []byte) (result R10OmitEmpty, i int, er
 				return result, i, ggen.NewParseErr("pfx", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 48
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -3450,7 +3450,7 @@ func (recv R10OmitEmpty) DecodeFromStream(s *ggen.Stream) (result R10OmitEmpty, 
 			} else {
 				result.IP = net.ParseIP(sv)
 				if result.IP == nil {
-					return result, ggen.NewParseErr("ip", s.Offset(), &net.ParseError{Type: "IP address", Text: strings.Clone(sv)})
+					return result, ggen.NewParseErr("ip", s.Offset(), &ggen.AddrError{Type: "IP address", Text: strings.Clone(sv)})
 				}
 			}
 		case "pfx":

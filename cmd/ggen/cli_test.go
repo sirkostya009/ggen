@@ -1017,24 +1017,39 @@ type B struct {
 
 //ggen:generate
 type Validated struct {
-	Name string `+"`"+`json:"name" pipe:"required minlen=1"`+"`"+`
+	Name  string            `+"`"+`json:"name"  pipe:"required minlen=1"`+"`"+`
+	Nums  []int             `+"`"+`json:"nums"  pipe:"inner:lte=9"`+"`"+`
+	Pair  [2]int            `+"`"+`json:"pair"  pipe:"inner:lte=9"`+"`"+`
+	Ptrs  []*int            `+"`"+`json:"ptrs"  pipe:"inner:lte=9"`+"`"+`
+	Grid  [][]int           `+"`"+`json:"grid"  pipe:"inner:(maxlen=3 inner:lte=9)"`+"`"+`
+	Vals  map[string]int    `+"`"+`json:"vals"  pipe:"inner:lte=9"`+"`"+`
+	Tags  []string          `+"`"+`json:"tags"  pipe:"inner:(trim minrunes=2)"`+"`"+`
+	Kinds []string          `+"`"+`json:"kinds" pipe:"inner:oneof=a|b"`+"`"+`
+	Names map[string]string `+"`"+`json:"names" pipe:"inner:trim"`+"`"+`
 }
 `)
-		// By default, rules emit typed errors.
+		// By default, rules emit typed errors and mods emit their calls.
+		ruleCode := []string{"MinLenError", "RequiredError", "LTEError", "MaxLenError", "strings.TrimSpace", "utf8.", "ggenOneof"}
 		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
 			t.Fatalf("ggen default: %v\n%s", err, out)
 		}
 		body := mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
-		if !strings.Contains(body, "MinLenError") || !strings.Contains(body, "RequiredError") {
-			t.Fatalf("expected MinLenError + RequiredError in default output, got:\n%s", body)
+		for _, want := range ruleCode {
+			if !strings.Contains(body, want) {
+				t.Fatalf("expected %s in default output, got:\n%s", want, body)
+			}
 		}
-		// With -novalidate, the rules are left out.
+		// With -novalidate, the rules and mods are left out at every
+		// container level, and so are the imports and oneof sets only they
+		// use.
 		if out, err := runCLI(t, bin, dir, "-novalidate", "msg.go"); err != nil {
 			t.Fatalf("ggen -novalidate: %v\n%s", err, out)
 		}
 		body = mustReadOutput(t, filepath.Join(dir, "msg_ggen.go"))
-		if strings.Contains(body, "MinLenError") || strings.Contains(body, "RequiredError") {
-			t.Fatalf("expected no validation errors with -novalidate, got:\n%s", body)
+		for _, gone := range append(ruleCode, `"unicode/utf8"`) {
+			if strings.Contains(body, gone) {
+				t.Fatalf("expected no %s with -novalidate, got:\n%s", gone, body)
+			}
 		}
 	})
 
@@ -1610,7 +1625,7 @@ func WrongShape(s string) (string, int) { return s, 0 }
 		t.Parallel()
 		// A parameter type mismatch, where the field is int and the func takes
 		// string, must be rejected at parse time by the types.Identical check in
-		// classifyValueFunc.
+		// classifyValueFunc. The levels below a map are checked the same way.
 		base := t.TempDir()
 		dir := filepath.Join(base, "paramshape")
 		writeFixture(t, filepath.Join(base, "go.mod"), `module paramshape
@@ -1621,7 +1636,9 @@ go 1.26
 
 //ggen:generate
 type Msg struct {
-	N int `+"`"+`json:"n" pipe:"@WrongParam"`+"`"+`
+	N int              `+"`"+`json:"n" pipe:"@WrongParam"`+"`"+`
+	D map[string][]int `+"`"+`json:"d" pipe:"inner:(inner:@WrongParam)"`+"`"+`
+	E []map[string]int `+"`"+`json:"e" pipe:"inner:(inner:@WrongParam)"`+"`"+`
 }
 
 // WrongParam takes string instead of int — param mismatch.
@@ -1631,8 +1648,10 @@ func WrongParam(s string) error { return nil }
 		if err == nil {
 			t.Fatalf("expected ggen to reject param mismatch, got success:\n%s", out)
 		}
-		if !strings.Contains(out, "param type string does not match value type int") {
-			t.Errorf("expected diagnostic about param type, got:\n%s", out)
+		for _, field := range []string{"Msg.N", "Msg.D", "Msg.E"} {
+			if !strings.Contains(out, field+": param type string does not match value type int") {
+				t.Errorf("expected diagnostic about %s param type, got:\n%s", field, out)
+			}
 		}
 	})
 
@@ -1987,6 +2006,49 @@ type Msg struct {
 				t.Errorf("diagnostic missing:\n%s", out)
 			}
 		})
+		// An `=` alias of another package's type is that type, so as a converter
+		// input it is refused like the type itself, behind a pointer too.
+		t.Run("converter_foreign_alias_input", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeMod(t, dir)
+			writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+import (
+	"net"
+	"time"
+)
+
+type (
+	CIDRText = net.IPNet
+	Dur      = time.Duration
+)
+
+func FromCIDR(n CIDRText) string  { return n.String() }
+func FromCIDRP(n *CIDRText) string { return "" }
+func FromDur(d Dur) string         { return d.String() }
+
+//ggen:generate
+type Msg struct {
+	C string `+"`"+`json:"c" pipe:"@FromCIDR/."`+"`"+`
+	P string `+"`"+`json:"p" pipe:"@FromCIDRP/."`+"`"+`
+	D string `+"`"+`json:"d" pipe:"@FromDur/."`+"`"+`
+}
+`)
+			out, err := runCLI(t, bin, dir, "msg.go")
+			if err == nil {
+				t.Fatalf("expected rejection, got success:\n%s", out)
+			}
+			for _, want := range []string{
+				"converter input fixture.CIDRText names net.IPNet, which is from another package",
+				"converter input *fixture.CIDRText names net.IPNet, which is from another package",
+				"converter input fixture.Dur names time.Duration, which is from another package",
+			} {
+				if !strings.Contains(out, want) {
+					t.Errorf("diagnostic %q missing:\n%s", want, out)
+				}
+			}
+		})
 		// A pointer converter input claims null as well as the shape of the type it
 		// points to, so it cannot share a decode stage with nullzero.
 		t.Run("converter_pointer_input_null_clash", func(t *testing.T) {
@@ -2064,6 +2126,10 @@ type Msg struct {
 			tag      string // the struct tag, without the backticks
 			wantDiag string // text expected in the combined stdout and stderr
 		}
+		const (
+			embedPipe = "Msg.Extra: `pipe:` does not apply to a json:\",embed\" catch-all map"
+			embedHint = "Msg.Extra: `hint:` does not apply to a json:\",embed\" catch-all map"
+		)
 		// Each entry runs ggen on a single-file fixture. The CLI must exit non-zero
 		// and the error must contain wantDiag.
 		cases := []bad{
@@ -2233,6 +2299,12 @@ type Msg struct {
 			{"string_tag_on_string", "S string", `json:"s,string"`, "only valid on numeric fields"},
 			{"inner_depth2_mismatch", "M [][]int", `json:"m" pipe:"inner:(inner:(trim))"`, "is inapplicable to int"},
 			{"inner_deeper_than_type", "X []int", `json:"x" pipe:"inner:(inner:(gte=0))"`, "no element at that depth"},
+			// The levels below a map value or a map element are judged the same way.
+			{"inner_depth2_map_value", "M map[string][]int", `json:"m" pipe:"inner:(inner:trim)"`, "(depth 2): `trim` is inapplicable to int"},
+			{"inner_depth2_map_elem", "A [2]map[string]int", `json:"a" pipe:"inner:(inner:alphanum)"`, "(depth 2): `alphanum` is inapplicable"},
+			{"inner_depth3_map", "M map[string][]map[string]string", `json:"m" pipe:"inner:(inner:(inner:gte=0))"`, "(depth 3): `gte` is inapplicable"},
+			{"inner_deeper_than_map", "M map[string]map[string]int", `json:"m" pipe:"inner:(inner:(inner:gte=0))"`, "no element at that depth"},
+			{"hint_inner_below_map", "M map[string][]int", `json:"m" hint:"inner:(4 inner:2)"`, "level 2 is only valid on a slice/map element"},
 
 			// ----- more parse-time checks -----
 			// A byte slice or byte array decodes as one base64 string. There is no
@@ -2255,6 +2327,15 @@ type Msg struct {
 			{"json_option_whitespace", "S string", `json:"s, omitempty"`, "padded with whitespace"},
 			// The catch-all emitters call make on the field and index and range over it.
 			{"embed_on_pointer_map", "Extra *map[string]any", `json:",embed"`, "not a pointer to one"},
+			// A catch-all has no key or value of its own, so no form of pipe: or
+			// hint: has anything to apply to.
+			{"embed_pipe_outer", "Extra map[string][]int", `json:",embed" pipe:"maxlen=1"`, embedPipe},
+			{"embed_pipe_inner", "Extra map[string][]int", `json:",embed" pipe:"inner:(maxlen=1 inner:gte=0)"`, embedPipe},
+			{"embed_pipe_keys", "Extra map[string]int", `json:",embed" pipe:"keys:minlen=2"`, embedPipe},
+			{"embed_pipe_required", "Extra map[string]int", `json:",embed" pipe:"required"`, embedPipe},
+			{"embed_pipe_nullzero", "Extra map[string]int", `json:",embed" pipe:"nullzero"`, embedPipe},
+			{"embed_hint", "Extra map[string][]int", `json:",embed" hint:"16"`, embedHint},
+			{"embed_hint_inner", "Extra map[string][]int", `json:",embed" hint:"inner:9"`, embedHint},
 			// Field types that have no generated form. An anonymous struct cannot be
 			// written in the output at all, and json.Marshal rejects every func or
 			// channel value, so AppendJSON could never succeed.
@@ -2534,7 +2615,8 @@ func TestGeneratedCompiles(t *testing.T) {
 	base := t.TempDir()
 	fixtureGoMod(t, base, "fixture")
 	// A field name that ends like a package qualifier (`Uptime` contains `time`)
-	// must not import that package. The scan matches qualifiers, not substrings.
+	// must not import that package. The scan matches qualifiers, not substrings,
+	// and a non-ASCII letter is part of the identifier too.
 	writeFixture(t, filepath.Join(base, "uptime", "uptime.go"), `package uptime
 
 //ggen:generate
@@ -2546,6 +2628,59 @@ type Status struct {
 type Host struct {
 	Uptime   Status `+"`json:\"uptime\"`"+`
 	Datetime Status `+"`json:\"datetime\"`"+`
+	Ωtime    Status `+"`json:\"omega\"`"+`
+}
+`)
+	// Keys, rule values and error paths are string literals, so `net.` or
+	// `time.` inside them names no package. Nothing here has a field of those
+	// packages, so importing one fails with "imported and not used". The last
+	// two keys put an escaped quote and an escaped backslash in the literals.
+	writeFixture(t, filepath.Join(base, "qualkeys", "qualkeys.go"), `package qualkeys
+
+//ggen:generate
+type Attrs struct {
+	Peer   string              `+"`json:\"net.peer.name\"`"+`
+	Zone   string              `+"`json:\"time.zone\"`"+`
+	Proto  string              `+"`json:\"proto\" pipe:\"starts=net.\"`"+`
+	Kind   string              `+"`json:\"kind\" pipe:\"oneof=net.tcp|net.udp\"`"+`
+	Net    map[string]any      `+"`json:\"net\"`"+`
+	Time   map[string]any      `+"`json:\"time\"`"+`
+	Bytes  map[string][]string `+"`json:\"bytes\"`"+`
+	Raw    string              `+"`json:\"json.raw\"`"+`
+	Str    string              `+"`json:\"strings.x\"`"+`
+	Big    string              `+"`json:\"big.int\"`"+`
+	Fmt    string              `+"`json:\"fmt.verb\"`"+`
+	Quoted string              `+"`json:\"q\\\"net.quoted\"`"+`
+	Back   string              `+"`json:\"back\\\\\"`"+`
+}
+`)
+	// A net.IPNet value field never spells `net.`, so a "net.host" key must not
+	// pull the import in either.
+	writeFixture(t, filepath.Join(base, "netkey", "netkey.go"), `package netkey
+
+import "net"
+
+//ggen:generate
+type Conn struct {
+	Subnet net.IPNet `+"`json:\"subnet\"`"+`
+	Host   string    `+"`json:\"net.host\"`"+`
+}
+`)
+	// The same holds for a foreign package named only inside a key.
+	writeFixture(t, filepath.Join(base, "leafkey", "leaf", "leaf.go"), `package leaf
+
+type Leaf struct {
+	N int `+"`json:\"n\"`"+`
+}
+`)
+	writeFixture(t, filepath.Join(base, "leafkey", "leafkey.go"), `package leafkey
+
+import "fixture/leafkey/leaf"
+
+//ggen:generate
+type Holder struct {
+	L    leaf.Leaf `+"`json:\"l\"`"+`
+	Name string    `+"`json:\"leaf.name\"`"+`
 }
 `)
 	// A user package whose name clashes with a package the emitter uses is
@@ -2603,6 +2738,208 @@ type ID struct {
 	Tup  *[3]byte  `+"`json:\"tup,format:array\"`"+`
 }
 `)
+	// A pointer inside another pointer's leaf, or an array read inside an array
+	// slot, declares its own temp and slot counter. Reusing the outer names
+	// would shadow what the inner store still writes through.
+	writeFixture(t, filepath.Join(base, "nested", "nested.go"), `package nested
+
+//ggen:generate
+type Item struct {
+	A string `+"`json:\"a\"`"+`
+}
+
+//ggen:generate
+type Nest struct {
+	Strs  *[]**string                    `+"`json:\"strs\"`"+`
+	Items *[]**Item                      `+"`json:\"items\"`"+`
+	Grid  *[2]**[3]int                   `+"`json:\"grid\"`"+`
+	Vals  *map[string]*string            `+"`json:\"vals\"`"+`
+	Deep  map[string]*map[string]*string `+"`json:\"deep\"`"+`
+	Rows  []**[]**string                 `+"`json:\"rows\"`"+`
+}
+`)
+	// novalidate drops every rule and mod, so the packages only they use are
+	// not imported: unicode/utf8 for a rune rule and the package of an
+	// @pkg.Func step. One package per level, because one generated file
+	// shares its imports.
+	writeFixture(t, filepath.Join(base, "noval", "check", "check.go"), `package check
+
+func NotBlank(s string) bool { return s != "" }
+`)
+	for pkg, field := range map[string]string{
+		"field": "Name string `json:\"name\" pipe:\"minrunes=2 @check.NotBlank\"`",
+		"elem":  "Names []string `json:\"names\" pipe:\"inner:(minrunes=2 @check.NotBlank)\"`",
+	} {
+		writeFixture(t, filepath.Join(base, "noval", pkg, pkg+".go"), `package `+pkg+`
+
+import _ "fixture/noval/check"
+
+//ggen:generate novalidate
+type Doc struct {
+	`+field+`
+}
+`)
+	}
+	// An `@Func` step on a `[]*T` or `[N]*T` element takes the `*T`, while the
+	// element decodes into a slab slot of type T. Every site that runs element
+	// steps must hand the func the stored pointer: the dead null peek of a
+	// `[]*[]T` row, a named primitive or time pointee, a nested `[][]*T` and
+	// a bool-form mod on an array of generated structs.
+	writeFixture(t, filepath.Join(base, "ptrelem", "ptrelem.go"), `package ptrelem
+
+import "time"
+
+type Level int
+
+//ggen:generate
+type Leaf struct {
+	N int `+"`json:\"n\"`"+`
+}
+
+//ggen:generate
+type Elems struct {
+	Rows   []*[]int     `+"`json:\"rows\"   pipe:\"inner:@RowOK\"`"+`
+	Levels []*Level     `+"`json:\"levels\" pipe:\"inner:(@LevelOK gte=1 @SameLevel)\"`"+`
+	Times  []*time.Time `+"`json:\"times\"  pipe:\"inner:@TimeOK\"`"+`
+	Nested [][]*int     `+"`json:\"nested\" pipe:\"inner:(inner:(@IntOK gte=0))\"`"+`
+	Leaves [3]*Leaf     `+"`json:\"leaves\" pipe:\"inner:@LeafOK\"`"+`
+}
+
+func RowOK(*[]int) error           { return nil }
+func LevelOK(*Level) bool          { return true }
+func SameLevel(p *Level) *Level    { return p }
+func TimeOK(*time.Time) error      { return nil }
+func IntOK(*int) error             { return nil }
+func LeafOK(p *Leaf) (*Leaf, bool) { return p, true }
+`)
+	// A catch-all of bytes, each the only base64 user of its package. The
+	// values decode from base64, so the import must be there and be used.
+	writeFixture(t, filepath.Join(base, "embedbytes", "embedbytes.go"), `package embedbytes
+
+//ggen:generate
+type Blobs struct {
+	Extra map[string][]byte `+"`json:\",embed\"`"+`
+}
+`)
+	writeFixture(t, filepath.Join(base, "embedbytearr", "embedbytearr.go"), `package embedbytearr
+
+//ggen:generate
+type Keys struct {
+	Extra map[string]*[16]byte `+"`json:\",embed\"`"+`
+}
+`)
+	// An element that is not a struct has no `T{}` zero: a named primitive
+	// with its own text codec, standard named types the inline path leaves
+	// alone, an interface, and a plain named primitive that only container
+	// aliases hold.
+	writeFixture(t, filepath.Join(base, "zeroalias", "zeroalias.go"), `package zeroalias
+
+type Code string
+
+//ggen:generate
+type Codes []Code
+
+//ggen:generate
+type CodePair [2]Code
+`)
+	writeFixture(t, filepath.Join(base, "zeroelem", "zeroelem.go"), `package zeroelem
+
+import (
+	"encoding/json"
+	"log/slog"
+	"strconv"
+)
+
+type Level int
+
+func (l Level) MarshalText() ([]byte, error) { return strconv.AppendInt(nil, int64(l), 10), nil }
+
+func (l *Level) UnmarshalText(b []byte) error {
+	n, err := strconv.Atoi(string(b))
+	*l = Level(n)
+	return err
+}
+
+//ggen:generate
+type Elems struct {
+	Levels []Level       `+"`json:\"levels\"`"+`
+	Pair   [2]Level      `+"`json:\"pair\"`"+`
+	Slog   []slog.Level  `+"`json:\"slog\"`"+`
+	Nums   []json.Number `+"`json:\"nums\"`"+`
+	Errs   []error       `+"`json:\"errs\"`"+`
+}
+
+// omitzero compares each field with its zero.
+//
+//ggen:generate
+type Omits struct {
+	Own  Level       `+"`json:\"own,omitzero\"`"+`
+	Slog slog.Level  `+"`json:\"slog,omitzero\"`"+`
+	Num  json.Number `+"`json:\"num,omitzero\"`"+`
+	Err  error       `+"`json:\"err,omitzero\"`"+`
+}
+`)
+	// nullzero writes the zero of the whole field, here a named primitive with
+	// its own text codec.
+	writeFixture(t, filepath.Join(base, "zeronull", "zeronull.go"), `package zeronull
+
+type Mode int
+
+func (m Mode) MarshalText() ([]byte, error) { return []byte{byte('0' + m)}, nil }
+
+func (m *Mode) UnmarshalText(b []byte) error {
+	*m = Mode(b[0] - '0')
+	return nil
+}
+
+//ggen:generate
+type Doc struct {
+	Plain   Mode `+"`json:\"plain\" pipe:\"nullzero\"`"+`
+	Variant Mode `+"`json:\"variant\" pipe:\"nullzero / .\"`"+`
+}
+`)
+	// A cross-package converter is the decode stage, so its package is
+	// imported with or without novalidate, alone or next to a validator from
+	// the same package. One package per shape, because one generated file
+	// shares its imports.
+	writeFixture(t, filepath.Join(base, "conv", "conv", "conv.go"), `package conv
+
+import "strconv"
+
+func Atoi(s string) (int, error) { return strconv.Atoi(s) }
+
+func Pos(n int) bool { return n > 0 }
+`)
+	for pkg, c := range map[string]struct{ ann, pipe string }{
+		"alone":   {"", ". / @conv.Atoi"},
+		"alonenv": {" novalidate", ". / @conv.Atoi"},
+		"rule":    {"", ". / @conv.Atoi @conv.Pos"},
+		"rulenv":  {" novalidate", ". / @conv.Atoi @conv.Pos"},
+	} {
+		writeFixture(t, filepath.Join(base, "conv", pkg, pkg+".go"), `package `+pkg+`
+
+import _ "fixture/conv/conv"
+
+//ggen:generate`+c.ann+`
+type Doc struct {
+	N int `+"`json:\"n\" pipe:\""+c.pipe+"\"`"+`
+}
+`)
+	}
+	// A rune rule after alphanum counts bytes, so nothing names unicode/utf8.
+	for pkg, field := range map[string]string{
+		"field": "Code string `json:\"code\" pipe:\"alphanum maxrunes=10\"`",
+		"inner": "Codes []string `json:\"codes\" pipe:\"inner:(alphanum maxrunes=10)\"`",
+		"keys":  "ByCode map[string]int `json:\"byCode\" pipe:\"keys:(alphanum maxrunes=10)\"`",
+	} {
+		writeFixture(t, filepath.Join(base, "asciirunes", pkg, pkg+".go"), `package `+pkg+`
+
+//ggen:generate
+type Doc struct {
+	`+field+`
+}
+`)
+	}
 	if out, err := runCLI(t, bin, base, "./..."); err != nil {
 		t.Fatalf("ggen ./...: %v\n%s", err, out)
 	}
@@ -2613,6 +2950,66 @@ type ID struct {
 		!strings.Contains(body, "[]json_.Val") {
 		t.Errorf("user package `json` not aliased:\n%s", body)
 	}
+	// Without go/types, as outside any module, omitzero must not compare a
+	// type the kinds cannot prove comparable with `!=`: an array of slices,
+	// maps, big numbers or net kinds, or a struct that may hold one. The
+	// output is generated outside the module, then built inside it.
+	const astOnly = `package astonly
+
+import (
+	"encoding/json"
+	"math/big"
+	"net"
+)
+
+type Inner struct {
+	X []int ` + "`json:\"x\"`" + `
+}
+
+//ggen:generate
+type Z struct {
+	Slices  [2][]int           ` + "`json:\"slices,omitzero\"`" + `
+	Maps    [2]map[string]int  ` + "`json:\"maps,omitzero\"`" + `
+	Bytes   [2][]byte          ` + "`json:\"bytes,omitzero\"`" + `
+	Raw     [2]json.RawMessage ` + "`json:\"raw,omitzero\"`" + `
+	Big     [2]big.Int         ` + "`json:\"big,omitzero\"`" + `
+	Deep    [2][2][]int        ` + "`json:\"deep,omitzero\"`" + `
+	Structs [2]Inner           ` + "`json:\"structs,omitzero\"`" + `
+	One     Inner              ` + "`json:\"one,omitzero\"`" + `
+	Ints    [3]int             ` + "`json:\"ints,omitzero\"`" + `
+	Ptrs    [2]*Inner          ` + "`json:\"ptrs,omitzero\"`" + `
+	Nets    [2]net.IPNet       ` + "`json:\"nets,omitzero\"`" + `
+	Peers   [2]net.TCPAddr     ` + "`json:\"peers,omitzero\"`" + `
+	UDPs    [1]net.UDPAddr     ` + "`json:\"udps,omitzero\"`" + `
+	IPs     [2]net.IP          ` + "`json:\"ips,omitzero\"`" + `
+}
+
+// Without go/types a named primitive reads as a struct, so its zero
+// element must not be written Level{}.
+type Level int
+
+//ggen:generate
+type Levels struct {
+	All  []Level  ` + "`json:\"all\"`" + `
+	Pair [2]Level ` + "`json:\"pair\"`" + `
+}
+`
+	astDir := t.TempDir()
+	writeFixture(t, filepath.Join(astDir, "z.go"), astOnly)
+	if out, err := runCLI(t, bin, astDir, "z.go"); err != nil {
+		t.Fatalf("ggen z.go outside a module: %v\n%s", err, out)
+	}
+	astBody := mustReadOutput(t, filepath.Join(astDir, "z_ggen.go"))
+	for _, want := range []string{
+		"!reflect.ValueOf(s.Slices).IsZero()", "!reflect.ValueOf(s.One).IsZero()", "!reflect.ValueOf(s.Nets).IsZero()",
+		"s.Ints != ([3]int{})", "s.Ptrs != ([2]*Inner{})",
+	} {
+		if !strings.Contains(astBody, want) {
+			t.Errorf("AST-only omitzero guard %q missing:\n%s", want, astBody)
+		}
+	}
+	writeFixture(t, filepath.Join(base, "astonly", "z.go"), astOnly)
+	writeFixture(t, filepath.Join(base, "astonly", "z_ggen.go"), astBody)
 	goBuild(t, base)
 }
 

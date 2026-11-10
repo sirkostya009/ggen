@@ -61,10 +61,14 @@ var subjects = []struct {
 	{fixturePkg, "Containers", `{}`, roundtrip[Containers]},
 	{fixturePkg, "Rules", `{"name":"ab"}`, roundtrip[Rules]},
 	{fixturePkg, "More", `{}`, roundtrip[More]},
+	{fixturePkg, "Zeros", `{}`, roundtrip[Zeros]},
 	{fixturePkg, "Node", `{"value":"x"}`, roundtrip[Node]},
 	{fixturePkg, "Pair", `{}`, roundtrip[Pair]},
+	{fixturePkg, "Keys", `{}`, roundtrip[Keys]},
 	{fixturePkg, "Count", "", roundtrip[Count]},
 	{fixturePkg, "Tags", "", roundtrip[Tags]},
+	{fixturePkg, "PairView", "", roundtrip[PairView]},
+	{fixturePkg, "Shade", "", roundtrip[Shade]},
 	{otherPkg, "Money", `{"currency":"USD"}`, roundtrip[other.Money]},
 }
 
@@ -100,8 +104,13 @@ var probes = []string{
 	`"\u0041"`, `"\u00e9"`, `"\ud83d\ude00"`, `"a\/b"`, `"\u0085ab"`, `"\ufeffab"`,
 	`"\u039f\u0394\u039f\u03a3"`, `"\u0130"`, `"\u00df"`,
 	`"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"`,
-	// deeper nesting than a field's own level
-	`[[[1]]]`, `{"a":{"b":{"c":1}}}`, `[{"value":"v","children":[{"value":"w"}]}]`,
+	// deeper nesting than a field's own level, and inner keys a key rule of
+	// the outer map must not reach
+	`[[[1]]]`, `{"a":{"b":{"c":1}}}`, `[{"value":"v","children":[{"value":"w"}]}]`, `{"ab":{"XY":2}}`, `{"AB":{"x":1}}`,
+	// IPv6 prefixes, zero and padded ports, a zone on a mapped address, also
+	// inside containers
+	`"::/64"`, `"2001:db8::/32"`, `"::/64.5"`, `"::/NaN"`, `"::ffff:1.2.3.4/96"`, `"[::ffff:1.2.3.4%eth0]:1"`, `":0"`, `"[::1]:0080"`,
+	`["::/64"]`, `["::/64.5"]`, `{"a":":0"}`, `{"a":"[::ffff:1.2.3.4%eth0]:1"}`,
 }
 
 // probeCase is one probe at one place, seen from one side: input is judged
@@ -837,6 +846,9 @@ func TestDifferentialTS(t *testing.T) {
 	declared := map[string]map[string]struct{}{}
 	for _, d := range set.Types() {
 		in := d.In()
+		if in.Alias != nil && in.Alias.Ref != nil {
+			in = in.Alias.Ref.In() // a delegating alias takes its target's keys
+		}
 		if in.Rest != nil {
 			continue // a catch-all takes every key
 		}

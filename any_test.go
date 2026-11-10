@@ -1925,6 +1925,13 @@ func TestAnySize_BoundsAppendAny(t *testing.T) {
 		net.TCPAddr{IP: net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"), Port: 65535, Zone: str},
 		&net.UDPAddr{IP: net.ParseIP("fe80::1"), Port: 65535, Zone: long}, (*net.TCPAddr)(nil),
 		[]net.UDPAddr{{Port: 1}, {}},
+		// Every zone byte escapes at the full width of one mode or the other,
+		// so the '%' before the zone must be budgeted on its own.
+		net.TCPAddr{IP: net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"), Port: 65535, Zone: `"`},
+		&net.UDPAddr{IP: net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"), Port: 65535, Zone: "<"},
+		net.TCPAddr{IP: net.IPv4(255, 255, 255, 255), Port: 65535},
+		net.IPNet{IP: net.IPv4(255, 255, 255, 255).To4(), Mask: net.CIDRMask(32, 32)},
+		map[string]*net.IPNet{"n": {IP: net.ParseIP("ffff::1"), Mask: net.CIDRMask(128, 128)}, "z": nil},
 		sizeText{long},
 		sizeJSON{50},
 		myInt(math.MinInt), myStr(long), myBytes(long),

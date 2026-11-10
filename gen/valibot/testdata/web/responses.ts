@@ -71,6 +71,7 @@ export const Edges = ggenObject(v.objectWithRest({
   addr: v.union([v.pipe(v.string(), v.empty()), v.pipe(v.string(), v.check(ggenIsAddr, "must be an IP address"))], "must be empty or an IP address"),
   net: v.union([v.pipe(v.string(), v.empty()), v.pipe(v.string(), v.check(ggenIsPrefix, "must be an IP prefix"))], "must be empty or an IP prefix"),
   tcp: v.nullable(v.union([v.pipe(v.string(), v.empty()), v.pipe(v.string(), v.check(ggenIsAddrPort, "must be an IP address and port"))], "must be empty or an IP address and port")),
+  udp: v.union([v.pipe(v.string(), v.empty()), v.pipe(v.string(), v.check(ggenIsAddrPort, "must be an IP address and port"))], "must be empty or an IP address and port"),
   ns: v.nullable(v.string()),
   raw: v.unknown(),
   lower: v.picklist(["x", "y", ""]),
@@ -79,3 +80,22 @@ export const Edges = ggenObject(v.objectWithRest({
   tags: Tags,
 }, v.string()));
 export type Edges = v.InferOutput<typeof Edges>;
+
+/**
+ * Keyed restricts the keys of its maps. A keys: step applies to the field's
+ * own map only, not to a map inside it.
+ */
+export const Keyed = v.strictObject({
+  two: v.nullable(ggenObject(v.record(v.picklist(["ab", "cd"]), v.pipe(v.number(), v.safeInteger())))),
+  one: v.nullable(ggenObject(v.record(v.literal("ab"), v.pipe(v.number(), v.safeInteger())))),
+  nested: v.nullable(ggenObject(v.record(v.picklist(["ab", "cd"]), v.nullable(ggenObject(v.record(v.string(), v.pipe(v.number(), v.safeInteger()))))))),
+});
+export type Keyed = v.InferOutput<typeof Keyed>;
+
+/** AddressView delegates to the generated Address. */
+export const AddressView = Address;
+export type AddressView = v.InferOutput<typeof AddressView>;
+
+/** Token delegates to the text methods of Secret. */
+export const Token = v.string();
+export type Token = v.InferOutput<typeof Token>;

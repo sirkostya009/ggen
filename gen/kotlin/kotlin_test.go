@@ -40,6 +40,8 @@ func render(t *testing.T) (string, *gen.Output) {
 	requests.Place(set.Type(api, "Address").In(), "AddressInput")
 	requests.Place(set.Type(api, "Edges").In(), "EdgesInput")
 	requests.Place(set.Type(api, "Tags").In(), "TagsInput")
+	requests.Place(set.Type(api, "AddressView").In(), "AddressViewInput")
+	requests.Place(set.Type(api, "Token").In(), "TokenInput")
 
 	responses := out.File("api/Responses.kt", apiPkg)
 	responses.Place(set.Type(api, "User").Out().StrictFields("role"), "User")
@@ -48,6 +50,8 @@ func render(t *testing.T) (string, *gen.Output) {
 	responses.Place(set.Type(api, "Plan").Out(), "Plan")
 	responses.Place(set.Type(api, "Edges").Out(), "Edges")
 	responses.Place(set.Type(api, "Tags").Out(), "Tags")
+	responses.Place(set.Type(api, "AddressView").Out(), "AddressView")
+	responses.Place(set.Type(api, "Token").Out(), "Token")
 
 	out.File("shared/Money.kt", kotlin.New("com.example.shared", header)).Place(set.Type(other, "Money").Out(), "User")
 

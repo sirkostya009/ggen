@@ -261,7 +261,7 @@ func TestPrettyLogger_RichError_FullLayout(t *testing.T) {
 	if strings.Contains(lines[0], "Error:") {
 		t.Errorf("line 1 should NOT have an Error: header, got: %q", lines[0])
 	}
-	if !strings.Contains(lines[0], path+":4:24:") {
+	if !strings.Contains(lines[0], model.RelPath(path)+":4:24:") {
 		t.Errorf("line 1 should carry position with CodeSpan column (24), got: %q", lines[0])
 	}
 	// With color off, quotes are removed (`"ascii"` prints as `ascii`), the
@@ -934,10 +934,11 @@ func TestPrettyLogger_GroupsErrorsBySourceLine(t *testing.T) {
 	// Line 1 is the position header and the first message. A group with
 	// several errors leaves out the column, because the carets show which
 	// span each error points at.
-	if !strings.Contains(lines[0], path+":4: ") {
+	shown := model.RelPath(path)
+	if !strings.Contains(lines[0], shown+":4: ") {
 		t.Errorf("line 1 should carry `file:4:` (no col, grouped), got: %q", lines[0])
 	}
-	if strings.Contains(lines[0], path+":4:2:") || strings.Contains(lines[0], path+":4:24:") {
+	if strings.Contains(lines[0], shown+":4:2:") || strings.Contains(lines[0], shown+":4:24:") {
 		t.Errorf("line 1 must NOT include a column for multi-error groups, got: %q", lines[0])
 	}
 	// With color off, quotes are removed from the message, the hint has no
@@ -949,7 +950,7 @@ func TestPrettyLogger_GroupsErrorsBySourceLine(t *testing.T) {
 		t.Errorf("line 1 should carry first hint inline, got: %q", lines[0])
 	}
 	// Line 2 is the second message, with no position prefix.
-	if strings.Contains(lines[1], path+":") {
+	if strings.Contains(lines[1], shown+":") {
 		t.Errorf("line 2 should NOT carry its own position (grouped), got: %q", lines[1])
 	}
 	if !strings.Contains(lines[1], "mod trim cannot be applied to int") {
@@ -960,7 +961,7 @@ func TestPrettyLogger_GroupsErrorsBySourceLine(t *testing.T) {
 	}
 	// The second message must line up under the first. Its indent is as
 	// many spaces as the length of `./foo.go:4: `.
-	expectIndent := len(path) + len(":4: ")
+	expectIndent := len(shown) + len(":4: ")
 	if len(lines[1])-len(strings.TrimLeft(lines[1], " ")) != expectIndent {
 		t.Errorf("line 2 indent width %d, want %d: %q",
 			len(lines[1])-len(strings.TrimLeft(lines[1], " ")), expectIndent, lines[1])

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"go/types"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -68,7 +69,7 @@ type Type struct {
 	// Rules describe the converted value and do not constrain this shape.
 	Converted bool
 	Nullable  bool // JSON null is accepted (input) or can be emitted (output)
-	Empty     bool // "" is accepted or can be emitted for a formatted string (IP, Addr, Prefix, URL)
+	Empty     bool // "" is accepted or can be emitted for a formatted string (IP, Addr, Prefix, IPNet, TCPAddr, UDPAddr, URL)
 }
 
 // Formats a Type can carry.
@@ -301,30 +302,19 @@ func (l *lowerer) field(fi model.FieldInfo) *Type {
 		return &Type{GoType: fi.GoType, Go: Any, Wire: WireAny}
 	}
 	c := &fieldCtx{f: fi, noSteps: l.decl.info.NoValidate}
-	t := l.typ(fi.Type, c, -1)
 	if l.mode == Out {
-		switch {
-		case fi.OmitZero:
-			t.Nullable, t.Empty = false, false
-			if t.Enum != nil {
-				t.Enum.Zero = false
-			}
-		case fi.OmitEmpty:
-			t.Nullable, t.Empty = false, false
-			if t.Enum != nil && t.Wire == WireString {
-				t.Enum.Zero = false
-			}
-		}
-		return t
+		return l.output(fi, c)
 	}
+	t := l.typ(fi.Type, c, -1)
 	var converted []*Type
 	native := len(fi.Variants) == 0
+	nullZero := false
 	for _, v := range fi.Variants {
 		switch v.Kind {
 		case model.VariantNative:
 			native = true
 		case model.VariantNullZero:
-			t.Nullable = true
+			nullZero = true
 		case model.VariantConvert:
 			if v.In != nil {
 				in := l.typ(v.In, &fieldCtx{f: fi, noSteps: true}, -1)
@@ -333,19 +323,106 @@ func (l *lowerer) field(fi model.FieldInfo) *Type {
 			}
 		}
 	}
-	if fi.NullZero {
-		t.Nullable = true
+	if !model.FieldHasConverter(fi) {
+		// With no converter there is no dispatch, and nullzero is the flag of
+		// the field or of its struct.
+		nullZero = l.nullZeroApplies(fi)
 	}
+	nullZero = nullZero && zeroPasses(t)
 	if !native && len(converted) > 0 {
 		// The decoder never scans the field's own type: every accepted shape
-		// comes from a converter, and the rules run on what it returns.
-		rules, nullable := t.Rules, t.Nullable
+		// comes from a converter, and the rules run on what it returns. Only
+		// nullzero or a pointer input takes null.
+		rules := t.Rules
 		*t = *converted[0]
-		t.Rules, t.Nullable, t.OneOf = rules, nullable || t.Nullable, converted[1:]
+		t.Rules, t.Nullable, t.OneOf = rules, nullZero || t.Nullable, converted[1:]
 		return t
 	}
+	t.Nullable = t.Nullable || nullZero
 	t.OneOf = append(t.OneOf, converted...)
 	return t
+}
+
+// nullZeroApplies mirrors cmd/ggen's: nullzero, set on the field or on its
+// struct, adds a null branch only to a non-pointer whose kind does not decode
+// null itself.
+func (l *lowerer) nullZeroApplies(fi model.FieldInfo) bool {
+	if fi.Pointer || !fi.NullZero && !l.decl.info.NullZero {
+		return false
+	}
+	//exhaustive:ignore not every kind applies here
+	switch fi.Kind {
+	case model.KindSlice, model.KindMap, model.KindBytes, model.KindNetIP, model.KindRawJSON, model.KindSQLNull, model.KindAny:
+		return false
+	}
+	return true
+}
+
+// output lowers an output field. omitempty and omitzero skip a field behind
+// a guard (cmd/ggen fieldSkipExpr), and a widening goes only when the guard
+// skips every value that carries it.
+func (l *lowerer) output(fi model.FieldInfo, c *fieldCtx) *Type {
+	null := isSQLNull(fi.Type)
+	if p, ok := types.Unalias(fi.Type).(*types.Pointer); ok && (fi.OmitZero || fi.OmitEmpty) {
+		// Both guards skip a nil pointer first, so the field writes whatever
+		// its pointee writes.
+		t := l.typ(p.Elem(), c, -1)
+		t.GoType = types.TypeString(fi.Type, l.qualifier)
+		if fi.OmitEmpty {
+			omitEmpty(t, null)
+		}
+		return t
+	}
+	t := l.typ(fi.Type, c, -1)
+	if fi.OmitZero && !null {
+		// Only the Go zero value is skipped. Raw JSON and an any hold null
+		// without being nil, and a non-nil empty IP or a non-zero URL is
+		// written as "". A database/sql Null type keeps both widenings: an
+		// invalid one with a value is written as null.
+		t.Nullable = t.Nullable && (t.Go == RawJSON || t.Go == Any)
+		t.Empty = t.Empty && t.Go != Addr && t.Go != Prefix
+		if t.Enum != nil {
+			t.Enum.Zero = false
+		}
+	}
+	if fi.OmitEmpty {
+		omitEmpty(t, null)
+	}
+	return t
+}
+
+// omitEmpty clears what omitempty skips (cmd/ggen omitEmptyCond). For a kind
+// it tests, it skips an empty value and every nil pointer above it: a
+// database/sql Null type, which null marks, is empty when not Valid, and raw
+// JSON or an any can be null without being empty.
+func omitEmpty(t *Type, null bool) {
+	switch {
+	case null:
+		t.Nullable = false
+	case t.Go == String:
+		t.Nullable = false
+		if t.Enum != nil {
+			t.Enum.Zero = false
+		}
+	case t.Go == Slice, t.Go == Map, t.Go == IP, t.Go == Addr, t.Go == Prefix, t.Go == IPNet, t.Go == TCPAddr, t.Go == UDPAddr,
+		(t.Go == Bytes || t.Go == Array) && t.Len == 0:
+		t.Nullable, t.Empty = false, false
+	case t.Go == URL:
+		// A non-zero URL can still have empty text.
+		t.Nullable = false
+	}
+}
+
+// isSQLNull reports whether gt, under any pointers, is a database/sql Null
+// type.
+func isSQLNull(gt types.Type) bool {
+	for {
+		p, ok := types.Unalias(gt).(*types.Pointer)
+		if !ok {
+			return sqlNullInner(types.Unalias(gt)) != nil
+		}
+		gt = p.Elem()
+	}
 }
 
 // typ lowers a go/types type at pipe level lvl. Level -1 is the field itself,
@@ -384,7 +461,7 @@ func (l *lowerer) typ(gt types.Type, c *fieldCtx, lvl int) *Type {
 	case l.mode == Out:
 		t.Nullable = t.Nullable || nilable
 	case nilable:
-		t.Nullable = !rejectsEmpty(t.Rules)
+		t.Nullable = zeroPasses(t)
 	}
 	return t
 }
@@ -417,7 +494,15 @@ func (l *lowerer) shapeOf(t *Type, gt types.Type, c *fieldCtx, lvl int) (nilable
 	case *types.Map:
 		t.Go, t.Wire = Map, WireObject
 		t.Key = &Type{GoType: types.TypeString(x.Key(), l.qualifier), Go: String, Wire: WireString}
-		l.applySteps(t.Key, c.keySteps())
+		if lvl < 0 {
+			// keys: steps belong to the field's own map, which pointers do not
+			// hide. A map writes only the keys it holds, so a key enum has no
+			// zero value to admit.
+			l.applySteps(t.Key, c.keySteps())
+			if t.Key.Enum != nil {
+				t.Key.Enum.Zero = false
+			}
+		}
 		t.Elem = l.typ(x.Elem(), c, lvl+1)
 		return true
 	case *types.Interface:
@@ -637,13 +722,8 @@ func (l *lowerer) stdKind(t *Type, key string, c *fieldCtx) (handled, nilable bo
 // refShape records the JSON side of a reference to a generated type. Its
 // fields and rules live on the referenced type's own shape.
 func (l *lowerer) refShape(t *Type, n *types.Named) {
-	if d := t.Ref; d != nil && d.info.IsAlias {
-		// The alias decides its own wire shape: `type LocalTime time.Time` is
-		// a string, not the object its underlying struct would suggest.
-		if a := d.shape(l.mode).Alias; a != nil {
-			t.Go, t.Wire, t.Format, t.Empty = a.Go, a.Wire, a.Format, a.Empty
-			return
-		}
+	if l.aliasWire(t) {
+		return
 	}
 	switch u := n.Underlying().(type) {
 	case *types.Struct:
@@ -667,6 +747,19 @@ func (l *lowerer) refShape(t *Type, n *types.Named) {
 	}
 }
 
+// aliasWire copies the JSON side of a reference to a generated alias, which
+// decides its own: `type LocalTime time.Time` is a string, not the object its
+// underlying struct would suggest. It reports whether t.Ref is such an alias.
+func (l *lowerer) aliasWire(t *Type) bool {
+	if d := t.Ref; d != nil && d.info.IsAlias {
+		if a := d.shape(l.mode).Alias; a != nil {
+			t.Go, t.Wire, t.Format, t.Empty = a.Go, a.Wire, a.Format, a.Empty
+			return true
+		}
+	}
+	return false
+}
+
 func (l *lowerer) enumAlias() *Type {
 	d := l.decl
 	t := &Type{GoType: d.Name, Name: d.Name, Pkg: d.Pkg, File: d.File}
@@ -675,26 +768,26 @@ func (l *lowerer) enumAlias() *Type {
 	return t
 }
 
+// delegatingAlias lowers a struct alias whose methods delegate to its target:
+// a generated target is a reference to it, any other an external type of the
+// target's package, which is the alias's own when the import path is empty.
 func (l *lowerer) delegatingAlias() *Type {
 	info := l.decl.info
 	name := info.AliasUnderlying[strings.LastIndexByte(info.AliasUnderlying, '.')+1:]
-	t := &Type{GoType: info.AliasUnderlying, Name: name, Go: Struct, Wire: WireAny, External: true}
-	if path := info.AliasUnderlyingImport.Path; path != "" {
-		if d := l.set.decls[path+"."+name]; d != nil {
-			t.Ref, t.External, t.Wire = d, false, WireObject
-		}
-		if p, ok := l.set.pkgs[path]; ok {
-			t.Pkg = p
-		} else {
-			t.Pkg = &Package{Path: path, Name: info.AliasUnderlyingImport.Name}
-			l.set.pkgs[path] = t.Pkg
-		}
+	t := &Type{GoType: info.AliasUnderlying, Name: name, Pkg: l.decl.Pkg, Go: Struct, Wire: WireAny, External: true}
+	if imp := info.AliasUnderlyingImport; imp.Path != "" {
+		t.Pkg = l.set.pkgOf(imp.Path, imp.Name)
 	}
-	if path := info.AliasUnderlyingImport.Path; path != "" && t.Ref == nil {
-		if handled, _ := l.stdKind(t, path+"."+name, &fieldCtx{f: l.aliasField()}); handled {
-			t.External, t.Name, t.GoType = true, name, info.AliasUnderlying
-			return t
+	key := t.Pkg.Path + "." + name
+	if d := l.set.decls[key]; d != nil && d.named == nil {
+		t.Ref, t.File, t.External = d, d.File, false
+		if !l.aliasWire(t) {
+			t.Wire = WireObject
 		}
+		return t
+	}
+	if handled, _ := l.stdKind(t, key, &fieldCtx{f: l.aliasField()}); handled {
+		return t
 	}
 	if !info.AliasIface.JSONMarshaler && !info.AliasIface.JSONUnmarshaler &&
 		(info.AliasIface.TextMarshaler || info.AliasIface.TextUnmarshaler || info.AliasIface.TextAppender) {
@@ -932,22 +1025,74 @@ func validatorRule(v model.ValidationRule) (Rule, bool) {
 	return r, true
 }
 
-// rejectsEmpty reports whether rules reject an empty container, which is what
-// JSON null decodes to.
-func rejectsEmpty(rules []Rule) bool {
-	for _, r := range rules {
+// zeroPasses reports whether t's Go zero value, which null decodes to on a
+// nil-able type or under nullzero, passes t's rules in declared order. Of the
+// built-in transforms only clamp moves it. A custom function is assumed to
+// pass and to keep the value.
+func zeroPasses(t *Type) bool {
+	if t.Enum != nil && t.Enum.Decl == nil && !hasZero(t.Enum.Values, t.Wire) {
+		return false // a oneof, which no transform precedes
+	}
+	size := t.Len // of "", an empty container, or a fixed array
+	var n float64
+	for _, r := range t.Rules {
+		pass := true
 		//exhaustive:ignore not every kind applies here
 		switch r.Op {
 		case NotEmpty:
-			return true
-		case MinLen, Len:
-			n, _ := strconv.Atoi(r.Args[0])
-			if (r.Op == MinLen && n > 0) || (r.Op == Len && n != 0) {
-				return true
+			pass = size > 0
+		case Len, Runes:
+			pass = size == ruleInt(r.Args[0])
+		case MinLen, MinRunes:
+			pass = size >= ruleInt(r.Args[0])
+		case MaxLen, MaxRunes:
+			pass = size <= ruleInt(r.Args[0])
+		case GT:
+			pass = n > ruleNum(r.Args[0])
+		case GTE:
+			pass = n >= ruleNum(r.Args[0])
+		case LT:
+			pass = n < ruleNum(r.Args[0])
+		case LTE:
+			pass = n <= ruleNum(r.Args[0])
+		case Multiple:
+			pass = math.Mod(n, ruleNum(r.Args[0])) == 0
+		case Eq, Neq, OneOf:
+			in := slices.ContainsFunc(r.Args, func(a string) bool {
+				if t.Go == String {
+					return a == ""
+				}
+				return ruleNum(a) == n
+			})
+			pass = in != (r.Op == Neq)
+		case URLRule, Alphanum, Numeric, Hex, Starts, Ends, Contains:
+			// "" is no URL and has no characters, and these substrings are
+			// never empty.
+			pass = false
+		case Clamp:
+			if strings.TrimSpace(r.Args[0]) != "" {
+				n = max(n, ruleNum(r.Args[0]))
+			}
+			if strings.TrimSpace(r.Args[1]) != "" {
+				n = min(n, ruleNum(r.Args[1]))
 			}
 		}
+		if !pass {
+			return false
+		}
 	}
-	return false
+	return true
+}
+
+// ruleInt and ruleNum read a rule argument, which the parser already checked.
+func ruleInt(arg string) int {
+	n, _ := strconv.Atoi(strings.TrimSpace(arg))
+	return n
+}
+
+func ruleNum(arg string) float64 {
+	f, _ := strconv.ParseFloat(strings.TrimSpace(arg), 64)
+	return f
 }
 
 func walkShapeRefs(s *Shape, fn func(*TypeDecl)) {

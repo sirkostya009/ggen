@@ -4,10 +4,17 @@ package integrationtests
 
 import (
 	"encoding/json"
+	"errors"
+	"net"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sirkostya009/ggen"
+	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
+	"github.com/sirkostya009/ggen/integrationtests/thirdparty2"
 )
 
 // EmbedStruct exercises the json:",embed" catch-all. Decode absorbs unknown
@@ -35,6 +42,114 @@ type EmbedStructsStruct struct {
 type EmbedRawStruct struct {
 	Name  string                     `json:"name"`
 	Extra map[string]json.RawMessage `json:",embed"`
+}
+
+// EmbedLease is the generated struct the catch-alls below hold behind a
+// pointer and in a slice.
+//
+//ggen:generate
+type EmbedLease struct {
+	Addr net.TCPAddr   `json:"addr"`
+	TTL  time.Duration `json:"ttl"`
+}
+
+// The catch-alls below hold values written in a form encoding/json does not
+// read: the net kinds, Duration, a byte array and generated structs, alone,
+// behind a pointer and in containers, plus a plain and a generated struct
+// from other packages. A struct has one catch-all, so each value type gets
+// its own.
+
+//ggen:generate
+type EmbedIPNets struct {
+	Name  string               `json:"name"`
+	Extra map[string]net.IPNet `json:",embed"`
+}
+
+//ggen:generate
+type EmbedIPNetPtrs struct {
+	Name  string                `json:"name"`
+	Extra map[string]*net.IPNet `json:",embed"`
+}
+
+//ggen:generate
+type EmbedTCPAddrs struct {
+	Name  string                 `json:"name"`
+	Extra map[string]net.TCPAddr `json:",embed"`
+}
+
+//ggen:generate
+type EmbedTCPAddrPtrs struct {
+	Name  string                  `json:"name"`
+	Extra map[string]*net.TCPAddr `json:",embed"`
+}
+
+//ggen:generate
+type EmbedUDPAddrs struct {
+	Name  string                 `json:"name"`
+	Extra map[string]net.UDPAddr `json:",embed"`
+}
+
+//ggen:generate
+type EmbedUDPAddrPtrs struct {
+	Name  string                  `json:"name"`
+	Extra map[string]*net.UDPAddr `json:",embed"`
+}
+
+//ggen:generate
+type EmbedDurations struct {
+	Name  string                   `json:"name"`
+	Extra map[string]time.Duration `json:",embed"`
+}
+
+//ggen:generate
+type EmbedDurationPtrs struct {
+	Name  string                    `json:"name"`
+	Extra map[string]*time.Duration `json:",embed"`
+}
+
+//ggen:generate
+type EmbedByteArrays struct {
+	Name  string              `json:"name"`
+	Extra map[string][16]byte `json:",embed"`
+}
+
+//ggen:generate
+type EmbedLeasePtrs struct {
+	Name  string                 `json:"name"`
+	Extra map[string]*EmbedLease `json:",embed"`
+}
+
+//ggen:generate
+type EmbedLeaseSlices struct {
+	Name  string                  `json:"name"`
+	Extra map[string][]EmbedLease `json:",embed"`
+}
+
+//ggen:generate
+type EmbedUDPAddrPtrSlices struct {
+	Name  string                    `json:"name"`
+	Extra map[string][]*net.UDPAddr `json:",embed"`
+}
+
+//ggen:generate
+type EmbedEndpoints struct {
+	Name  string                         `json:"name"`
+	Extra map[string]thirdparty.Endpoint `json:",embed"`
+}
+
+//ggen:generate
+type EmbedForeignLeases struct {
+	Name  string                       `json:"name"`
+	Extra map[string]thirdparty2.Lease `json:",embed"`
+}
+
+// EmbedFlaggedUDPAddrPtrs runs a typed catch-all under the flags that change
+// its code: htmlescape escapes the zone, and copy clones the kept key.
+//
+//ggen:generate copy htmlescape allowinvalidutf8 multierr
+type EmbedFlaggedUDPAddrPtrs struct {
+	Name  string                  `json:"name"`
+	Extra map[string]*net.UDPAddr `json:",embed"`
 }
 
 func TestEmbed_decodeAbsorbsUnknown(t *testing.T) {
@@ -362,5 +477,153 @@ func TestEmbed_carriedMapDropsStaleKeys(t *testing.T) {
 	}
 	if len(got.Extra) != 1 || got.Extra["a"].Name != "A2" {
 		t.Errorf("stale catch-all keys survived: %v", got.Extra)
+	}
+	// The same for values decoded by the field emitters, on both paths.
+	carried := func() EmbedTCPAddrPtrs {
+		v, _, err := EmbedTCPAddrPtrs{}.DecodeFrom([]byte(`{"name":"n","a":":1","b":":2"}`))
+		if err != nil || len(v.Extra) != 2 {
+			t.Fatalf("first decode: %v %v", v.Extra, err)
+		}
+		return v
+	}
+	const second = `{"name":"n","a":":3"}`
+	bgot, _, err := carried().DecodeFrom([]byte(second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sgot, err := ggen.NewStream(strings.NewReader(second), nil).Value(carried())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, v := range map[string]EmbedTCPAddrPtrs{"bytes": bgot, "stream": sgot} {
+		if len(v.Extra) != 1 || v.Extra["a"] == nil || v.Extra["a"].Port != 3 {
+			t.Errorf("%s: stale catch-all keys survived: %v", path, v.Extra)
+		}
+	}
+}
+
+// embedRoundTrip runs a subtest that marshals v and requires the output to
+// decode, on the bytes path and on a stream fed 1, 3 and 64 bytes per read,
+// into a value that marshals to the same members.
+func embedRoundTrip[T interface {
+	ggen.Marshaler
+	ggen.Decoder[T]
+	ggen.StreamDecoder[T]
+}](t *testing.T, name string, v T) {
+	t.Helper()
+	t.Run(name, func(t *testing.T) {
+		t.Parallel()
+		out, err := ggen.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		same := func(path string, got T) {
+			again, err := ggen.Marshal(got)
+			if err != nil || !reflect.DeepEqual(objectKeys(t, again), objectKeys(t, out)) {
+				t.Errorf("%s:\n got  %s (%v)\n want %s", path, again, err, out)
+			}
+		}
+		var zero T
+		got, _, err := zero.DecodeFrom(out)
+		if err != nil {
+			t.Fatalf("bytes: %v\nwire: %s", err, out)
+		}
+		same("bytes", got)
+		for _, chunk := range []int{1, 3, 64} {
+			var s ggen.Stream
+			s.Reset(&chunkReader{data: out, max: chunk}, make([]byte, 0, 16))
+			sgot, err := s.Value[T]()
+			if err != nil {
+				t.Fatalf("stream chunk %d: %v\nwire: %s", chunk, err, out)
+			}
+			same("stream", sgot)
+		}
+	})
+}
+
+// A catch-all reads back what it writes for values whose written form
+// encoding/json does not read.
+func TestEmbed_typedValuesRoundTrip(t *testing.T) {
+	t.Parallel()
+	cidr := mustCIDR("2001:db8::/32")
+	tcp := net.TCPAddr{IP: net.ParseIP("1.2.3.4"), Port: 80}
+	udp := net.UDPAddr{IP: net.ParseIP("fe80::1"), Port: 53, Zone: "eth0"}
+	ttl := 90 * time.Second
+	lease := EmbedLease{Addr: tcp, TTL: ttl}
+	embedRoundTrip(t, "IPNet", EmbedIPNets{Name: "n", Extra: map[string]net.IPNet{"a": cidr, "zero": {}}})
+	embedRoundTrip(t, "*IPNet", EmbedIPNetPtrs{Name: "n", Extra: map[string]*net.IPNet{"a": &cidr, "nil": nil}})
+	embedRoundTrip(t, "TCPAddr", EmbedTCPAddrs{Name: "n", Extra: map[string]net.TCPAddr{"a": tcp, "port": {Port: 1}}})
+	embedRoundTrip(t, "*TCPAddr", EmbedTCPAddrPtrs{Name: "n", Extra: map[string]*net.TCPAddr{"a": &tcp, "nil": nil}})
+	embedRoundTrip(t, "UDPAddr", EmbedUDPAddrs{Name: "n", Extra: map[string]net.UDPAddr{"a": udp, "zero": {}}})
+	embedRoundTrip(t, "*UDPAddr", EmbedUDPAddrPtrs{Name: "n", Extra: map[string]*net.UDPAddr{"a": &udp, "nil": nil}})
+	embedRoundTrip(t, "Duration", EmbedDurations{Name: "n", Extra: map[string]time.Duration{"a": ttl, "neg": -time.Millisecond}})
+	embedRoundTrip(t, "*Duration", EmbedDurationPtrs{Name: "n", Extra: map[string]*time.Duration{"a": &ttl, "nil": nil}})
+	embedRoundTrip(t, "[16]byte", EmbedByteArrays{Name: "n", Extra: map[string][16]byte{"a": {1, 2, 255}, "zero": {}}})
+	embedRoundTrip(t, "*generated", EmbedLeasePtrs{Name: "n", Extra: map[string]*EmbedLease{"a": &lease, "nil": nil}})
+	embedRoundTrip(t, "[]generated", EmbedLeaseSlices{Name: "n", Extra: map[string][]EmbedLease{"a": {lease, {}}}})
+	embedRoundTrip(t, "[]*UDPAddr", EmbedUDPAddrPtrSlices{Name: "n", Extra: map[string][]*net.UDPAddr{"a": {&udp, nil}}})
+	embedRoundTrip(t, "foreign", EmbedEndpoints{Name: "n", Extra: map[string]thirdparty.Endpoint{"a": {Addr: tcp, Timeout: ttl}}})
+	embedRoundTrip(t, "foreign generated", EmbedForeignLeases{Name: "n", Extra: map[string]thirdparty2.Lease{"a": {TTL: ttl}}})
+	embedRoundTrip(t, "flagged", EmbedFlaggedUDPAddrPtrs{Name: "n", Extra: map[string]*net.UDPAddr{"a<": {IP: udp.IP, Port: 1, Zone: "a<b"}}})
+}
+
+// A struct ggen did not generate is written in a catch-all the way a
+// map[string]V field writes it, here through encoding/json.
+func TestEmbed_foreignStructWire(t *testing.T) {
+	t.Parallel()
+	v := EmbedEndpoints{Name: "n", Extra: map[string]thirdparty.Endpoint{"a": {
+		Addr: net.TCPAddr{IP: net.ParseIP("1.2.3.4"), Port: 80}, Timeout: time.Second,
+	}}}
+	const want = `{"name":"n","a":{"Addr":{"IP":"1.2.3.4","Port":80,"Zone":""},"Timeout":1000000000}}`
+	if out, err := ggen.Marshal(v); err != nil || string(out) != want {
+		t.Errorf("got  %s (%v)\nwant %s", out, err, want)
+	}
+}
+
+// A malformed catch-all value fails at the same position on both paths, and
+// its error path starts at the member's key.
+func TestEmbed_typedValueErrorPath(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		payload string
+		run     func(string, int) (error, error)
+		keys    []string
+	}{
+		{`{"name":"n","edge":"1.2.3.4"}`, decodeBothChunked[EmbedTCPAddrs], []string{"edge"}},
+		{`{"name":"n","edge":"10.0.0.0/33"}`, decodeBothChunked[EmbedIPNetPtrs], []string{"edge"}},
+		{`{"name":"n","edge":"soon"}`, decodeBothChunked[EmbedDurations], []string{"edge"}},
+		{`{"name":"n","edge":[":1","x"]}`, decodeBothChunked[EmbedUDPAddrPtrSlices], []string{"edge[]"}},
+		{`{"name":"n","edge":{"ttl":"soon"}}`, decodeBothChunked[EmbedLeasePtrs], []string{"edge", "ttl"}},
+	} {
+		for _, chunk := range []int{1, 3, 64} {
+			bErr, sErr := c.run(c.payload, chunk)
+			bp, bok := errors.AsType[*ggen.ParseError](bErr)
+			sp, sok := errors.AsType[*ggen.ParseError](sErr)
+			if !bok || !sok {
+				t.Errorf("%s chunk %d: want ParseError on both paths, got %v / %v", c.payload, chunk, bErr, sErr)
+				continue
+			}
+			if !slices.Equal(bp.Keys, c.keys) || !slices.Equal(sp.Keys, c.keys) || bp.Pos != sp.Pos {
+				t.Errorf("%s chunk %d: keys %q / %q pos %d / %d, want keys %q on both at one pos",
+					c.payload, chunk, bp.Keys, sp.Keys, bp.Pos, sp.Pos, c.keys)
+			}
+		}
+	}
+}
+
+// Under copy, the key and the value of a typed catch-all entry do not change
+// when the input is overwritten after decode.
+func TestEmbed_typedValueCopyOutlivesInput(t *testing.T) {
+	t.Parallel()
+	in := []byte(`{"name":"n","edge":"[fe80::1%eth0]:1"}`)
+	got, _, err := EmbedFlaggedUDPAddrPtrs{}.DecodeFrom(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range in {
+		in[i] = 'X'
+	}
+	if a := got.Extra["edge"]; a == nil || a.Zone != "eth0" || a.Port != 1 {
+		t.Errorf("entry changed with the input: %v", got.Extra)
 	}
 }

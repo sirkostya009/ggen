@@ -28,6 +28,24 @@ type URLStruct struct {
 	Site url.URL `json:"site"`
 }
 
+// IPNetStruct, TCPAddrStruct and UDPAddrStruct hold one net value each, so
+// JSONSize is that value's budget plus the fixed object bytes.
+//
+//ggen:generate
+type IPNetStruct struct {
+	V net.IPNet `json:"v"`
+}
+
+//ggen:generate
+type TCPAddrStruct struct {
+	V net.TCPAddr `json:"v"`
+}
+
+//ggen:generate
+type UDPAddrStruct struct {
+	V net.UDPAddr `json:"v"`
+}
+
 // JSONSize is an upper bound. ggen.Marshal preallocates exactly that many
 // bytes, and AppendJSON must never grow the buffer. The bound covers
 // realistic worst-case input: long ASCII, two-char escapes, HTML characters,
@@ -164,6 +182,27 @@ func TestJSONSize_NoReallocOnWorstCase(t *testing.T) {
 				PtrAddrStruct:    PtrAddrStruct{Addr: &Address{Street: worstShort, City: worstShort, ZipCode: "00000"}},
 				PtrWhenStruct:    PtrWhenStruct{When: new(time.Unix(math.MaxInt32, 0).UTC())},
 				PtrEnabledStruct: PtrEnabledStruct{Enabled: new(false)},
+			},
+		},
+		{
+			// `=` alias fields are sized as the types they name, so a long
+			// URL or a zoned IPv6 address behind an alias still fits.
+			name: "SameViaAlias_target_sizes",
+			v: SameViaAlias{
+				TCP:   net.TCPAddr{IP: net.ParseIP("2001:db8:85a3::8a2e:370:7334"), Port: 65535, Zone: "eth0"},
+				PTCP:  &net.TCPAddr{IP: net.ParseIP("fe80::1"), Port: 65535, Zone: worstShort},
+				Nets:  []net.IPNet{mustCIDR("2001:db8::/32"), mustCIDR("10.0.0.0/8")},
+				ByKey: map[string]net.IPNet{worstShort: mustCIDR("2001:db8::/32")},
+				UDP:   net.UDPAddr{IP: net.ParseIP("2001:db8:85a3::8a2e:370:7334"), Port: 65535, Zone: "eth0"},
+				Dur:   time.Duration(math.MinInt64),
+				Durs:  []time.Duration{time.Duration(math.MinInt64), time.Duration(math.MaxInt64)},
+				URL:   url.URL{Scheme: "https", Host: "x.io", Path: "/" + worstShort, RawQuery: worstShort},
+				Addr:  netip.MustParseAddr("2001:db8:85a3::8a2e:370:7334"),
+				NS:    sql.NullString{String: worstShort, Valid: true},
+				Cnt:   -1 << 62,
+				Words: []string{worstShort, worstHTML},
+				PInt:  new(-1 << 62),
+				Opt:   sql.Null[int64]{V: math.MinInt64, Valid: true},
 			},
 		},
 		{
@@ -475,6 +514,21 @@ func TestJSONSize_HTMLEscapeStruct_NoRealloc(t *testing.T) {
 	}
 }
 
+// The same 6-byte bound holds for strings two container levels down, a
+// netip zone among them, and for a sql.NullString value.
+func TestJSONSize_HTMLEscapeNested_NoRealloc(t *testing.T) {
+	t.Parallel()
+	in := htmlEscapeNested(strings.Repeat("<>&", 50))
+	size := in.JSONSize()
+	got, err := in.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	if len(got) > size || cap(got) != size {
+		t.Errorf("htmlescape realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+	}
+}
+
 // An `any` is sized by walking the value it holds. So the bound holds for a
 // payload of any size at every position an `any` can take. That includes the
 // htmlescape escape factor and a generated struct reporting its own JSONSize.
@@ -536,6 +590,43 @@ func TestJSONSize_InlineStruct_NoRealloc(t *testing.T) {
 	}
 	if cap(got) != size {
 		t.Errorf("inline realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+	}
+}
+
+// A typed catch-all value is budgeted as a map value of its type, and the
+// bound must cover the longest text each value writes.
+func TestJSONSize_EmbedTypedValues_NoRealloc(t *testing.T) {
+	t.Parallel()
+	ip := net.ParseIP("1111:2222:3333:4444:5555:6666:7777:8888")
+	tcp := net.TCPAddr{IP: ip, Port: 65535, Zone: strings.Repeat(`"\`, 16)}
+	udp := net.UDPAddr(tcp)
+	cidr := net.IPNet{IP: ip, Mask: net.CIDRMask(128, 128)}
+	long := time.Duration(math.MinInt64)
+	lease := EmbedLease{Addr: tcp, TTL: long}
+	key := strings.Repeat(`"`, 20)
+	for name, v := range map[string]ggen.Marshaler{
+		"IPNet":       EmbedIPNets{Extra: map[string]net.IPNet{key: cidr}},
+		"*IPNet":      EmbedIPNetPtrs{Extra: map[string]*net.IPNet{key: &cidr, "nil": nil}},
+		"TCPAddr":     EmbedTCPAddrs{Extra: map[string]net.TCPAddr{key: tcp}},
+		"*TCPAddr":    EmbedTCPAddrPtrs{Extra: map[string]*net.TCPAddr{key: &tcp}},
+		"UDPAddr":     EmbedUDPAddrs{Extra: map[string]net.UDPAddr{key: udp}},
+		"*UDPAddr":    EmbedUDPAddrPtrs{Extra: map[string]*net.UDPAddr{key: &udp}},
+		"Duration":    EmbedDurations{Extra: map[string]time.Duration{key: long}},
+		"*Duration":   EmbedDurationPtrs{Extra: map[string]*time.Duration{key: &long}},
+		"[16]byte":    EmbedByteArrays{Extra: map[string][16]byte{key: {255}}},
+		"*generated":  EmbedLeasePtrs{Extra: map[string]*EmbedLease{key: &lease}},
+		"[]generated": EmbedLeaseSlices{Extra: map[string][]EmbedLease{key: {lease, lease}}},
+		"[]*UDPAddr":  EmbedUDPAddrPtrSlices{Extra: map[string][]*net.UDPAddr{key: {&udp, nil}}},
+		"htmlescape":  EmbedFlaggedUDPAddrPtrs{Extra: map[string]*net.UDPAddr{key: {IP: ip, Port: 65535, Zone: strings.Repeat("<>&", 10)}}},
+	} {
+		size := v.JSONSize()
+		got, err := v.AppendJSON(make([]byte, 0, size))
+		if err != nil {
+			t.Fatalf("%s: AppendJSON: %v", name, err)
+		}
+		if cap(got) != size {
+			t.Errorf("%s: JSONSize=%d but AppendJSON wrote %d (cap %d)", name, size, len(got), cap(got))
+		}
 	}
 }
 
@@ -787,6 +878,47 @@ func TestJSONSize_PtrSlicePerShape_NoRealloc(t *testing.T) {
 	}
 }
 
+// Cap-guard for pointers to containers as container elements. Each pointee is
+// budgeted inside the loop over its container, with outer lengths below the
+// inner ones, nil slots, and long strings off the diagonal, so a pointee loop
+// indexing with the outer variable either panics or undercounts.
+func TestJSONSize_PtrContainerElems_NoRealloc(t *testing.T) {
+	t.Parallel()
+	worst := strings.Repeat(`"\`+"\n\t", 16)
+	zoned := netip.MustParseAddr("fe80::1%" + strings.Repeat("z", 40))
+	addr := Address{Street: worst, City: worst, ZipCode: "00000"}
+	cases := []struct {
+		name string
+		v    ggen.Marshaler
+	}{
+		{"slice_of_ptr_array/short_outer", PtrContainerElems{SA: []*[2]string{{worst, worst}}}},
+		{"slice_of_ptr_array/nil_first", PtrContainerElems{SA: []*[2]string{nil, {worst, worst}}}},
+		{"slice_of_ptr_array/off_diagonal", PtrContainerElems{SA: []*[2]string{{"", worst}, {worst, ""}}}},
+		{"slice_of_ptr_slice", PtrContainerElems{SS: []*[]string{{worst, worst, worst}, nil}}},
+		{"array_of_ptr_array", PtrContainerElems{AA: [2]*[3]netip.Addr{nil, {zoned, zoned, zoned}}}},
+		{"slice_of_ptr_struct_slice", PtrContainerElems{SI: []*[]Address{{addr, addr}}}},
+		{"map_of_ptr_array", PtrContainerElems{MA: map[string]*[2]string{"k": {worst, worst}, "n": nil}}},
+		{"map_of_slice_of_ptr_array", PtrContainerElems{MS: map[string][]*[2]string{"k": {{worst, worst}}, "j": {nil, {worst, worst}}}}},
+		{"nested_slice_of_ptr_array", PtrContainerElems{NA: [][]*[2]string{{{worst, worst}}, {nil, {worst, worst}}}}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			size := c.v.JSONSize()
+			got, err := c.v.AppendJSON(make([]byte, 0, size))
+			if err != nil {
+				t.Fatalf("AppendJSON: %v", err)
+			}
+			if cap(got) != size {
+				t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+			}
+			if len(got) > size {
+				t.Errorf("undersized: len=%d > size=%d", len(got), size)
+			}
+		})
+	}
+}
+
 // Per-pointee-kind cap-guard for single-level *T fields, nil and populated.
 func TestJSONSize_PtrFieldPerKind_NoRealloc(t *testing.T) {
 	t.Parallel()
@@ -939,6 +1071,72 @@ func TestJSONSize_ContainerAliases_NoRealloc(t *testing.T) {
 	size = tuple.JSONSize()
 	got, err = tuple.AppendJSON(make([]byte, 0, size))
 	check("AliasTuple", size, got, err)
+}
+
+// The net.IPNet, net.TCPAddr and net.UDPAddr budgets at their widest: the
+// longest IPv4 and IPv6 texts, port 65535, and zones whose every byte escapes
+// at the full width of the escape mode, at every position NetAddrs has.
+func TestJSONSize_NetKinds_NoRealloc(t *testing.T) {
+	t.Parallel()
+	v6 := net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")
+	v4 := net.IPv4(255, 255, 255, 255)
+	for _, zone := range []string{"", `""""`, `\\`} {
+		wide := net.TCPAddr{IP: v6, Port: 65535, Zone: zone}
+		narrow := net.TCPAddr{IP: v4, Port: 65535}
+		n6 := net.IPNet{IP: v6, Mask: net.CIDRMask(128, 128)}
+		n4 := net.IPNet{IP: v4.To4(), Mask: net.CIDRMask(32, 32)}
+		in := NetAddrs{
+			Net: n6, TCP: wide, UDP: net.UDPAddr(narrow), PNet: &n4, PTCP: &wide,
+			Nets: []net.IPNet{n6, n4}, PAddrs: []*net.UDPAddr{(*net.UDPAddr)(&wide), nil},
+			ByName: map[string]net.TCPAddr{"a": wide, "b": narrow}, PByKey: map[string]*net.IPNet{"n": &n6},
+			Tuple: [2]net.UDPAddr{net.UDPAddr(wide), net.UDPAddr(narrow)}, OTCP: wide, OPUDP: (*net.UDPAddr)(&wide),
+			ONet: &n4, ZNet: n6, EUDP: (*net.UDPAddr)(&wide),
+			Deep: map[string][]net.IPNet{"d": {n6}}, Wide: map[string]*net.UDPAddr{"w": (*net.UDPAddr)(&wide)},
+		}
+		size := in.JSONSize()
+		got, err := in.AppendJSON(make([]byte, 0, size))
+		if err != nil || cap(got) != size {
+			t.Errorf("zone %q: realloc or error: JSONSize=%d cap=%d len=%d (%v)", zone, size, cap(got), len(got), err)
+		}
+	}
+	h := NetAddrsHTML{TCP: net.TCPAddr{IP: v6, Port: 65535, Zone: "<>&"}}
+	size := h.JSONSize()
+	got, err := h.AppendJSON(make([]byte, 0, size))
+	if err != nil || cap(got) != size {
+		t.Errorf("htmlescape: realloc or error: JSONSize=%d cap=%d len=%d (%v)", size, cap(got), len(got), err)
+	}
+}
+
+// Each net budget is exactly the length of the widest text of its kind and
+// address family, so a value that writes that text has no slack to hide a
+// budget one byte short.
+func TestJSONSize_NetKinds_Exact(t *testing.T) {
+	t.Parallel()
+	v6 := net.ParseIP("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff")
+	v4 := net.IPv4(255, 255, 255, 255)
+	wide := net.TCPAddr{IP: v6, Port: 65535}
+	narrow := net.TCPAddr{IP: v4, Port: 65535}
+	// Every zone byte escapes to two bytes, or to six under htmlescape.
+	zoned := net.TCPAddr{IP: v6, Port: 65535, Zone: `"\`}
+	for name, v := range map[string]ggen.Marshaler{
+		"IPNet v4":        IPNetStruct{V: net.IPNet{IP: v4.To4(), Mask: net.CIDRMask(32, 32)}},
+		"IPNet v6":        IPNetStruct{V: net.IPNet{IP: v6, Mask: net.CIDRMask(128, 128)}},
+		"TCPAddr v4":      TCPAddrStruct{V: narrow},
+		"TCPAddr v6":      TCPAddrStruct{V: wide},
+		"TCPAddr zone":    TCPAddrStruct{V: zoned},
+		"UDPAddr v4":      UDPAddrStruct{V: net.UDPAddr(narrow)},
+		"UDPAddr v6":      UDPAddrStruct{V: net.UDPAddr(wide)},
+		"UDPAddr zone":    UDPAddrStruct{V: net.UDPAddr(zoned)},
+		"htmlescape zone": NetAddrsHTML{TCP: net.TCPAddr{IP: v6, Port: 65535, Zone: "<>&"}},
+	} {
+		out, err := v.AppendJSON(nil)
+		if err != nil {
+			t.Fatalf("%s: AppendJSON: %v", name, err)
+		}
+		if size := v.JSONSize(); size != len(out) {
+			t.Errorf("%s: JSONSize=%d but AppendJSON wrote %d: %s", name, size, len(out), out)
+		}
+	}
 }
 
 // A zoned netip.Addr must budget its '%' and zone bytes. Without them the

@@ -113,6 +113,10 @@ func TestAddrPortHelperMatchesGo(t *testing.T) {
 		":0", "[]:80", "[:80", "localhost:80", "1.2.3.4:http", "01.2.3.4:1", "1.2.3.4:00000000000000000080",
 		"[::ffff:1.2.3.4%eth0]:80", "[0:0:0:0:0:ffff:102:304%x]:1", "[::FFFF:0:1%x]:1", "[::fffe:1.2.3.4%x]:1",
 		"[1::ffff:1.2.3.4%x]:1", "[::1.2.3.4%x]:1", "[0000::00ffff:1.2.3.4%x]:1", "[::ffff:1.2.3.4]:80",
+		// one non-zero group before the ffff, at each position the mapped
+		// prefix spans
+		"[0:1::ffff:1.2.3.4%x]:1", "[0:0:1::ffff:102:304%x]:1", "[0:0:0:1::ffff:1.2.3.4%x]:1",
+		"[::1:ffff:1.2.3.4%x]:1", "[0:0:0:0:1:ffff:102:304%x]:1",
 	)
 	matchGo(t, inputs, "ggenIsAddrPort(s)", func(s string) string {
 		if s == "" {

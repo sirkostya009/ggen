@@ -10,6 +10,7 @@ import (
 	jsonv2 "encoding/json/v2"
 	"math/big"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -120,6 +121,28 @@ func TestAnyNumber_NestedShape(t *testing.T) {
 	arr := m["k"].([]any)
 	if _, ok := arr[1].(json.Number); !ok {
 		t.Errorf("array elem = %T, want json.Number", arr[1])
+	}
+}
+
+// AnyNumberGrid holds `any` values two container levels down.
+//
+//ggen:generate usenumber
+type AnyNumberGrid struct {
+	Grid [][]any `json:"grid"`
+}
+
+func TestAnyNumber_NestedContainerElem(t *testing.T) {
+	t.Parallel()
+	const in = `{"grid":[[12345678901234567890]]}`
+	bytesV, _, bErr := AnyNumberGrid{}.DecodeFrom([]byte(in))
+	streamV, sErr := ggen.NewStream(strings.NewReader(in), nil).Value[AnyNumberGrid]()
+	if bErr != nil || sErr != nil {
+		t.Fatalf("decode: bytes %v, stream %v", bErr, sErr)
+	}
+	for path, got := range map[string]AnyNumberGrid{"bytes": bytesV, "stream": streamV} {
+		if n, ok := got.Grid[0][0].(json.Number); !ok || n != "12345678901234567890" {
+			t.Errorf("%s: grid[0][0] = %T %v, want json.Number 12345678901234567890", path, got.Grid[0][0], got.Grid[0][0])
+		}
 	}
 }
 

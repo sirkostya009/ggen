@@ -105,6 +105,12 @@ type Stdlib struct {
 	NS     sql.NullString `json:"ns"`
 	NI     sql.NullInt16  `json:"ni"`
 	NG     sql.Null[bool] `json:"ng"`
+
+	PN    *netip.Prefix          `json:"pn,omitzero"`
+	PT    *net.TCPAddr           `json:"pt,omitzero"`
+	OT    net.TCPAddr            `json:"ot,omitzero"`
+	Nets  []net.IPNet            `json:"nets"`
+	Peers map[string]net.TCPAddr `json:"peers"`
 }
 
 //ggen:generate
@@ -171,6 +177,30 @@ type Pair struct {
 	Right *Node `json:"right"`
 }
 
+// PairAlias is an `=` alias of Pair.
+type PairAlias = Pair
+
+// PairView delegates to the generated Pair, written through an `=` alias.
+//
+//ggen:generate
+type PairView PairAlias
+
+// Shade delegates to the text methods of Color.
+//
+//ggen:generate
+type Shade Color
+
+// Keys restricts map keys. A keys: step applies to the field's own map only,
+// not to a map inside it.
+//
+//ggen:generate
+type Keys struct {
+	One    map[string]int            `json:"one"    pipe:"keys:oneof=ab"`
+	Two    map[string]int            `json:"two"    pipe:"keys:oneof=ab|cd"`
+	Deep   map[string]map[string]int `json:"deep"   pipe:"keys:oneof=ab|cd"`
+	Folded map[string]map[string]int `json:"folded" pipe:"keys:(minrunes=2 tolower)"`
+}
+
 // Level is an integer enum type.
 type Level int
 
@@ -183,6 +213,13 @@ const (
 type Embedded struct {
 	Note string `json:"note"`
 }
+
+// SiteAlias and SpanAlias are `=` aliases. A field written through one is
+// the type the alias names, to Go and to the schemas alike.
+type (
+	SiteAlias = url.URL
+	SpanAlias = time.Duration
+)
 
 // More covers the kinds, formats and field shapes the other subjects miss.
 //
@@ -207,4 +244,26 @@ type More struct {
 	Zero    string                 `json:"zero,omitzero"`
 	Skip    string                 `json:"-"`
 	Quoted  string                 `json:"'a,b'"`
+	ASite   SiteAlias              `json:"a_site"`
+	ASpans  []SpanAlias            `json:"a_spans"`
+}
+
+// Zeros decodes null as the zero value of every field with no null of its
+// own.
+//
+//ggen:generate nullzero
+type Zeros struct {
+	S    string      `json:"s"`
+	Min  string      `json:"min"  pipe:"minlen=1"`
+	N    int         `json:"n"    pipe:"lte=10"`
+	Pos  int         `json:"pos"  pipe:"gt=0"`
+	Neq  int         `json:"neq"  pipe:"neq=0"`
+	B    bool        `json:"b"`
+	T    time.Time   `json:"t"`
+	TCP  net.TCPAddr `json:"tcp"`
+	Net  net.IPNet   `json:"net"`
+	Pair [2]int      `json:"pair"`
+	Fix  [4]byte     `json:"fix"`
+	Role Role        `json:"role"`
+	List []string    `json:"list" pipe:"minlen=1"`
 }

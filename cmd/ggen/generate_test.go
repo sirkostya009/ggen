@@ -192,6 +192,73 @@ func TestGenerate_runeGates(t *testing.T) {
 	})
 }
 
+// On the scalar tier the text forms of the net types get a 48-byte inline scan
+// window, so a full "[IPv6 address]:65535" is scanned once. A plain string
+// keeps the default 32.
+func TestGenerate_netTextWindow(t *testing.T) {
+	for _, tc := range []struct {
+		goType string
+		kind   model.TypeKind
+		want   string
+	}{
+		{"net.IP", model.KindNetIP, "kew := ke + 48"},
+		{"netip.Addr", model.KindNetipAddr, "kew := ke + 48"},
+		{"netip.Prefix", model.KindNetipPrefix, "kew := ke + 48"},
+		{"net.IPNet", model.KindIPNet, "kew := ke + 48"},
+		{"net.TCPAddr", model.KindTCPAddr, "kew := ke + 48"},
+		{"net.UDPAddr", model.KindUDPAddr, "kew := ke + 48"},
+		{"string", model.KindString, "kew := ke + 32"},
+	} {
+		code, err := generate("p", []model.StructInfo{{Name: "V", Fields: []model.FieldInfo{{
+			GoName: "F", JSONName: "f", GoType: tc.goType, Kind: tc.kind,
+		}}}})
+		if err != nil {
+			t.Fatalf("%s: %v", tc.goType, err)
+		}
+		if n := strings.Count(string(code), "kew := ke + "); n != 1 || !bytes.Contains(code, []byte(tc.want)) {
+			t.Errorf("%s: want one %q window, got %d windows:\n%s", tc.goType, tc.want, n, code)
+		}
+	}
+}
+
+// The import scan reads the rendered bodies as Go source. A qualifier inside a
+// string, raw string or rune literal or a comment names no package, and an
+// escape neither ends a literal early nor runs it past its closing quote.
+func TestGenerate_importScan(t *testing.T) {
+	structs := []model.StructInfo{{Name: "V", Fields: []model.FieldInfo{{
+		TypeImports: []model.TypeImport{{Name: "leaf", Path: "example.com/leaf"}},
+	}}}}
+	for _, tc := range []struct {
+		body      string
+		want, not string
+	}{
+		{body: `case "net.host":`, not: "net"},
+		{body: `x = "q\"net.x"`, not: "net"},
+		{body: `x = "back\\"; _ = strconv.Itoa`, want: "strconv"},
+		{body: `x = "http://net.x"; _ = time.Now`, want: "time", not: "net"},
+		{body: `if c == '"' { _ = time.Now }`, want: "time"},
+		{body: `if c == '\'' { _ = fmt.Sprint }`, want: "fmt"},
+		{body: "x = `raw \" net.x`; _ = bytes.Clone", want: "bytes", not: "net"},
+		{body: "// json.Marshal\n_ = math.MaxInt", want: "math", not: "encoding/json"},
+		{body: "/* it's big.Int */ _ = reflect.TypeOf", want: "reflect", not: "math/big"},
+		{body: `result.Ωtime.DecodeFrom(data)`, not: "time"},
+		{body: `x = "leaf.name"`, not: "example.com/leaf"},
+		{body: `var v leaf.Leaf`, want: "example.com/leaf"},
+	} {
+		std, third := collectImports(structs, [][]byte{[]byte(tc.body)})
+		got := map[string]struct{}{}
+		for _, s := range append(std, third...) {
+			got[s.Path] = struct{}{}
+		}
+		if _, ok := got[tc.want]; tc.want != "" && !ok {
+			t.Errorf("%s: missing import %q, got %v", tc.body, tc.want, got)
+		}
+		if _, ok := got[tc.not]; tc.not != "" && ok {
+			t.Errorf("%s: unexpected import %q", tc.body, tc.not)
+		}
+	}
+}
+
 func TestOutputWrittenNextToSource(t *testing.T) {
 	dir := t.TempDir()
 	sub := filepath.Join(dir, "nested", "pkg")
@@ -235,9 +302,11 @@ type Msg struct {
 	}
 }
 
-// The synthetic FieldInfos built for container elements and converter inputs
-// must keep the parent's flags. That covers the inner levels of hint:, and
-// allowinvalidutf8 and copy at every container level and on @Conv inputs.
+// The synthetic FieldInfos built for container elements, sql.Null values and
+// converter inputs must keep the parent's flags. That covers the inner levels
+// of hint:, allowinvalidutf8, copy, htmlescape and usenumber at every
+// container level, htmlescape on a sql.NullString, and multierr on @Conv
+// inputs.
 func TestGenerate_syntheticFieldFlagPropagation(t *testing.T) {
 	t.Run("hint_inner_levels", func(t *testing.T) {
 		code, err := generate("p", []model.StructInfo{{
@@ -260,6 +329,34 @@ func TestGenerate_syntheticFieldFlagPropagation(t *testing.T) {
 		}
 	})
 
+	t.Run("hint_inner_levels_below_map", func(t *testing.T) {
+		code, err := generate("p", []model.StructInfo{{
+			Name: "H",
+			Fields: []model.FieldInfo{
+				{
+					GoName: "ByKey", JSONName: "byKey", GoType: "map[string][]int",
+					Kind: model.KindMap, ElemKind: model.KindSlice, ElemType: "[]int",
+					HintLen: -1, HintLevels: []int{8},
+				},
+				{
+					GoName: "Rows", JSONName: "rows", GoType: "[]map[string]int",
+					Kind: model.KindSlice, ElemKind: model.KindMap, ElemType: "map[string]int",
+					HintLen: -1, HintLevels: []int{6},
+				},
+			},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := string(code)
+		if !strings.Contains(s, "make([]int, 0, 8)") {
+			t.Errorf("map value hint dropped by sliceElemField:\n%s", s)
+		}
+		if !strings.Contains(s, "make(map[string]int, 6)") {
+			t.Errorf("map element hint dropped by sliceElemField:\n%s", s)
+		}
+	})
+
 	t.Run("allowinvalidutf8_nested_elem", func(t *testing.T) {
 		code, err := generate("p", []model.StructInfo{{
 			Name: "U", AllowInvalidUTF8: true,
@@ -274,6 +371,108 @@ func TestGenerate_syntheticFieldFlagPropagation(t *testing.T) {
 		}
 		if strings.Contains(string(code), "ggen.String(data, i, true)") {
 			t.Errorf("inner string elems re-validate UTF-8 despite allowinvalidutf8:\n%s", code)
+		}
+	})
+
+	t.Run("htmlescape_nested_elem", func(t *testing.T) {
+		nested := func(name, goType string, kind, elemKind model.TypeKind, elemType string) model.FieldInfo {
+			return model.FieldInfo{
+				GoName: name, JSONName: strings.ToLower(name), GoType: goType,
+				Kind: kind, ElemKind: elemKind, ElemType: elemType,
+				HintLen: -1, HTMLEscape: true,
+			}
+		}
+		fixed := nested("Fixed", "[2][]string", model.KindArray, model.KindSlice, "[]string")
+		fixed.ArrayLen = 2
+		pairs := nested("Pairs", "[][2]string", model.KindSlice, model.KindArray, "[2]string")
+		pairs.ElemArrayLen = 2
+		code, err := generate("p", []model.StructInfo{{
+			Name: "E", HTMLEscape: true,
+			Fields: []model.FieldInfo{
+				nested("Rows", "[][]string", model.KindSlice, model.KindSlice, "[]string"),
+				fixed,
+				pairs,
+				nested("Deep", "map[string][][]string", model.KindMap, model.KindSlice, "[][]string"),
+				nested("Anys", "[][]any", model.KindSlice, model.KindSlice, "[]any"),
+			},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := string(code)
+		for _, raw := range []string{"AppendStringNoHTML", "ggen.AppendAny(", "ggen.AnySize("} {
+			if strings.Contains(s, raw) {
+				t.Errorf("an element two container levels down is written with %s despite htmlescape:\n%s", raw, s)
+			}
+		}
+		if strings.Contains(s, ")*2 + ") {
+			t.Errorf("nested string elements budget 2 bytes per byte despite htmlescape:\n%s", s)
+		}
+	})
+
+	t.Run("usenumber_nested_elem", func(t *testing.T) {
+		code, err := generate("p", []model.StructInfo{{
+			Name: "N", UseNumber: true,
+			Fields: []model.FieldInfo{{
+				GoName: "Anys", JSONName: "anys", GoType: "[][]any",
+				Kind: model.KindSlice, ElemKind: model.KindSlice, ElemType: "[]any",
+				HintLen: -1, UseNumber: true,
+			}},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := string(code)
+		if strings.Contains(s, "ggen.Any(data") || strings.Contains(s, "s.Any(") {
+			t.Errorf("inner any elems decode numbers as float64 despite usenumber:\n%s", s)
+		}
+		if !strings.Contains(s, "ggen.AnyNumber(data") || !strings.Contains(s, "s.AnyNumber(") {
+			t.Errorf("inner any elems lack the json.Number decode on one path:\n%s", s)
+		}
+	})
+
+	t.Run("htmlescape_sql_null_value", func(t *testing.T) {
+		code, err := generate("p", []model.StructInfo{{
+			Name: "Q", HTMLEscape: true,
+			Fields: []model.FieldInfo{{
+				GoName: "NS", JSONName: "ns", GoType: "sql.NullString", Kind: model.KindSQLNull,
+				HintLen: -1, HTMLEscape: true,
+			}},
+		}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := string(code)
+		if !strings.Contains(s, "ggen.AppendString(dst, s.NS.String)") {
+			t.Errorf("sql.NullString value written without htmlescape:\n%s", s)
+		}
+		if !strings.Contains(s, "len(s.NS.String) * 6") {
+			t.Errorf("sql.NullString value budget misses the htmlescape factor:\n%s", s)
+		}
+	})
+
+	t.Run("multierr_converter_input", func(t *testing.T) {
+		// generate() seeds multiErrTypes only when it is nil.
+		generatedTypes, generatedFields, multiErrTypes, namedKinds, cyclicTypes = nil, nil, nil, nil, nil
+		code, err := generate("p", []model.StructInfo{
+			{Name: "W", MultiErr: true, Fields: []model.FieldInfo{{
+				GoName: "N", JSONName: "n", GoType: "int", Kind: model.KindInt, HintLen: -1, MultiErr: true,
+			}}},
+			{Name: "M", MultiErr: true, Fields: []model.FieldInfo{{
+				GoName: "Price", JSONName: "price", GoType: "int", Kind: model.KindInt, HintLen: -1, MultiErr: true,
+				Variants: []model.Variant{
+					{Kind: model.VariantNative},
+					{Kind: model.VariantConvert, FuncName: "FromW", InType: "W", InKind: model.KindStruct},
+				},
+			}}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// A failure inside the converter input is collected on both paths,
+		// like one inside a struct field.
+		if got := strings.Count(string(code), "errs.Collect(\"price\""); got != 2 {
+			t.Errorf("converter input collects on %d paths, want 2:\n%s", got, code)
 		}
 	})
 }
@@ -354,4 +553,63 @@ func TestGenerate_round8Fixes(t *testing.T) {
 			t.Errorf("omitempty named string: got %q", got)
 		}
 	})
+}
+
+// A catch-all value written in a form encoding/json does not read decodes
+// through the field emitters, and a struct ggen did not generate is written
+// and read like a map value. Every other value keeps AppendAny and
+// encoding/json. Errors name the member's key, so no value label is left in
+// the output.
+func TestGenerate_embedValueRoutes(t *testing.T) {
+	genGlobalsMu.Lock()
+	defer genGlobalsMu.Unlock()
+	reset := func() {
+		generatedTypes, generatedFields, namedKinds, multiErrTypes, cyclicTypes = nil, nil, nil, nil, nil
+	}
+	defer reset()
+	inner := model.StructInfo{Name: "Inner", Fields: []model.FieldInfo{{GoName: "N", JSONName: "n", GoType: "int", Kind: model.KindInt}}}
+	for _, c := range []struct {
+		elemType             string
+		unmarshal, appendAny bool
+	}{
+		{"time.Duration", false, true},
+		{"*net.TCPAddr", false, true},
+		{"[]*net.UDPAddr", false, true},
+		{"map[string]net.IPNet", false, true},
+		{"[]byte", false, true},
+		{"*[4]byte", false, true},
+		{"*Inner", false, true},
+		{"[]Inner", false, true},
+		{"other.Peer", true, false},
+		{"*other.Peer", true, false},
+		{"[]other.Peer", true, false},
+		{"url.URL", true, true},
+		{"sql.NullString", true, true},
+		{"time.Time", true, true},
+		{"Level", true, true},
+		{"[][4]byte", true, true},
+	} {
+		reset()
+		code, err := generate("p", []model.StructInfo{inner, {
+			Name: "Host",
+			Fields: []model.FieldInfo{{
+				GoName: "Extra", JSONName: "Extra", GoType: "map[string]" + c.elemType, Kind: model.KindMap,
+				ElemType: c.elemType, ElemKind: model.ResolveKind(c.elemType), Embed: true, HintLen: -1,
+				NamedPrims: map[string]model.TypeKind{"Level": model.KindInt},
+			}},
+		}})
+		if err != nil {
+			t.Fatalf("%s: %v", c.elemType, err)
+		}
+		s := string(code)
+		if got := strings.Contains(s, "json.Unmarshal("); got != c.unmarshal {
+			t.Errorf("%s: json.Unmarshal emitted = %v, want %v", c.elemType, got, c.unmarshal)
+		}
+		if got := strings.Contains(s, "ggen.AppendAny("); got != c.appendAny {
+			t.Errorf("%s: AppendAny emitted = %v, want %v", c.elemType, got, c.appendAny)
+		}
+		if strings.Contains(s, `\x00`) {
+			t.Errorf("%s: a value label leaked into the output:\n%s", c.elemType, s)
+		}
+	}
 }

@@ -14,6 +14,7 @@ import (
 	"unsafe"
 
 	"github.com/sirkostya009/ggen"
+	tp "github.com/sirkostya009/ggen/integrationtests/thirdparty"
 	"github.com/sirkostya009/ggen/internal/prealloc"
 )
 
@@ -332,6 +333,74 @@ func TestTuple_Stream(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got.Pair, [2][]string{{"a"}, {"b", "c"}}) {
 		t.Errorf("Pair = %v", got.Pair)
+	}
+}
+
+// TupleNest holds tuples two container levels down. Each inner tuple has its
+// own length, which differs from the container above it.
+//
+//ggen:generate
+type TupleNest struct {
+	Polygon [][][2]float64         `json:"polygon"`
+	Grid    [][2][3]int            `json:"grid"`
+	Wide    [][3][2]string         `json:"wide"`
+	ByKey   map[string][][2][3]int `json:"byKey"`
+}
+
+func decodeTupleNest(t *testing.T, in []byte) (bytesV TupleNest, bytesErr error, streamV TupleNest, streamErr error) {
+	t.Helper()
+	bytesV, _, bytesErr = TupleNest{}.DecodeFrom(in)
+	var s ggen.Stream
+	s.Reset(bytes.NewReader(in), make([]byte, 0, 8))
+	streamV, streamErr = TupleNest{}.DecodeFromStream(&s)
+	return bytesV, bytesErr, streamV, streamErr
+}
+
+func TestTuple_NestedBelowContainer(t *testing.T) {
+	t.Parallel()
+	want := TupleNest{
+		Polygon: [][][2]float64{{{1.5, 2.5}, {3.5, 4.5}}, {{5, 6}}},
+		Grid:    [][2][3]int{{{1, 2, 3}, {4, 5, 6}}},
+		Wide:    [][3][2]string{{{"a", "b"}, {"c", "d"}, {"e", "f"}}},
+		ByKey:   map[string][][2][3]int{"k": {{{7, 8, 9}, {10, 11, 12}}}},
+	}
+	out, err := ggen.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, bErr, s, sErr := decodeTupleNest(t, out)
+	if bErr != nil || !reflect.DeepEqual(b, want) {
+		t.Errorf("bytes: %+v %v\nwire: %s", b, bErr, out)
+	}
+	if sErr != nil || !reflect.DeepEqual(s, want) {
+		t.Errorf("stream: %+v %v\nwire: %s", s, sErr, out)
+	}
+}
+
+// The inner tuple is checked against its own length on both paths: an extra
+// element is reported as soon as it is seen, never written past the end.
+func TestTuple_NestedBelowContainerLength(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		in        string
+		want, got int
+		atLeast   bool
+	}{
+		{`{"wide":[[["a","b","c"],["d","e"],["f","g"]]]}`, 2, 3, true},
+		{`{"grid":[[[1,2],[4,5,6]]]}`, 3, 2, false},
+		{`{"byKey":{"k":[[[1,2,3,4],[5,6,7]]]}}`, 3, 4, true},
+	} {
+		_, bErr, _, sErr := decodeTupleNest(t, []byte(tc.in))
+		for path, err := range map[string]error{"bytes": bErr, "stream": sErr} {
+			le, ok := errors.AsType[*ggen.LenError](err)
+			if !ok {
+				t.Errorf("%s %s: got %v, want *ggen.LenError", path, tc.in, err)
+				continue
+			}
+			if le.Want != tc.want || le.Got != tc.got || le.AtLeast != tc.atLeast {
+				t.Errorf("%s %s: Want=%d Got=%d AtLeast=%v, want %d/%d/%v", path, tc.in, le.Want, le.Got, le.AtLeast, tc.want, tc.got, tc.atLeast)
+			}
+		}
 	}
 }
 
@@ -856,5 +925,48 @@ func TestR10BParenthesizedTypes(t *testing.T) {
 	const want = `{"bytes":"aGk=","deep":[[true,false],[]],"ints":[1,2,3],"ptr":7,"vals":{"a":1}}`
 	if string(out) != want {
 		t.Errorf("roundtrip:\n got %s\nwant %s", out, want)
+	}
+}
+
+// R10BPair has two type parameters. ggen does not generate it, so
+// encoding/json reads and writes it, and the code around it writes its
+// instantiation out in full.
+type R10BPair[K comparable, V any] struct {
+	K K `json:"k"`
+	V V `json:"v"`
+}
+
+// R10BGenerics holds R10BPair as a map value, a slice element, a pointer and
+// a value, and once with a type argument from a package this file imports
+// under another name.
+//
+//ggen:generate
+type R10BGenerics struct {
+	ByKey map[string]R10BPair[string, int] `json:"bykey"`
+	List  []R10BPair[string, int]          `json:"list"`
+	Lvl   []R10BPair[tp.Level, int]        `json:"lvl"`
+	Ptr   *R10BPair[string, int]           `json:"ptr"`
+	Val   R10BPair[string, int]            `json:"val"`
+}
+
+func TestR10BMultiArgGenerics(t *testing.T) {
+	t.Parallel()
+	in := R10BGenerics{
+		ByKey: map[string]R10BPair[string, int]{"x": {"a", 1}},
+		List:  []R10BPair[string, int]{{"b", 2}},
+		Lvl:   []R10BPair[tp.Level, int]{{"warn", 3}},
+		Ptr:   &R10BPair[string, int]{"c", 4},
+		Val:   R10BPair[string, int]{"d", 5},
+	}
+	want, err := json.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, err := ggen.Marshal(in); err != nil || !bytes.Equal(got, want) {
+		t.Errorf("marshal = %s %v, want %s", got, err, want)
+	}
+	b, s, err := remarshalBoth[R10BGenerics](want)
+	if err != nil || !bytes.Equal(b, want) || !bytes.Equal(s, want) {
+		t.Errorf("round trip: bytes %s, stream %s, %v; want %s", b, s, err, want)
 	}
 }

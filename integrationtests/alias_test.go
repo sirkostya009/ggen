@@ -6,14 +6,19 @@ package integrationtests
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
+	"net"
+	"net/netip"
+	"net/url"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sirkostya009/ggen"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
@@ -741,6 +746,76 @@ func TestNamedPrim_JSONNumberStaysNumeric(t *testing.T) {
 	}
 }
 
+// NPText is a named primitive with its own text codec, so it keeps its
+// methods. The aliases below hold NPAliasElem, a plain named primitive no
+// field of this file uses. In none of them is the element a struct, so its
+// zero value is not `T{}`.
+type NPText int
+
+func (n NPText) MarshalText() ([]byte, error) { return []byte("t" + strconv.Itoa(int(n))), nil }
+
+func (n *NPText) UnmarshalText(b []byte) error {
+	v, err := strconv.Atoi(strings.TrimPrefix(string(b), "t"))
+	*n = NPText(v)
+	return err
+}
+
+//ggen:generate
+type NPTextElems struct {
+	A [2]NPText `json:"a"`
+	S []NPText  `json:"s"`
+}
+
+type NPAliasElem string
+
+//ggen:generate
+type NPAliasList []NPAliasElem
+
+//ggen:generate
+type NPAliasPair [2]NPAliasElem
+
+func TestNamedPrim_NonStructElements(t *testing.T) {
+	t.Parallel()
+	in := []byte(`{"a":["t3","t4"],"s":["t1","t2"]}`)
+	want := NPTextElems{A: [2]NPText{3, 4}, S: []NPText{1, 2}}
+	got, _, err := NPTextElems{}.DecodeFrom(in)
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("bytes: %+v %v", got, err)
+	}
+	var st ggen.Stream
+	st.Reset(bytes.NewReader(in), make([]byte, 0, 8))
+	if got, err = (NPTextElems{}).DecodeFromStream(&st); err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("stream: %+v %v", got, err)
+	}
+	if out, err := ggen.Marshal(want); err != nil || !bytes.Equal(out, in) {
+		t.Errorf("marshal: %s %v, want %s", out, err, in)
+	}
+
+	pair := []byte(`["x","y"]`)
+	list, _, err := NPAliasList{}.DecodeFrom(pair)
+	if err != nil || !reflect.DeepEqual(list, NPAliasList{"x", "y"}) {
+		t.Fatalf("list bytes: %v %v", list, err)
+	}
+	st.Reset(bytes.NewReader(pair), make([]byte, 0, 4))
+	if list, err = (NPAliasList{}).DecodeFromStream(&st); err != nil || !reflect.DeepEqual(list, NPAliasList{"x", "y"}) {
+		t.Fatalf("list stream: %v %v", list, err)
+	}
+	arr, _, err := NPAliasPair{}.DecodeFrom(pair)
+	if err != nil || arr != (NPAliasPair{"x", "y"}) {
+		t.Fatalf("pair bytes: %v %v", arr, err)
+	}
+	st.Reset(bytes.NewReader(pair), make([]byte, 0, 4))
+	if arr, err = (NPAliasPair{}).DecodeFromStream(&st); err != nil || arr != (NPAliasPair{"x", "y"}) {
+		t.Fatalf("pair stream: %v %v", arr, err)
+	}
+	if out, err := ggen.Marshal(list); err != nil || !bytes.Equal(out, pair) {
+		t.Errorf("list marshal: %s %v", out, err)
+	}
+	if out, err := ggen.Marshal(arr); err != nil || !bytes.Equal(out, pair) {
+		t.Errorf("pair marshal: %s %v", out, err)
+	}
+}
+
 // InnerBit is the element of the container aliases below. A nested ggen
 // struct element makes the alias's AppendJSON emit `dst, err = …`, so the
 // alias encode body must declare err or the package does not compile.
@@ -1011,5 +1086,327 @@ func TestAlias_StructIntrospect_CustomSteps(t *testing.T) {
 	s, err := R10IntroAlias{}.DecodeFromStream(ggen.NewStream(strings.NewReader(`{"a":"y","b":"ok","n":"3"}`), nil))
 	if err != nil || s.A != "Y" || s.N != 3 {
 		t.Errorf("stream: v=%+v err=%v", s, err)
+	}
+}
+
+// ---- `=` aliases ------------------------------------------------------
+//
+// An `=` alias names the very type it stands for, so a field written through
+// one gets that type's wire shape wherever it sits: as a value, behind a
+// pointer, as a slice element or map value, and when the alias is declared in
+// another package or is generic.
+
+type (
+	SameTCPAddr     = net.TCPAddr
+	SameIPNet       = net.IPNet
+	SameDuration    = time.Duration
+	SameURL         = url.URL
+	SameAddr        = netip.Addr
+	SameNullString  = sql.NullString
+	SameCount       = int
+	SameWords       = []string
+	SameIntPtr      = *int
+	SameNull[T any] = sql.Null[T]
+)
+
+//ggen:generate
+type SameViaAlias struct {
+	TCP   SameTCPAddr           `json:"tcp"`
+	PTCP  *SameTCPAddr          `json:"ptcp"`
+	Nets  []SameIPNet           `json:"nets"`
+	ByKey map[string]SameIPNet  `json:"bykey"`
+	UDP   thirdparty.UDPAddr    `json:"udp"`
+	Dur   SameDuration          `json:"dur"`
+	Durs  []thirdparty.Duration `json:"durs"`
+	URL   SameURL               `json:"url"`
+	Addr  SameAddr              `json:"addr"`
+	NS    SameNullString        `json:"ns"`
+	Cnt   SameCount             `json:"cnt"`
+	Words SameWords             `json:"words"`
+	PInt  SameIntPtr            `json:"pint"`
+	Opt   SameNull[int64]       `json:"opt"`
+}
+
+// SameDirect writes every field of SameViaAlias without the aliases.
+//
+//ggen:generate
+type SameDirect struct {
+	TCP   net.TCPAddr          `json:"tcp"`
+	PTCP  *net.TCPAddr         `json:"ptcp"`
+	Nets  []net.IPNet          `json:"nets"`
+	ByKey map[string]net.IPNet `json:"bykey"`
+	UDP   net.UDPAddr          `json:"udp"`
+	Dur   time.Duration        `json:"dur"`
+	Durs  []time.Duration      `json:"durs"`
+	URL   url.URL              `json:"url"`
+	Addr  netip.Addr           `json:"addr"`
+	NS    sql.NullString       `json:"ns"`
+	Cnt   int                  `json:"cnt"`
+	Words []string             `json:"words"`
+	PInt  *int                 `json:"pint"`
+	Opt   sql.Null[int64]      `json:"opt"`
+}
+
+//ggen:generate
+type SameDurations []SameDuration
+
+// remarshalBoth decodes data on the bytes path and on a stream fed 7 bytes
+// per Read, and marshals each result again.
+func remarshalBoth[T interface {
+	ggen.Unmarshaler[T]
+	ggen.Marshaler
+}](data []byte) (fromBytes, fromStream []byte, err error) {
+	var zero T
+	b, _, err := zero.DecodeFrom(data)
+	if err != nil {
+		return nil, nil, fmt.Errorf("bytes: %w", err)
+	}
+	var s ggen.Stream
+	s.Reset(&chunkReader{data: data, max: 7}, make([]byte, 0, 64))
+	sv, err := s.Value[T]()
+	if err != nil {
+		return nil, nil, fmt.Errorf("stream: %w", err)
+	}
+	if fromBytes, err = b.AppendJSON(nil); err != nil {
+		return nil, nil, err
+	}
+	fromStream, err = sv.AppendJSON(nil)
+	return fromBytes, fromStream, err
+}
+
+func TestAlias_EqFieldsTakeTargetShape(t *testing.T) {
+	t.Parallel()
+	n := 7
+	v := SameViaAlias{
+		TCP:   net.TCPAddr{IP: net.ParseIP("1.2.3.4"), Port: 80},
+		PTCP:  &net.TCPAddr{IP: net.ParseIP("::1"), Port: 443},
+		Nets:  []net.IPNet{mustCIDR("10.0.0.0/8")},
+		ByKey: map[string]net.IPNet{"k": mustCIDR("2001:db8::/32")},
+		UDP:   net.UDPAddr{IP: net.ParseIP("fe80::1"), Port: 53, Zone: "eth0"},
+		Dur:   90 * time.Second,
+		Durs:  []time.Duration{time.Millisecond},
+		URL:   url.URL{Scheme: "https", Host: "example.com", Path: "/a"},
+		Addr:  netip.MustParseAddr("192.0.2.1"),
+		NS:    sql.NullString{String: "x", Valid: true},
+		Cnt:   3,
+		Words: []string{"a"},
+		PInt:  &n,
+		Opt:   sql.Null[int64]{V: 5, Valid: true},
+	}
+	out, err := ggen.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := ggen.Marshal(SameDirect(v))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(out, want) {
+		t.Fatalf("alias-spelled wire\n%s\ndiffers from the direct one\n%s", out, want)
+	}
+	for _, frag := range []string{`"dur":"1m30s"`, `"durs":["1ms"]`, `"url":"https://example.com/a"`, `"ns":"x"`, `"opt":5`} {
+		if !bytes.Contains(out, []byte(frag)) {
+			t.Errorf("missing %s in %s", frag, out)
+		}
+	}
+	b, s, err := remarshalBoth[SameViaAlias](want)
+	if err != nil || !bytes.Equal(b, want) || !bytes.Equal(s, want) {
+		t.Errorf("round trip: bytes %s, stream %s, %v; want %s", b, s, err, want)
+	}
+
+	durs, err := ggen.Marshal(SameDurations{time.Second, 2 * time.Minute})
+	if err != nil || string(durs) != `["1s","2m0s"]` {
+		t.Fatalf("container alias of an alias element: %s %v", durs, err)
+	}
+	b, s, err = remarshalBoth[SameDurations](durs)
+	if err != nil || !bytes.Equal(b, durs) || !bytes.Equal(s, durs) {
+		t.Errorf("container alias round trip: bytes %s, stream %s, %v", b, s, err)
+	}
+}
+
+// A struct alias reads the fields of its underlying struct by their own
+// types, as a struct declared with those fields does: net.IP and a type with
+// a text codec write text, and a named []byte with no codec of its own, such
+// as net.IPMask, goes through encoding/json, which writes base64. So both
+// write what encoding/json writes for the underlying.
+
+// IPNetFields and TCPAddrFields declare the fields of net.IPNet and
+// net.TCPAddr.
+//
+//ggen:generate
+type IPNetFields struct {
+	IP   net.IP
+	Mask net.IPMask
+}
+
+//ggen:generate
+type TCPAddrFields struct {
+	IP   net.IP
+	Port int
+	Zone string
+}
+
+//ggen:generate
+type CIDRAlias net.IPNet
+
+//ggen:generate
+type PeerAlias net.TCPAddr
+
+//ggen:generate
+type HostAlias thirdparty.Host
+
+func TestAlias_StructIntrospect_NamedFieldTypes(t *testing.T) {
+	t.Parallel()
+	n := mustCIDR("10.0.0.0/8")
+	a := net.TCPAddr{IP: net.ParseIP("1.2.3.4"), Port: 80}
+	h := thirdparty.Host{
+		Digest: thirdparty.Digest{1, 2, 3, 4},
+		Grid:   [][2]int{{1, 2}},
+		IP:     net.ParseIP("10.0.0.1"),
+		Level:  "lv",
+		Mask:   net.CIDRMask(8, 32),
+		Raw:    json.RawMessage(`{"k":1}`),
+	}
+	cases := []struct {
+		name      string
+		std       any            // the underlying value, as encoding/json writes it
+		alias     ggen.Marshaler // the struct alias of it
+		fields    ggen.Marshaler // a struct declaring the same fields, if any
+		remarshal func([]byte) ([]byte, []byte, error)
+	}{
+		{"CIDRAlias", n, CIDRAlias(n), IPNetFields(n), remarshalBoth[CIDRAlias]},
+		{"PeerAlias", a, PeerAlias(a), TCPAddrFields(a), remarshalBoth[PeerAlias]},
+		{"HostAlias", h, HostAlias(h), nil, remarshalBoth[HostAlias]},
+	}
+	for _, c := range cases {
+		want, err := json.Marshal(c.std)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := ggen.Marshal(c.alias)
+		if err != nil || !bytes.Equal(got, want) {
+			t.Errorf("%s: alias %s %v, encoding/json %s", c.name, got, err, want)
+		}
+		if c.fields != nil {
+			if fields, err := ggen.Marshal(c.fields); err != nil || !bytes.Equal(fields, want) {
+				t.Errorf("%s: struct with the same fields %s %v, encoding/json %s", c.name, fields, err, want)
+			}
+		}
+		b, s, err := c.remarshal(want)
+		if err != nil || !bytes.Equal(b, want) || !bytes.Equal(s, want) {
+			t.Errorf("%s round trip: bytes %s, stream %s, %v; want %s", c.name, b, s, err, want)
+		}
+	}
+}
+
+//ggen:generate
+type RankedAlias thirdparty.Ranked
+
+// A field whose type this package cannot name, unexported or internal, is
+// read and written whole by encoding/json, so the alias still writes what
+// encoding/json writes for the underlying and reads it back.
+func TestAlias_StructIntrospect_UnnameableFieldTypes(t *testing.T) {
+	t.Parallel()
+	used := RankedAlias(thirdparty.NewRanked("old", "old", 7, 8, 9))
+	for _, r := range []thirdparty.Ranked{thirdparty.NewRanked("c", "warn", 3, 4), thirdparty.NewRanked("", "")} {
+		want, err := json.Marshal(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, err := ggen.Marshal(RankedAlias(r)); err != nil || !bytes.Equal(got, want) {
+			t.Errorf("alias %s %v, encoding/json %s", got, err, want)
+		}
+		b, s, err := remarshalBoth[RankedAlias](want)
+		if err != nil || !bytes.Equal(b, want) || !bytes.Equal(s, want) {
+			t.Errorf("round trip: bytes %s, stream %s, %v; want %s", b, s, err, want)
+		}
+		if got, _, err := used.DecodeFrom(want); err != nil || !reflect.DeepEqual(got, RankedAlias(r)) {
+			t.Errorf("decode into a used receiver = %+v %v, want %+v", got, err, r)
+		}
+	}
+}
+
+// ---- container aliases of arrays ---------------------------------------
+//
+// A slice or array alias whose element is itself an array, written out or
+// through an `=` alias, holds each element to that array's length.
+
+type ArrPair = [2]int
+
+//ggen:generate
+type ArrRows [][2]int
+
+//ggen:generate
+type ArrGrid [3][2]int
+
+//ggen:generate
+type ArrPtrRows []*[2]int
+
+//ggen:generate
+type ArrPtrGrid [2]*[2]int
+
+//ggen:generate
+type ArrPairs []ArrPair
+
+// arrayAliasRoundTrip marshals v, decodes it back on the bytes path, on a
+// chunked stream and into stale, a receiver that holds other values, and
+// checks every result against v.
+func arrayAliasRoundTrip[T interface {
+	ggen.Unmarshaler[T]
+	ggen.Marshaler
+}](t *testing.T, v, stale T, want string) {
+	t.Helper()
+	out, err := ggen.Marshal(v)
+	if err != nil || string(out) != want {
+		t.Fatalf("%T marshal = %s %v, want %s", v, out, err, want)
+	}
+	b, s, err := remarshalBoth[T](out)
+	if err != nil || string(b) != want || string(s) != want {
+		t.Errorf("%T round trip: bytes %s, stream %s, %v", v, b, s, err)
+	}
+	got, _, err := stale.DecodeFrom(out)
+	if err != nil || !reflect.DeepEqual(got, v) {
+		t.Errorf("%T decode into a used receiver = %v %v, want %v", v, got, err, v)
+	}
+}
+
+func TestAlias_ArrayElements(t *testing.T) {
+	t.Parallel()
+	arrayAliasRoundTrip(t, ArrRows{{1, 2}, {3, 4}}, ArrRows{{9, 9}, {9, 9}, {9, 9}}, `[[1,2],[3,4]]`)
+	arrayAliasRoundTrip(t, ArrGrid{{1, 2}, {3, 4}, {5, 6}}, ArrGrid{{9, 9}}, `[[1,2],[3,4],[5,6]]`)
+	arrayAliasRoundTrip(t, ArrPtrRows{{1, 2}, nil}, ArrPtrRows{{9, 9}, {9, 9}, nil}, `[[1,2],null]`)
+	arrayAliasRoundTrip(t, ArrPtrGrid{nil, {3, 4}}, ArrPtrGrid{{9, 9}, {9, 9}}, `[null,[3,4]]`)
+	arrayAliasRoundTrip(t, ArrPairs{{1, 2}}, ArrPairs{{9, 9}, {9, 9}}, `[[1,2]]`)
+
+	// An element of the wrong length is a LenError, behind a pointer too and
+	// on both paths. The grid has room for exactly two elements.
+	rows := []string{`[[]]`, `[[1]]`, `[[1,2,3]]`}
+	grid := []string{`[[],null]`, `[null,[1]]`, `[[1,2,3],null]`}
+	stream := func(d []byte, dec func(*ggen.Stream) error) error {
+		var s ggen.Stream
+		return dec(s.Reset(bytes.NewReader(d), nil))
+	}
+	for _, c := range []struct {
+		name   string
+		in     []string
+		decode func([]byte) error
+	}{
+		{"ArrRows", rows, func(d []byte) error { _, _, err := ArrRows{}.DecodeFrom(d); return err }},
+		{"ArrPairs", rows, func(d []byte) error { _, _, err := ArrPairs{}.DecodeFrom(d); return err }},
+		{"ArrPtrRows", rows, func(d []byte) error { _, _, err := ArrPtrRows{}.DecodeFrom(d); return err }},
+		{"ArrPtrRows stream", rows, func(d []byte) error {
+			return stream(d, func(s *ggen.Stream) error { _, err := ArrPtrRows{}.DecodeFromStream(s); return err })
+		}},
+		{"ArrPtrGrid", grid, func(d []byte) error { _, _, err := ArrPtrGrid{}.DecodeFrom(d); return err }},
+		{"ArrPtrGrid stream", grid, func(d []byte) error {
+			return stream(d, func(s *ggen.Stream) error { _, err := ArrPtrGrid{}.DecodeFromStream(s); return err })
+		}},
+	} {
+		for _, in := range c.in {
+			var lenErr *ggen.LenError
+			if err := c.decode([]byte(in)); !errors.As(err, &lenErr) {
+				t.Errorf("%s accepted %s: %v", c.name, in, err)
+			}
+		}
 	}
 }
