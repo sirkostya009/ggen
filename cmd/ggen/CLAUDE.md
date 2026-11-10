@@ -171,7 +171,9 @@ Field config is partitioned by role across three tags: `json:` (wire shape),
   do (jsonv2 reserves only `, \ ' " \`` in a name). jsonv2 quoting:
   options split on commas OUTSIDE single quotes, so `json:"'a,b'"` names the
   field `a,b` and `format:'Jan 2, 2006'` survives its comma; `\'` = literal
-  quote (`parseJSONTag`/`splitTagOpts`, tags.go)
+  quote (`parseJSONTag`/`splitTagOpts`, tags.go). The tag literal may be a
+  raw or an interpreted string: `tagText` (parse.go) unquotes it for
+  `jsonTag` and `fieldFromTag` (opt #98)
 - `json:"-"` — field explicitly ignored. `-` with options is a parse ERROR
   (jsonv2 parity — v1 read it as a field named `-`; use `json:"'-'"` for
   that). Empty options (`a,`, `a,,x`) also error, and so does a
@@ -245,6 +247,9 @@ Field config is partitioned by role across three tags: `json:` (wire shape),
   `ggen.AnyIsEmpty`: type switch over nil/string/[]any/map[string]any/
   primitives, reflect for other slices/maps/arrays/pointers, structs never
   inspected), `[0]T` (always omitted), `[N]byte` (never — N base64 bytes),
+  a named non-struct type without a codec (`namedEmptyCond`, opt #94:
+  `len(ref) > 0` for a named slice or map, `!ggen.AnyIsEmpty(ref)` for an
+  interface such as `error`),
   and a pointer field peels every level and ANDs the leaf's guard
   (`p != nil && *p != ""`). A pointer to a STRUCT therefore omits on nil
   alone, and a non-nil one emits `{}`. `AppendAny` applies the same rules to
@@ -282,7 +287,10 @@ Field config is partitioned by role across three tags: `json:` (wire shape),
   (v2 dropped bool quoting); a STRING field is a generate-time error — it
   was a silent no-op that didn't even match v1's double-encoding
 - `json:"name,format:X"` — format hint for native types (see Kinds). **jsonv2
-  requirement: `format:X` must be LAST in the tag.**
+  requirement: `format:X` must be LAST in the tag.** An empty value
+  (`json:"t,format:"`) is a generate-time error from `parseJSONTag`
+  (``json tag "t,format:": `format:` has no value``), as in jsonv2. Pinned
+  by the `format_empty` row of `TestCLI/InvalidRuleApplication`.
 
 ### `pipe:` — decode/transform/validate pipeline
 
@@ -489,7 +497,11 @@ real element loop: `canDive` excludes `KindBytes` and
 it, so `[]byte` and `[N]byte` get the "only valid on slice/array/map"
 diagnostic with a byte-specific hint (their base64 emitters have no element
 loop, so every element step there was a silent no-op) while `[N]byte
-json:",format:array"` keeps its loop and its `inner:` rules. That diagnostic
+json:",format:array"` keeps its loop and its `inner:` rules. Below the
+field's own level the same holds: `peelTypeOnce` stops at a type whose kind
+is `KindBytes`, so an `inner:` level that would step into the `[]byte` of a
+`[][]byte`, a `map[string][]byte` or a `[]map[string][]byte` gets the "no
+element at that depth" diagnostic (the `inner_below_bytes_*` rows). That diagnostic
 is the WHOLE story for a non-diveable field: the level-1 element pass and the
 `inner:` level loop run in the else arm, since a field with no element type
 would otherwise have its element rules judged against an empty type name
@@ -794,12 +806,11 @@ Accepted underlying kinds:
 
 - **slice / map / array** (`type Tags []string`, `type Lookup map[string]int`,
   `type Tuple [3]int`): synthetic FieldInfo handed to field-level emitters with
-  `result` (decode) / `s` (encode) as ref. All field-level features carry over.
-  The inline named-primitive path is the exception: `AliasField` carries no
-  `NamedPrims` and `seedNamedKinds` reads them from `Fields` only, so a
-  plain named primitive element (no JSON or text methods of its own) goes
-  through `encoding/json` both ways unless its type is annotated or a field
-  of the pass names it (backlog).
+  `result` (decode) / `s` (encode) as ref. All field-level features carry over,
+  the inline named-primitive path included: `aliasContainerField` fills
+  `AliasField.NamedPrims` and `seedNamedKinds` reads them, so a plain named
+  primitive element (`type Codes []Code` over `type Code string`) is scanned
+  as its underlying type and converted (`NPAliasList` / `NPAliasPair`, integ).
   `aliasContainerField` builds the element half, and the slice and array
   branches set `ElemArrayLen` from the element type (a map value keeps 0, as
   on a field), so `[][2]int`, `[3][2]int`, `[]*[2]int`, `[2]*[2]int` and an
@@ -1037,6 +1048,9 @@ import path per pass (see "Foreign type spelling" under Cross-package types).
   (via `extractFieldFromTypes`) stashed on `FieldInfo.SQLNullInner`; the
   decode/encode/size renderers delegate the `V` slot to the standard field
   emitters, so `sql.Null[T]` gets exactly the wire (and fast path) of a bare `T`.
+  A generic `sql.Null[T]` below the field's own level (slice or array
+  element, map value, pointee, the `T` of another `sql.Null`) resolves the
+  same way through `FieldInfo.SQLNulls` and `sqlNullInner` (opt #93).
   Parent flags (`MultiErr`/`NoValidate`/`UseNumber`/`HTMLEscape`) copy onto the
   inner. The AST-only loader (no go/types) keeps only built-in-primitive generic
   forms (`SQLNullSpec` + `isSupportedSQLNullInner` gate); custom inners there fall
@@ -1268,6 +1282,9 @@ Backlog and commit messages cite these by number — numbering is stable.
     `TestGeneratedCompiles`.
 11. **Map-key mods + validation.** `keyValidateAndMod` runs right after the key
     read (before `:`), short-circuiting invalid keys before the value decodes.
+    Both map readers hand the key helper the level's own key local (`mkVar`):
+    `renderMap` to `keyValidateAndMod`, `renderStreamMap` to
+    `keyValidateAndModStream`.
 12. **Marshal error propagation.** `AppendJSON` returns `([]byte, error)` threaded
     through every nested call. Pure-primitive structs declare `var err error; _ =
 err` (elided by the compiler).
@@ -2312,9 +2329,14 @@ switch), map value (`renderMap` / stream twin, via `_nm`), `renderAppendValue`,
 `emitSliceElement`, `renderAppendMap`, `sizeContribKind`, `sizeSliceContrib`,
 and the map-size loop. Pointer fields reach it through the existing leaf
 recursion. Every site gates on `namedKinds`, which `seedNamedKinds` fills
-from annotated primitive aliases and from `Fields[].NamedPrims`, so the
-element of a container alias inlines only when one of those covers its type
-(Top-level type aliases). Alias depth is free: `type B S; type S string`
+from annotated primitive aliases, from `Fields[].NamedPrims` and from a
+container alias's `AliasField.NamedPrims`, so the element of a container
+alias inlines like a field element (Top-level type aliases). An `=` alias
+that keeps its own name, because this package cannot spell its target
+(`other.KindA = other/internal/k.Kind`), is registered under the alias name
+by the `*types.Alias` arm of `collectNamedPrims` when the target is a plain
+primitive without JSON or text methods, and generated code converts through
+the alias. Alias depth is free: `type B S; type S string`
 resolves in one step because go/types' `Underlying()` walks the whole chain.
 
 Three gates, all load-bearing:
@@ -2416,7 +2438,9 @@ struct) is now zero on every axis.
   and the alias-underlying branches, so AST-derived and go/types-derived
   spellings agree), `collectImports` carries path → alias
   and `writePrelude` emits `json_ "example.com/p3/json"`, so the stdlib
-  import and the user package never both claim `json`.
+  import and the user package never both claim `json`. A package named
+  like a local of the generated functions takes the same `<name>_` form
+  (`emitterLocals` / `emitterLocal`, opt #96).
   `collectImports` lexes the rendered bodies and the cap/oneof declarations
   once (`bodyQualifiers`) and collects every identifier written directly
   before a `.`. The lexer skips interpreted strings and rune literals
@@ -2550,6 +2574,7 @@ under `integrationtests/`, and benchmarks under `bench/`.
   array-in-slot readers, novalidate imports, cross-package converters with
   and without novalidate, rune rules after `alphanum`, zero literals of
   non-struct elements, pointer-element `@Func` steps, `[]byte` catch-alls,
+  foreign packages named like generated locals (`shadow`),
   the AST-only `omitzero` guard over arrays of slices, maps, big numbers
   and net kinds).
 - `bench_test.go` — `BenchmarkGenerate`, over
@@ -2717,7 +2742,7 @@ under `integrationtests/`, and benchmarks under `bench/`.
       `unsupportedFieldType` (go/types path, `extractFieldFromTypes` — struct
       alias fields) walk pointers, slice/array elements and map key/value and
       refuse an anonymous struct, a func or a chan (a named type stops the
-      walk). Each is a demonstrated defect, not a taste call: an anonymous
+      walk, and `namedFuncOrChan` judges a named func or chan type, opt #95). Each is a demonstrated defect, not a taste call: an anonymous
       struct literal emitted `result.An = nil` against a struct type and did
       not compile (`exprToString` had no arm for the literal and fell to
       fmt's `%T`, writing `*ast.StructType` into the generated file), while a
@@ -2725,7 +2750,7 @@ under `integrationtests/`, and benchmarks under `bench/`.
       value (`json: unsupported type: chan int`) — a codec that can never
       succeed. The diagnostic is a `RichError` carrying position + the remedy
       that actually works for that shape: `json:"-"` or unexporting for a
-      func/chan (a NAMED func type is not a way out — see the backlog),
+      func/chan (a NAMED func type without codec methods is refused too),
       declaring a named struct type for an anonymous struct. INTERFACES ARE
       NOT REJECTED, with methods or without: such a field is spelled by
       go/types, routes through the `encoding/json` rung, and marshals its
@@ -2900,8 +2925,9 @@ under `integrationtests/`, and benchmarks under `bench/`.
     underlying, dedicated kind) out. The flag is false in AST-only (degraded)
     mode, so the check defers there exactly as the kinded rule matrix does.
     A field promoted from an embedded struct is judged where it is DECLARED,
-    so the diagnostic names that struct. Consequences: `omitEmptyCond` has no
-    struct arm, so `*T` under `omitempty` is a bare `!= nil` — a non-nil
+    so the diagnostic names that struct. Consequences: `omitEmptyCond` returns
+    no guard for a struct (`namedEmptyCond`, opt #94), so `*T` under
+    `omitempty` is a bare `!= nil` — a non-nil
     pointer to an all-omitted struct emits `{}`; and `AppendAny`, which
     cannot reject at runtime, skips the unwrite for a struct value
     (`structWire`, peeling pointers/interfaces so a nil one still omits).
@@ -3035,3 +3061,105 @@ under `integrationtests/`, and benchmarks under `bench/`.
     `CustomError` holding a nil `*int` at the same `Pos` on both paths, a
     nil-returning mod, the multierr carrier `PtrElemPipeME`) and the
     `ptrelem` row of `TestGeneratedCompiles`.
+
+93. **A generic `sql.Null[T]` below the field's own level resolves through
+    go/types.** `ResolveKind` reads a type by its spelling and knows only the
+    primitive and `time.Time` inners (`isSupportedSQLNullInner`), so
+    `[]sql.Null[net.IPNet]` or `*sql.Null[time.Duration]` would read as
+    `KindStruct` and take the `encoding/json` rung, a `{"V":…,"Valid":…}`
+    object where a field of the same type writes the inner value or `null`.
+    `nestedSQLNulls` (parse.go, called from both extraction paths) walks the
+    field's type through pointers, slices, arrays, map values and
+    `sql.Null` type arguments and stores the `sqlNullGenericInfo` inner of
+    every such type in `FieldInfo.SQLNulls`, keyed by spelling. It also sets
+    `Kind` (pointee) and `ElemKind` (direct element) to `KindSQLNull`.
+    `seedNamedKinds` gathers the entries of every field, and of every
+    `SQLNullInner`, into the pass-wide `sqlNullInners`. The emitters ask
+    `resolveKind` / `stripOneContainer`, which wrap the model functions and
+    answer `KindSQLNull` for a registered spelling, wherever they rebuild a
+    level from a type string (`leafKind`, `elemPtrField`, `peelSliceField`,
+    `sliceElemField`, `emitSliceElement`, `embedValueRoute`), and
+    `sqlNullInner(f)` returns `f.SQLNullInner` or the registry entry for
+    `f.GoType`. So every position takes the field's wire and `JSONSize`
+    budget. A `T` that holds another `sql.Null`
+    (`sql.Null[[]sql.Null[string]]`) decodes into a numbered temp
+    (`sqlNullTemp`: `nvo1`, `nvo2`, … counted by `sqlNest`), since the inner
+    decode declares its own `nv`. A container alias fills `SQLNulls` from
+    its own type in `aliasContainerField`, and `seedFieldTypes` gathers the
+    entries of `AliasField`, of every field and, recursively, of every
+    `sql.Null` inner. Pinned by `TestSQLNull_GenericBelowField`
+    (`SQLNullNested`, integ: element, pointee, map value, array slot, two
+    levels down, nested, bytes + stream, `JSONSize`) and
+    `TestSQLNull_GenericInContainerAlias` (`SQLNullNets`, `SQLNullDurMap`).
+
+94. **`omitempty` on a named non-struct type tests the underlying value.** A
+    named slice, map or interface type without a dedicated kind is
+    `KindStruct` in the model, and `encoding/json` writes it by its
+    underlying type. `omitEmptyCond`'s `KindStruct` arm calls
+    `namedEmptyCond`, which reads `FieldInfo.Type` (pointers peeled): a
+    slice or map gives `len(ref) > 0`, an interface (`error`) gives
+    `!ggen.AnyIsEmpty(ref)`, a zero-length array gives `false`, so the field
+    is never written. Everything else gets no guard: a struct (opt #87
+    refuses the option there), a type with `MarshalJSON`, `MarshalText`,
+    `AppendText` or `AppendJSON`, which decides its own encoding, and every
+    type in AST-only mode, where `Type` is nil. A pointer field ANDs the
+    guard after its nil checks (opt #35), so a `*Names` pointing at an empty
+    slice is omitted. `opaqueField` still refuses `omitempty` on a type
+    generated code cannot name. Pinned by `TestOmitEmpty_NamedContainers`
+    (`OmitNamed`, integ).
+
+95. **A named func or chan field type without a codec is refused.**
+    `namedFuncOrChan` (parse.go) walks a go/types type through pointers,
+    slices, arrays, map values and a `sql.Null[T]` type argument, and names
+    the first named type whose underlying type is a func or a chan and that
+    has none of `MarshalJSON`, `MarshalText`, `AppendText` or `AppendJSON`.
+    Three sites call it: `extractStructSeen` turns it into the
+    `unsupportedTypeError` the literal gets ("func field types are not
+    supported"), `extractFieldFromTypes` refuses a struct-alias field the
+    same way, and the container branch of the alias extraction refuses an
+    element ("func element types are not supported"). Such a field would compile
+    and then fail in `AppendJSON` for every value through the
+    `encoding/json` rung. A type with codec methods (`type Hook func()` with
+    `MarshalJSON` / `UnmarshalJSON`) takes the fallback ladder. Pinned by
+    `TestNamedFuncChanField` (cmd/ggen: a field, a slice element, a
+    `sql.Null[T]` inner, a container alias element and a struct-alias field).
+
+96. **A foreign package named like a generated local is spelled `<name>_`.**
+    Generated functions declare locals such as `result`, `data`, `key`,
+    `dst`, `err`, `mv` and `nv`, some with a number or a field name appended
+    (`mk1`, `seenName`). A package qualifier with one of those names would be
+    shadowed where generated code names a type of the package.
+    `emitterLocals` (parse.go) lists
+    the base names, `emitterLocal` also matches a numbered form and the
+    `seen` / `first` / `named` / `buf` / `tf` / `b` prefixes followed by an
+    upper-case letter, and `structSet.qualifierFor` appends `_` for a match,
+    the same form a package colliding with `emitterPackages` takes. The
+    import line is written `result_ "…/result"` through `TypeImport.Explicit`.
+    Pinned by the `shadow` fixture of `TestGeneratedCompiles` (packages
+    `result`, `data`, `key`).
+
+97. **A cross-package type two or more container levels down keeps its
+    method set.** `Iface` describes the field's type and `ElemIface` its
+    direct element. `namedIfaces` (parse.go, from `typeField`) inspects every
+    named type at container depth two or more and stores the result in
+    `FieldInfo.Ifaces`, keyed by spelling. `seedNamedKinds` gathers them into
+    the pass-wide `typeIfaces`, and `deepElemIface` gives `peelSliceField`
+    and `sliceElemField` the `ElemIface` of the level they build. So
+    `[][]sub.T`, `[N][]sub.T`, `map[string][]sub.T`, `[][]*sub.T`,
+    `[]map[string]sub.T` and a catch-all `map[string][]sub.T` call `sub.T`'s
+    own `DecodeFrom` / `AppendJSON` at every depth, the wire a `[]sub.T`
+    field writes. A container alias fills `Ifaces` from its own type in
+    `aliasContainerField`, and `seedFieldTypes` also gathers the `Ifaces` of
+    every `sql.Null` inner, so `type Grid [][]sub.T` and
+    `sql.Null[[][]sub.T]` take the same route. Pinned by
+    `TestCrossPkg_belowFirstContainerLevel` (`CrossPkgDeep`, integ) and
+    `TestCrossPkg_belowContainerAliasAndSQLNull` (`LeaseGrid` over
+    `thirdparty2.Grant`, `LeaseNulls` over `thirdparty2.Quota`, each named
+    by one host only, so no other field registers its methods).
+
+98. **A struct tag may be an interpreted string.** `tagText` (parse.go)
+    unquotes the tag literal with `strconv.Unquote`, which reads a raw and
+    an interpreted literal alike, and `jsonTag` and `fieldFromTag` both read
+    the tag through it. So `A string "json:\"alpha\""` names the key
+    `alpha`, as `encoding/json` does. Pinned by
+    `TestParseFile_interpretedStringTag` (gen/model).

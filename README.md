@@ -274,7 +274,9 @@ as both stdlib versions do); a whitespace-padded option (`json:"a, omitempty"`)
 is a generate-time error, as is `case:` — ggen matches keys exactly, and a
 field that silently matched only its exact spelling would turn accepted
 payloads into `UnknownKeyError` — and a misspelled option (`omitEmpty`,
-`Inline`, `Format:hex`), which jsonv2 refuses too. Extras worth knowing:
+`Inline`, `Format:hex`), which jsonv2 refuses too. A tag written as an
+interpreted string (`"json:\"name\""`) reads like one in backticks. Extras
+worth knowing:
 
 - `json:",embed"` — the field becomes a catch-all map for unknown keys. The Go
   type must be a plain string-keyed map — literally `map[string]V`, not a
@@ -299,7 +301,11 @@ payloads into `UnknownKeyError` — and a misspelled option (`omitEmpty`,
 - `json:"name,omitempty"` — skipped on marshal when the value ENCODES as
   `null`, `""` or `[]`, or is an empty map: an empty string, an `any` holding
   an empty value, a nil pointer, and a pointer to any of these are omitted;
-  numbers and `false` never are. On a field whose type is a STRUCT it is a
+  numbers and `false` never are. A named slice or map type (`type Names
+  []string`) is omitted when it has no entries, and an interface field such
+  as `error` when it holds nil or an empty value. A named type with its own
+  JSON or text methods is always written, because only its methods know what
+  it encodes as. On a field whose type is a STRUCT it is a
   generate-time error — ggen always writes a struct's object, so the option
   would do nothing there; spell the omit as `json:"name,omitzero"`, or put
   the struct behind a pointer, which then omits when nil (a non-nil pointer
@@ -308,7 +314,8 @@ payloads into `UnknownKeyError` — and a misspelled option (`omitEmpty`,
   `IsZero()` (a zero time carrying a location is still omitted), other
   structs compare structurally.
 - `format:X` — type-specific format hint (see _supported kinds_ below). Per
-  jsonv2, this MUST be the last option in the tag. Single-quote values with
+  jsonv2, this MUST be the last option in the tag, and a `format:` with no
+  value is a generate-time error. Single-quote values with
   special characters (`format:'Jan 2, 2006'`). A literal quote is `\\'` —
   the tag value is a double-quoted Go string, so a bare `\'` is an invalid
   escape that makes the whole tag unreadable (ggen rejects it outright), as is
@@ -428,7 +435,9 @@ A bare prefix takes exactly one step: `inner:trim`. Group several in parentheses
 `inner:(trim maxlen=20)`. Nest the groups to go deeper: `inner:(minlen=1 inner:(gte=0 lte=100))`.
 All that isn't paired with `inner:` applies to struct field container value directly.
 `inner:` needs a slice, array or map — a `[]byte` / `[N]byte` decodes as one
-base64 string and has no elements (`format:array` gives it some).
+base64 string and has no elements (`format:array` gives it some). The same
+holds below the field: an `inner:` group that would step into the `[]byte`
+of a `[][]byte` or a `map[string][]byte` is a generate-time error.
 
 Groups nest through maps the same way, at any depth. `keys:` applies to the
 outer map's keys only.
@@ -612,7 +621,9 @@ depth (behind a pointer, as a slice element, as a map value): an anonymous
 struct literal, a func, and a channel. A func or channel field would compile
 and then fail to marshal for every value, so the diagnostic points at the way
 out — `json:"-"` or unexporting it; an anonymous struct wants a named struct
-type. A field the tag already ignores (`json:"-"`) is never judged, whatever
+type. A named func or channel type (`type Handler func()`) is refused the
+same way unless it has JSON or text methods of its own, which then read and
+write it. A field the tag already ignores (`json:"-"`) is never judged, whatever
 its type. Interface fields are fine: `any` / `interface{}` gets the stdlib
 decode shape (see _stdlib types_), and an interface WITH methods
 (`io.Reader`, a literal `interface{ M() }`) behaves as it does under
@@ -633,7 +644,9 @@ alias of a func or chan type is refused like the type itself.
 
 For any field whose type is defined outside the package being generated, ggen
 probes the method set at codegen time and emits a direct call — no runtime
-probing. The first method available in order is picked:
+probing. The same holds for such a type at any container depth (`[]pkg.T`,
+`map[string][]pkg.T`, `[][]*pkg.T`). The first method available in order is
+picked:
 
 | direction | ladder                                                                                            |
 | --------- | ------------------------------------------------------------------------------------------------- |
@@ -702,9 +715,8 @@ too, because ggen does not know the field's kind.
 A named type over a primitive does NOT need the annotation to be fast: as a
 field, element, map value or pointee it is scanned as its underlying type and
 converted, at any alias depth (`type B S; type S string`). The elements of a
-container alias annotated with `//ggen:generate` (`type Codes []Code`) are the
-exception. Unless the named type is annotated too, they may go through
-`encoding/json`, which is slower and reads a `null` element as the zero value.
+container alias annotated with `//ggen:generate` (`type Codes []Code`) are
+read the same way.
 Annotate it when you want the METHODS on the type itself, or when you want
 per-type behaviour — an alias carrying its own `htmlescape` / `copy` /
 `allowinvalidutf8` keeps its own encoder and decoder, which is what makes the
@@ -765,7 +777,7 @@ decoding rules:
 | `math/big.Float`                   | string              | arbitrary precision (matches stdlib)                                                                                                                                                                                                                                                                                        |
 | `math/big.Rat`                     | string              | `"22/7"`                                                                                                                                                                                                                                                                                                                    |
 | `database/sql.Null*`               | inner value or null | incompatible with stdlib; `NullInt16`/`NullInt32`/`NullByte` reject out-of-range values with `ggen.ErrNumberOverflow`                                                                                                                                                                                                       |
-| `database/sql.Null[T]`             | inner value or null | ggen handles `T` as a field with extra nullzero semantics                                                                                                                                                                                                                                                                   |
+| `database/sql.Null[T]`             | inner value or null | ggen handles `T` as a field with extra nullzero semantics, wherever the `sql.Null[T]` sits: a field, a slice or array element, a map value, behind a pointer, or as the `T` of another `sql.Null`                                                                                                                           |
 
 `any` also works, similar to how the standard json treats it. On marshal it
 follows jsonv2: a value whose POINTER type carries `MarshalJSON` /

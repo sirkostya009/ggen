@@ -908,3 +908,20 @@ type S struct {
 		t.Errorf("P pointee = %q", p.PointeeType)
 	}
 }
+
+// A struct tag written as an interpreted string reads like a raw one.
+func TestParseFile_interpretedStringTag(t *testing.T) {
+	t.Parallel()
+	file := writeGoFile(
+		t,
+		"package test\n\ntype Foo struct {\n\tA string \"json:\\\"alpha,omitempty\\\" pipe:\\\"minlen=2\\\"\"\n\tB string \"json:\\\"-\\\"\"\n}\n",
+	)
+	res, err := ParseFile(file, []string{"Foo"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs := res.Structs[0].Fields
+	if len(fs) != 1 || fs[0].JSONName != "alpha" || !fs[0].OmitEmpty || len(fs[0].Validation) != 1 {
+		t.Errorf("fields = %+v", fs)
+	}
+}

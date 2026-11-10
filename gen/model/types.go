@@ -168,6 +168,15 @@ type FieldInfo struct {
 	// refer to.
 	SQLNullInner   *FieldInfo
 	SQLNullImports []TypeImport
+	// Ifaces holds the interfaces of every named type in the field's type,
+	// keyed by the spelling the emitters write. Iface and ElemIface cover the
+	// field and its direct element. A level below those reads this.
+	Ifaces map[string]FieldInterfaces
+	// SQLNulls holds the inner field of every generic sql.Null[T] below the
+	// field's own type that ResolveKind cannot read from its spelling, keyed
+	// by that spelling. An element, map value or pointee of such a type
+	// takes the inner field from here.
+	SQLNulls map[string]*FieldInfo
 
 	// TypeImports holds every foreign package named anywhere in the field's
 	// type: the type itself, a slice or array element, a map key or value, a

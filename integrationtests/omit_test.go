@@ -336,3 +336,37 @@ func TestOmitEmpty_JSONEmptyKinds(t *testing.T) {
 		}
 	}
 }
+
+type omitNames []string
+
+type omitIndex map[string]int
+
+// OmitNamed holds named types without a codec, which encoding/json writes by
+// their underlying type. omitempty drops the ones that encode as null, [] or
+// {}.
+//
+//ggen:generate
+type OmitNamed struct {
+	Names omitNames  `json:"names,omitempty"`
+	Index omitIndex  `json:"index,omitempty"`
+	PN    *omitNames `json:"pn,omitempty"`
+	Err   error      `json:"err,omitempty"`
+	N     int        `json:"n"`
+}
+
+func TestOmitEmpty_NamedContainers(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		v    OmitNamed
+		want string
+	}{
+		{OmitNamed{}, `{"n":0}`},
+		{OmitNamed{Names: omitNames{}, Index: omitIndex{}, PN: &omitNames{}}, `{"n":0}`},
+		{OmitNamed{Names: omitNames{"a"}, Index: omitIndex{"k": 1}, PN: &omitNames{"b"}}, `{"index":{"k":1},"n":0,"names":["a"],"pn":["b"]}`},
+	} {
+		got, err := ggen.Marshal(c.v)
+		if err != nil || string(got) != c.want {
+			t.Errorf("%+v: got %s %v, want %s", c.v, got, err, c.want)
+		}
+	}
+}

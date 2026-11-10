@@ -7,8 +7,10 @@ package integrationtests
 // So these tests only check that ggen round-trips its own output.
 
 import (
+	"bytes"
 	"database/sql"
 	"errors"
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -383,5 +385,108 @@ func TestSQLNull_NarrowOverflow(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// SQLNullNested holds a generic sql.Null[T] below the field's own level, with
+// a T only go/types can resolve. Every position writes the inner value or
+// null, as a field of that type does.
+//
+//ggen:generate
+type SQLNullNested struct {
+	Field sql.Null[net.IPNet]                `json:"field"`
+	Nets  []sql.Null[net.IPNet]              `json:"nets"`
+	Dur   *sql.Null[time.Duration]           `json:"dur"`
+	M     map[string]sql.Null[time.Duration] `json:"m"`
+	Pair  [2]sql.Null[Address]               `json:"pair"`
+	Grid  [][]sql.Null[time.Duration]        `json:"grid"`
+	Deep  sql.Null[[]sql.Null[string]]       `json:"deep"`
+	Wrap  sql.Null[[]sql.Null[net.IPNet]]    `json:"wrap"`
+}
+
+func TestSQLNull_GenericBelowField(t *testing.T) {
+	t.Parallel()
+	_, n, err := net.ParseCIDR("10.0.0.0/8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	null := sql.Null[net.IPNet]{}
+	some := sql.Null[net.IPNet]{V: *n, Valid: true}
+	v := SQLNullNested{
+		Field: some,
+		Nets:  []sql.Null[net.IPNet]{some, null},
+		Dur:   &sql.Null[time.Duration]{V: 90 * time.Second, Valid: true},
+		M:     map[string]sql.Null[time.Duration]{"a": {V: time.Hour, Valid: true}},
+		Pair:  [2]sql.Null[Address]{{V: Address{Street: "S", City: "Kyiv", ZipCode: "01001"}, Valid: true}, {}},
+		Grid:  [][]sql.Null[time.Duration]{{{V: time.Second, Valid: true}, {}}},
+		Deep:  sql.Null[[]sql.Null[string]]{V: []sql.Null[string]{{V: "x", Valid: true}, {}}, Valid: true},
+		Wrap:  sql.Null[[]sql.Null[net.IPNet]]{V: []sql.Null[net.IPNet]{some, null}, Valid: true},
+	}
+	out, err := ggen.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`"field":"10.0.0.0/8"`, `"nets":["10.0.0.0/8",null]`, `"dur":"1m30s"`, `"m":{"a":"1h0m0s"}`,
+		`"grid":[["1s",null]]`, `"deep":["x",null]`, `"wrap":["10.0.0.0/8",null]`,
+	} {
+		if !strings.Contains(string(out), want) {
+			t.Errorf("marshal lacks %s:\n%s", want, out)
+		}
+	}
+	if strings.Contains(string(out), `"Valid"`) {
+		t.Errorf("a sql.Null was written as a struct:\n%s", out)
+	}
+	b, s, err := remarshalBoth[SQLNullNested](out)
+	if err != nil || !bytes.Equal(b, out) || !bytes.Equal(s, out) {
+		t.Errorf("round trip: bytes %s, stream %s, %v; want %s", b, s, err, out)
+	}
+	if n := v.JSONSize(); n < len(out) {
+		t.Errorf("JSONSize %d < %d written", n, len(out))
+	}
+}
+
+// SQLNullNets is a container alias whose element is a generic sql.Null[T]
+// only go/types resolves. It writes the inner value or null, as a field does.
+//
+//ggen:generate
+type SQLNullNets []sql.Null[net.IPNet]
+
+//ggen:generate
+type SQLNullDurMap map[string]sql.Null[time.Duration]
+
+func TestSQLNull_GenericInContainerAlias(t *testing.T) {
+	t.Parallel()
+	_, n, err := net.ParseCIDR("10.0.0.0/8")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range []struct {
+		out  func() ([]byte, error)
+		want string
+		rt   func([]byte) ([]byte, []byte, error)
+	}{
+		{
+			func() ([]byte, error) { return ggen.Marshal(SQLNullNets{{V: *n, Valid: true}, {}}) },
+			`["10.0.0.0/8",null]`, remarshalBoth[SQLNullNets],
+		},
+		{
+			func() ([]byte, error) { return ggen.Marshal(SQLNullDurMap{"a": {V: time.Minute, Valid: true}}) },
+			`{"a":"1m0s"}`, remarshalBoth[SQLNullDurMap],
+		},
+		{
+			func() ([]byte, error) { return ggen.Marshal(SQLNullDurMap{"b": {}}) },
+			`{"b":null}`, remarshalBoth[SQLNullDurMap],
+		},
+	} {
+		out, err := c.out()
+		if err != nil || string(out) != c.want {
+			t.Errorf("marshal: %s %v, want %s", out, err, c.want)
+			continue
+		}
+		b, s, err := c.rt(out)
+		if err != nil || string(b) != c.want || string(s) != c.want {
+			t.Errorf("round trip: bytes %s, stream %s, %v; want %s", b, s, err, c.want)
+		}
 	}
 }

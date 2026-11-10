@@ -5336,17 +5336,29 @@ func (recv NPAliasList) DecodeFrom(data []byte) (result NPAliasList, i int, err 
 	}
 	if i < len(data) && data[i] != ']' {
 		for {
-			result = append(result, *new(NPAliasElem))
-			start := i
-			i, err = ggen.SkipValue(data, start)
-			if err != nil {
-				return result, i, ggen.NewParseErr("", i, err)
+			result = append(result, NPAliasElem(""))
+			var namedElem0 string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 			}
-			result[len(result)-1] = *new(NPAliasElem)
-			err = json.Unmarshal(data[start:i], &result[len(result)-1])
-			if err != nil {
-				return result, i, ggen.NewParseErr("", i, err)
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
 			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				namedElem0 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				namedElem0, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("", i, err)
+				}
+			}
+			result[len(result)-1] = NPAliasElem(namedElem0)
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
@@ -5421,16 +5433,13 @@ func (recv NPAliasList) DecodeFromStream(s *ggen.Stream) (result NPAliasList, er
 			}
 		}
 		for s.Bytes()[s.Pos] != ']' {
-			result = append(result, *new(NPAliasElem))
-			span, err := s.CaptureValue()
+			result = append(result, NPAliasElem(""))
+			var namedElem0 string
+			namedElem0, err = s.String(true)
 			if err != nil {
 				return result, ggen.NewParseErr("", s.Offset(), err)
 			}
-			result[len(result)-1] = *new(NPAliasElem)
-			err = json.Unmarshal(span, &result[len(result)-1])
-			if err != nil {
-				return result, ggen.NewParseErr("", s.Offset(), err)
-			}
+			result[len(result)-1] = NPAliasElem(namedElem0)
 			err = s.SkipSpace()
 			if err != nil {
 				return result, ggen.NewParseErr("", s.Offset(), err)
@@ -5466,7 +5475,9 @@ func (s NPAliasList) JSONSize() int {
 	if n := len(s); n > 0 {
 		size += n - 1
 	}
-	size += len(s) * 128
+	for i0 := range s {
+		size += len(s[i0])*2 + 2
+	}
 	return size
 }
 
@@ -5478,24 +5489,12 @@ func (s NPAliasList) AppendJSON(dst []byte) ([]byte, error) {
 	} else {
 		dst = append(dst, '[')
 		if len(s) > 0 {
-			{
-				var b []byte
-				b, err = json.Marshal(s[0])
-				if err != nil {
-					return dst, err
-				}
-				dst = append(dst, b...)
-			}
+			dst = append(dst, '"')
+			dst = ggen.AppendStringNoHTML(dst, string(s[0]))
 			for _, v0 := range s[1:] {
 				dst = append(dst, ',')
-				{
-					var b []byte
-					b, err = json.Marshal(v0)
-					if err != nil {
-						return dst, err
-					}
-					dst = append(dst, b...)
-				}
+				dst = append(dst, '"')
+				dst = ggen.AppendStringNoHTML(dst, string(v0))
 			}
 		}
 		dst = append(dst, ']')
@@ -5521,17 +5520,29 @@ func (recv NPAliasPair) DecodeFrom(data []byte) (result NPAliasPair, i int, err 
 			if idx0 >= 2 {
 				return result, i, &ggen.LenError{Pos: i, Keys: []string{""}, Want: 2, Got: 3, AtLeast: true}
 			}
-			result[idx0] = *new(NPAliasElem)
-			start := i
-			i, err = ggen.SkipValue(data, start)
-			if err != nil {
-				return result, i, ggen.NewParseErr("", i, err)
+			result[idx0] = NPAliasElem("")
+			var namedElem0 string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
 			}
-			result[idx0] = *new(NPAliasElem)
-			err = json.Unmarshal(data[start:i], &result[idx0])
-			if err != nil {
-				return result, i, ggen.NewParseErr("", i, err)
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
 			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				namedElem0 = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				namedElem0, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("", i, err)
+				}
+			}
+			result[idx0] = NPAliasElem(namedElem0)
 			idx0++
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
@@ -5579,16 +5590,13 @@ func (recv NPAliasPair) DecodeFromStream(s *ggen.Stream) (result NPAliasPair, er
 		if idx0 >= 2 {
 			return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{""}, Want: 2, Got: 3, AtLeast: true}
 		}
-		result[idx0] = *new(NPAliasElem)
-		span, err := s.CaptureValue()
+		result[idx0] = NPAliasElem("")
+		var namedElem0 string
+		namedElem0, err = s.String(true)
 		if err != nil {
 			return result, ggen.NewParseErr("", s.Offset(), err)
 		}
-		result[idx0] = *new(NPAliasElem)
-		err = json.Unmarshal(span, &result[idx0])
-		if err != nil {
-			return result, ggen.NewParseErr("", s.Offset(), err)
-		}
+		result[idx0] = NPAliasElem(namedElem0)
 		idx0++
 		err = s.SkipSpace()
 		if err != nil {
@@ -5627,7 +5635,9 @@ func (s NPAliasPair) JSONSize() int {
 	if n := len(s); n > 0 {
 		size += n - 1
 	}
-	size += len(s) * 128
+	for i0 := range s {
+		size += len(s[i0])*2 + 2
+	}
 	return size
 }
 
@@ -5636,24 +5646,12 @@ func (s NPAliasPair) AppendJSON(dst []byte) ([]byte, error) {
 	_ = err
 	dst = append(dst, '[')
 	if len(s) > 0 {
-		{
-			var b []byte
-			b, err = json.Marshal(s[0])
-			if err != nil {
-				return dst, err
-			}
-			dst = append(dst, b...)
-		}
+		dst = append(dst, '"')
+		dst = ggen.AppendStringNoHTML(dst, string(s[0]))
 		for _, v0 := range s[1:] {
 			dst = append(dst, ',')
-			{
-				var b []byte
-				b, err = json.Marshal(v0)
-				if err != nil {
-					return dst, err
-				}
-				dst = append(dst, b...)
-			}
+			dst = append(dst, '"')
+			dst = ggen.AppendStringNoHTML(dst, string(v0))
 		}
 	}
 	dst = append(dst, ']')

@@ -2311,6 +2311,9 @@ type Msg struct {
 			// element loop for an inner: step to run in. Only [N]byte with format:array
 			// keeps one.
 			{"inner_on_bytes", "B []byte", `json:"b" pipe:"inner:trim"`, "`inner:` tag prefix is only valid on slice/array/map fields"},
+			{"inner_below_bytes_map", "M map[string][]byte", `json:"m" pipe:"inner:(inner:lte=5)"`, "no element at that depth"},
+			{"inner_below_bytes_slice", "B [][]byte", `json:"b" pipe:"inner:(inner:lte=5)"`, "no element at that depth"},
+			{"inner_below_bytes_deep", "D []map[string][]byte", `json:"d" pipe:"inner:(inner:(inner:lte=5))"`, "no element at that depth"},
 			{"inner_on_byte_array", "B [3]byte", `json:"b" pipe:"inner:gt=1"`, "`inner:` tag prefix is only valid on slice/array/map fields"},
 			// Presence belongs to the field, never to an element or a key. So required
 			// and optional are not allowed under inner: or keys:, on their own or in a
@@ -2342,6 +2345,7 @@ type Msg struct {
 			{"anon_struct_field", "S struct{ A int }", `json:"s"`, "anonymous struct field types are not supported"},
 			{"anon_struct_elem", "L []struct{ Q int }", `json:"l"`, "anonymous struct field types are not supported"},
 			{"anon_struct_map_value", "M map[string]*struct{ Q int }", `json:"m"`, "anonymous struct field types are not supported"},
+			{"format_empty", "T time.Time", `json:"t,format:"`, "`format:` has no value"},
 			{"func_field", "F func()", `json:"f"`, "func field types are not supported"},
 			{"chan_field", "C chan int", `json:"c"`, "chan field types are not supported"},
 		}
@@ -2832,6 +2836,28 @@ type Keys struct {
 	// with its own text codec, standard named types the inline path leaves
 	// alone, an interface, and a plain named primitive that only container
 	// aliases hold.
+	// A package named like a local of the generated functions gets its own
+	// qualifier, or the local would shadow it.
+	for _, name := range []string{"result", "data", "key"} {
+		writeFixture(t, filepath.Join(base, "shadow", name, name+".go"), "package "+name+"\n\ntype Rec struct {\n\tA int `json:\"a\"`\n}\n")
+	}
+	writeFixture(t, filepath.Join(base, "shadow", "shadow.go"), `package shadow
+
+import (
+	"fixture/shadow/data"
+	"fixture/shadow/key"
+	"fixture/shadow/result"
+)
+
+//ggen:generate
+type Host struct {
+	P *result.Rec           `+"`json:\"p\"`"+`
+	D []data.Rec            `+"`json:\"d\"`"+`
+	M map[string]key.Rec    `+"`json:\"m\"`"+`
+	Z result.Rec            `+"`json:\"z,omitzero\"`"+`
+	G map[string][]data.Rec `+"`json:\"g\"`"+`
+}
+`)
 	writeFixture(t, filepath.Join(base, "zeroalias", "zeroalias.go"), `package zeroalias
 
 type Code string
@@ -3011,6 +3037,60 @@ type Levels struct {
 	writeFixture(t, filepath.Join(base, "astonly", "z.go"), astOnly)
 	writeFixture(t, filepath.Join(base, "astonly", "z_ggen.go"), astBody)
 	goBuild(t, base)
+}
+
+// A named func or chan type has no JSON shape unless it brings its own
+// codec, the same as a func or chan literal.
+func TestNamedFuncChanField(t *testing.T) {
+	t.Parallel()
+	bin := buildCLI(t)
+	base := t.TempDir()
+	fixtureGoMod(t, base, "fixture")
+	const decls = `
+type Handler func()
+
+type Pipe chan int
+
+type Hook func()
+
+func (Hook) MarshalJSON() ([]byte, error) { return []byte("1"), nil }
+
+func (*Hook) UnmarshalJSON([]byte) error { return nil }
+`
+	for name, c := range map[string]struct{ field, want string }{
+		"fn":      {"H Handler", "func field types are not supported"},
+		"ch":      {"P []Pipe", "chan field types are not supported"},
+		"sqlnull": {"N sql.Null[Handler]", "func field types are not supported"},
+		"codec":   {"K Hook", ""},
+	} {
+		src := "package " + name + "\n\nimport \"database/sql\"\n\nvar _ sql.NullString\n" + decls +
+			"\n//ggen:generate\ntype Doc struct {\n\t" + c.field + " `json:\"x\"`\n}\n"
+		writeFixture(t, filepath.Join(base, name, name+".go"), src)
+		out, err := runCLI(t, bin, filepath.Join(base, name), ".")
+		if c.want == "" {
+			if err != nil {
+				t.Errorf("%s: %v\n%s", name, err, out)
+			}
+			continue
+		}
+		if err == nil || !strings.Contains(out, c.want) {
+			t.Errorf("%s: want %q, got %v\n%s", name, c.want, err, out)
+		}
+	}
+	goBuild(t, base)
+	// The same holds for a container alias element and for a field reached
+	// through struct-alias introspection.
+	writeFixture(t, filepath.Join(base, "dep", "dep.go"), "package dep\n\ntype Handler func()\n\ntype Rec struct {\n\tA int\n\tH Handler\n}\n")
+	for name, c := range map[string]struct{ src, want string }{
+		"elems":   {"type Handler func()\n\n//ggen:generate\ntype Hs []Handler\n", "func element types are not supported"},
+		"aliased": {"import \"fixture/dep\"\n\n//ggen:generate\ntype R dep.Rec\n", "field H: func field types are not supported"},
+	} {
+		writeFixture(t, filepath.Join(base, name, name+".go"), "package "+name+"\n\n"+c.src)
+		out, err := runCLI(t, bin, filepath.Join(base, name), ".")
+		if err == nil || !strings.Contains(out, c.want) {
+			t.Errorf("%s: want %q, got %v\n%s", name, c.want, err, out)
+		}
+	}
 }
 
 // TestOneofScope_TestFileDistinct checks that the oneof slices in a package's

@@ -36,3 +36,16 @@ func (w *Wrap) UnmarshalJSON(b []byte) error {
 type Lease struct {
 	TTL time.Duration `json:"ttl"`
 }
+
+// Grant and Quota each appear in one host type only (LeaseGrid and
+// LeaseNulls), so nothing else in that package registers their methods.
+//
+//ggen:generate
+type Grant struct {
+	TTL time.Duration `json:"ttl"`
+}
+
+//ggen:generate
+type Quota struct {
+	TTL time.Duration `json:"ttl"`
+}

@@ -1368,11 +1368,14 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 
 	// Slice, map and array aliases. Build a FieldInfo that describes the
 	// shape.
+	if what := s.namedFuncOrChan(underlying); what != "" {
+		return info, fmt.Errorf("type %s: %s element types are not supported", name, what)
+	}
 	switch tt := underlying.(type) {
 	case *types.Slice:
 		info.AliasKind = KindSlice
 		info.AliasUnderlying = s.spell(rhs)
-		f := s.aliasContainerField(tt.Elem())
+		f := s.aliasContainerField(name, tt, tt.Elem())
 		if elemKindIsBytes(f.ElemType) {
 			// `type Bytes []byte` becomes KindBytes, encoded as base64.
 			info.AliasKind = KindBytes
@@ -1389,14 +1392,14 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 		}
 		info.AliasKind = KindMap
 		info.AliasUnderlying = s.spell(rhs)
-		f := s.aliasContainerField(tt.Elem())
+		f := s.aliasContainerField(name, tt, tt.Elem())
 		f.Kind = KindMap
 		info.AliasField = f
 		return info, nil
 	case *types.Array:
 		info.AliasKind = KindArray
 		info.AliasUnderlying = s.spell(rhs)
-		f := s.aliasContainerField(tt.Elem())
+		f := s.aliasContainerField(name, tt, tt.Elem())
 		f.Kind = KindArray
 		f.ArrayLen = int(tt.Len())
 		f.ElemArrayLen = ArrayLenFromType(f.ElemType)
@@ -1416,7 +1419,7 @@ func (s *structSet) extractAliasFromTypes(name string, t types.Type, rhs ast.Exp
 // aliasContainerField builds a partial FieldInfo for the element type of a
 // container alias. A slice or array caller sets ElemArrayLen, and ArrayLen for
 // an array.
-func (s *structSet) aliasContainerField(elem types.Type) FieldInfo {
+func (s *structSet) aliasContainerField(name string, container, elem types.Type) FieldInfo {
 	fi := FieldInfo{}
 	elem = s.unalias(elem)
 	if pe, ok := elem.(*types.Pointer); ok {
@@ -1427,6 +1430,9 @@ func (s *structSet) aliasContainerField(elem types.Type) FieldInfo {
 	fi.ElemKind = ResolveKind(fi.ElemType)
 	fi.ElemIface = s.inspect(elem)
 	fi.TypeImports = s.foreignImports(elem)
+	fi.NamedPrims = s.namedPrims(elem)
+	fi.Ifaces = s.namedIfaces(container)
+	s.nestedSQLNulls(name, container, &fi)
 	return fi
 }
 
@@ -1456,7 +1462,7 @@ func (s *structSet) qualifierFor(p *types.Package) string {
 	base := p.Name()
 	// A name that emitted code uses, such as `json` or `time`, belongs to
 	// that package only. Any other package with that name gets `<name>_`.
-	if want, ok := emitterPackages[base]; ok && want != p.Path() {
+	if want, ok := emitterPackages[base]; ok && want != p.Path() || emitterLocal(base) {
 		base += "_"
 	}
 	q := base
@@ -1473,6 +1479,32 @@ func (s *structSet) qualifierTaken(q string) bool {
 		return true
 	}
 	return s.typesPkg != nil && s.typesPkg.Scope().Lookup(q) != nil
+}
+
+// emitterLocals are the names generated functions declare, without the
+// number some of them end in. A package named like one gets `<name>_`, or
+// the local would shadow it where generated code names a type of the package.
+var emitterLocals = map[string]struct{}{
+	"recv": {}, "result": {}, "data": {}, "dst": {}, "err": {}, "errs": {}, "size": {},
+	"s": {}, "i": {}, "j": {}, "k": {}, "n": {}, "v": {}, "f": {}, "b": {}, "c": {}, "d": {}, "e": {}, "t": {}, "u": {}, "z": {},
+	"ke": {}, "kew": {}, "ki": {}, "key": {}, "ownKey": {}, "mk": {}, "mv": {}, "iv": {}, "uv": {}, "cv": {}, "sv": {}, "nv": {}, "nvo": {},
+	"ve": {}, "vew": {}, "de": {}, "qn": {}, "qe": {}, "rc": {}, "pw": {}, "tj": {}, "ts": {}, "ok": {}, "neg": {}, "limit": {},
+	"idx": {}, "row": {}, "start": {}, "consumed": {}, "slab": {}, "span": {}, "spanStart": {}, "reuse": {}, "carried": {},
+	"entry": {}, "entryConsumed": {}, "cnt": {}, "conv": {}, "sec": {}, "nsec": {}, "zero": {}, "buf": {}, "first": {}, "seen": {},
+}
+
+// emitterLocal reports whether generated code may declare a local named q.
+func emitterLocal(q string) bool {
+	base := strings.TrimRight(q, "0123456789")
+	if _, ok := emitterLocals[base]; ok {
+		return true
+	}
+	for _, p := range []string{"seen", "first", "named", "buf", "tf", "b"} {
+		if rest, ok := strings.CutPrefix(q, p); ok && rest != "" && rest[0] >= 'A' && rest[0] <= 'Z' {
+			return true
+		}
+	}
+	return false
 }
 
 // typeImport describes p for the generated import block: its qualifier, and
@@ -1728,6 +1760,69 @@ func (s *structSet) elemIface(t types.Type) FieldInterfaces {
 	return s.inspect(elem)
 }
 
+// namedIfaces inspects every named type two or more container levels below
+// t, where neither Iface nor ElemIface reaches.
+func (s *structSet) namedIfaces(t types.Type) map[string]FieldInterfaces {
+	var out map[string]FieldInterfaces
+	var walk func(t types.Type, depth int)
+	walk = func(t types.Type, depth int) {
+		switch x := t.(type) {
+		case *types.Pointer:
+			walk(x.Elem(), depth)
+		case *types.Slice:
+			walk(x.Elem(), depth+1)
+		case *types.Array:
+			walk(x.Elem(), depth+1)
+		case *types.Map:
+			walk(x.Elem(), depth+1)
+		case *types.Named:
+			if depth < 2 {
+				return
+			}
+			if out == nil {
+				out = map[string]FieldInterfaces{}
+			}
+			out[types.TypeString(x, s.pkgQualifier())] = s.inspect(x)
+		}
+	}
+	walk(t, 0)
+	return out
+}
+
+// namedFuncOrChan names the first named func or chan type in t that has no
+// codec methods. encoding/json cannot write one, so it has no JSON shape,
+// like the literal unsupportedTypeExpr refuses.
+func (s *structSet) namedFuncOrChan(t types.Type) string {
+	switch x := types.Unalias(t).(type) {
+	case *types.Pointer:
+		return s.namedFuncOrChan(x.Elem())
+	case *types.Slice:
+		return s.namedFuncOrChan(x.Elem())
+	case *types.Array:
+		return s.namedFuncOrChan(x.Elem())
+	case *types.Map:
+		return s.namedFuncOrChan(x.Elem())
+	case *types.Named:
+		var what string
+		switch x.Underlying().(type) {
+		case *types.Signature:
+			what = "func"
+		case *types.Chan:
+			what = "chan"
+		default:
+			if isStdSQLNull(x) {
+				return s.namedFuncOrChan(x.TypeArgs().At(0))
+			}
+			return ""
+		}
+		if i := s.inspect(x); i.JSONMarshaler || i.TextMarshaler || i.TextAppender || i.AppendJSON {
+			return ""
+		}
+		return what
+	}
+	return ""
+}
+
 // elemKindIsBytes reports whether the Go type name is the byte type, so
 // `[]byte` and `[]uint8` aliases use base64.
 func elemKindIsBytes(elem string) bool {
@@ -1786,7 +1881,11 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 		fi.Ignored = true
 		return fi, nil
 	}
-	if what := unsupportedFieldType(field.Type()); what != "" {
+	what := unsupportedFieldType(field.Type())
+	if what == "" {
+		what = s.namedFuncOrChan(field.Type())
+	}
+	if what != "" {
 		// A plain error, so the caller's `type X:` prefix and the file
 		// prefix both reach the message. A foreign field has no position
 		// in the source being generated.
@@ -1819,6 +1918,7 @@ func (s *structSet) extractFieldFromTypes(structName string, field *types.Var, t
 			fi.SQLNullInner = inner
 			fi.SQLNullImports = imps
 		}
+		s.nestedSQLNulls(structName, t, &fi)
 	}
 	if err != nil {
 		setPosOnAll(err, s.fileSet.Position(field.Pos()))
@@ -1876,6 +1976,7 @@ func (s *structSet) typeField(fi *FieldInfo, t types.Type) types.Type {
 	fi.ElemIface = s.elemIface(t)
 	fi.TypeImports = s.foreignImports(t)
 	fi.NamedPrims = s.namedPrims(t)
+	fi.Ifaces = s.namedIfaces(t)
 	return t
 }
 
@@ -2038,6 +2139,10 @@ func (s *structSet) extractStructSeen(name string, st *ast.StructType, seen map[
 				if expr, ok := s.fieldExpr[name+"."+ident.Name]; ok {
 					if tv, ok := s.typesInfo.Types[expr]; ok {
 						fieldType = s.typeField(&fi, tv.Type)
+						if what := s.namedFuncOrChan(tv.Type); what != "" && extractErr == nil {
+							extractErr = unsupportedTypeError(ident.Name, what)
+							errs = append(errs, attachPosition(extractErr, s.fileSet.Position(field.Pos())))
+						}
 						// Named primitives are only resolved now. Run the rule
 						// checks again, so a rule of the wrong kind on a
 						// `type P string` field is rejected here instead of
@@ -2075,6 +2180,7 @@ func (s *structSet) extractStructSeen(name string, st *ast.StructType, seen map[
 				fi.SQLNullInner = inner
 				fi.SQLNullImports = imps
 			}
+			s.nestedSQLNulls(name, fieldType, &fi)
 			// Resolve `@Func` references. The errors are RichErrors with
 			// CodeSpan set. Add the Struct.Field prefix to each one, since a
 			// batch can hold several, so CodeSpan and hints are kept.
@@ -2240,13 +2346,21 @@ func (s *structSet) extractEmbedded(parent string, field *ast.Field, seen map[st
 	return sub.Fields, nil
 }
 
+// tagText returns the struct tag a literal spells, raw or interpreted.
+func tagText(lit *ast.BasicLit) reflect.StructTag {
+	if s, err := strconv.Unquote(lit.Value); err == nil {
+		return reflect.StructTag(s)
+	}
+	return reflect.StructTag(strings.Trim(lit.Value, "`"))
+}
+
 // jsonTag returns the value of the field's `json` tag, or "" when there is
 // none.
 func jsonTag(field *ast.Field) string {
 	if field.Tag == nil {
 		return ""
 	}
-	return reflect.StructTag(strings.Trim(field.Tag.Value, "`")).Get("json")
+	return tagText(field.Tag).Get("json")
 }
 
 // checkTagReadable rejects a struct tag that has one of ggen's keys but a
@@ -2373,7 +2487,7 @@ func fieldFromTag(structName, goName string, lit *ast.BasicLit) (FieldInfo, erro
 	fi := FieldInfo{GoName: goName, StructName: structName, HintLen: -1}
 
 	if lit != nil {
-		tag := reflect.StructTag(strings.Trim(lit.Value, "`"))
+		tag := tagText(lit)
 		if err := checkTagReadable(tag, goName); err != nil {
 			return fi, err
 		}
@@ -2822,6 +2936,54 @@ func (s *structSet) sqlNullGenericInfo(structName string, t types.Type, parent *
 	return &inner, s.foreignImports(innerType), true
 }
 
+// nestedSQLNulls fills fi.SQLNulls with every generic sql.Null[T] below t's
+// own level whose T the spelling alone cannot resolve, then gives the
+// pointee and the element that kind.
+func (s *structSet) nestedSQLNulls(structName string, t types.Type, fi *FieldInfo) {
+	if t == nil {
+		return
+	}
+	var walk func(t types.Type, top bool)
+	walk = func(t types.Type, top bool) {
+		switch x := s.unalias(t).(type) {
+		case *types.Pointer:
+			walk(x.Elem(), false)
+		case *types.Slice:
+			walk(x.Elem(), false)
+		case *types.Array:
+			walk(x.Elem(), false)
+		case *types.Map:
+			walk(x.Elem(), false)
+		case *types.Named:
+			if !isStdSQLNull(x) {
+				return
+			}
+			spelled := types.TypeString(x, s.pkgQualifier())
+			if _, seen := fi.SQLNulls[spelled]; !top && !seen && ResolveKind(spelled) != KindSQLNull {
+				if inner, _, ok := s.sqlNullGenericInfo(structName, x, fi); ok {
+					if fi.SQLNulls == nil {
+						fi.SQLNulls = map[string]*FieldInfo{}
+					}
+					fi.SQLNulls[spelled] = inner
+				}
+			}
+			walk(x.TypeArgs().At(0), false)
+		}
+	}
+	walk(t, true)
+	if len(fi.SQLNulls) == 0 {
+		return
+	}
+	if fi.Pointer {
+		if _, leaf := PointerDepth(fi.GoType); fi.SQLNulls[leaf] != nil {
+			fi.Kind = KindSQLNull
+		}
+	}
+	if fi.SQLNulls[fi.ElemType] != nil {
+		fi.ElemKind = KindSQLNull
+	}
+}
+
 // foreignImports returns, sorted by path, the imports for every package
 // other than the one being generated that t names. That covers the field's
 // own type and every element, key, pointee and type argument. The emitters
@@ -2880,6 +3042,23 @@ func (s *structSet) collectNamedPrims(t types.Type, out map[string]TypeKind, see
 	}
 	seen[t] = struct{}{}
 	switch x := t.(type) {
+	case *types.Alias:
+		if u := s.unalias(x); u != t {
+			s.collectNamedPrims(u, out, seen)
+			return
+		}
+		// An alias kept under its own name, because this package cannot
+		// spell its target. Generated code converts through the alias.
+		target := types.Unalias(x)
+		if b, ok := target.Underlying().(*types.Basic); ok {
+			name := types.TypeString(x, s.pkgQualifier())
+			if k := ResolveKind(b.Name()); isSupportedAliasPrimitive(k) && ResolveKind(name) == KindStruct {
+				if iface := s.inspect(target); !iface.JSONMarshaler && !iface.JSONUnmarshaler &&
+					!iface.TextMarshaler && !iface.TextUnmarshaler && !iface.TextAppender {
+					out[name] = k
+				}
+			}
+		}
 	case *types.Named:
 		if b, ok := x.Underlying().(*types.Basic); ok {
 			// Use the name as source code writes it, `leaf.Name` and not

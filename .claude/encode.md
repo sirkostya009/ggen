@@ -37,7 +37,7 @@ func BytesToString(buf []byte) string                // unsafe.String over buffe
 func AppendString(dst []byte, s string) []byte       // HTML-safe variant
 func AppendNetipAddr(dst []byte, a netip.Addr) []byte // addr text + closing `"`; zoned text re-escapes (zones are arbitrary bytes)
 func AppendNetipAddrHTML(dst []byte, a netip.Addr) []byte // htmlescape variant
-func AppendURL(dst []byte, u url.URL) []byte          // wire-form text + closing `"`, re-escapes when needed; byte-for-byte url.URL.String() — path presence is tracked explicitly (hasPath := raw || u.Path != ""), so a Path starting with a NUL byte still gets the authority/path '/'
+func AppendURL(dst []byte, u url.URL) []byte          // wire-form text + closing `"`, re-escapes when needed; byte-for-byte url.URL.String() — path presence is tracked explicitly (hasPath := raw || u.Path != ""), so a Path starting with a NUL byte still gets the authority/path '/', and an OmitHost URL with no authority writes the first '/' of a "//" path as %2F
 func AppendURLHTML(dst []byte, u url.URL) []byte      // htmlescape variant
 func AppendIPNet(dst, ip, mask []byte) ([]byte, error) // CIDR text of an IPNet's IP + Mask + closing `"`, what (*net.IPNet).String prints, "" for neither part. Refuses a value String would print without a prefix length (non-canonical mask, IP/mask mismatch)
 func AppendNetAddr(dst, ip []byte, port int, zone string) ([]byte, error) // "ip:port" of a TCPAddr/UDPAddr + closing `"`, what String prints, "%zone" appended by hand (WithZone would intern it), "" for the zero value. Refuses a port outside [0,65535], an IP neither 4 nor 16 bytes, a zone without an IPv6 address. Zoned text goes through the escape check

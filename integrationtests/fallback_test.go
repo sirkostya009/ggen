@@ -4,12 +4,14 @@ package integrationtests
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	jsonv2 "encoding/json/v2"
 	"errors"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/sirkostya009/ggen"
 	"github.com/sirkostya009/ggen/integrationtests/thirdparty"
@@ -351,5 +353,74 @@ func TestSamePkgCodec_MethodsHonoured(t *testing.T) {
 	}
 	if s2 != w2 {
 		t.Errorf("stream decode: ggen %+v jsonv2 %+v", s2, w2)
+	}
+}
+
+// CrossPkgDeep holds a cross-package generated struct two container levels
+// down, where it must still use its own methods: a Lease writes its TTL as a
+// duration string only through them.
+//
+//ggen:generate
+type CrossPkgDeep struct {
+	Rows  [][]thirdparty2.Lease          `json:"rows"`
+	Arr   [2][]thirdparty2.Lease         `json:"arr"`
+	Dict  map[string][]thirdparty2.Lease `json:"dict"`
+	Ptrs  [][]*thirdparty2.Lease         `json:"ptrs"`
+	Maps  []map[string]thirdparty2.Lease `json:"maps"`
+	Extra map[string][]thirdparty2.Lease `json:",embed"`
+}
+
+func TestCrossPkg_belowFirstContainerLevel(t *testing.T) {
+	t.Parallel()
+	l := thirdparty2.Lease{TTL: 90 * time.Second}
+	v := CrossPkgDeep{
+		Rows:  [][]thirdparty2.Lease{{l}},
+		Arr:   [2][]thirdparty2.Lease{{l}, {}},
+		Dict:  map[string][]thirdparty2.Lease{"a": {l}},
+		Ptrs:  [][]*thirdparty2.Lease{{&l, nil}},
+		Maps:  []map[string]thirdparty2.Lease{{"k": l}},
+		Extra: map[string][]thirdparty2.Lease{"x": {l}},
+	}
+	const want = `{"arr":[[{"ttl":"1m30s"}],[]],"dict":{"a":[{"ttl":"1m30s"}]},"maps":[{"k":{"ttl":"1m30s"}}],` +
+		`"ptrs":[[{"ttl":"1m30s"},null]],"rows":[[{"ttl":"1m30s"}]],"x":[{"ttl":"1m30s"}]}`
+	out, err := ggen.Marshal(v)
+	if err != nil || string(out) != want {
+		t.Fatalf("marshal: %s %v\nwant %s", out, err, want)
+	}
+	b, s, err := remarshalBoth[CrossPkgDeep](out)
+	if err != nil || string(b) != want || string(s) != want {
+		t.Errorf("round trip: bytes %s, stream %s, %v", b, s, err)
+	}
+}
+
+// LeaseGrid is a container alias two levels over a cross-package generated
+// struct, and LeaseNulls holds one inside a sql.Null[T]. Both keep the
+// struct's own methods, so the TTL is a duration string.
+//
+//ggen:generate
+type LeaseGrid [][]thirdparty2.Grant
+
+//ggen:generate
+type LeaseNulls struct {
+	N sql.Null[[][]thirdparty2.Quota] `json:"n"`
+}
+
+func TestCrossPkg_belowContainerAliasAndSQLNull(t *testing.T) {
+	t.Parallel()
+	const grid = `[[{"ttl":"1m30s"}],[]]`
+	out, err := ggen.Marshal(LeaseGrid{{{TTL: 90 * time.Second}}, {}})
+	if err != nil || string(out) != grid {
+		t.Errorf("alias marshal: %s %v, want %s", out, err, grid)
+	}
+	if b, s, err := remarshalBoth[LeaseGrid]([]byte(grid)); err != nil || string(b) != grid || string(s) != grid {
+		t.Errorf("alias round trip: bytes %s, stream %s, %v", b, s, err)
+	}
+	const nulls = `{"n":[[{"ttl":"1m30s"}]]}`
+	out, err = ggen.Marshal(LeaseNulls{N: sql.Null[[][]thirdparty2.Quota]{V: [][]thirdparty2.Quota{{{TTL: 90 * time.Second}}}, Valid: true}})
+	if err != nil || string(out) != nulls {
+		t.Errorf("sql.Null marshal: %s %v, want %s", out, err, nulls)
+	}
+	if b, s, err := remarshalBoth[LeaseNulls]([]byte(nulls)); err != nil || string(b) != nulls || string(s) != nulls {
+		t.Errorf("sql.Null round trip: bytes %s, stream %s, %v", b, s, err)
 	}
 }

@@ -367,6 +367,8 @@ func TestAppendURL_Construction(t *testing.T) {
 		{"empty_url", url.URL{}},
 		{"force_query_no_value", url.URL{Scheme: "https", Host: "ex.com", ForceQuery: true}},
 		{"omit_host", url.URL{Scheme: "file", OmitHost: true, Path: "/tmp/x"}},
+		{"omit_host_double_slash", url.URL{Scheme: "file", OmitHost: true, Path: "//host/p"}},
+		{"omit_host_double_slash_raw", url.URL{Scheme: "file", OmitHost: true, Path: "//a b", RawPath: "//a%20b"}},
 		{"opaque_with_fragment", url.URL{Scheme: "tel", Opaque: "+1-555-0100", Fragment: "main"}},
 		{"raw_fragment_set", url.URL{Scheme: "https", Host: "ex.com", Fragment: "a b", RawFragment: "a%20b"}},
 		{"fragment_with_special", url.URL{Scheme: "https", Host: "ex.com", Fragment: "<script>"}},

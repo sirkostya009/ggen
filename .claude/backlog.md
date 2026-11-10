@@ -641,26 +641,15 @@ surface pinned by `Decoder[T]`).
   `""`; exact parity would need `String()` (allocates) or a per-component
   test, not worth it.
 
-- **`url.URL` `OmitHost` + `//`-path branch missing from `appendURLRaw`
-  (2026-09, unfixed).** Go 1.27's `url.URL.String` escapes the first `/` of a
-  path starting with `//` when `OmitHost && Host == "" && User == nil` so
-  re-parsing does not turn the path into an authority; ggen emits it raw:
-  `url.URL{Scheme:"file", OmitHost:true, Path:"//host/p"}` gives ggen
-  `file://host/p` vs stdlib `file:%2F/host/p`. A few lines after the
-  `hasPath` slash check; add a row to `TestAppendURL_Construction`.
-
 - **`case:ignore` could be implemented rather than refused.** A
   `strings.EqualFold` fallback arm after the exact-match switch (jsonv2
   semantics: exact match first, then case-insensitive). Refused for now
   under the no-silent-no-op rule; no consumer has asked.
 
-- **Tag-grammar leftovers (2026-09).** `format:` with an empty value
-  (`json:"t,format:"`) is accepted with `Format=""` (silently no format)
-  where jsonv2 errors "cannot have empty value for `format` tag option".
-  `boundFits` (and the gt/gte/lt/lte gate) rejects an integer-valued float
-  spelling like `gt=1.0` on an int field as out of range although Go accepts
-  the constant (`oneof=1|1.0` is caught as a duplicate first) — over-strict,
-  harmless. `[0]byte` is unsupported: `foldByteArray` folds it onto KindBytes
+- **Tag-grammar leftovers (2026-09).** `boundFits` (and the gt/gte/lt/lte
+  gate) rejects an integer-valued float spelling like `gt=1.0` on an int
+  field as out of range although Go accepts the constant (`oneof=1|1.0` is
+  caught as a duplicate first) — over-strict, harmless. `[0]byte` is unsupported: `foldByteArray` folds it onto KindBytes
   with `ArrayLen 0`, indistinguishable from `[]byte`, so the nil-check emit
   does not compile; jsonv2 base64s it as `""` — either skip the fold for a
   zero-length array (then it is a `[]` tuple, diverging from v2) or teach the
@@ -735,16 +724,6 @@ surface pinned by `Decoder[T]`).
   `LoadUint8x16Part`/`LoadInt8x32Part` stay safe (scalar 8/4/2/1-byte
   element loads).
 
-- **A NAMED func or channel field type without codec methods is accepted
-  (2026-09).** The parse-level refusal covers type LITERALS, and a named type
-  stops the walk, so a `type Handler func()` field compiles (its zero is
-  spelled `*new(Handler)` or `(Recv{}).H`) and then fails in `AppendJSON` for
-  every value through the `encoding/json` rung, the defect the literal refusal
-  exists for. With a `MarshalJSON`/`UnmarshalJSON` or text pair it works.
-  Refuse a named func or chan type that has no codec methods. The literal's
-  diagnostic could then offer "declare a named type with its own codec" as a
-  remedy, which today it must not.
-
 - **gc internal compiler error on a dead store into a zero-length array
   (Go 1.27.1, worth filing upstream).** Assigning into an element of a
   `[0][3]int` — the shape a `map[string][0][3]int` decode loop produced —
@@ -755,18 +734,10 @@ surface pinned by `Decoder[T]`).
 
 Found during the 2026-10 review and its fixes, all unfixed:
 
-- **Interpreted-string struct tags are ignored.** `A string "json:\"alpha\""`
-  gets key `A` where `encoding/json` uses `alpha`: `gen/model/parse.go` reads
-  a tag by trimming the backticks off its literal, with no `strconv.Unquote`,
-  in `jsonTag` and `fieldFromTag`.
-
-- **A foreign package named like a generated local is shadowed.** A field
-  `P *result.Rec` from a package named `result` fails "result.Rec is not a
-  type": `structSet.qualifierFor` avoids package-level identifiers only, not
-  the emitter's locals (`result`, `s`, `data`, `dst`, `v`, `mv`, `i`, `err`,
-  `recv`, …). A sibling, theoretical hole in the import scan: a selector
-  followed by `.` (`.Field.`) counts as a qualifier, so a foreign package
-  named like a field could be imported for nothing.
+- **The import scan counts a selector as a qualifier (theoretical).** An
+  identifier followed by `.` in a chain (`.Field.`) is collected by
+  `bodyQualifiers`, so a foreign package named like a field could be imported
+  for nothing.
 
 - **`json:",embed"` catch-all residuals.** (a) Values `embedValueRoute` leaves
   on `embedViaAny`, such as numbers, bools, `time.Time`, netip, `big.*`,
@@ -788,17 +759,6 @@ Found during the 2026-10 review and its fixes, all unfixed:
   `[]*[4]byte`) does not round-trip: `AppendAny` writes base64, while
   `encoding/json`, which reads it, and the container emitters both expect a
   number array.
-
-- **A cross-package generated struct below the first container level loses its
-  method set.** At depth 1 (`[]sub.T`, `map[string]sub.T`) an element takes
-  `sub.T`'s own `DecodeFrom` / `AppendJSON`, but `[][]sub.T`, `[N][]sub.T`,
-  `map[string][]sub.T` and a catch-all `map[string][]thirdparty2.External2`
-  read and write it through `encoding/json`: `peelSliceField` builds the inner
-  level with no `Iface` / `ElemIface`, and `sliceElemField` keeps the outer
-  value's `ElemIface`, which describes the container. One type then has two
-  wire shapes (a `time.Duration` member as nanoseconds, a `net.TCPAddr` as an
-  object), and its own `DecodeFrom` cannot read the deeper one. Needs
-  per-level `FieldInterfaces` from the parser.
 
 - **`encoding/json`'s fallback reads a named `[]byte` without a codec in two
   forms.** A `net.IPMask` in a plain struct or a struct alias also accepts a
@@ -827,30 +787,6 @@ Found during the 2026-10 review and its fixes, all unfixed:
   AA in Emb not found in this package") where `encoding/json` promotes
   `Inner`'s fields.
 
-- **`sql.Null[T]` whose `T` holds `sql.Null` elements does not compile.**
-  `X sql.Null[[]sql.Null[string]]` gives `cannot assign to nv[len(nv) - 1]`
-  on both paths: `renderSQLNull`/`renderStreamSQLNull` name their temp `nv`
-  at every level, so the element's `var nv string` shadows the outer slice.
-  Fix it like `ptrNest`, with a nesting counter for the name.
-
-- **`sql.Null[T]` with a non-primitive `T` below a field goes through
-  `encoding/json`.** A field resolves `sql.Null[T]` through go/types
-  (`sqlNullGenericInfo` → `SQLNullInner`) and writes the inner value or `null`
-  for any `T`. A slice or array element, a map value or a pointee is resolved
-  by its spelling (`ResolveKind`), where `isSupportedSQLNullInner` admits only
-  primitives and `time.Time`, so `[]sql.Null[net.IPNet]` or
-  `*sql.Null[time.Duration]` is `KindStruct` and writes the
-  `{"V":…,"Valid":…}` struct dump. One struct then carries two shapes of one
-  Go type, and `AppendAny` writes a third (`{"V":"10.0.0.0/8","Valid":true}`).
-  Resolve those positions through go/types like `sqlNullGenericInfo`.
-
-- **`inner:` below a `[]byte` level is a silent no-op.** `map[string][]byte`,
-  `[][]byte` and `[]map[string][]byte` with `inner:(inner:lte=5)` are
-  accepted: the applicability walk (`peelTypeOnce`) and `resolvePipeCustoms`
-  (`diveElemType`) peel `[]byte` to `byte`, but `[]byte` decodes as one
-  base64 string with no element loop. Top-level `inner:` on `[]byte` is
-  rejected, and the deeper levels need the same rejection.
-
 - **Pointer map values are judged inconsistently at generate time.**
   `map[string]*int` with `inner:gte=0` is rejected ("`gte` is inapplicable
   to *int") while a `*int` field, `[]*int` elements and
@@ -862,31 +798,14 @@ Found during the 2026-10 review and its fixes, all unfixed:
   `diveElemType` does. Both are loud, not silent, and aligning them touches
   the gen export too.
 
-- **`omitempty` on a non-struct `KindStruct` type is a silent no-op.**
-  `omitEmptyCond` has no `KindStruct` arm, and the struct-field rejection
-  (cmd/ggen opt #87) fires only when the underlying type is a struct. So a
-  named container (`N dep.Names` with `type Names []string`, or a same-package
-  one), an interface such as `error`, and every foreign type in AST-only mode
-  are written even when they encode as `null`, `[]` or `{}`. Reject it, or
-  emit a guard that does not name the type (`!ggen.AnyIsEmpty(ref)`, or
-  `len(ref) > 0` from the go/types underlying), which would also let
-  `opaqueField`'s `omitempty` rejection go.
-
-- **`collectNamedPrims` has no `*types.Alias` arm.** An `=` alias kept under
-  its own name because this package cannot spell its target
-  (`other.KindA = other/internal/k.Kind`, a string) loses its named-primitive
-  kind: string rules on it are rejected at generate time ("inapplicable to
-  other.KindA") and it decodes through `encoding/json`, although generated
-  code could convert through the alias name. Loud, not silent.
-
-- **A container alias of a plain named primitive decodes its elements through
-  `encoding/json`.** `//ggen:generate type Codes []Code` over a plain
-  `type Code string` that no struct field of the pass names (`NPAliasList` /
-  `NPAliasPair` in integrationtests) unmarshals and marshals each element with
-  `encoding/json`: `aliasContainerField` sets no `NamedPrims`, and
-  `seedNamedKinds` does not read `AliasField.NamedPrims`, so `Code` never
-  reaches `namedKinds`. Correct, but slower than the inline path a `[]Code`
-  struct field takes.
+- **`omitempty` is a silent no-op on a named type with marshal methods, and
+  in AST-only mode.** `namedEmptyCond` gives no guard to a type with
+  `MarshalJSON`, `MarshalText`, `AppendText` or `AppendJSON`, and none when
+  the field has no go/types type. So a named container with its own codec,
+  and every named container, interface and foreign type in AST-only mode,
+  is written even when it encodes as `null`, `""`, `[]` or `{}`. Reject it,
+  or test the written bytes. `opaqueField` rejects `omitempty` on a type
+  generated code cannot name.
 
 - **A pointer pipe on `null` skips built-ins after a nil-filling `@Func`
   mod (contract question).** On a JSON `null` only the `@Func` half of a
@@ -894,12 +813,6 @@ Found during the 2026-10 review and its fixes, all unfixed:
   steps under `inner:` on a `[]*int`) accepts `null` as 0 while rejecting an
   explicit 0. Deliberate today (the built-ins have no leaf on a `null`), but
   arguably not declared order.
-
-- **Stream map keys validate a literal `mk` (harmless today).**
-  `renderStreamMap` calls `keyValidateAndModStream(b, f, "mk")` where the bytes
-  `renderMap` passes `mkVar`. A nested stream map's key is `mk1`, so key
-  rules reaching a nested map would check the outer key. None do:
-  `sliceElemField` clears `KeyValidation`/`KeyMods`/`KeyPipe`.
 
 - **gen describes annotations, not CLI flags.** `gen.Load` never applies
   `model.Flags`, so a decoder generated with `-nullzero`, `-ignoreunknown`

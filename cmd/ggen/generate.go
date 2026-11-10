@@ -576,13 +576,13 @@ func collectFieldImports(f model.FieldInfo, addImport func(model.TypeImport)) {
 		}
 	case model.KindSQLNull:
 		add("database/sql")
-		if f.SQLNullInner != nil {
+		if sqlNullInner(f) != nil {
 			// Add the foreign packages named in the type, then recurse for
 			// the inner type's own imports.
 			for _, imp := range f.SQLNullImports {
 				addImport(imp)
 			}
-			collectFieldImports(*f.SQLNullInner, addImport)
+			collectFieldImports(*sqlNullInner(f), addImport)
 		} else if spec, ok := model.SQLNullSpec(f.GoType); ok {
 			//exhaustive:ignore not every kind applies here
 			if spec.Inner == model.KindTime {
@@ -603,7 +603,7 @@ func collectFieldImports(f model.FieldInfo, addImport func(model.TypeImport)) {
 			leaf.Pointer = false
 			leaf.PointeeType = ""
 			_, leaf.GoType = model.PointerDepth(f.GoType)
-			leaf.Kind = model.ResolveKind(leaf.GoType)
+			leaf.Kind = resolveKind(leaf.GoType)
 			collectFieldImports(leaf, addImport)
 		} else {
 			crossPkgStruct(typ, f.Iface)
@@ -797,6 +797,8 @@ func renderOneMod(b *bytes.Buffer, m model.ModRule, field, ref, goType string, k
 func seedNamedKinds(structs []model.StructInfo) {
 	aliasFlags = map[string]aliasCodegen{}
 	litTypes = map[string]struct{}{}
+	sqlNullInners = map[string]*model.FieldInfo{}
+	typeIfaces = map[string]model.FieldInterfaces{}
 	for _, s := range structs {
 		if s.IsAlias && kindPrimitiveName(s.AliasKind) != "" {
 			namedKinds[s.Name] = s.AliasKind
@@ -813,13 +815,32 @@ func seedNamedKinds(structs []model.StructInfo) {
 		if s.IsAlias && s.Type != nil {
 			recordLitTypes(s.AliasUnderlying, s.Type.Underlying())
 		}
+		if s.IsAlias {
+			maps.Copy(namedKinds, s.AliasField.NamedPrims)
+			seedFieldTypes(s.AliasField)
+		}
 		for _, f := range s.Fields {
 			maps.Copy(namedKinds, f.NamedPrims)
 			recordLitTypes(f.GoType, f.Type)
-			if f.SQLNullInner != nil {
-				recordLitTypes(f.SQLNullInner.GoType, f.SQLNullInner.Type)
-			}
+			seedFieldTypes(f)
 		}
+	}
+}
+
+// seedFieldTypes registers the sql.Null[T] inners and the deep element
+// interfaces a field names, then does the same for each sql.Null inner, whose
+// T may hold more of both.
+func seedFieldTypes(f model.FieldInfo) {
+	maps.Copy(sqlNullInners, f.SQLNulls)
+	maps.Copy(typeIfaces, f.Ifaces)
+	inners := slices.Collect(maps.Values(f.SQLNulls))
+	if f.SQLNullInner != nil {
+		inners = append(inners, f.SQLNullInner)
+	}
+	for _, inner := range inners {
+		maps.Copy(namedKinds, inner.NamedPrims)
+		recordLitTypes(inner.GoType, inner.Type)
+		seedFieldTypes(*inner)
 	}
 }
 
@@ -1062,7 +1083,7 @@ func leafKind(f model.FieldInfo, leafType string) model.TypeKind {
 	if byteArrayLen(f) > 0 {
 		return model.KindBytes
 	}
-	return model.ResolveKind(leafType)
+	return resolveKind(leafType)
 }
 
 // arrayLenErr builds a typed *ggen.LenError literal for the strict element
@@ -1575,6 +1596,38 @@ func omitEmptyCond(f model.FieldInfo, ref string) string {
 	case model.KindSQLNull:
 		// A value with Valid false marshals as `null`.
 		return ref + ".Valid"
+	case model.KindStruct:
+		return namedEmptyCond(f, ref)
+	}
+	return ""
+}
+
+// namedEmptyCond is the omitempty test for a named type that is not a
+// struct and has no codec of its own, which encoding/json writes by its
+// underlying type: a slice or map by length, an interface by the value it
+// holds. A type with marshal methods decides its own encoding, so it gets no
+// test, and neither does anything without go/types.
+func namedEmptyCond(f model.FieldInfo, ref string) string {
+	if f.Type == nil || f.Iface.JSONMarshaler || f.Iface.TextMarshaler || f.Iface.TextAppender || f.Iface.AppendJSON {
+		return ""
+	}
+	t := types.Unalias(f.Type)
+	for {
+		p, ok := t.Underlying().(*types.Pointer)
+		if !ok {
+			break
+		}
+		t = types.Unalias(p.Elem())
+	}
+	switch u := t.Underlying().(type) {
+	case *types.Slice, *types.Map:
+		return fmt.Sprintf("len(%s) > 0", ref)
+	case *types.Interface:
+		return fmt.Sprintf("!ggen.AnyIsEmpty(%s)", ref)
+	case *types.Array:
+		if u.Len() == 0 {
+			return "false"
+		}
 	}
 	return ""
 }
@@ -1603,7 +1656,7 @@ func comparableByKind(goType string) bool {
 		return true
 	}
 	//exhaustive:ignore the other kinds hold a slice or map, or are opaque here
-	switch effectiveKind(goType, model.ResolveKind(goType)) {
+	switch effectiveKind(goType, resolveKind(goType)) {
 	case model.KindString, model.KindBool,
 		model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64,
 		model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64,
@@ -1612,7 +1665,7 @@ func comparableByKind(goType string) bool {
 		model.KindURL, model.KindSQLNull, model.KindAny:
 		return true
 	case model.KindArray:
-		elem, _, _ := model.StripOneContainer(goType)
+		elem, _, _ := stripOneContainer(goType)
 		return comparableByKind(elem)
 	}
 	return false
@@ -2008,7 +2061,7 @@ if dst, err = %s; err != nil { return dst, err }
 		// AppendText.
 		fmt.Fprintf(b, "dst = append(dst, '\"')\nif dst, err = (&%s).AppendText(dst); err != nil { return dst, err }\ndst = append(dst, '\"')\n", ref)
 	case model.KindSQLNull:
-		if f.SQLNullInner != nil {
+		if sqlNullInner(f) != nil {
 			inner := sqlNullInnerField(f)
 			fmt.Fprintf(b, "if !%s.Valid {\n\tdst = append(dst, 'n', 'u', 'l', 'l')\n} else {\n\t", ref)
 			renderAppendValue(b, inner, ref+".V")
@@ -2697,7 +2750,7 @@ func sizeContribKind(f model.FieldInfo, ref string, depth int) (int, string) {
 	case model.KindBigRat:
 		return 8, fmt.Sprintf("size += (%s.Num().BitLen() + %s.Denom().BitLen())/3\n", ref, ref)
 	case model.KindSQLNull:
-		if f.SQLNullInner != nil {
+		if sqlNullInner(f) != nil {
 			inner := sqlNullInnerField(f)
 			innerN, code := sizeContrib(inner, ref+".V", depth)
 			return max(innerN, 4), code // room for "null" when !Valid
@@ -2951,7 +3004,7 @@ func emitSliceElement(b *bytes.Buffer, f model.FieldInfo, vref string, depth int
 		nf := f
 		nf.ElemPointer = false
 		_, nf.ElemType = model.PointerDepth(f.ElemType)
-		nf.ElemKind = model.ResolveKind(nf.ElemType)
+		nf.ElemKind = resolveKind(nf.ElemType)
 		if nf.ElemKind == model.KindArray {
 			nf.ElemArrayLen = model.ArrayLenFromType(nf.ElemType)
 		}
@@ -3923,7 +3976,7 @@ func elemPtrReusable(f model.FieldInfo) bool {
 	// pointer levels in ElemType. Resolve the leaf before checking it.
 	et, _ := elemPtrType(f)
 	_, leaf := model.PointerDepth(et)
-	return leafResets(model.ResolveKind(leaf), leaf)
+	return leafResets(resolveKind(leaf), leaf)
 }
 
 // emitArraySlotBlank empties a fixed-array slot before its element is decoded
@@ -4860,17 +4913,19 @@ func sliceElemField(f model.FieldInfo) model.FieldInfo {
 		// Do what the parser does: pointer stars stay on ElemType. renderMap
 		// routes pointer values through elemPtrType.
 		ef.ElemType = strings.TrimPrefix(ef.GoType, "map[string]")
-		ef.ElemKind = model.ResolveKind(ef.ElemType)
+		ef.ElemKind = resolveKind(ef.ElemType)
+		ef.ElemIface = deepElemIface(ef.ElemType)
 	case model.KindSlice, model.KindArray:
 		// Rebuild the container's own element shape, which elemAsField
 		// cleared. Remove a pointer the same way peelSliceField does.
-		inner, kind, n := model.StripOneContainer(ef.GoType)
+		inner, kind, n := stripOneContainer(ef.GoType)
 		if strings.HasPrefix(inner, "*") {
 			ef.ElemPointer = true
 			inner = inner[1:]
-			kind = model.ResolveKind(inner)
+			kind = resolveKind(inner)
 		}
 		ef.ElemType, ef.ElemKind = inner, kind
+		ef.ElemIface = deepElemIface(inner)
 		if ef.ElemKind == model.KindArray {
 			ef.ElemArrayLen = model.ArrayLenFromType(ef.ElemType)
 		}
@@ -5108,7 +5163,7 @@ func renderBigRat(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 // struct flags applied. The parser builds the inner field before the flags
 // are propagated, so they are applied here.
 func sqlNullInnerField(f model.FieldInfo) model.FieldInfo {
-	inner := *f.SQLNullInner
+	inner := *sqlNullInner(f)
 	inner.JSONName = f.JSONName
 	inner.MultiErr = f.MultiErr
 	inner.NoValidate = f.NoValidate
@@ -5121,20 +5176,37 @@ func sqlNullInnerField(f model.FieldInfo) model.FieldInfo {
 	return inner
 }
 
+// sqlNest counts the sql.Null[T] decodes open around the one being emitted
+// whose T holds another sql.Null.
+var sqlNest int
+
+// sqlNullTemp names the temp a generic sql.Null[T] decodes its value into.
+// A T that holds another sql.Null gets a numbered name, so the inner decode's
+// own `nv` cannot shadow it. Call done after rendering the inner value.
+func sqlNullTemp(inner model.FieldInfo) (name string, done func()) {
+	if !strings.Contains(inner.GoType, "sql.Null") {
+		return "nv", func() {}
+	}
+	sqlNest++
+	return "nvo" + strconv.Itoa(sqlNest), func() { sqlNest-- }
+}
+
 // renderSQLNull emits the decode of a database/sql.NullX field. It checks for
 // `null` first. Otherwise it parses the inner value and sets Valid to true.
 func renderSQLNull(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
-	if f.SQLNullInner != nil {
+	if sqlNullInner(f) != nil {
 		// Generic sql.Null[T]. null gives the zero value. Otherwise decode V
 		// into a temp and store the {V, Valid: true} literal.
 		inner := sqlNullInnerField(f)
 		var dec bytes.Buffer
-		renderField(&dec, inner, "nv", posVar)
-		body, valExpr := dec.String(), "nv"
-		if rest, expr, ok := foldTailAssign(body, "nv"); ok {
+		nv, done := sqlNullTemp(inner)
+		renderField(&dec, inner, nv, posVar)
+		done()
+		body, valExpr := dec.String(), nv
+		if rest, expr, ok := foldTailAssign(body, nv); ok {
 			body, valExpr = rest, expr
 		} else {
-			body = "var nv " + inner.GoType + "\n" + body
+			body = "var " + nv + " " + inner.GoType + "\n" + body
 		}
 		inlineNullPeek(b, posVar, fieldLit(f))
 		fmt.Fprintf(b, `%[1]s = sql.%[2]s{}
@@ -5459,7 +5531,7 @@ func embedValueField(f model.FieldInfo) (model.FieldInfo, embedRoute) {
 func embedValueRoute(t string, top bool) embedRoute {
 	_, t = model.PointerDepth(t)
 	//exhaustive:ignore not every kind applies here
-	switch model.ResolveKind(t) {
+	switch resolveKind(t) {
 	case model.KindDuration, model.KindIPNet, model.KindTCPAddr, model.KindUDPAddr, model.KindBytes:
 		return embedViaFieldDecode
 	case model.KindStruct:
@@ -5473,7 +5545,7 @@ func embedValueRoute(t string, top bool) embedRoute {
 		}
 		return embedViaFields
 	case model.KindSlice, model.KindArray:
-		elem, _, n := model.StripOneContainer(t)
+		elem, _, n := stripOneContainer(t)
 		if n > 0 && (elem == "byte" || elem == "uint8") {
 			if top {
 				return embedViaFieldDecode
@@ -5707,7 +5779,7 @@ func elemPtrField(f model.FieldInfo, jsonName string) model.FieldInfo {
 		GoType:           et,
 		Pointer:          true,
 		PointeeType:      et[1:],
-		Kind:             model.ResolveKind(leafType),
+		Kind:             resolveKind(leafType),
 		JSONName:         jsonName,
 		Format:           f.Format,
 		HTMLEscape:       f.HTMLEscape,
@@ -5728,11 +5800,11 @@ func elemPtrField(f model.FieldInfo, jsonName string) model.FieldInfo {
 	switch pf.Kind {
 	case model.KindSlice, model.KindArray:
 		pf.ArrayLen = model.ArrayLenFromType(leafType)
-		elem, kind, _ := model.StripOneContainer(leafType)
+		elem, kind, _ := stripOneContainer(leafType)
 		if strings.HasPrefix(elem, "*") {
 			pf.ElemPointer = true
 			elem = elem[1:]
-			kind = model.ResolveKind(elem)
+			kind = resolveKind(elem)
 		}
 		pf.ElemType, pf.ElemKind = elem, kind
 		if kind == model.KindArray {
@@ -5740,7 +5812,7 @@ func elemPtrField(f model.FieldInfo, jsonName string) model.FieldInfo {
 		}
 	case model.KindMap:
 		pf.ElemType = strings.TrimPrefix(leafType, "map[string]")
-		pf.ElemKind = model.ResolveKind(pf.ElemType)
+		pf.ElemKind = resolveKind(pf.ElemType)
 	}
 	return pf
 }
@@ -6181,14 +6253,14 @@ func renderSlice(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 // KindArray.
 func peelSliceField(f model.FieldInfo) model.FieldInfo {
 	innerGoType := f.ElemType
-	innerElem, innerKind, _ := model.StripOneContainer(innerGoType)
+	innerElem, innerKind, _ := stripOneContainer(innerGoType)
 	// Do what the parser does: one leading `*` moves into ElemPointer, and
 	// any other stars stay on ElemType for the multi-level pointer code.
 	innerPointer := false
 	if strings.HasPrefix(innerElem, "*") {
 		innerPointer = true
 		innerElem = innerElem[1:]
-		innerKind = model.ResolveKind(innerElem)
+		innerKind = resolveKind(innerElem)
 	}
 	inner := model.FieldInfo{
 		GoType:           innerGoType,
@@ -6198,6 +6270,7 @@ func peelSliceField(f model.FieldInfo) model.FieldInfo {
 		ElemPointer:      innerPointer,
 		ElemType:         innerElem,
 		ElemKind:         innerKind,
+		ElemIface:        deepElemIface(innerElem),
 		JSONName:         f.JSONName + "[]",
 		MultiErr:         f.MultiErr,
 		NoValidate:       f.NoValidate,
@@ -6867,7 +6940,7 @@ func renderStreamMap(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 		var %[7]s string
 		%[7]s, err = s.String(`+vArg(f)+`)
 		%[4]s`, ref, f.GoType, makeExpr, chk, badLit, rm, mkVar)
-	keyValidateAndModStream(b, f, "mk")
+	keyValidateAndModStream(b, f, mkVar)
 	fmt.Fprintf(b, `		err = s.SkipSpace()
 		%[1]s%[3]sif s.Bytes()[s.Pos] != ':' { %[2]s }
 		s.Pos++
@@ -7427,17 +7500,19 @@ sv, err = s.StringView(`+vArg(f)+`)
 // renderStreamSQLNull is the stream counterpart of renderSQLNull.
 func renderStreamSQLNull(b *bytes.Buffer, f model.FieldInfo, ref, posVar string) {
 	_ = posVar
-	if f.SQLNullInner != nil {
+	if sqlNullInner(f) != nil {
 		inner := sqlNullInnerField(f)
 		field := fieldLit(f)
 		rm := streamReadMore(field, "0", false, headSentinel(inner))
 		rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
-		dec := renderStreamField(inner, "nv", posVar)
-		body, valExpr := dec, "nv"
-		if rest, expr, ok := foldTailAssign(body, "nv"); ok {
+		nv, done := sqlNullTemp(inner)
+		dec := renderStreamField(inner, nv, posVar)
+		done()
+		body, valExpr := dec, nv
+		if rest, expr, ok := foldTailAssign(body, nv); ok {
 			body, valExpr = rest, expr
 		} else {
-			body = "var nv " + inner.GoType + "\n" + body
+			body = "var " + nv + " " + inner.GoType + "\n" + body
 		}
 		fmt.Fprintf(b, `%[5]sif s.Bytes()[s.Pos] == 'n' {
 	for ki := 1; ki < 4; ki++ {
@@ -8189,6 +8264,44 @@ var namedKinds map[string]model.TypeKind
 // slice or map in a field's type. zeroLit falls back to `*new(T)` for any
 // other type.
 var litTypes map[string]struct{}
+
+// sqlNullInners holds the inner field of every generic sql.Null[T] the pass
+// names below a field's own type, keyed by spelling (FieldInfo.SQLNulls).
+var sqlNullInners map[string]*model.FieldInfo
+
+// typeIfaces holds the interfaces of the named types the pass names two or
+// more container levels below a field, keyed by spelling (FieldInfo.Ifaces).
+var typeIfaces map[string]model.FieldInterfaces
+
+// deepElemIface returns the interfaces of an element type that sits below
+// the levels the parser describes on the field itself.
+func deepElemIface(elemType string) model.FieldInterfaces {
+	_, leaf := model.PointerDepth(elemType)
+	return typeIfaces[leaf]
+}
+
+// resolveKind is model.ResolveKind, plus the generic sql.Null[T] types only
+// go/types can resolve.
+func resolveKind(t string) model.TypeKind {
+	if _, ok := sqlNullInners[t]; ok {
+		return model.KindSQLNull
+	}
+	return model.ResolveKind(t)
+}
+
+func stripOneContainer(typ string) (string, model.TypeKind, int) {
+	inner, _, n := model.StripOneContainer(typ)
+	return inner, resolveKind(inner), n
+}
+
+// sqlNullInner returns the inner field of a generic sql.Null[T], or nil for
+// the fixed sql.NullX types and the T's that ResolveKind reads itself.
+func sqlNullInner(f model.FieldInfo) *model.FieldInfo {
+	if f.SQLNullInner != nil {
+		return f.SQLNullInner
+	}
+	return sqlNullInners[f.GoType]
+}
 
 // aliasCodegen records the flags that change codegen, as each annotated
 // primitive alias was generated with them. A field of such a type is decoded

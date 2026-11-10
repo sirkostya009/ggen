@@ -5,6 +5,7 @@ package integrationtests
 import (
 	"bytes"
 	"encoding/base64"
+	"encoding/json"
 	"math"
 	"net"
 	"net/netip"
@@ -4348,6 +4349,527 @@ func (s R10OmitInner) AppendJSON(dst []byte) ([]byte, error) {
 		}
 		dst = append(dst, "\"n\":"...)
 		dst = strconv.AppendInt(dst, int64(s.N), 10)
+	}
+	return append(dst, '}'), nil
+}
+
+func (recv OmitNamed) DecodeFrom(data []byte) (result OmitNamed, i int, err error) {
+	result = recv
+	seenErr := false
+	seenIndex := false
+	seenN := false
+	seenNames := false
+	seenPN := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenErr {
+			result.Err = (OmitNamed{}).Err
+		}
+		if !seenIndex {
+			result.Index = (OmitNamed{}).Index
+		}
+		if !seenN {
+			result.N = 0
+		}
+		if !seenNames {
+			result.Names = (OmitNamed{}).Names
+		}
+		if !seenPN {
+			result.PN = nil
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "err":
+			if seenErr {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"err"}}
+			}
+			seenErr = true
+			start := i
+			i, err = ggen.SkipValue(data, start)
+			if err != nil {
+				return result, i, ggen.NewParseErr("err", i, err)
+			}
+			result.Err = (OmitNamed{}).Err
+			err = json.Unmarshal(data[start:i], &result.Err)
+			if err != nil {
+				return result, i, ggen.NewParseErr("err", i, err)
+			}
+		case "index":
+			if seenIndex {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"index"}}
+			}
+			seenIndex = true
+			start := i
+			i, err = ggen.SkipValue(data, start)
+			if err != nil {
+				return result, i, ggen.NewParseErr("index", i, err)
+			}
+			result.Index = (OmitNamed{}).Index
+			err = json.Unmarshal(data[start:i], &result.Index)
+			if err != nil {
+				return result, i, ggen.NewParseErr("index", i, err)
+			}
+		case "n":
+			if seenN {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"n"}}
+			}
+			seenN = true
+			neg := false
+			if i < len(data) && data[i] == '-' {
+				neg = true
+				i++
+			}
+			if i >= len(data) || data[i] < '0' || data[i] > '9' {
+				return result, i, ggen.NewParseErr("n", i, ggen.ErrBadNumber)
+			}
+			if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+				return result, i, ggen.NewParseErr("n", i, ggen.ErrBadNumber)
+			}
+			limit := uint64(math.MaxInt64)
+			if neg {
+				limit = ggen.SignedNeg
+			}
+			var u uint64
+			de := i + 18
+			if de > len(data) {
+				de = len(data)
+			}
+			for i < de && data[i] >= '0' && data[i] <= '9' {
+				u = u*10 + uint64(data[i]-'0')
+				i++
+			}
+			for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+				d := uint64(data[i] - '0')
+				if u > limit/10 || (u == limit/10 && d > limit%10) {
+					return result, i, ggen.NewParseErr("n", i, ggen.ErrNumberOverflow)
+				}
+				u = u*10 + d
+				i++
+			}
+			if i < len(data) {
+				c := data[i]
+				if c == '.' || c == 'e' || c == 'E' {
+					return result, i, ggen.NewParseErr("n", i, ggen.ErrBadNumber)
+				}
+			}
+			var n int64
+			if neg {
+				if u == ggen.SignedNeg {
+					n = math.MinInt64
+				} else {
+					n = -int64(u)
+				}
+			} else {
+				n = int64(u)
+			}
+			result.N = int(n)
+		case "names":
+			if seenNames {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"names"}}
+			}
+			seenNames = true
+			start := i
+			i, err = ggen.SkipValue(data, start)
+			if err != nil {
+				return result, i, ggen.NewParseErr("names", i, err)
+			}
+			result.Names = (OmitNamed{}).Names
+			err = json.Unmarshal(data[start:i], &result.Names)
+			if err != nil {
+				return result, i, ggen.NewParseErr("names", i, err)
+			}
+		case "pn":
+			if seenPN {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"pn"}}
+			}
+			seenPN = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("pn", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.PN = nil
+				break
+			}
+			var v omitNames
+			start := i
+			i, err = ggen.SkipValue(data, start)
+			if err != nil {
+				return result, i, ggen.NewParseErr("pn", i, err)
+			}
+			v = *new(omitNames)
+			err = json.Unmarshal(data[start:i], &v)
+			if err != nil {
+				return result, i, ggen.NewParseErr("pn", i, err)
+			}
+			if result.PN == nil {
+				result.PN = new(v)
+			} else {
+				(*result.PN) = v
+			}
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenErr {
+				result.Err = (OmitNamed{}).Err
+			}
+			if !seenIndex {
+				result.Index = (OmitNamed{}).Index
+			}
+			if !seenN {
+				result.N = 0
+			}
+			if !seenNames {
+				result.Names = (OmitNamed{}).Names
+			}
+			if !seenPN {
+				result.PN = nil
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv OmitNamed) DecodeFromStream(s *ggen.Stream) (result OmitNamed, err error) {
+	result = recv
+	seenErr := false
+	seenIndex := false
+	seenN := false
+	seenNames := false
+	seenPN := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenErr {
+			result.Err = (OmitNamed{}).Err
+		}
+		if !seenIndex {
+			result.Index = (OmitNamed{}).Index
+		}
+		if !seenN {
+			result.N = 0
+		}
+		if !seenNames {
+			result.Names = (OmitNamed{}).Names
+		}
+		if !seenPN {
+			result.PN = nil
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "err":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("err", s.Offset(), err)
+			}
+			if seenErr {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"err"}}
+			}
+			seenErr = true
+			span, err := s.CaptureValue()
+			if err != nil {
+				return result, ggen.NewParseErr("err", s.Offset(), err)
+			}
+			result.Err = (OmitNamed{}).Err
+			err = json.Unmarshal(span, &result.Err)
+			if err != nil {
+				return result, ggen.NewParseErr("err", s.Offset(), err)
+			}
+		case "index":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("index", s.Offset(), err)
+			}
+			if seenIndex {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"index"}}
+			}
+			seenIndex = true
+			span, err := s.CaptureValue()
+			if err != nil {
+				return result, ggen.NewParseErr("index", s.Offset(), err)
+			}
+			result.Index = (OmitNamed{}).Index
+			err = json.Unmarshal(span, &result.Index)
+			if err != nil {
+				return result, ggen.NewParseErr("index", s.Offset(), err)
+			}
+		case "n":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("n", s.Offset(), err)
+			}
+			if seenN {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"n"}}
+			}
+			seenN = true
+			var iv int64
+			iv, err = s.Int64()
+			if err != nil {
+				return result, ggen.NewParseErr("n", s.Offset(), err)
+			}
+			result.N = int(iv)
+		case "names":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("names", s.Offset(), err)
+			}
+			if seenNames {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"names"}}
+			}
+			seenNames = true
+			span, err := s.CaptureValue()
+			if err != nil {
+				return result, ggen.NewParseErr("names", s.Offset(), err)
+			}
+			result.Names = (OmitNamed{}).Names
+			err = json.Unmarshal(span, &result.Names)
+			if err != nil {
+				return result, ggen.NewParseErr("names", s.Offset(), err)
+			}
+		case "pn":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("pn", s.Offset(), err)
+			}
+			if seenPN {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"pn"}}
+			}
+			seenPN = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("pn", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("pn", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("pn", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.PN = nil
+				break
+			}
+			var v omitNames
+			span, err := s.CaptureValue()
+			if err != nil {
+				return result, ggen.NewParseErr("pn", s.Offset(), err)
+			}
+			v = *new(omitNames)
+			err = json.Unmarshal(span, &v)
+			if err != nil {
+				return result, ggen.NewParseErr("pn", s.Offset(), err)
+			}
+			if result.PN == nil {
+				result.PN = new(v)
+			} else {
+				(*result.PN) = v
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenErr {
+				result.Err = (OmitNamed{}).Err
+			}
+			if !seenIndex {
+				result.Index = (OmitNamed{}).Index
+			}
+			if !seenN {
+				result.N = 0
+			}
+			if !seenNames {
+				result.Names = (OmitNamed{}).Names
+			}
+			if !seenPN {
+				result.PN = nil
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s OmitNamed) JSONSize() int {
+	size := 26
+	if !ggen.AnyIsEmpty(s.Err) {
+		size += 135
+	}
+	if len(s.Index) > 0 {
+		size += 137
+	}
+	if len(s.Names) > 0 {
+		size += 137
+	}
+	if s.PN != nil && len((*s.PN)) > 0 {
+		size += 134
+	}
+	return size
+}
+
+func (s OmitNamed) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, '{')
+	start := len(dst)
+	if !ggen.AnyIsEmpty(s.Err) {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, "\"err\":"...)
+		var bErr []byte
+		bErr, err = json.Marshal(s.Err)
+		if err != nil {
+			return dst, err
+		}
+		dst = append(dst, bErr...)
+	}
+	if len(s.Index) > 0 {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, "\"index\":"...)
+		var bIndex []byte
+		bIndex, err = json.Marshal(s.Index)
+		if err != nil {
+			return dst, err
+		}
+		dst = append(dst, bIndex...)
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"n\":"...)
+	dst = strconv.AppendInt(dst, int64(s.N), 10)
+	if len(s.Names) > 0 {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, "\"names\":"...)
+		var bNames []byte
+		bNames, err = json.Marshal(s.Names)
+		if err != nil {
+			return dst, err
+		}
+		dst = append(dst, bNames...)
+	}
+	if s.PN != nil && len((*s.PN)) > 0 {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, "\"pn\":"...)
+		var bPN []byte
+		bPN, err = json.Marshal((*s.PN))
+		if err != nil {
+			return dst, err
+		}
+		dst = append(dst, bPN...)
 	}
 	return append(dst, '}'), nil
 }

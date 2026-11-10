@@ -5,6 +5,7 @@ package integrationtests
 import (
 	"database/sql"
 	"math"
+	"net"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +14,21 @@ import (
 	"github.com/google/uuid"
 	"github.com/sirkostya009/ggen"
 )
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_SQLNullNested_V_sql_Null_string_ = (min((80/max(int(unsafe.Sizeof(*new(sql.Null[string]))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(sql.Null[string]))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(sql.Null[string]))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(sql.Null[string]))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_SQLNullNested_Grid___sql_Null_time_Duration_ = (min((80/max(int(unsafe.Sizeof(*new([]sql.Null[time.Duration]))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new([]sql.Null[time.Duration]))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new([]sql.Null[time.Duration]))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new([]sql.Null[time.Duration]))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_SQLNullNested_Grid_sql_Null_time_Duration_ = (min((80/max(int(unsafe.Sizeof(*new(sql.Null[time.Duration]))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(sql.Null[time.Duration]))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(sql.Null[time.Duration]))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(sql.Null[time.Duration]))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_SQLNullNested_Nets_sql_Null_net_IPNet_ = (min((80/max(int(unsafe.Sizeof(*new(sql.Null[net.IPNet]))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(sql.Null[net.IPNet]))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(sql.Null[net.IPNet]))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(sql.Null[net.IPNet]))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_SQLNullNested_V_sql_Null_net_IPNet_ = (min((80/max(int(unsafe.Sizeof(*new(sql.Null[net.IPNet]))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(sql.Null[net.IPNet]))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(sql.Null[net.IPNet]))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(sql.Null[net.IPNet]))), 1)), 1)
 
 func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStruct, i int, err error) {
 	result = recv
@@ -5127,4 +5143,2718 @@ func (s SQLNullStruct) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '"')
 	}
 	return append(dst, '}'), nil
+}
+
+func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, err error) {
+	result = recv
+	if result.Grid != nil {
+		result.Grid = result.Grid[:0]
+	}
+	if result.M != nil {
+		clear(result.M)
+	}
+	if result.Nets != nil {
+		result.Nets = result.Nets[:0]
+	}
+	seenDeep := false
+	seenDur := false
+	seenField := false
+	seenGrid := false
+	seenM := false
+	seenNets := false
+	seenPair := false
+	seenWrap := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenDeep {
+			result.Deep = (SQLNullNested{}).Deep
+		}
+		if !seenDur {
+			result.Dur = nil
+		}
+		if !seenField {
+			result.Field = (SQLNullNested{}).Field
+		}
+		if !seenPair {
+			result.Pair = (SQLNullNested{}).Pair
+		}
+		if !seenWrap {
+			result.Wrap = (SQLNullNested{}).Wrap
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "deep":
+			if seenDeep {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"deep"}}
+			}
+			seenDeep = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.Deep = sql.Null[[]sql.Null[string]]{}
+			} else {
+				var nvo1 []sql.Null[string]
+				if i < len(data) && data[i] == 'n' {
+					if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+						return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadLiteral)
+					}
+					i += 4
+					nvo1 = nil
+				} else {
+					if i >= len(data) || data[i] != '[' {
+						return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadArray)
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ']' {
+						if nvo1 == nil {
+							nvo1 = []sql.Null[string]{}
+						}
+					} else {
+						if nvo1 == nil {
+							nvo1 = make([]sql.Null[string], 0, ggenCap_SQLNullNested_V_sql_Null_string_)
+						}
+					}
+					if i < len(data) && data[i] != ']' {
+						for {
+							nvo1 = append(nvo1, sql.Null[string]{})
+							if i < len(data) && data[i] == 'n' {
+								if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+									return result, i, ggen.NewParseErr("deep[]", i, ggen.ErrBadLiteral)
+								}
+								i += 4
+								nvo1[len(nvo1)-1] = sql.Null[string]{}
+							} else {
+								var nv string
+								if i >= len(data) || data[i] != '"' {
+									return result, i, ggen.NewParseErr("deep[]", i, ggen.ErrExpectString)
+								}
+								ke := i + 1
+								kew := ke + 32
+								if kew > len(data) {
+									kew = len(data)
+								}
+								for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+									ke++
+								}
+								if ke < len(data) && data[ke] == '"' {
+									nv = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+									i = ke + 1
+								} else {
+									nv, i, err = ggen.String(data, i, true)
+									if err != nil {
+										return result, i, ggen.NewParseErr("deep[]", i, err)
+									}
+								}
+
+								nvo1[len(nvo1)-1] = sql.Null[string]{V: nv, Valid: true}
+							}
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								if i >= len(data) || data[i] == ']' {
+									return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadArray)
+								}
+								continue
+							}
+							break
+						}
+					}
+					if i >= len(data) || data[i] != ']' {
+						return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadArray)
+					}
+					i++
+				}
+
+				result.Deep = sql.Null[[]sql.Null[string]]{V: nvo1, Valid: true}
+			}
+		case "dur":
+			if seenDur {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"dur"}}
+			}
+			seenDur = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("dur", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.Dur = nil
+				break
+			}
+			var v sql.Null[time.Duration]
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("dur", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				v = sql.Null[time.Duration]{}
+			} else {
+				var nv time.Duration
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, ggen.NewParseErr("dur", i, ggen.ErrExpectString)
+				}
+				ke := i + 1
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+					ke++
+				}
+				if ke < len(data) && data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = ggen.String(data, i, true)
+					if err != nil {
+						return result, i, ggen.NewParseErr("dur", i, err)
+					}
+				}
+				nv, err = time.ParseDuration(s)
+				if err != nil {
+					return result, i, ggen.NewParseErr("dur", i, err)
+				}
+
+				v = sql.Null[time.Duration]{V: nv, Valid: true}
+			}
+			if result.Dur == nil {
+				result.Dur = new(v)
+			} else {
+				(*result.Dur) = v
+			}
+		case "field":
+			if seenField {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"field"}}
+			}
+			seenField = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("field", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.Field = sql.Null[net.IPNet]{}
+			} else {
+				var nv net.IPNet
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, ggen.NewParseErr("field", i, ggen.ErrExpectString)
+				}
+				ke := i + 1
+				kew := ke + 48
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+					ke++
+				}
+				if ke < len(data) && data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = ggen.String(data, i, true)
+					if err != nil {
+						return result, i, ggen.NewParseErr("field", i, err)
+					}
+				}
+				nv.IP, nv.Mask, err = ggen.ParseIPNet(s)
+				if err != nil {
+					return result, i, ggen.NewParseErr("field", i, err)
+				}
+
+				result.Field = sql.Null[net.IPNet]{V: nv, Valid: true}
+			}
+		case "grid":
+			if seenGrid {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"grid"}}
+			}
+			seenGrid = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("grid", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.Grid = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, ggen.NewParseErr("grid", i, ggen.ErrBadArray)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.Grid == nil {
+					result.Grid = [][]sql.Null[time.Duration]{}
+				}
+			} else {
+				if result.Grid == nil {
+					result.Grid = make([][]sql.Null[time.Duration], 0, ggenCap_SQLNullNested_Grid___sql_Null_time_Duration_)
+				}
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					if len(result.Grid) < cap(result.Grid) {
+						result.Grid = result.Grid[:len(result.Grid)+1]
+					} else {
+						result.Grid = append(result.Grid, nil)
+					}
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							return result, i, ggen.NewParseErr("grid", i, ggen.ErrBadLiteral)
+						}
+						i += 4
+						result.Grid[len(result.Grid)-1] = nil
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, ggen.NewParseErr("grid", i, ggen.ErrBadArray)
+							}
+							continue
+						}
+						break
+					}
+					row0 := result.Grid[len(result.Grid)-1]
+					if row0 != nil {
+						row0 = row0[:0]
+					}
+					if i >= len(data) || data[i] != '[' {
+						return result, i, ggen.NewParseErr("grid[]", i, ggen.ErrBadArray)
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ']' {
+						if row0 == nil {
+							row0 = []sql.Null[time.Duration]{}
+						}
+					} else {
+						if row0 == nil {
+							row0 = make([]sql.Null[time.Duration], 0, ggenCap_SQLNullNested_Grid_sql_Null_time_Duration_)
+						}
+					}
+					if i < len(data) && data[i] != ']' {
+						for {
+							row0 = append(row0, sql.Null[time.Duration]{})
+							if i < len(data) && data[i] == 'n' {
+								if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+									return result, i, ggen.NewParseErr("grid[][]", i, ggen.ErrBadLiteral)
+								}
+								i += 4
+								row0[len(row0)-1] = sql.Null[time.Duration]{}
+							} else {
+								var nv time.Duration
+								var s string
+								if i >= len(data) || data[i] != '"' {
+									return result, i, ggen.NewParseErr("grid[][]", i, ggen.ErrExpectString)
+								}
+								ke := i + 1
+								kew := ke + 32
+								if kew > len(data) {
+									kew = len(data)
+								}
+								for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+									ke++
+								}
+								if ke < len(data) && data[ke] == '"' {
+									s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+									i = ke + 1
+								} else {
+									s, i, err = ggen.String(data, i, true)
+									if err != nil {
+										return result, i, ggen.NewParseErr("grid[][]", i, err)
+									}
+								}
+								nv, err = time.ParseDuration(s)
+								if err != nil {
+									return result, i, ggen.NewParseErr("grid[][]", i, err)
+								}
+
+								row0[len(row0)-1] = sql.Null[time.Duration]{V: nv, Valid: true}
+							}
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								if i >= len(data) || data[i] == ']' {
+									return result, i, ggen.NewParseErr("grid[]", i, ggen.ErrBadArray)
+								}
+								continue
+							}
+							break
+						}
+					}
+					if i >= len(data) || data[i] != ']' {
+						return result, i, ggen.NewParseErr("grid[]", i, ggen.ErrBadArray)
+					}
+					i++
+					result.Grid[len(result.Grid)-1] = row0
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, ggen.NewParseErr("grid", i, ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, ggen.NewParseErr("grid", i, ggen.ErrBadArray)
+			}
+			i++
+		case "m":
+			if seenM {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"m"}}
+			}
+			seenM = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("m", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.M = nil
+				break
+			}
+			if i >= len(data) || data[i] != '{' {
+				return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == '}' {
+				if result.M == nil {
+					result.M = map[string]sql.Null[time.Duration]{}
+				}
+			} else {
+				if result.M == nil {
+					result.M = make(map[string]sql.Null[time.Duration])
+				}
+			}
+			if i < len(data) && data[i] != '}' {
+				for {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("m", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("m", i, err)
+						}
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					{
+						var mv sql.Null[time.Duration]
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								return result, i, ggen.NewParseErr("m.value", i, ggen.ErrBadLiteral)
+							}
+							i += 4
+							mv = sql.Null[time.Duration]{}
+						} else {
+							var nv time.Duration
+							var s string
+							if i >= len(data) || data[i] != '"' {
+								return result, i, ggen.NewParseErr("m.value", i, ggen.ErrExpectString)
+							}
+							ke := i + 1
+							kew := ke + 32
+							if kew > len(data) {
+								kew = len(data)
+							}
+							for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+								ke++
+							}
+							if ke < len(data) && data[ke] == '"' {
+								s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+								i = ke + 1
+							} else {
+								s, i, err = ggen.String(data, i, true)
+								if err != nil {
+									return result, i, ggen.NewParseErr("m.value", i, err)
+								}
+							}
+							nv, err = time.ParseDuration(s)
+							if err != nil {
+								return result, i, ggen.NewParseErr("m.value", i, err)
+							}
+
+							mv = sql.Null[time.Duration]{V: nv, Valid: true}
+						}
+						result.M[mk] = mv
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != '}' {
+				return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+			}
+			i++
+		case "nets":
+			if seenNets {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"nets"}}
+			}
+			seenNets = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("nets", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.Nets = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, ggen.NewParseErr("nets", i, ggen.ErrBadArray)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.Nets == nil {
+					result.Nets = []sql.Null[net.IPNet]{}
+				}
+			} else {
+				if result.Nets == nil {
+					result.Nets = make([]sql.Null[net.IPNet], 0, ggenCap_SQLNullNested_Nets_sql_Null_net_IPNet_)
+				}
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.Nets = append(result.Nets, sql.Null[net.IPNet]{})
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							return result, i, ggen.NewParseErr("nets[]", i, ggen.ErrBadLiteral)
+						}
+						i += 4
+						result.Nets[len(result.Nets)-1] = sql.Null[net.IPNet]{}
+					} else {
+						var nv net.IPNet
+						var s string
+						if i >= len(data) || data[i] != '"' {
+							return result, i, ggen.NewParseErr("nets[]", i, ggen.ErrExpectString)
+						}
+						ke := i + 1
+						kew := ke + 48
+						if kew > len(data) {
+							kew = len(data)
+						}
+						for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+							ke++
+						}
+						if ke < len(data) && data[ke] == '"' {
+							s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+							i = ke + 1
+						} else {
+							s, i, err = ggen.String(data, i, true)
+							if err != nil {
+								return result, i, ggen.NewParseErr("nets[]", i, err)
+							}
+						}
+						nv.IP, nv.Mask, err = ggen.ParseIPNet(s)
+						if err != nil {
+							return result, i, ggen.NewParseErr("nets[]", i, err)
+						}
+
+						result.Nets[len(result.Nets)-1] = sql.Null[net.IPNet]{V: nv, Valid: true}
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, ggen.NewParseErr("nets", i, ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, ggen.NewParseErr("nets", i, ggen.ErrBadArray)
+			}
+			i++
+		case "pair":
+			if seenPair {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"pair"}}
+			}
+			seenPair = true
+			if i >= len(data) || data[i] != '[' {
+				return result, i, ggen.NewParseErr("pair", i, ggen.ErrBadArray)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			var idx0 int
+			if i < len(data) && data[i] != ']' {
+				for {
+					if idx0 >= 2 {
+						return result, i, &ggen.LenError{Pos: i, Keys: []string{"pair"}, Want: 2, Got: 3, AtLeast: true}
+					}
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							return result, i, ggen.NewParseErr("pair[]", i, ggen.ErrBadLiteral)
+						}
+						i += 4
+						result.Pair[idx0] = sql.Null[Address]{}
+					} else {
+						var nv Address
+						var consumed int
+						nv, consumed, err = nv.DecodeFrom(data[i:])
+						i += consumed
+						if err != nil {
+							return result, i, ggen.NewParseErrShift("pair[]", i, consumed, err)
+						}
+
+						result.Pair[idx0] = sql.Null[Address]{V: nv, Valid: true}
+					}
+					idx0++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, ggen.NewParseErr("pair", i, ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, ggen.NewParseErr("pair", i, ggen.ErrBadArray)
+			}
+			if idx0 != 2 {
+				return result, i, &ggen.LenError{Pos: i, Keys: []string{"pair"}, Want: 2, Got: idx0}
+			}
+			i++
+		case "wrap":
+			if seenWrap {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"wrap"}}
+			}
+			seenWrap = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("wrap", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.Wrap = sql.Null[[]sql.Null[net.IPNet]]{}
+			} else {
+				var nvo1 []sql.Null[net.IPNet]
+				if i < len(data) && data[i] == 'n' {
+					if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+						return result, i, ggen.NewParseErr("wrap", i, ggen.ErrBadLiteral)
+					}
+					i += 4
+					nvo1 = nil
+				} else {
+					if i >= len(data) || data[i] != '[' {
+						return result, i, ggen.NewParseErr("wrap", i, ggen.ErrBadArray)
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ']' {
+						if nvo1 == nil {
+							nvo1 = []sql.Null[net.IPNet]{}
+						}
+					} else {
+						if nvo1 == nil {
+							nvo1 = make([]sql.Null[net.IPNet], 0, ggenCap_SQLNullNested_V_sql_Null_net_IPNet_)
+						}
+					}
+					if i < len(data) && data[i] != ']' {
+						for {
+							nvo1 = append(nvo1, sql.Null[net.IPNet]{})
+							if i < len(data) && data[i] == 'n' {
+								if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+									return result, i, ggen.NewParseErr("wrap[]", i, ggen.ErrBadLiteral)
+								}
+								i += 4
+								nvo1[len(nvo1)-1] = sql.Null[net.IPNet]{}
+							} else {
+								var nv net.IPNet
+								var s string
+								if i >= len(data) || data[i] != '"' {
+									return result, i, ggen.NewParseErr("wrap[]", i, ggen.ErrExpectString)
+								}
+								ke := i + 1
+								kew := ke + 48
+								if kew > len(data) {
+									kew = len(data)
+								}
+								for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+									ke++
+								}
+								if ke < len(data) && data[ke] == '"' {
+									s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+									i = ke + 1
+								} else {
+									s, i, err = ggen.String(data, i, true)
+									if err != nil {
+										return result, i, ggen.NewParseErr("wrap[]", i, err)
+									}
+								}
+								nv.IP, nv.Mask, err = ggen.ParseIPNet(s)
+								if err != nil {
+									return result, i, ggen.NewParseErr("wrap[]", i, err)
+								}
+
+								nvo1[len(nvo1)-1] = sql.Null[net.IPNet]{V: nv, Valid: true}
+							}
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i < len(data) && data[i] == ',' {
+								i++
+								for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								if i >= len(data) || data[i] == ']' {
+									return result, i, ggen.NewParseErr("wrap", i, ggen.ErrBadArray)
+								}
+								continue
+							}
+							break
+						}
+					}
+					if i >= len(data) || data[i] != ']' {
+						return result, i, ggen.NewParseErr("wrap", i, ggen.ErrBadArray)
+					}
+					i++
+				}
+
+				result.Wrap = sql.Null[[]sql.Null[net.IPNet]]{V: nvo1, Valid: true}
+			}
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenDeep {
+				result.Deep = (SQLNullNested{}).Deep
+			}
+			if !seenDur {
+				result.Dur = nil
+			}
+			if !seenField {
+				result.Field = (SQLNullNested{}).Field
+			}
+			if !seenPair {
+				result.Pair = (SQLNullNested{}).Pair
+			}
+			if !seenWrap {
+				result.Wrap = (SQLNullNested{}).Wrap
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested, err error) {
+	result = recv
+	if result.Grid != nil {
+		result.Grid = result.Grid[:0]
+	}
+	if result.M != nil {
+		clear(result.M)
+	}
+	if result.Nets != nil {
+		result.Nets = result.Nets[:0]
+	}
+	seenDeep := false
+	seenDur := false
+	seenField := false
+	seenGrid := false
+	seenM := false
+	seenNets := false
+	seenPair := false
+	seenWrap := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenDeep {
+			result.Deep = (SQLNullNested{}).Deep
+		}
+		if !seenDur {
+			result.Dur = nil
+		}
+		if !seenField {
+			result.Field = (SQLNullNested{}).Field
+		}
+		if !seenPair {
+			result.Pair = (SQLNullNested{}).Pair
+		}
+		if !seenWrap {
+			result.Wrap = (SQLNullNested{}).Wrap
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "deep":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("deep", s.Offset(), err)
+			}
+			if seenDeep {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"deep"}}
+			}
+			seenDeep = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("deep", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("deep", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("deep", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				result.Deep = sql.Null[[]sql.Null[string]]{}
+				s.Pos += 4
+			} else {
+				var nvo1 []sql.Null[string]
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("deep", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("deep", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("deep", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr("deep", s.Offset(), ggen.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					nvo1 = nil
+				} else {
+					err = s.ArrayOpen()
+					if err != nil {
+						return result, ggen.NewParseErr("deep", s.Offset(), err)
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("deep", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("deep", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+						}
+					}
+					if s.Bytes()[s.Pos] == ']' {
+						if nvo1 == nil {
+							nvo1 = []sql.Null[string]{}
+						}
+					} else {
+						if nvo1 == nil {
+							nvo1 = make([]sql.Null[string], 0, ggenCap_SQLNullNested_V_sql_Null_string_)
+						}
+					}
+					for s.Bytes()[s.Pos] != ']' {
+						nvo1 = append(nvo1, sql.Null[string]{})
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("deep[]", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+							}
+						}
+						if s.Bytes()[s.Pos] == 'n' {
+							for ki := 1; ki < 4; ki++ {
+								if s.Pos+ki >= len(s.Bytes()) {
+									if err = s.ReadMore(0); err != nil {
+										return result, ggen.NewParseErr("deep[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+									}
+								}
+								if s.Bytes()[s.Pos+ki] != "null"[ki] {
+									return result, ggen.NewParseErr("deep[]", s.Offset(), ggen.ErrBadLiteral)
+								}
+							}
+							nvo1[len(nvo1)-1] = sql.Null[string]{}
+							s.Pos += 4
+						} else {
+							var nv string
+							nv, err = s.String(true)
+							if err != nil {
+								return result, ggen.NewParseErr("deep[]", s.Offset(), err)
+							}
+
+							nvo1[len(nvo1)-1] = sql.Null[string]{V: nv, Valid: true}
+						}
+						err = s.SkipSpace()
+						if err != nil {
+							return result, ggen.NewParseErr("deep", s.Offset(), err)
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("deep", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+							}
+						}
+						if s.Bytes()[s.Pos] == ',' {
+							s.Pos++
+							err = s.SkipSpace()
+							if err != nil {
+								return result, ggen.NewParseErr("deep", s.Offset(), err)
+							}
+							if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+								return result, ggen.NewParseErr("deep", s.Offset(), ggen.ErrBadArray)
+							}
+							continue
+						}
+						break
+					}
+					if s.Bytes()[s.Pos] != ']' {
+						return result, ggen.NewParseErr("deep", s.Offset(), ggen.ErrBadArray)
+					}
+					s.Pos++
+				}
+
+				result.Deep = sql.Null[[]sql.Null[string]]{V: nvo1, Valid: true}
+			}
+		case "dur":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("dur", s.Offset(), err)
+			}
+			if seenDur {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"dur"}}
+			}
+			seenDur = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("dur", s.Offset(), ggen.NotEOF(err, ggen.ErrUnexpectedEnd))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("dur", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("dur", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Dur = nil
+				break
+			}
+			var v sql.Null[time.Duration]
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("dur", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("dur", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("dur", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				v = sql.Null[time.Duration]{}
+				s.Pos += 4
+			} else {
+				var nv time.Duration
+				var sv string
+				sv, err = s.StringView(true)
+				if err != nil {
+					return result, ggen.NewParseErr("dur", s.Offset(), err)
+				}
+				nv, err = time.ParseDuration(sv)
+				if err != nil {
+					_, err = time.ParseDuration(strings.Clone(sv))
+					return result, ggen.NewParseErr("dur", s.Offset(), err)
+				}
+
+				v = sql.Null[time.Duration]{V: nv, Valid: true}
+			}
+			if result.Dur == nil {
+				result.Dur = new(v)
+			} else {
+				(*result.Dur) = v
+			}
+		case "field":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("field", s.Offset(), err)
+			}
+			if seenField {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"field"}}
+			}
+			seenField = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("field", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("field", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("field", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				result.Field = sql.Null[net.IPNet]{}
+				s.Pos += 4
+			} else {
+				var nv net.IPNet
+				var sv string
+				sv, err = s.StringView(true)
+				if err != nil {
+					return result, ggen.NewParseErr("field", s.Offset(), err)
+				}
+				nv.IP, nv.Mask, err = ggen.ParseIPNet(sv)
+				if err != nil {
+					return result, ggen.NewParseErr("field", s.Offset(), err)
+				}
+
+				result.Field = sql.Null[net.IPNet]{V: nv, Valid: true}
+			}
+		case "grid":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("grid", s.Offset(), err)
+			}
+			if seenGrid {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"grid"}}
+			}
+			seenGrid = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("grid", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("grid", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("grid", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("grid", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Grid = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("grid", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("grid", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("grid", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.Grid == nil {
+					result.Grid = [][]sql.Null[time.Duration]{}
+				}
+			} else {
+				if result.Grid == nil {
+					result.Grid = make([][]sql.Null[time.Duration], 0, ggenCap_SQLNullNested_Grid___sql_Null_time_Duration_)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				if len(result.Grid) < cap(result.Grid) {
+					result.Grid = result.Grid[:len(result.Grid)+1]
+				} else {
+					result.Grid = append(result.Grid, nil)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("grid", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("grid", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr("grid", s.Offset(), ggen.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.Grid[len(result.Grid)-1] = nil
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("grid", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("grid", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, ggen.NewParseErr("grid", s.Offset(), err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, ggen.NewParseErr("grid", s.Offset(), ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+				row0 := result.Grid[len(result.Grid)-1]
+				if row0 != nil {
+					row0 = row0[:0]
+				}
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, ggen.NewParseErr("grid[]", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("grid[]", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("grid[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == ']' {
+					if row0 == nil {
+						row0 = []sql.Null[time.Duration]{}
+					}
+				} else {
+					if row0 == nil {
+						row0 = make([]sql.Null[time.Duration], 0, ggenCap_SQLNullNested_Grid_sql_Null_time_Duration_)
+					}
+				}
+				for s.Bytes()[s.Pos] != ']' {
+					row0 = append(row0, sql.Null[time.Duration]{})
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("grid[][]", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, ggen.NewParseErr("grid[][]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, ggen.NewParseErr("grid[][]", s.Offset(), ggen.ErrBadLiteral)
+							}
+						}
+						row0[len(row0)-1] = sql.Null[time.Duration]{}
+						s.Pos += 4
+					} else {
+						var nv time.Duration
+						var sv string
+						sv, err = s.StringView(true)
+						if err != nil {
+							return result, ggen.NewParseErr("grid[][]", s.Offset(), err)
+						}
+						nv, err = time.ParseDuration(sv)
+						if err != nil {
+							_, err = time.ParseDuration(strings.Clone(sv))
+							return result, ggen.NewParseErr("grid[][]", s.Offset(), err)
+						}
+
+						row0[len(row0)-1] = sql.Null[time.Duration]{V: nv, Valid: true}
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("grid[]", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("grid[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, ggen.NewParseErr("grid[]", s.Offset(), err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, ggen.NewParseErr("grid[]", s.Offset(), ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, ggen.NewParseErr("grid[]", s.Offset(), ggen.ErrBadArray)
+				}
+				s.Pos++
+				result.Grid[len(result.Grid)-1] = row0
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("grid", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("grid", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("grid", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, ggen.NewParseErr("grid", s.Offset(), ggen.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, ggen.NewParseErr("grid", s.Offset(), ggen.ErrBadArray)
+			}
+			s.Pos++
+		case "m":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			if seenM {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"m"}}
+			}
+			seenM = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.M = nil
+				break
+			}
+			err = s.ObjectOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == '}' {
+				if result.M == nil {
+					result.M = map[string]sql.Null[time.Duration]{}
+				}
+			} else {
+				if result.M == nil {
+					result.M = make(map[string]sql.Null[time.Duration])
+				}
+			}
+			for s.Bytes()[s.Pos] != '}' {
+				var mk string
+				mk, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] != ':' {
+					return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadObject)
+				}
+				s.Pos++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+				{
+					var mv sql.Null[time.Duration]
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("m.value", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, ggen.NewParseErr("m.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, ggen.NewParseErr("m.value", s.Offset(), ggen.ErrBadLiteral)
+							}
+						}
+						mv = sql.Null[time.Duration]{}
+						s.Pos += 4
+					} else {
+						var nv time.Duration
+						var sv string
+						sv, err = s.StringView(true)
+						if err != nil {
+							return result, ggen.NewParseErr("m.value", s.Offset(), err)
+						}
+						nv, err = time.ParseDuration(sv)
+						if err != nil {
+							_, err = time.ParseDuration(strings.Clone(sv))
+							return result, ggen.NewParseErr("m.value", s.Offset(), err)
+						}
+
+						mv = sql.Null[time.Duration]{V: nv, Valid: true}
+					}
+					result.M[mk] = mv
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadObject)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != '}' {
+				return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadObject)
+			}
+			s.Pos++
+		case "nets":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("nets", s.Offset(), err)
+			}
+			if seenNets {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"nets"}}
+			}
+			seenNets = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("nets", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("nets", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("nets", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("nets", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Nets = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("nets", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("nets", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("nets", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.Nets == nil {
+					result.Nets = []sql.Null[net.IPNet]{}
+				}
+			} else {
+				if result.Nets == nil {
+					result.Nets = make([]sql.Null[net.IPNet], 0, ggenCap_SQLNullNested_Nets_sql_Null_net_IPNet_)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				result.Nets = append(result.Nets, sql.Null[net.IPNet]{})
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("nets[]", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("nets[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr("nets[]", s.Offset(), ggen.ErrBadLiteral)
+						}
+					}
+					result.Nets[len(result.Nets)-1] = sql.Null[net.IPNet]{}
+					s.Pos += 4
+				} else {
+					var nv net.IPNet
+					var sv string
+					sv, err = s.StringView(true)
+					if err != nil {
+						return result, ggen.NewParseErr("nets[]", s.Offset(), err)
+					}
+					nv.IP, nv.Mask, err = ggen.ParseIPNet(sv)
+					if err != nil {
+						return result, ggen.NewParseErr("nets[]", s.Offset(), err)
+					}
+
+					result.Nets[len(result.Nets)-1] = sql.Null[net.IPNet]{V: nv, Valid: true}
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("nets", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("nets", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("nets", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, ggen.NewParseErr("nets", s.Offset(), ggen.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, ggen.NewParseErr("nets", s.Offset(), ggen.ErrBadArray)
+			}
+			s.Pos++
+		case "pair":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("pair", s.Offset(), err)
+			}
+			if seenPair {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"pair"}}
+			}
+			seenPair = true
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("pair", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("pair", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("pair", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			var idx0 int
+			for s.Bytes()[s.Pos] != ']' {
+				if idx0 >= 2 {
+					return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{"pair"}, Want: 2, Got: 3, AtLeast: true}
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("pair[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("pair[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr("pair[]", s.Offset(), ggen.ErrBadLiteral)
+						}
+					}
+					result.Pair[idx0] = sql.Null[Address]{}
+					s.Pos += 4
+				} else {
+					var nv Address
+					nv, err = nv.DecodeFromStream(s)
+					if err != nil {
+						return result, ggen.NewParseErr("pair[]", s.Offset(), err)
+					}
+
+					result.Pair[idx0] = sql.Null[Address]{V: nv, Valid: true}
+				}
+				idx0++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("pair", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("pair", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("pair", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, ggen.NewParseErr("pair", s.Offset(), ggen.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, ggen.NewParseErr("pair", s.Offset(), ggen.ErrBadArray)
+			}
+			if idx0 != 2 {
+				return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{"pair"}, Want: 2, Got: idx0}
+			}
+			s.Pos++
+		case "wrap":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("wrap", s.Offset(), err)
+			}
+			if seenWrap {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"wrap"}}
+			}
+			seenWrap = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("wrap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("wrap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("wrap", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				result.Wrap = sql.Null[[]sql.Null[net.IPNet]]{}
+				s.Pos += 4
+			} else {
+				var nvo1 []sql.Null[net.IPNet]
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("wrap", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("wrap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("wrap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr("wrap", s.Offset(), ggen.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					nvo1 = nil
+				} else {
+					err = s.ArrayOpen()
+					if err != nil {
+						return result, ggen.NewParseErr("wrap", s.Offset(), err)
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("wrap", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("wrap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+						}
+					}
+					if s.Bytes()[s.Pos] == ']' {
+						if nvo1 == nil {
+							nvo1 = []sql.Null[net.IPNet]{}
+						}
+					} else {
+						if nvo1 == nil {
+							nvo1 = make([]sql.Null[net.IPNet], 0, ggenCap_SQLNullNested_V_sql_Null_net_IPNet_)
+						}
+					}
+					for s.Bytes()[s.Pos] != ']' {
+						nvo1 = append(nvo1, sql.Null[net.IPNet]{})
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("wrap[]", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+							}
+						}
+						if s.Bytes()[s.Pos] == 'n' {
+							for ki := 1; ki < 4; ki++ {
+								if s.Pos+ki >= len(s.Bytes()) {
+									if err = s.ReadMore(0); err != nil {
+										return result, ggen.NewParseErr("wrap[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+									}
+								}
+								if s.Bytes()[s.Pos+ki] != "null"[ki] {
+									return result, ggen.NewParseErr("wrap[]", s.Offset(), ggen.ErrBadLiteral)
+								}
+							}
+							nvo1[len(nvo1)-1] = sql.Null[net.IPNet]{}
+							s.Pos += 4
+						} else {
+							var nv net.IPNet
+							var sv string
+							sv, err = s.StringView(true)
+							if err != nil {
+								return result, ggen.NewParseErr("wrap[]", s.Offset(), err)
+							}
+							nv.IP, nv.Mask, err = ggen.ParseIPNet(sv)
+							if err != nil {
+								return result, ggen.NewParseErr("wrap[]", s.Offset(), err)
+							}
+
+							nvo1[len(nvo1)-1] = sql.Null[net.IPNet]{V: nv, Valid: true}
+						}
+						err = s.SkipSpace()
+						if err != nil {
+							return result, ggen.NewParseErr("wrap", s.Offset(), err)
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("wrap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+							}
+						}
+						if s.Bytes()[s.Pos] == ',' {
+							s.Pos++
+							err = s.SkipSpace()
+							if err != nil {
+								return result, ggen.NewParseErr("wrap", s.Offset(), err)
+							}
+							if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+								return result, ggen.NewParseErr("wrap", s.Offset(), ggen.ErrBadArray)
+							}
+							continue
+						}
+						break
+					}
+					if s.Bytes()[s.Pos] != ']' {
+						return result, ggen.NewParseErr("wrap", s.Offset(), ggen.ErrBadArray)
+					}
+					s.Pos++
+				}
+
+				result.Wrap = sql.Null[[]sql.Null[net.IPNet]]{V: nvo1, Valid: true}
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenDeep {
+				result.Deep = (SQLNullNested{}).Deep
+			}
+			if !seenDur {
+				result.Dur = nil
+			}
+			if !seenField {
+				result.Field = (SQLNullNested{}).Field
+			}
+			if !seenPair {
+				result.Pair = (SQLNullNested{}).Pair
+			}
+			if !seenWrap {
+				result.Wrap = (SQLNullNested{}).Wrap
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s SQLNullNested) JSONSize() int {
+	size := 88
+	if n := len(s.Deep.V); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Deep.V {
+		size += 4
+		size += len(s.Deep.V[i0].V) * 2
+	}
+	if s.Dur == nil {
+		size += 4
+	} else {
+		size += 27
+	}
+	if s.Field.V.IP.To4() != nil {
+		size += 18
+	} else {
+		size += 43
+	}
+	if n := len(s.Grid); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Grid {
+		size += 4
+		if n := len(s.Grid[i0]); n > 0 {
+			size += n - 1
+		}
+		size += len(s.Grid[i0]) * 27
+	}
+	size += len(s.M) * 31
+	for k := range s.M {
+		size += len(k) * 2
+	}
+	if n := len(s.Nets); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Nets {
+		size += 4
+		if s.Nets[i0].V.IP.To4() != nil {
+			size += 18
+		} else {
+			size += 43
+		}
+	}
+	if n := len(s.Pair); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Pair {
+		size += 4
+		size += s.Pair[i0].V.JSONSize()
+	}
+	if n := len(s.Wrap.V); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Wrap.V {
+		size += 4
+		if s.Wrap.V[i0].V.IP.To4() != nil {
+			size += 18
+		} else {
+			size += 43
+		}
+	}
+	return size
+}
+
+func (s SQLNullNested) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"deep\":"...)
+	if !s.Deep.Valid {
+		dst = append(dst, "null"...)
+	} else {
+		if s.Deep.V == nil {
+			dst = append(dst, "null"...)
+		} else {
+			dst = append(dst, '[')
+			if len(s.Deep.V) > 0 {
+				if !s.Deep.V[0].Valid {
+					dst = append(dst, "null"...)
+				} else {
+					dst = append(dst, '"')
+					dst = ggen.AppendStringNoHTML(dst, s.Deep.V[0].V)
+				}
+				for _, v0 := range s.Deep.V[1:] {
+					dst = append(dst, ',')
+					if !v0.Valid {
+						dst = append(dst, "null"...)
+					} else {
+						dst = append(dst, '"')
+						dst = ggen.AppendStringNoHTML(dst, v0.V)
+					}
+				}
+			}
+			dst = append(dst, ']')
+		}
+	}
+	dst = append(dst, ",\"dur\":"...)
+	if s.Dur == nil {
+		dst = append(dst, "null"...)
+	} else {
+		if !(*s.Dur).Valid {
+			dst = append(dst, "null"...)
+		} else {
+			dst = append(dst, '"')
+			dst = ggen.AppendStringNoHTML(dst, (*s.Dur).V.String())
+		}
+	}
+	dst = append(dst, ",\"field\":"...)
+	if !s.Field.Valid {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '"')
+		if dst, err = ggen.AppendIPNet(dst, s.Field.V.IP, s.Field.V.Mask); err != nil {
+			return dst, err
+		}
+	}
+	dst = append(dst, ",\"grid\":"...)
+	if s.Grid == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Grid) > 0 {
+			if s.Grid[0] == nil {
+				dst = append(dst, "null"...)
+			} else {
+				dst = append(dst, '[')
+				if len(s.Grid[0]) > 0 {
+					if !s.Grid[0][0].Valid {
+						dst = append(dst, "null"...)
+					} else {
+						dst = append(dst, '"')
+						dst = ggen.AppendStringNoHTML(dst, s.Grid[0][0].V.String())
+					}
+					for _, v1 := range s.Grid[0][1:] {
+						dst = append(dst, ',')
+						if !v1.Valid {
+							dst = append(dst, "null"...)
+						} else {
+							dst = append(dst, '"')
+							dst = ggen.AppendStringNoHTML(dst, v1.V.String())
+						}
+					}
+				}
+				dst = append(dst, ']')
+			}
+			for _, v0 := range s.Grid[1:] {
+				dst = append(dst, ',')
+				if v0 == nil {
+					dst = append(dst, "null"...)
+				} else {
+					dst = append(dst, '[')
+					if len(v0) > 0 {
+						if !v0[0].Valid {
+							dst = append(dst, "null"...)
+						} else {
+							dst = append(dst, '"')
+							dst = ggen.AppendStringNoHTML(dst, v0[0].V.String())
+						}
+						for _, v1 := range v0[1:] {
+							dst = append(dst, ',')
+							if !v1.Valid {
+								dst = append(dst, "null"...)
+							} else {
+								dst = append(dst, '"')
+								dst = ggen.AppendStringNoHTML(dst, v1.V.String())
+							}
+						}
+					}
+					dst = append(dst, ']')
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"m\":"...)
+	if s.M == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '{')
+		firstM := true
+		for k, v := range s.M {
+			if firstM {
+				firstM = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
+			}
+			dst = ggen.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			if !v.Valid {
+				dst = append(dst, "null"...)
+			} else {
+				dst = append(dst, '"')
+				dst = ggen.AppendStringNoHTML(dst, v.V.String())
+			}
+		}
+		dst = append(dst, '}')
+	}
+	dst = append(dst, ",\"nets\":"...)
+	if s.Nets == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Nets) > 0 {
+			if !s.Nets[0].Valid {
+				dst = append(dst, "null"...)
+			} else {
+				dst = append(dst, '"')
+				if dst, err = ggen.AppendIPNet(dst, s.Nets[0].V.IP, s.Nets[0].V.Mask); err != nil {
+					return dst, err
+				}
+			}
+			for _, v0 := range s.Nets[1:] {
+				dst = append(dst, ',')
+				if !v0.Valid {
+					dst = append(dst, "null"...)
+				} else {
+					dst = append(dst, '"')
+					if dst, err = ggen.AppendIPNet(dst, v0.V.IP, v0.V.Mask); err != nil {
+						return dst, err
+					}
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"pair\":["...)
+	if len(s.Pair) > 0 {
+		if !s.Pair[0].Valid {
+			dst = append(dst, "null"...)
+		} else {
+			if dst, err = s.Pair[0].V.AppendJSON(dst); err != nil {
+				return dst, err
+			}
+		}
+		for _, v0 := range s.Pair[1:] {
+			dst = append(dst, ',')
+			if !v0.Valid {
+				dst = append(dst, "null"...)
+			} else {
+				if dst, err = v0.V.AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+		}
+	}
+	dst = append(dst, "],\"wrap\":"...)
+	if !s.Wrap.Valid {
+		dst = append(dst, "null"...)
+	} else {
+		if s.Wrap.V == nil {
+			dst = append(dst, "null"...)
+		} else {
+			dst = append(dst, '[')
+			if len(s.Wrap.V) > 0 {
+				if !s.Wrap.V[0].Valid {
+					dst = append(dst, "null"...)
+				} else {
+					dst = append(dst, '"')
+					if dst, err = ggen.AppendIPNet(dst, s.Wrap.V[0].V.IP, s.Wrap.V[0].V.Mask); err != nil {
+						return dst, err
+					}
+				}
+				for _, v0 := range s.Wrap.V[1:] {
+					dst = append(dst, ',')
+					if !v0.Valid {
+						dst = append(dst, "null"...)
+					} else {
+						dst = append(dst, '"')
+						if dst, err = ggen.AppendIPNet(dst, v0.V.IP, v0.V.Mask); err != nil {
+							return dst, err
+						}
+					}
+				}
+			}
+			dst = append(dst, ']')
+		}
+	}
+	return append(dst, '}'), nil
+}
+
+func (recv SQLNullNets) DecodeFrom(data []byte) (result SQLNullNets, i int, err error) {
+	result = recv
+	if result != nil {
+		result = result[:0]
+	}
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == 'n' {
+		if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadLiteral)
+		}
+		i += 4
+		result = nil
+		return result, i, nil
+	}
+	if i >= len(data) || data[i] != '[' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadArray)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if result == nil {
+		result = SQLNullNets{}
+	}
+	if i < len(data) && data[i] != ']' {
+		for {
+			result = append(result, sql.Null[net.IPNet]{})
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					return result, i, ggen.NewParseErr("[]", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result[len(result)-1] = sql.Null[net.IPNet]{}
+			} else {
+				var nv net.IPNet
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, ggen.NewParseErr("[]", i, ggen.ErrExpectString)
+				}
+				ke := i + 1
+				kew := ke + 48
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+					ke++
+				}
+				if ke < len(data) && data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = ggen.String(data, i, true)
+					if err != nil {
+						return result, i, ggen.NewParseErr("[]", i, err)
+					}
+				}
+				nv.IP, nv.Mask, err = ggen.ParseIPNet(s)
+				if err != nil {
+					return result, i, ggen.NewParseErr("[]", i, err)
+				}
+
+				result[len(result)-1] = sql.Null[net.IPNet]{V: nv, Valid: true}
+			}
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ',' {
+				i++
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i >= len(data) || data[i] == ']' {
+					return result, i, ggen.NewParseErr("", i, ggen.ErrBadArray)
+				}
+				continue
+			}
+			break
+		}
+	}
+	if i >= len(data) || data[i] != ']' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadArray)
+	}
+	i++
+	return result, i, nil
+}
+
+func (recv SQLNullNets) DecodeFromStream(s *ggen.Stream) (result SQLNullNets, err error) {
+	result = recv
+	if result != nil {
+		result = result[:0]
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(0); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+		}
+	}
+	if s.Bytes()[s.Pos] == 'n' {
+		for ki := 1; ki < 4; ki++ {
+			if s.Pos+ki >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+				}
+			}
+			if s.Bytes()[s.Pos+ki] != "null"[ki] {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadLiteral)
+			}
+		}
+		s.Pos += 4
+		result = nil
+	} else {
+		err = s.ArrayOpen()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(0); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+			}
+		}
+		if s.Bytes()[s.Pos] == ']' {
+			if result == nil {
+				result = SQLNullNets{}
+			}
+		} else {
+			if result == nil {
+				result = SQLNullNets{}
+			}
+		}
+		for s.Bytes()[s.Pos] != ']' {
+			result = append(result, sql.Null[net.IPNet]{})
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("[]", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("[]", s.Offset(), ggen.ErrBadLiteral)
+					}
+				}
+				result[len(result)-1] = sql.Null[net.IPNet]{}
+				s.Pos += 4
+			} else {
+				var nv net.IPNet
+				var sv string
+				sv, err = s.StringView(true)
+				if err != nil {
+					return result, ggen.NewParseErr("[]", s.Offset(), err)
+				}
+				nv.IP, nv.Mask, err = ggen.ParseIPNet(sv)
+				if err != nil {
+					return result, ggen.NewParseErr("[]", s.Offset(), err)
+				}
+
+				result[len(result)-1] = sql.Null[net.IPNet]{V: nv, Valid: true}
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == ',' {
+				s.Pos++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+					return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadArray)
+				}
+				continue
+			}
+			break
+		}
+		if s.Bytes()[s.Pos] != ']' {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadArray)
+		}
+		s.Pos++
+	}
+	return result, nil
+}
+
+func (s SQLNullNets) JSONSize() int {
+	size := 4
+	if n := len(s); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s {
+		size += 4
+		if s[i0].V.IP.To4() != nil {
+			size += 18
+		} else {
+			size += 43
+		}
+	}
+	return size
+}
+
+func (s SQLNullNets) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	if s == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s) > 0 {
+			if !s[0].Valid {
+				dst = append(dst, 'n', 'u', 'l', 'l')
+			} else {
+				dst = append(dst, '"')
+				if dst, err = ggen.AppendIPNet(dst, s[0].V.IP, s[0].V.Mask); err != nil {
+					return dst, err
+				}
+			}
+			for _, v0 := range s[1:] {
+				dst = append(dst, ',')
+				if !v0.Valid {
+					dst = append(dst, 'n', 'u', 'l', 'l')
+				} else {
+					dst = append(dst, '"')
+					if dst, err = ggen.AppendIPNet(dst, v0.V.IP, v0.V.Mask); err != nil {
+						return dst, err
+					}
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	return dst, nil
+}
+
+func (recv SQLNullDurMap) DecodeFrom(data []byte) (result SQLNullDurMap, i int, err error) {
+	result = recv
+	if result != nil {
+		clear(result)
+	}
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == 'n' {
+		if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadLiteral)
+		}
+		i += 4
+		result = nil
+		return result, i, nil
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		if result == nil {
+			result = SQLNullDurMap{}
+		}
+	} else {
+		if result == nil {
+			result = make(SQLNullDurMap)
+		}
+	}
+	if i < len(data) && data[i] != '}' {
+		for {
+			var mk string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				mk, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("", i, err)
+				}
+			}
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i >= len(data) || data[i] != ':' {
+				return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			{
+				var mv sql.Null[time.Duration]
+				if i < len(data) && data[i] == 'n' {
+					if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+						return result, i, ggen.NewParseErr(".value", i, ggen.ErrBadLiteral)
+					}
+					i += 4
+					mv = sql.Null[time.Duration]{}
+				} else {
+					var nv time.Duration
+					var s string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr(".value", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						s, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr(".value", i, err)
+						}
+					}
+					nv, err = time.ParseDuration(s)
+					if err != nil {
+						return result, i, ggen.NewParseErr(".value", i, err)
+					}
+
+					mv = sql.Null[time.Duration]{V: nv, Valid: true}
+				}
+				result[mk] = mv
+			}
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ',' {
+				i++
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i >= len(data) || data[i] == '}' {
+					return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+				}
+				continue
+			}
+			break
+		}
+	}
+	if i >= len(data) || data[i] != '}' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	return result, i, nil
+}
+
+func (recv SQLNullDurMap) DecodeFromStream(s *ggen.Stream) (result SQLNullDurMap, err error) {
+	result = recv
+	if result != nil {
+		clear(result)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(0); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+		}
+	}
+	if s.Bytes()[s.Pos] == 'n' {
+		for ki := 1; ki < 4; ki++ {
+			if s.Pos+ki >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+				}
+			}
+			if s.Bytes()[s.Pos+ki] != "null"[ki] {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadLiteral)
+			}
+		}
+		s.Pos += 4
+		result = nil
+	} else {
+		err = s.ObjectOpen()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(0); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+		}
+		if s.Bytes()[s.Pos] == '}' {
+			if result == nil {
+				result = SQLNullDurMap{}
+			}
+		} else {
+			if result == nil {
+				result = make(SQLNullDurMap)
+			}
+		}
+		for s.Bytes()[s.Pos] != '}' {
+			var mk string
+			mk, err = s.String(true)
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] != ':' {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+			}
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			{
+				var mv sql.Null[time.Duration]
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr(".value", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr(".value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr(".value", s.Offset(), ggen.ErrBadLiteral)
+						}
+					}
+					mv = sql.Null[time.Duration]{}
+					s.Pos += 4
+				} else {
+					var nv time.Duration
+					var sv string
+					sv, err = s.StringView(true)
+					if err != nil {
+						return result, ggen.NewParseErr(".value", s.Offset(), err)
+					}
+					nv, err = time.ParseDuration(sv)
+					if err != nil {
+						_, err = time.ParseDuration(strings.Clone(sv))
+						return result, ggen.NewParseErr(".value", s.Offset(), err)
+					}
+
+					mv = sql.Null[time.Duration]{V: nv, Valid: true}
+				}
+				result[mk] = mv
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == ',' {
+				s.Pos++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+					return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+				}
+				continue
+			}
+			break
+		}
+		if s.Bytes()[s.Pos] != '}' {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+		}
+		s.Pos++
+	}
+	return result, nil
+}
+
+func (s SQLNullDurMap) JSONSize() int {
+	size := 4
+	size += len(s) * 31
+	for k := range s {
+		size += len(k) * 2
+	}
+	return size
+}
+
+func (s SQLNullDurMap) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	if s == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '{')
+		first := true
+		for k, v := range s {
+			if first {
+				first = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
+			}
+			dst = ggen.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			if !v.Valid {
+				dst = append(dst, 'n', 'u', 'l', 'l')
+			} else {
+				dst = append(dst, '"')
+				dst = ggen.AppendStringNoHTML(dst, v.V.String())
+			}
+		}
+		dst = append(dst, '}')
+	}
+	return dst, nil
 }

@@ -57,6 +57,9 @@ func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool, err 
 		}
 		if rest, ok := strings.CutPrefix(opt, "format:"); ok {
 			opts.Format = unquoteTagValue(rest)
+			if opts.Format == "" {
+				return "", JSONOptions{}, false, fmt.Errorf("json tag %q: `format:` has no value", tag)
+			}
 			continue
 		}
 		switch opt {

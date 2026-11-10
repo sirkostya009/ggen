@@ -295,6 +295,9 @@ func peelTypeOnce(typ string) (string, TypeKind, bool) {
 	switch {
 	case strings.HasPrefix(typ, "map[string]"):
 		typ = strings.TrimPrefix(typ, "map[string]")
+	case ResolveKind(typ) == KindBytes:
+		// A []byte is one base64 string. It has no element to step into.
+		return "", 0, false
 	default:
 		inner, _, _ := StripOneContainer(typ)
 		if inner == typ {

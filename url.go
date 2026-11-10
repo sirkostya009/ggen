@@ -4,7 +4,10 @@
 
 package ggen
 
-import "net/url"
+import (
+	"net/url"
+	"strings"
+)
 
 // AppendURL appends the text form of u and the closing '"'. The caller writes
 // the opening '"', as with AppendString. The text is byte for byte what
@@ -68,6 +71,13 @@ func appendURLRaw(dst []byte, u url.URL) []byte {
 		case hasPath:
 			p0, seg = u.Path[0], pathFirstSegment(u.Path)
 		}
+		// With no authority, a path starting with "//" would read back as
+		// one, so its first '/' is escaped.
+		path, rawPath := u.Path, u.RawPath
+		if omit && (raw && strings.HasPrefix(rawPath, "//") || !raw && strings.HasPrefix(path, "//")) {
+			dst = append(dst, "%2F"...)
+			path, rawPath = path[1:], rawPath[min(1, len(rawPath)):]
+		}
 		if hasPath && p0 != '/' && u.Host != "" {
 			dst = append(dst, '/')
 		}
@@ -79,11 +89,11 @@ func appendURLRaw(dst []byte, u url.URL) []byte {
 		}
 		switch {
 		case raw:
-			dst = append(dst, u.RawPath...)
+			dst = append(dst, rawPath...)
 		case u.Path == "*":
 			dst = append(dst, '*')
 		default:
-			dst = appendURLEscape(dst, u.Path, urlEncodePath)
+			dst = appendURLEscape(dst, path, urlEncodePath)
 		}
 	}
 	if u.ForceQuery || u.RawQuery != "" {
