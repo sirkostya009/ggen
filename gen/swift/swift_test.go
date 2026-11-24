@@ -419,3 +419,18 @@ func TestAwkwardNames(t *testing.T) {
 	compileSwift(t, swiftc, dir, "API", filepath.Join(dir, "lib", "libAPI.a"),
 		[]string{"-parse-as-library", "-emit-library", "-static"}, filepath.Join(dir, "Types.swift"))
 }
+
+// TestRecursiveAlias pins that an alias reaching itself is refused: a Swift
+// typealias cannot refer to itself.
+func TestRecursiveAlias(t *testing.T) {
+	t.Parallel()
+	set, err := gen.Load("../testdata/shapes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := gen.NewOutput(t.TempDir())
+	out.File("Rec", swift.New("x")).Place(set.Type("github.com/sirkostya009/ggen/gen/testdata/shapes", "Tree").Out(), "Tree")
+	if err := out.Write(); err == nil || !strings.Contains(err.Error(), "Tree reaches itself") {
+		t.Errorf("recursive alias: %v", err)
+	}
+}

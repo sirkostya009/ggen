@@ -1,4 +1,4 @@
-//go:build goexperiment.simd
+//go:build goexperiment.simd && amd64
 
 package ggen
 
@@ -320,5 +320,43 @@ func TestStreamSkipStringSIMD_ErrorPos(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// SIMD version of TestMaxDepthPosition: the tiers report ErrMaxDepth at the
+// bracket that exceeds the cap, like the scalar skip.
+func TestSkipValueSIMD_MaxDepthPosition(t *testing.T) {
+	t.Parallel()
+	docs := []string{
+		strings.Repeat("[", maxDepth+1),
+		strings.Repeat(`{"k":`, maxDepth+1) + "1" + strings.Repeat("}", maxDepth+1),
+	}
+	wants := []int{maxDepth, 5 * maxDepth}
+	for _, tier := range []struct {
+		name    string
+		bytes   func([]byte, int) (int, error)
+		stream  func(*Stream) error
+		capture func(*Stream) ([]byte, error)
+	}{
+		{"AVX", SkipValueAVX, (*Stream).SkipValueAVX, (*Stream).CaptureValueAVX},
+		{"AVX2", SkipValueAVX2, (*Stream).SkipValueAVX2, (*Stream).CaptureValueAVX2},
+		{"AVX512", SkipValueAVX512, (*Stream).SkipValueAVX512, (*Stream).CaptureValueAVX512},
+	} {
+		for k, doc := range docs {
+			data := []byte(doc)
+			want := wants[k]
+			if j, err := tier.bytes(data, 0); err != ErrMaxDepth || j != want {
+				t.Errorf("%s doc %d: bytes = (%d, %v), want (%d, ErrMaxDepth)", tier.name, k, j, err, want)
+			}
+			var s Stream
+			s.Reset(bytes.NewReader(data), make([]byte, 0, 256))
+			if err := tier.stream(&s); err != ErrMaxDepth || s.Offset() != want {
+				t.Errorf("%s doc %d: stream = (%d, %v), want (%d, ErrMaxDepth)", tier.name, k, s.Offset(), err, want)
+			}
+			s.Reset(bytes.NewReader(data), make([]byte, 0, 256))
+			if _, err := tier.capture(&s); err != ErrMaxDepth || s.Offset() != want {
+				t.Errorf("%s doc %d: capture = (%d, %v), want (%d, ErrMaxDepth)", tier.name, k, s.Offset(), err, want)
+			}
+		}
 	}
 }

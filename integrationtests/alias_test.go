@@ -11,6 +11,7 @@ import (
 	jsonv2 "encoding/json/v2"
 	"errors"
 	"fmt"
+	"math/big"
 	"net"
 	"net/netip"
 	"net/url"
@@ -354,6 +355,30 @@ func TestAlias_StructDelegation_OpaqueFallback(t *testing.T) {
 	}
 	if OpaqueWithMethods(got).hidden != "secret" {
 		t.Errorf("roundtrip mismatch: %+v", got)
+	}
+}
+
+// big.Int's MarshalJSON has a pointer receiver.
+//
+//ggen:generate
+type BigIntAlias big.Int
+
+func TestAlias_StructDelegation_PointerMarshalJSON(t *testing.T) {
+	t.Parallel()
+	n, _ := new(big.Int).SetString("123456789012345678901234567890", 10)
+	out, err := ggen.Marshal(BigIntAlias(*n))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(out) != "123456789012345678901234567890" {
+		t.Errorf("marshal = %s", out)
+	}
+	got, _, err := BigIntAlias{}.DecodeFrom(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g := big.Int(got); g.Cmp(n) != 0 {
+		t.Errorf("roundtrip = %s", g.String())
 	}
 }
 
@@ -953,7 +978,69 @@ func TestAlias_leadingWhitespaceBytesAndText(t *testing.T) {
 }
 
 //ggen:generate
+type AliasStamp time.Time
+
+// The UnmarshalJSON rung skips leading whitespace before it takes the span,
+// since UnmarshalJSON rejects it. A callee error past the whitespace is
+// still rebased onto the payload.
+func TestAlias_leadingWhitespaceJSONRung(t *testing.T) {
+	t.Parallel()
+	const doc = " \t\n\"2020-01-02T03:04:05Z\""
+	want := time.Date(2020, 1, 2, 3, 4, 5, 0, time.UTC)
+	v, n, err := AliasStamp{}.DecodeFrom([]byte(doc))
+	if err != nil || !time.Time(v).Equal(want) || n != len(doc) {
+		t.Fatalf("bytes: %v n=%d %v", time.Time(v), n, err)
+	}
+	var st ggen.Stream
+	st.Reset(&chunkReader{data: []byte(doc), max: 1}, make([]byte, 0, 16))
+	if v, err = (AliasStamp{}).DecodeFromStream(&st); err != nil || !time.Time(v).Equal(want) {
+		t.Fatalf("stream: %v %v", time.Time(v), err)
+	}
+	payload := "  \n" + `{"key":"abc","value":"q"}`
+	aliasPosBoth[AliasPosWrap](t, payload, strings.Index(payload, `"q"`))
+}
+
+//ggen:generate
 type AliasDigest [4]byte
+
+//ggen:generate
+type AliasLenHost struct {
+	T AliasTuple  `json:"t"`
+	D AliasDigest `json:"d"`
+}
+
+// An alias has no label of its own: its length errors start with an empty
+// path, and as a field they carry just the field's key.
+func TestAlias_lengthErrorPath(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		dec  func(string) (error, error)
+		in   string
+		want string
+	}{
+		{"tuple", decodeBothPaths[AliasTuple], `[1,2,3,4]`, ""},
+		{"digest", decodeBothPaths[AliasDigest], `"AQID"`, ""},
+		{"tuple field", decodeBothPaths[AliasLenHost], `{"t":[1,2]}`, "t"},
+		{"digest field", decodeBothPaths[AliasLenHost], `{"d":"AQID"}`, "d"},
+	} {
+		berr, serr := tc.dec(tc.in)
+		for i, err := range []error{berr, serr} {
+			ve, ok := errors.AsType[*ggen.LenError](err)
+			if !ok {
+				t.Errorf("%s path %d: want *ggen.LenError, got %T %v", tc.name, i, err, err)
+				continue
+			}
+			want := ve.Message()
+			if tc.want != "" {
+				want = tc.want + ": " + want
+			}
+			if got := strings.Join(ve.Path(), "."); got != tc.want || len(ve.Path()) != min(len(tc.want), 1) || err.Error() != want {
+				t.Errorf("%s path %d: Path()=%q Error()=%q, want path %q, %q", tc.name, i, ve.Path(), err.Error(), tc.want, want)
+			}
+		}
+	}
+}
 
 // A [N]byte alias takes the base64 path, exactly like a [N]byte field, so one
 // Go type has one wire shape wherever it appears. An alias carries no struct
@@ -1408,5 +1495,186 @@ func TestAlias_ArrayElements(t *testing.T) {
 				t.Errorf("%s accepted %s: %v", c.name, in, err)
 			}
 		}
+	}
+}
+
+//ggen:generate multierr
+type MEItem struct {
+	ID   int    `json:"id"`
+	Name string `json:"name" pipe:"minlen=2"`
+}
+
+//ggen:generate multierr
+type MEItems []MEItem
+
+//ggen:generate multierr
+type MEByName map[string]MEItem
+
+//ggen:generate multierr
+type MEPair [2]MEItem
+
+//ggen:generate multierr
+type MEPtrs []*MEItem
+
+// A multierr container alias collects every element's validation failures
+// and returns them after the closing bracket, on both paths.
+func TestAlias_multierrContainerCollects(t *testing.T) {
+	t.Parallel()
+	arr := `[{"id":1,"name":"a"},{"id":2,"name":"b"}]`
+	for _, c := range []struct {
+		name    string
+		payload string
+		run     func(string) (error, error)
+	}{
+		{"slice", arr, decodeBothPaths[MEItems]},
+		{"array", arr, decodeBothPaths[MEPair]},
+		{"ptrs", arr, decodeBothPaths[MEPtrs]},
+		{"map", `{"x":{"id":1,"name":"a"},"y":{"id":2,"name":"b"}}`, decodeBothPaths[MEByName]},
+	} {
+		berr, serr := c.run(c.payload)
+		var bes, ses ggen.Errors
+		if !errors.As(berr, &bes) || !errors.As(serr, &ses) {
+			t.Fatalf("%s: bytes=%v stream=%v", c.name, berr, serr)
+		}
+		if len(bes) != 2 || len(ses) != 2 {
+			t.Fatalf("%s: want 2 errors, bytes=%v stream=%v", c.name, bes, ses)
+		}
+		if berr.Error() != serr.Error() {
+			t.Errorf("%s: bytes=%v stream=%v", c.name, berr, serr)
+		}
+	}
+	v, _, err := MEItems{}.DecodeFrom([]byte(`[{"id":1,"name":"a"},{"id":2,"name":"bb"}]`))
+	if len(v) != 2 || v[1].ID != 2 {
+		t.Errorf("value not decoded past the failure: %v %v", v, err)
+	}
+	if _, _, err := (MEItems{}).DecodeFrom([]byte(`[{"id":1,"name":"aa"}]`)); err != nil {
+		t.Errorf("valid input: %v", err)
+	}
+}
+
+//ggen:generate
+type AliasPosLeaf struct {
+	Key   string `json:"key"`
+	Value int    `json:"value"`
+}
+
+// aliasPosWrap has no exported fields, so an alias of it takes the
+// UnmarshalJSON rung. Its UnmarshalJSON calls a generated decoder, so an
+// error it returns carries a position relative to the span it was given.
+type aliasPosWrap struct{ in AliasPosLeaf }
+
+func (w *aliasPosWrap) UnmarshalJSON(b []byte) error {
+	v, _, err := AliasPosLeaf{}.DecodeFrom(b)
+	w.in = v
+	return err
+}
+
+func (w aliasPosWrap) MarshalJSON() ([]byte, error) { return ggen.Marshal(w.in) }
+
+//ggen:generate
+type AliasPosWrap aliasPosWrap
+
+//ggen:generate
+type AliasPosHost struct {
+	Pad string       `json:"pad"`
+	W   AliasPosWrap `json:"w"`
+	T   LocalText    `json:"t"`
+}
+
+// aliasPosBoth decodes payload on the bytes path and on the stream path at
+// several chunk sizes, and checks that every error is a *ggen.ParseError at
+// want.
+func aliasPosBoth[T interface {
+	ggen.Decoder[T]
+	ggen.StreamDecoder[T]
+}](t *testing.T, payload string, want int) {
+	t.Helper()
+	check := func(path string, err error) {
+		t.Helper()
+		pe, ok := errors.AsType[*ggen.ParseError](err)
+		if !ok {
+			t.Fatalf("%s %q: got %T %v", path, payload, err, err)
+		}
+		if pe.Pos != want {
+			t.Errorf("%s %q: Pos=%d, want %d (%v)", path, payload, pe.Pos, want, err)
+		}
+	}
+	var zb T
+	_, _, berr := zb.DecodeFrom([]byte(payload))
+	check("bytes", berr)
+	for _, chunk := range []int{1, 7, 4096} {
+		var s ggen.Stream
+		s.Reset(&chunkReader{data: []byte(payload), max: chunk}, make([]byte, 0, 16))
+		_, serr := zb.DecodeFromStream(&s)
+		check(fmt.Sprintf("stream/%d", chunk), serr)
+	}
+}
+
+// The UnmarshalJSON rung rebases the callee's span-relative positions onto
+// the payload on both paths.
+func TestAlias_jsonRungRebasesCalleePos(t *testing.T) {
+	t.Parallel()
+	payload := `{"pad":"` + strings.Repeat("p", 40) + `","w":{"key":"abc","value":"q"}}`
+	aliasPosBoth[AliasPosHost](t, payload, strings.Index(payload, `"q"`))
+}
+
+//ggen:generate
+type AliasCodecHost struct {
+	S AliasStamp  `json:"s"`
+	T LocalText   `json:"t"`
+	O OpaqueAlias `json:"o"`
+}
+
+// An alias that delegates to MarshalJSON or MarshalText budgets for its
+// output, so a parent presized with JSONSize does not grow its buffer.
+func TestAlias_codecRungJSONSizeIsBound(t *testing.T) {
+	t.Parallel()
+	stamp := AliasStamp(time.Date(2020, 1, 2, 3, 4, 5, 123456789, time.FixedZone("", -(11*3600+59*60))))
+	text := LocalText{v: strings.Repeat("t", 40)}
+	opaque := OpaqueAlias(OpaqueWithMethods{hidden: strings.Repeat("o", 40)})
+	for _, v := range []interface {
+		AppendJSON(dst []byte) ([]byte, error)
+		JSONSize() int
+	}{stamp, text, opaque, AliasCodecHost{S: stamp, T: text, O: opaque}} {
+		size := v.JSONSize()
+		out, err := v.AppendJSON(make([]byte, 0, size))
+		if err != nil {
+			t.Fatalf("%T: %v", v, err)
+		}
+		if cap(out) != size {
+			t.Errorf("%T: JSONSize=%d, but AppendJSON grew the buffer to write %d bytes", v, size, len(out))
+		}
+	}
+}
+
+// The UnmarshalJSON and UnmarshalText rungs report where scanning stopped,
+// the same byte on the bytes and the stream path.
+func TestAlias_codecRungErrorPos(t *testing.T) {
+	t.Parallel()
+	aliasPosBoth[AliasPosWrap](t, `{"a":[1,2,}`, 10)
+	aliasPosBoth[AliasPosWrap](t, `{"a":[1,2`, 9)
+	aliasPosBoth[LocalText](t, `"abc`, 4)
+	aliasPosBoth[LocalText](t, "\"ab\x01c\"", 3)
+	aliasPosBoth[AliasPosHost](t, `{"pad":"p","w":[1,2,}`, 20)
+	aliasPosBoth[AliasPosHost](t, `{"pad":"p","t":"abc`, 19)
+}
+
+// The stream UnmarshalText rung lends the window to UnmarshalText without a
+// copy, so the only allocation is the one textOnly makes to keep the text.
+func TestAlias_textRungStreamNoCopy(t *testing.T) { //nolint:paralleltest // measures allocations
+	doc := []byte(`"` + strings.Repeat("x", 40) + `"`)
+	r := bytes.NewReader(doc)
+	buf := make([]byte, 0, 256)
+	var st ggen.Stream
+	allocs := testing.AllocsPerRun(100, func() {
+		r.Reset(doc)
+		st.Reset(r, buf)
+		v, err := LocalText{}.DecodeFromStream(&st)
+		if err != nil || len(v.v) != 40 {
+			t.Fatalf("%+v %v", v, err)
+		}
+	})
+	if allocs != 1 {
+		t.Errorf("allocs = %v, want 1", allocs)
 	}
 }

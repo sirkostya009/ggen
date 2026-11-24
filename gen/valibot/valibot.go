@@ -189,15 +189,16 @@ func (e *Emitter) End(ctx *gen.Context) error {
 func (e *Emitter) object(ctx *gen.Context, s *gen.Shape) string {
 	var b strings.Builder
 	rest := s.Unknown == gen.Collect && s.Rest != nil
-	// valibot's object schemas accept an array whose own keys satisfy them.
-	// Only an object with no required field, or one with a rest schema, can
-	// be satisfied that way. Guarding just those keeps every other object
-	// schema plain, with v.pick, v.omit and .entries intact.
+	// valibot's object schemas accept an array whose keys satisfy them, and
+	// test a key with `in`. Only an object with a rest schema, or whose
+	// required fields an array can all have (none, length, an index, a prototype
+	// method), can be satisfied that way. Guarding just those keeps every
+	// other object schema plain, with v.pick, v.omit and .entries intact.
 	guard := rest
 	if !guard {
 		guard = true
 		for _, f := range s.Fields {
-			if !f.Optional {
+			if !f.Optional && !js.ArrayMember(f.JSONName) {
 				guard = false
 				break
 			}
@@ -360,6 +361,15 @@ func (e *Emitter) base(ctx *gen.Context, s *gen.Shape, t *gen.Type, where string
 			// which is what Math.fround reports.
 			return pipe("v.number()", num, check("Number.isFinite(Math.fround(x))", "out of range for a 32-bit float"))
 		}
+		switch t.Format {
+		case gen.FormatUnix:
+			// Go reads the seconds into an int64.
+			return pipe("v.number()", num, "v.minValue(-9223372036854775808)", "v.ltValue(9223372036854775808)")
+		case gen.FormatDurationSec:
+			// The int64 nanosecond range ends at ±9223372036.854775807,
+			// which rounds to a double Go rejects.
+			return pipe("v.number()", num, "v.gtValue(-9223372036.854776)", "v.ltValue(9223372036.854776)")
+		}
 		return pipe("v.number()", num, "v.finite()")
 	case gen.WireBool:
 		return pipe("v.boolean()", other)
@@ -413,11 +423,15 @@ func integer(t *gen.Type) schema {
 	case !ok:
 		return pipe("v.number()", num, "v.safeInteger()")
 	case bits == 64:
-		// -0 passes minValue(0) but is not a Go uint.
-		return pipe("v.number()", num, "v.safeInteger()", "v.minValue(0)", check("!Object.is(x, -0)", "must not be negative zero"))
+		return pipe("v.number()", num, "v.safeInteger()", "v.minValue(0)", negZero)
+	case unsigned:
+		return pipe("v.number()", num, "v.integer()", "v.minValue(0)", "v.maxValue("+hi+")", negZero)
 	}
 	return pipe("v.number()", num, "v.integer()", "v.minValue("+lo+")", "v.maxValue("+hi+")")
 }
+
+// negZero rejects -0, which passes minValue(0) but is not a Go uint.
+var negZero = check("!Object.is(x, -0)", "must not be negative zero")
 
 func check(cond, msg string) string {
 	return "v.check((x) => " + cond + ", " + js.Quote(msg) + ")"
@@ -472,7 +486,13 @@ func (e *Emitter) str(t *gen.Type) schema {
 	case t.Format == gen.FormatRational:
 		return pipe("v.string()", str, "v.check("+e.helpers.Use("ggenIsRational")+`, "must be a rational number")`)
 	}
-	c, ok := e.helpers.FormatCheck(t.Format)
+	var c js.Check
+	ok := true
+	if t.Format == gen.FormatNumberString {
+		c = e.helpers.NumberCheck(numberBits(t.Go))
+	} else {
+		c, ok = e.helpers.FormatCheck(t.Format)
+	}
 	if !ok {
 		return pipe("v.string()", str)
 	}
@@ -492,6 +512,19 @@ func (e *Emitter) str(t *gen.Type) schema {
 		sc.actions = append(sc.actions, check(fmt.Sprintf("%s(x, %sn, %sn)", e.helpers.Use("ggenFits"), lo, hi), "out of range"))
 	}
 	return sc
+}
+
+// numberBits is the width Go parses a quoted number of kind k at, 0 for
+// json.Number, which encoding/json checks for its grammar only.
+func numberBits(k gen.GoKind) int {
+	//exhaustive:ignore only the number-string kinds apply here
+	switch k {
+	case gen.Float32:
+		return 32
+	case gen.Number:
+		return 0
+	}
+	return 64
 }
 
 // formatWord names a format in a message.
@@ -524,8 +557,9 @@ func (e *Emitter) rules(ctx *gen.Context, t *gen.Type, sc *schema, where string)
 	}
 	numericString := t.Format == gen.FormatIntString || t.Format == gen.FormatUintString || t.Format == gen.FormatNumberString || t.Format == gen.FormatBigFloat
 	binary := t.Go == gen.Bytes && t.Wire == gen.WireString
+	f32 := t.Go == gen.Float32
 	add := func(a string) { sc.actions = append(sc.actions, a) }
-	for _, r := range t.Rules {
+	for ri, r := range t.Rules {
 		arg := func(i int) string { return r.Args[i] }
 		switch r.Op {
 		case gen.NotEmpty:
@@ -557,12 +591,18 @@ func (e *Emitter) rules(ctx *gen.Context, t *gen.Type, sc *schema, where string)
 			op, word := lenOp(map[gen.Op]gen.Op{gen.Runes: gen.Len, gen.MinRunes: gen.MinLen, gen.MaxRunes: gen.MaxLen}[r.Op])
 			add(check(e.helpers.Use("ggenRunes")+"(x) "+op+" "+arg(0), word+" "+js.Count(arg(0), "character")))
 		case gen.GT, gen.GTE, gen.LT, gen.LTE:
-			if sc.kind == num {
+			op := map[gen.Op]string{gen.GT: ">", gen.GTE: ">=", gen.LT: "<", gen.LTE: "<="}[r.Op]
+			switch {
+			case sc.kind == num && !f32:
 				e.checkSafe(ctx, arg(0), where)
 				add(map[gen.Op]string{gen.GT: "v.gtValue(", gen.GTE: "v.minValue(", gen.LT: "v.ltValue(", gen.LTE: "v.maxValue("}[r.Op] + arg(0) + ")")
-			} else {
-				op := map[gen.Op]string{gen.GT: ">", gen.GTE: ">=", gen.LT: "<", gen.LTE: "<="}[r.Op]
-				add(check("Number(x) "+op+" "+arg(0), "must be "+op+" "+arg(0)))
+			case sc.kind == num:
+				add(check("Math.fround(x) "+op+" Math.fround("+arg(0)+")", "must be "+op+" "+arg(0)))
+			case numericString:
+				n := e.helpers.NumberText(t.Format)
+				add(check(js.Fround(n.Val, f32)+" "+op+" "+js.Fround(n.Lit(arg(0)), f32), "must be "+op+" "+arg(0)))
+			default:
+				add(check(js.Fround("Number(x)", f32)+" "+op+" "+js.Fround(arg(0), f32), "must be "+op+" "+arg(0)))
 			}
 		case gen.Eq, gen.Neq:
 			fn := "v.value("
@@ -575,28 +615,61 @@ func (e *Emitter) rules(ctx *gen.Context, t *gen.Type, sc *schema, where string)
 				if r.Op == gen.Neq {
 					op, word = "!==", "must not be "
 				}
-				add(check("Number(x) "+op+" "+arg(0), word+arg(0)))
+				n := e.helpers.NumberText(t.Format)
+				add(check(js.Fround(n.Val, f32)+" "+op+" "+js.Fround(n.Lit(arg(0)), f32), word+arg(0)))
+			case f32:
+				op, word := "===", "must be "
+				if r.Op == gen.Neq {
+					op, word = "!==", "must not be "
+				}
+				add(check("Math.fround(x) "+op+" "+js.Fround(arg(0), f32), word+arg(0)))
 			case t.Wire == gen.WireString:
 				add(fn + js.Quote(arg(0)) + ")")
 			default:
 				add(fn + arg(0) + ")")
 			}
 		case gen.Multiple:
-			if sc.kind == num {
+			switch {
+			case sc.kind == num:
 				add("v.multipleOf(" + arg(0) + ")")
-			} else {
+			case numericString:
+				n := e.helpers.NumberText(t.Format)
+				add(check(n.Val+" % "+n.Lit(arg(0))+" === "+n.Zero(), "must be a multiple of "+arg(0)))
+			default:
 				add(check("Number(x) % "+arg(0)+" === 0", "must be a multiple of "+arg(0)))
 			}
 		case gen.OneOf:
 			vals := make([]string, len(r.Args))
+			if numericString {
+				// Go matches the parsed number, whatever its spelling.
+				n := e.helpers.NumberText(t.Format)
+				for i, a := range r.Args {
+					vals[i] = js.Fround(n.Lit(a), f32)
+				}
+				add(check("["+strings.Join(vals, ", ")+"].includes("+js.Fround(n.Val, f32)+")", "must be one of "+strings.Join(r.Args, ", ")))
+				break
+			}
+			if f32 {
+				for i, a := range r.Args {
+					vals[i] = js.Fround(a, true)
+				}
+				add(check("["+strings.Join(vals, ", ")+"].includes(Math.fround(x))", "must be one of "+strings.Join(r.Args, ", ")))
+				break
+			}
 			for i, a := range r.Args {
 				vals[i] = a
 				if t.Wire == gen.WireString {
 					vals[i] = js.Quote(a)
 				}
 			}
-			// picklist narrows the type. v.values would only check it.
-			add("v.picklist([" + strings.Join(vals, ", ") + "])")
+			if ri < len(t.Rules)-1 {
+				// The rules after it are typed against the narrowed type, so
+				// only the last oneof narrows.
+				add("v.values([" + strings.Join(vals, ", ") + "])")
+			} else {
+				// picklist narrows the type. v.values would only check it.
+				add("v.picklist([" + strings.Join(vals, ", ") + "])")
+			}
 		case gen.URLRule:
 			add("v.check(" + e.helpers.Use("ggenIsURL") + `, "must be a URL")`)
 		case gen.Alphanum, gen.Numeric, gen.Hex, gen.IsLower, gen.IsUpper:
@@ -615,7 +688,13 @@ func (e *Emitter) rules(ctx *gen.Context, t *gen.Type, sc *schema, where string)
 		case gen.Replace:
 			add(transform("x.replaceAll(" + js.Quote(arg(0)) + ", " + js.Quote(escapeDollar(arg(1))) + ")"))
 		case gen.Clamp:
-			add(transform("Math.min(Math.max(x, " + arg(0) + "), " + arg(1) + ")"))
+			if numericString {
+				// Go clamps the parsed number and writes it back quoted.
+				n := e.helpers.NumberText(t.Format)
+				add(transform("String(" + js.Clamp(n.Val, n.Lit(arg(0)), n.Lit(arg(1)), n.Int) + ")"))
+			} else {
+				add(transform(js.Clamp("x", arg(0), arg(1), false)))
+			}
 		case gen.Func:
 			if action, ok := e.funcAction(ctx, r); ok {
 				add(action)

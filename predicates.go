@@ -5,7 +5,8 @@ import (
 	"unicode"
 )
 
-// IsAlphanum reports whether every byte in s is an ASCII letter or digit.
+// IsAlphanum reports whether s is non-empty and every byte in it is an ASCII
+// letter or digit.
 func IsAlphanum(s string) bool {
 	if len(s) == 0 {
 		return false
@@ -19,7 +20,8 @@ func IsAlphanum(s string) bool {
 	return true
 }
 
-// IsNumeric reports whether every byte in s is an ASCII digit.
+// IsNumeric reports whether s is non-empty and every byte in it is an ASCII
+// digit.
 func IsNumeric(s string) bool {
 	if len(s) == 0 {
 		return false
@@ -56,7 +58,8 @@ func IsUpper(s string) bool {
 	return true
 }
 
-// IsHex reports whether every byte in s is an ASCII hex digit.
+// IsHex reports whether s is non-empty and every byte in it is an ASCII hex
+// digit.
 func IsHex(s string) bool {
 	if len(s) == 0 {
 		return false

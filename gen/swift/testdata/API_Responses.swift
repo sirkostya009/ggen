@@ -3,11 +3,13 @@
 import Foundation
 import Shared
 
+/// Role is an enum.
 enum Role: String, Codable, Hashable {
     case admin
     case member
 }
 
+/// Plan is an integer enum without a zero member.
 enum Plan: Int, Codable, Hashable {
     case free = 1
     case pro = 2

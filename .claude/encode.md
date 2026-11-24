@@ -15,7 +15,8 @@ buffer-append helpers generated code calls, and the `AppendAny` walker for `any`
   decode twins `ParseIPNet`/`ParseNetAddr` (.claude/scan.md) and their
   `AddrError`. The package imports no `net` (cmd/ggen/CLAUDE.md #89).
 - `rfc3339.go` — `AppendRFC3339` (+ the decode twin `ParseRFC3339`, .claude/scan.md).
-- `empty.go` — `AnyIsEmpty`, the `omitempty` predicate for `any` fields.
+- `empty.go` — `AnyIsEmpty`, the `omitempty` predicate for `any` fields, and
+  `RawIsEmpty`, the one for raw JSON fields.
 
 ## Surface
 
@@ -27,7 +28,7 @@ type Marshaler interface {
 
 func Marshal[T Marshaler](v T) ([]byte, error)        // append into make([]byte,0,v.JSONSize()) — 1 alloc
 func MarshalString[T Marshaler](v T) (string, error)  // Marshal + BytesToString aliasing (no extra alloc)
-func WriteTo(w io.Writer, v Marshaler) error          // pooled buffer; first non-nil error
+func WriteTo[T Marshaler](w io.Writer, v T) error     // pooled buffer; first non-nil error
 func AppendSlice[T Marshaler](dst []byte, items []T) ([]byte, error)
 func MarshalSlice[T Marshaler](items []T) ([]byte, error)
 func MarshalSliceString[T Marshaler](items []T) (string, error)
@@ -42,18 +43,22 @@ func AppendURLHTML(dst []byte, u url.URL) []byte      // htmlescape variant
 func AppendIPNet(dst, ip, mask []byte) ([]byte, error) // CIDR text of an IPNet's IP + Mask + closing `"`, what (*net.IPNet).String prints, "" for neither part. Refuses a value String would print without a prefix length (non-canonical mask, IP/mask mismatch)
 func AppendNetAddr(dst, ip []byte, port int, zone string) ([]byte, error) // "ip:port" of a TCPAddr/UDPAddr + closing `"`, what String prints, "%zone" appended by hand (WithZone would intern it), "" for the zero value. Refuses a port outside [0,65535], an IP neither 4 nor 16 bytes, a zone without an IPv6 address. Zoned text goes through the escape check
 func AppendNetAddrHTML(dst, ip []byte, port int, zone string) ([]byte, error) // htmlescape variant
+func AppendNumber(dst []byte, n json.Number) ([]byte, error) // a json.Number field's text, checked against the JSON number grammar (skipNumber); "" writes 0, like encoding/json
 type AddrError struct{ Type, Text string }            // bad net text ("IP address" / "CIDR address" / "ip:port address"). Text is always a copy. Error() = "invalid " + Type + ": " + strconv.Quote(Text)
 func AppendRFC3339(dst []byte, t time.Time, layout string) ([]byte, error) // RFC3339/RFC3339Nano AppendFormat + the year ∈ [0,9999] / zone hour < 24 check time.Time.AppendText and jsonv2 apply — a bare AppendFormat wrote strings no RFC 3339 parser reads back
-func AnySize(v any) int                              // upper bound on len(AppendAny(nil, v)): generator's per-kind constants for typed leaves (the net structs through netSize), walks dynamic shapes, generated values report JSONSize, text/JSON marshalers are run; mirrors appendAny's dispatch order + maxDepth
-func AnySizeHTML(v any) int                          // AnySize under AppendAnyHTML's 6× string escapes
-func AnyIsEmpty(v any) bool                          // omitempty for `any`: nil / "" / empty []any / empty map[string]any by type switch, other slices/maps/arrays/nil pointers by reflect; structs never inspected, except net.IPNet/TCPAddr/UDPAddr, empty when they write ""
+func AnySize(v any) int                              // upper bound on len(AppendAny(nil, v)): generator's per-kind constants for typed leaves (the net structs through netSize, netip.Addr/AddrPort/Prefix through netipAddrSize, so they are not run), walks dynamic shapes, generated values report JSONSize, text/JSON marshalers are run; mirrors appendAny's dispatch order + maxDepth (0 past it)
+func AnySizeHTML(v any) int                          // AnySize under AppendAnyHTML's 6× string and raw-value escapes
+func AnyIsEmpty(v any) bool                          // omitempty for `any`: nil / "" / empty []any / empty map[string]any by type switch, other slices/maps/arrays/nil pointers by reflect; a json.RawMessage by RawIsEmpty; structs never inspected, except net.IPNet/TCPAddr/UDPAddr and netip.Addr/AddrPort/Prefix, empty when they write ""
+func RawIsEmpty(b []byte) bool                       // omitempty for json.RawMessage / jsontext.Value: empty, or the text null / "" / [] / {} (emptyWire, the AppendAny struct walk's test)
 func CloseJSONString(dst []byte, from int) []byte     // close raw-appended text (TextAppender output), re-escaping iff dirty
 func CloseJSONStringHTML(dst []byte, from int) []byte // htmlescape variant
 func AppendStringNoHTML(dst []byte, s string) []byte // jsonv2-default variant
+func AppendRawHTML(dst, b []byte) []byte            // raw JSON value with <, >, & as \u00XX (htmlescape raw fields, AppendAnyHTML raw arms)
 func AppendFloat(dst []byte, v float64, bitSize int) ([]byte, error) // stdlib-parity float format
-func AppendUnixSeconds(dst []byte, t time.Time) []byte // format:unix wire — exact decimal seconds + fractional nanos (never float64(UnixNano()), which overflowed outside ~1678-2262 and lost sub-100ns precision); pinned by TestAppendUnixSeconds
+func AppendUnixSeconds(dst []byte, t time.Time) []byte // format:unix wire — exact decimal seconds + fractional nanos (never float64(UnixNano()), which overflows outside ~1678-2262 and loses sub-100ns precision); pinned by TestAppendUnixSeconds
+func AppendDurationSeconds(dst []byte, d time.Duration) []byte // format:sec wire — exact decimal seconds from the integer nanoseconds; pinned by TestDurationSeconds
 func AppendAny(dst []byte, v any) ([]byte, error)     // any-walker, NoHTML escaping
-func AppendAnyHTML(dst []byte, v any) ([]byte, error) // any-walker, HTML-safe escaping
+func AppendAnyHTML(dst []byte, v any) ([]byte, error) // any-walker, HTML-safe escaping, raw values included
 ```
 
 `AppendURLHTML`/`AppendNetipAddrHTML` (added 2026-08) close through
@@ -70,8 +75,10 @@ ES6 ToString, byte-for-byte v1 AND v2: `'f'` while the decimal exponent is in
 [-6, 21), `'e'` otherwise, then trim the zero-padded negative exponent in place
 (`1e-07` → `1e-7`). Bare `'g'` is a silent wire divergence (`1e6` → `1e+06` vs
 stdlib `1000000`) — pinned by `TestAppendFloatStdlibParity`. Codegen `sizeFloat`
-budget = 25 (longest 'f': sign + `0.` + 5 zeros + 17 digits). Duration
-`format:sec` routes here.
+budget = 25 (longest 'f': sign + `0.` + 5 zeros + 17 digits), `sizeFloat32` =
+22 (sign + 21 integer digits just under 1e21). Integers budget their own width
+through `numSize` (`int8` 4 … `int32` 11, `uint16` 5, `uint32` 10); `int`/`uint`
+take the 64-bit 20, because generated code is arch-independent.
 
 ## `Marshal` / `MarshalString` — generic, devirtualized
 
@@ -79,14 +86,15 @@ Generic over `T Marshaler` (not a plain `Marshaler` arg) so a concrete call (the
 generated `MarshalJSON` hook, user concrete types) monomorphizes:
 `JSONSize`/`AppendJSON` devirtualize, value not boxed. Caveat: can't be a bare
 func value — `f := ggen.Marshal` needs `ggen.Marshal[T]`. An already-boxed
-`Marshaler` still works (T = the interface). `WriteTo` / `WriteSliceTo` stay
-NON-generic interface-arg: pooled-buffer + `io.Write` cost dwarfs one box, and
-presizing their buffer from `JSONSize()` was rejected (pool converges to max
-payload size, so the size walk is pure overhead).
+`Marshaler` still works (T = the interface). `WriteTo` / `WriteSliceTo` are
+generic the same way, but write through a pooled buffer that is not presized
+from `JSONSize()`: the pool converges to the max payload size, so the size walk
+would be pure overhead.
 
 ## `MarshalSlice` / `AppendSlice` — per-item sizing, nil pointers
 
-Output presized from `sliceJSONSize` = SUM of each item's `JSONSize()`, not
+`MarshalSlice` presizes its output to the SUM of each item's `JSONSize()`
+(plus brackets, commas and 4 per nil item), not
 `len*zero.JSONSize()` (the zero size is only the constant-folded base; populated
 items would undersize and run the growth chain). A nil ITEMS slice emits `null`, empty non-nil `[]` (stdlib
 parity). Pointer- and interface-typed `T`: one-time
@@ -180,9 +188,14 @@ small set of concrete stdlib types **before** falling to reflection.
 
 ### Escaping
 
-One walker (`appendAny`) parameterized by `escapeFn` (`AppendString` /
-`AppendStringNoHTML`) threaded through every helper, so nested strings AND map
-keys escape consistently. `AppendAny` defaults to NoHTML (jsonv2 parity),
+One walker (`appendAny`) parameterized by `escMode` (a bool: `str` picks
+`AppendString` / `AppendStringNoHTML`, `raw` picks `AppendRawHTML` / a plain
+append) threaded through every helper, so nested strings, map keys and raw
+values (`json.RawMessage`, `[]json.RawMessage`, `json.Marshaler` output)
+escape consistently. `AppendRawHTML` rewrites every `<`, `>`, `&` without
+parsing: in valid JSON they occur only inside strings (v1's `compact` does the
+same). A generated value inside the walk keeps its own type's escaping.
+`AnySizeHTML` budgets raw bytes at 6×, `AnySize` at 1×. `AppendAny` defaults to NoHTML (jsonv2 parity),
 `AppendAnyHTML` is the v1 variant; codegen picks via `appendAnyFn(f.HTMLEscape)`.
 Pinned by `TestAppendAny_NoHTMLEscapeDefault`.
 
@@ -196,6 +209,13 @@ VALUE-level cycle (`s[0] = s`, a self-referential map, `n.Next = n`) hits —
 `collectFields` only breaks TYPE-level embed cycles. Pinned by
 `TestAppendAny_CyclicValue` / `TestAppendAny_DepthCap`.
 
+`anySize` has no error channel, so past `maxDepth` it panics a private
+`sizeOverDepth` that `AnySize` / `AnySizeHTML` recover into 0 (the append
+that follows reports `ErrMaxDepth`). The walk has to end at that first node:
+pruning only it and summing the siblings costs fan-out^maxDepth steps on a
+cycle with two back edges. The recover costs one defer per `AnySize` call and
+nothing per element. Pinned by `TestAnySize_CycleEndsAtDepthCap`.
+
 ### Switch ordering rules (don't break)
 
 Case order is load-bearing — concrete cases MUST precede the interface dispatches
@@ -204,7 +224,9 @@ that would otherwise catch them:
 1. **Concrete primitives** (`string`, `bool`, `int*`, `uint*`, `float*`, `nil`).
 2. **Homogeneous primitive slices** (`[]int*`, `[]uint16/32/64`, `[]float*`,
    `[]bool`, `[]string`, `[]any`). Skip `[]uint8` — that's `[]byte`, stays on the
-   base64 reflect.Slice path. Plus two concrete COMPOSITE-element slices
+   base64 reflect.Slice path (taken only for an UNNAMED byte element: `[]Octet` /
+   `[N]Octet` with `type Octet uint8` are lists whose element marshalers run, as in
+   jsonv2; `AnySize` gates the same way). Plus two concrete COMPOSITE-element slices
    (`[]time.Time`, `[]json.RawMessage`) handled wholesale so elements skip the
    reflect.Slice per-element `rv.Interface()` box.
 3. **Homogeneous string-keyed primitive maps** (`map[string]int*`/`uint*`/
@@ -264,18 +286,24 @@ that would otherwise catch them:
    (`netElemKind`), and `appendReflectValue` writes a slice, array or map
    element in place, without boxing a copy. A zone is escaped through
    `closeText` with the walker's `esc`, which copies only when a byte needs
-   escaping. `structWire` uses `netKindOf`, so `omitempty` drops one that
-   writes `""`. `AnyIsEmpty` counts them empty on the same test (`netEmpty`:
+   escaping. `omitempty` drops one that writes `""`, as it drops any `""`.
+   `AnyIsEmpty` counts them empty on the same test (`netEmpty`:
    an IPNet with IP and Mask empty, an address with IP empty, Port 0 and
-   Zone `""`), and reads a pointed-to one in place through `netElemKind`, so
-   an `omitempty` `any` holding a net pointer costs no allocation in
-   generated `AppendJSON` / `JSONSize`.
+   Zone `""`), and the netip types on `netipEmpty` (a zero Addr or Prefix,
+   an AddrPort with a zero Addr). It follows pointers, and the interfaces they point to, on the
+   `reflect.Value` in a loop bounded by `maxDepth`, so an `omitempty` `any`
+   holding a pointer costs no allocation in generated `AppendJSON` /
+   `JSONSize` whatever the pointee is (boxing an addressable pointee to
+   recurse would copy it to the heap), a pointee `json.RawMessage` is judged
+   by its bytes as a boxed one is, and a pointer that reaches itself ends
+   with `false`, leaving the `ErrMaxDepth` to `AppendAny`.
    `AnySize` budgets them through `netSize` (IPNet 20/45, addresses 23/49 by IPv4 vs
    IPv6 text, quotes included, plus `1 + len×mult` for a zone's `%` and
    bytes). A named type over one (`type A net.TCPAddr`) is a struct of its
    own and is written as one. Pinned by `TestAppendAny_netTypes`,
    `TestAnySize_BoundsAppendAny`, `TestAnyIsEmpty`,
-   `TestAnyIsEmpty_netNoAlloc`, and `TestAppendAny_netNoAlloc` (no allocation
+   `TestAnyIsEmpty_netNoAlloc`, `TestAnyIsEmpty_pointerNoAlloc`,
+   `TestAnyIsEmpty_PointerCycle`, and `TestAppendAny_netNoAlloc` (no allocation
    from `AppendAny` / `AppendAnyHTML` into a presized buffer, or from
    `AnySize` / `AnySizeHTML`, for net slices, pointers and values whose zone
    needs no escaping, and a map allocates the same at one entry as at eight).
@@ -288,23 +316,57 @@ that would otherwise catch them:
    types duplicated for `resolveFieldConflicts`. Pinned by
    `TestAppendAny_RecursiveEmbedNoOverflow`.
 
+   An embedded struct or `*struct` with a JSON name in its tag is a member,
+   kept even when its type is unexported, as in encoding/json and jsonv2
+   (`fieldInfo.hidden`). `Interface()` panics on a value read through an
+   unexported field, so `fieldValue` re-views it through
+   `reflect.NewAt(UnsafeAddr)`, and a struct with such a field
+   (`structInfo.hasHidden`) is walked from an addressable value, copied once
+   when it is not one. Its marshal methods are called like any member's.
+   Pinned by `TestAppendAny_NamedUnexportedEmbed`.
+
    **Pointer-receiver marshalers are reached for VALUES** (jsonv2 semantics;
    v1 only called pointer methods on addressable values). The type switch
    only sees the boxed value's method set, so a `MarshalJSON`/`MarshalText`/
    `AppendText`/`AppendJSON` declared on `*T` fell through to the reflect
    field dump for a `T` value. `needsAddr(t)` (per named type, memoised in a
    `sync.Map`: `!hasMarshaler(t) && hasMarshaler(PointerTo(t))`; unnamed
-   types short-circuit) and `addrOf(rv)` (`Addr().Interface()` when
+   types other than structs short-circuit, since an unnamed struct carries
+   the methods of its embedded fields, `mayHaveMethods`, which also gates
+   the map-key text-marshaler lookup) and `addrOf(rv)` (`Addr().Interface()` when
    addressable, else `reflect.New` + `Set` copy) box a pointer that re-enters
    the type switch and lands in the interface arms — ggen's own arm priority
    preserved, termination guaranteed. Consulted once per struct type in
    `collectFields` (`fieldInfo.addr`), once per container in the reflect
-   Slice/Array/Map arms (hoisted `elemAddr` handed into `appendReflectValue`,
+   Slice/Array/Map arms (`elemInfo.addr`, handed into `appendReflectValue`,
    so slice elements and the addressable map scratch box a pointer with no
    copy), and once in the reflect fallback for top-level / `[]any` /
    `map[string]any` values (a copy, as jsonv2 does regardless of
    addressability). Pinned by `TestAppendAny_PointerReceiverMarshalers` +
    `TestAny_PointerReceiverValueMarshals` (integ).
+
+   **No boxed copy for plain values.** `Interface()` on an addressable
+   `reflect.Value` (a slice element, the map scratch, a pointee) allocates a
+   copy unless the type is pointer-shaped, so the walk avoids it wherever the
+   type switch has nothing to add. `elemInfoOf` classifies a container's
+   element type once per container. A `directKind` (a bool, string or number
+   with no marshal method on `T` or `*T`; `json.Number` and `time.Duration`
+   have forms of their own) is written by `appendKind` straight from the
+   `reflect.Value`, and a struct whose `structInfo.inPlace` is set is walked
+   where it lies by `appendStructInfo`. The reflect Pointer arm does the same
+   for a struct pointee. `inPlace` needs a struct with no codec of its own
+   whose fields are all direct, pointer-marshaled (`addr`), pointer-shaped
+   (pointer, map, chan, func, interface) or in-place structs themselves. Any
+   other field (a slice, an array, `time.Time`, a named primitive with a
+   marshaler) would take `Interface()` on an addressable value, one
+   allocation per field instead of one per struct, so such a struct is boxed
+   once and walked from the copy. Struct fields take the same routes
+   (`fieldInfo.direct` / `plain`), which also keeps scalar fields out of the
+   type switch; a nested struct that is not in-place is walked directly only
+   when it is not addressable, since a field promoted through an embedded
+   pointer is. Every `appendAny` entry skipped this way keeps its depth
+   check, so the cap fires at the same level. Pinned by
+   `TestAppendAny_ReflectNoAlloc`.
 
    **Map keys with a text marshaler.** Once per map, when the key type is
    named, the addressable key scratch's pointer (`kv.Addr().Interface()`,
@@ -324,9 +386,11 @@ that would otherwise catch them:
    with `"`/`{`/`[`, or a 4-byte value opening with `n`); `first` is cleared
    only on commit. Zero numbers and `false` are emitted; an empty map, an
    empty slice and a RawMessage/marshaler that came out empty are dropped; a
-   `"\""` string is 4 bytes and kept. A STRUCT value is never rewound
-   (`structWire`, which peels pointers and interfaces so a nil one still
-   omits): the generator refuses `omitempty` on a struct field outright, so
+   `"\""` string is 4 bytes and kept. A STRUCT value that came out `{}` is
+   never rewound (`structWire`, which peels pointers and interfaces so a nil
+   one still omits); a struct whose marshaler writes `""`, such as a zero
+   `netip.Addr`, is dropped like any `""`, as jsonv2 and generated code do.
+   For `{}`, the generator refuses `omitempty` on a struct field outright, so
    the option is meaningless there — a deliberate divergence from jsonv2,
    which drops a struct encoding `{}`. One length compare per omitempty
    field, reflect path only. **`omitzero`** classifies each field once in `collectFields`
@@ -338,20 +402,21 @@ that would otherwise catch them:
    reached through `Addr()` when addressable (no copy), a pointer-only method
    through `addrOf`, otherwise `fv.IsZero()` — so a zero `time.Time` carrying
    a location is omitted, as generated `KindTime` and v1 1.24+ do. The
-   catch-all splice keys on the `embed` option (`fieldInfo.embed`), like the
-   generator and jsonv2; `,inline` is an ordinary unknown option there. It
-   runs as a SECOND pass after the named-member loop, carrying the same
-   `first` comma state, so the entries land after every named member wherever
-   the field is declared — jsonv2's order, and the one generated `AppendJSON`
-   already produced (splicing at the declaration position put a
-   first-declared catch-all's keys ahead of the named ones). `structInfo`
-   caches a `hasEmbed` flag beside the conflict resolution, so a struct
-   without one runs neither the test's body nor the extra loop; field
-   resolution and the "is this actually a string-keyed map" test are shared
-   by both passes (`fieldValue`/`embedSplices`) so they cannot drift.
+   catch-all splice keys on the `embed` option, like the generator and
+   jsonv2; `,inline` is an ordinary unknown option there. `collectFields`
+   puts a string-keyed `,embed` map in a list of its own (an `,embed` on any
+   other type is an ordinary member), so catch-alls take no part in
+   `resolveFieldConflicts`, and `dominantEmbed` keeps one in
+   `structInfo.embed` by jsonv2's rule, the generator's too: the shallowest,
+   none on a tie between promoted ones, and `embedConflict` for two of the
+   struct's own, which `AppendAny` refuses with `json.UnsupportedTypeError`
+   as jsonv2 does. The splice runs as a SECOND pass after the named-member
+   loop, carrying the same `first` comma state, so the entries land after
+   every named member wherever the field is declared, jsonv2's order and
+   generated `AppendJSON`'s. `structSize` budgets the same one catch-all.
    Pinned by `TestAppendAny_OmitEmptyJSONv2Semantics`,
-   `TestAppendAny_OmitZeroIsZeroMethod`, `TestAppendAny_EmbedSplices` (all
-   byte-compared against jsonv2).
+   `TestAppendAny_OmitZeroIsZeroMethod`, `TestAppendAny_EmbedSplices`,
+   `TestAppendAny_EmbedDominance` (all byte-compared against jsonv2).
 
 ### `,string` on `json.Number`
 
@@ -361,7 +426,11 @@ versions still quote (unlike bool, which jsonv2 deliberately stopped quoting).
 It is allowed through by type identity, not kind. The converse exclusion is
 `time.Duration`: a named int64 whose wire is already a string, refused by type
 identity so `,string` cannot double-wrap it. Pinned by
-`TestAppendAny_NumberStringTag` + `TestAppendAny_DurationUnits`.
+`TestAppendAny_NumberStringTag` + `TestAppendAny_DurationUnits`. The same
+holds for any named numeric type whose value or pointer has one of the four
+marshal methods: its output is written as is, as jsonv2 does (pinned by
+`TestAppendAny_StringOptSkipsMarshalers`). The check runs once per struct
+type, in `collectFields`.
 
 ### `usenumber` mode
 

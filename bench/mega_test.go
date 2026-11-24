@@ -68,6 +68,26 @@ func BenchmarkMega_Unmarshal(b *testing.B) {
 			)
 		})
 	}
+	// ggen_reuse decodes into the previous result, so the receiver's
+	// allocations come back.
+	b.Run("ggen_reuse", func(b *testing.B) {
+		runBench(b, int64(len(MegaPayload)),
+			func() Node {
+				v, _, err := Node{}.DecodeFrom(MegaPayload)
+				if err != nil {
+					b.Fatal(err)
+				}
+				return v
+			},
+			func(prev *Node) {
+				v, _, err := prev.DecodeFrom(MegaPayload)
+				if err != nil {
+					b.Fatal(err)
+				}
+				*prev = v
+			},
+		)
+	})
 }
 
 func BenchmarkMega_Marshal(b *testing.B) {
@@ -121,8 +141,9 @@ func BenchmarkMega_Marshal(b *testing.B) {
 
 func BenchmarkMega_Reader(b *testing.B) {
 	type readerState struct {
-		r   bytes.Reader
-		buf []byte
+		r    bytes.Reader
+		buf  []byte
+		prev Node
 	}
 
 	readerCodecs := []struct {
@@ -156,6 +177,15 @@ func BenchmarkMega_Reader(b *testing.B) {
 			var _st ggen.Stream
 			_st.Reset(&s.r, s.buf[:0])
 			_, err = Node{}.DecodeFromStream(&_st)
+			s.buf = _st.Bytes()
+			return err
+		}},
+		{"ggen stream_reuse", func(s *readerState) error {
+			s.r.Reset(MegaPayload)
+			var err error
+			var _st ggen.Stream
+			_st.Reset(&s.r, s.buf[:0])
+			s.prev, err = s.prev.DecodeFromStream(&_st)
 			s.buf = _st.Bytes()
 			return err
 		}},

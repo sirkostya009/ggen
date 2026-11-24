@@ -157,9 +157,10 @@ var bigEdges = []string{
 
 func TestBigFloatHelperMatchesGo(t *testing.T) {
 	t.Parallel()
-	inputs := append(enumerate("01.eEpP+-_xIinf", 4), bigEdges...)
+	inputs := append(enumerate("01.eEpP+-_xboIinf", 4), bigEdges...)
+	inputs = append(inputs, "0x1p-3", "0X.8P1", "0x1e5", "0b1e3", "0o7.4p2", "0x1.8", "0b1.1e-3", "1_0.2_5e1_0", "0x_1_f")
 	matchGo(t, inputs, "ggenIsBigFloat(s)", func(s string) string {
-		_, _, err := new(big.Float).Parse(s, 10)
+		_, _, err := new(big.Float).Parse(s, 0)
 		return strconv.FormatBool(err == nil)
 	})
 }
@@ -310,6 +311,11 @@ func TestCaseHelpersMatchGo(t *testing.T) {
 		"ß", "İ", "ı", "I", "i", "  ab  ", "\u0085ab", "\ufeffab", "\u00a0a\u00a0",
 		"\u2000a\u3000", "\ta\n", "日本", "\U0001f600", "Straße", "ǅ", "ǆ",
 	}
+	for r := rune(0x1f80); r <= 0x1fff; r++ {
+		if unicode.IsPrint(r) {
+			inputs = append(inputs, string(r))
+		}
+	}
 	matchGo(t, inputs, "`${ggenToLower(s)}|${ggenToUpper(s)}|${ggenTrim(s)}`", func(s string) string {
 		return strings.Map(unicode.ToLower, s) + "|" + strings.Map(unicode.ToUpper, s) + "|" + strings.TrimSpace(s)
 	})
@@ -331,6 +337,34 @@ func TestNumberHelpersMatchGo(t *testing.T) {
 		n, ok := new(big.Int).SetString(s, 10)
 		return strconv.FormatBool(ok && n.Cmp(big.NewInt(-128)) >= 0 && n.Cmp(big.NewInt(127)) <= 0)
 	})
+}
+
+func TestQuotedNumberHelpersMatchGo(t *testing.T) {
+	t.Parallel()
+	inputs := []string{
+		"0", "-0", "1.5", "-2e3", "3.4e38", "3.4028234e38", "3.5e38", "-1e39", "1e-50", "1e308", "1e309",
+		"1e400", "-1e400", "1e-400", "01", "1.", ".5", "+1", "1e", "0x1f", "Infinity", "NaN",
+	}
+	// json.Number checks only the grammar, a float field parses at its width.
+	matchGo(t, inputs, "`${ggenNumber.test(s)} ${ggenIsFloat32(s)} ${ggenIsNumber(s)}`", func(s string) string {
+		var n json.Number
+		grammar := json.Unmarshal([]byte(strconv.Quote(s)), &n) == nil
+		_, err32 := strconv.ParseFloat(s, 32)
+		_, err64 := strconv.ParseFloat(s, 64)
+		return fmt.Sprintf("%v %v %v", grammar, grammar && err32 == nil, grammar && err64 == nil)
+	})
+}
+
+func TestArrayMember(t *testing.T) {
+	t.Parallel()
+	for name, want := range map[string]bool{
+		"length": true, "map": true, "toString": true, "0": true, "12": true, "4294967294": true,
+		"4294967295": false, "01": false, "-1": false, "1.5": false, "": false, "name": false, "Length": false,
+	} {
+		if got := ArrayMember(name); got != want {
+			t.Errorf("ArrayMember(%q) = %v", name, got)
+		}
+	}
 }
 
 func TestQuote(t *testing.T) {
@@ -371,11 +405,18 @@ func TestIdents(t *testing.T) {
 		{"a,b", false, "a_b", `"a,b"`, false},
 		{"class", false, "class", "class", false},
 		{"if", false, "if", "if", false},
-		{"Ünicode", true, "__nicode", "Ünicode", false},
-		{"日本", true, "______", "日本", false},
+		{"Record", false, "Record", "Record", false},
+		{"Number", false, "Number", "Number", false},
+		{"z", false, "z", "z", false},
+		{"ggenBytes", false, "ggenBytes", "ggenBytes", false},
+		{"Records", true, "Records", "Records", false},
+		{"Ünicode", false, "__nicode", `"Ünicode"`, false},
+		{"日本", false, "______", `"日本"`, false},
+		{"aⸯ", false, "a___", `"aⸯ"`, false},
 		{"toString", true, "toString", "toString", true},
 		{"constructor", true, "constructor", "constructor", true},
 		{"hasOwnProperty", true, "hasOwnProperty", "hasOwnProperty", true},
+		{"__proto__", true, "__proto__", `["__proto__"]`, true},
 	} {
 		if got := IsIdent(c.in); got != c.ident {
 			t.Errorf("IsIdent(%q) = %v", c.in, got)

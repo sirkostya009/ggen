@@ -8,6 +8,16 @@ export const ggenBase64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-
 
 export const ggenBase64URL = /^(?:[A-Za-z0-9_-]{4})*(?:[A-Za-z0-9_-]{2}==|[A-Za-z0-9_-]{3}=)?$/;
 
+export function ggenBigInt(s: string): bigint {
+  // A failed check does not stop the ones after it, so this runs on text the
+  // format check already rejected.
+  try {
+    return BigInt(s);
+  } catch {
+    return 0n;
+  }
+}
+
 export function ggenBytes(s: string): number {
   let n = s.length;
   for (let i = 0; i < s.length; i++) {
@@ -78,16 +88,20 @@ export function ggenIsAddrPort(s: string): boolean {
 }
 
 export function ggenIsBigFloat(s: string): boolean {
-  const m = /^[+-]?(?:[Ii]nf|(\d*)(?:\.(\d*))?(?:[eEpP]([+-]?\d+))?)$/.exec(s);
-  if (m === null) return false;
-  const [whole, int = "", frac = "", exp = "0"] = m;
-  if (/inf$/i.test(whole)) return true;
-  if (int === "" && frac === "") return false;
-  const e = BigInt(exp);
+  if (/^[-+]?[Ii]nf$/.test(s)) return true;
+  if (!/^[-+]?(?:0[xX](?:_?[0-9a-fA-F](?:_?[0-9a-fA-F])*(?:\.(?:[0-9a-fA-F](?:_?[0-9a-fA-F])*)?)?|\.[0-9a-fA-F](?:_?[0-9a-fA-F])*)|0[bB](?:_?[01](?:_?[01])*(?:\.(?:[01](?:_?[01])*)?)?|\.[01](?:_?[01])*)|0[oO](?:_?[0-7](?:_?[0-7])*(?:\.(?:[0-7](?:_?[0-7])*)?)?|\.[0-7](?:_?[0-7])*)|(?:\d(?:_?\d)*(?:\.(?:\d(?:_?\d)*)?)?|\.\d(?:_?\d)*))(?:[eEpP][-+]?\d(?:_?\d)*)?$/.test(s)) return false;
+  const body = s.replace(/^[-+]/, "").replaceAll("_", "");
+  const bits = ({ "0x": 4, "0b": 1, "0o": 3 } as Record<string, number>)[body.slice(0, 2).toLowerCase()] ?? 0;
+  const digits = bits > 0 ? body.slice(2) : body;
+  const at = digits.search(bits === 4 ? /[pP]/ : /[eEpP]/);
+  const mant = at < 0 ? digits : digits.slice(0, at);
+  const e = at < 0 ? 0n : BigInt(digits.slice(at + 1));
   if (e < -(2n ** 63n) || e >= 2n ** 63n) return false;
-  const mant = BigInt(int + frac || "0");
-  if (mant === 0n) return true;
-  const exp2 = BigInt(mant.toString(2).length - frac.length) + e;
+  const [int, frac = ""] = mant.split(".");
+  const prefix = bits === 4 ? "0x" : bits === 1 ? "0b" : bits === 3 ? "0o" : "";
+  const m = BigInt(prefix + (int + frac || "0"));
+  if (m === 0n) return true;
+  const exp2 = BigInt(m.toString(2).length) - BigInt(frac.length * Math.max(bits, 1)) + e;
   return exp2 >= -(2n ** 31n) && exp2 < 2n ** 31n;
 }
 
@@ -138,6 +152,10 @@ export function ggenIsDuration(s: string): boolean {
   return true;
 }
 
+export function ggenIsFloat32(s: string): boolean {
+  return ggenNumber.test(s) && Number.isFinite(Math.fround(Number(s)));
+}
+
 export function ggenIsIP(s: string): boolean {
   return ggenIsIPv4(s) || ggenIsIPv6(s);
 }
@@ -166,7 +184,7 @@ export function ggenIsIPv6(s: string): boolean {
 }
 
 export function ggenIsNumber(s: string): boolean {
-  return /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(s) && Number.isFinite(Number(s));
+  return ggenNumber.test(s) && Number.isFinite(Number(s));
 }
 
 export function ggenIsPrefix(s: string): boolean {
@@ -190,7 +208,8 @@ export function ggenIsRational(s: string): boolean {
   const e = at < 0 ? 0n : BigInt(digits.slice(at + 1));
   if (e < -(2n ** 63n) || e >= 2n ** 63n) return false;
   const [int, frac = ""] = mant.split(".");
-  if (BigInt((bits === 4 ? "0x" : bits === 1 ? "0b" : bits === 3 ? "0o" : "") + (int + frac || "0")) === 0n) return true;
+  const prefix = bits === 4 ? "0x" : bits === 1 ? "0b" : bits === 3 ? "0o" : "";
+  if (BigInt(prefix + (int + frac || "0")) === 0n) return true;
   const point = BigInt(-frac.length);
   const decimal = at >= 0 && /[eE]/.test(digits[at]);
   const exp5 = (bits === 0 ? point : 0n) + (decimal ? e : 0n);
@@ -488,19 +507,32 @@ export function ggenIsURL(s: string): boolean {
 
 export function ggenMapCase(s: string, upper: boolean): string {
   // Go maps every rune on its own and never expands one into several, so a
-  // final sigma stays sigma and ß stays ß. U+0130 is the one simple mapping
-  // JavaScript spells with two code points.
+  // final sigma stays sigma and ß stays ß. U+0130 and the Greek letters with
+  // ypogegrammeni have simple mappings JavaScript spells with two code points.
   let out = "";
   for (const r of s) {
     if (!upper && r === "\u0130") {
       out += "i";
       continue;
     }
+    if (upper) {
+      const c = r.codePointAt(0)!;
+      if (c >= 0x1f80 && c <= 0x1fa7 && (c & 0xf) < 8) {
+        out += String.fromCodePoint(c + 8);
+        continue;
+      }
+      if (c === 0x1fb3 || c === 0x1fc3 || c === 0x1ff3) {
+        out += String.fromCodePoint(c + 9);
+        continue;
+      }
+    }
     const m = upper ? r.toUpperCase() : r.toLowerCase();
     out += [...m].length === 1 ? m : r;
   }
   return out;
 }
+
+export const ggenNumber = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/;
 
 export function ggenParsesURL(raw: string): boolean {
   const hostByte = (c: string) => /[A-Za-z0-9\-_.~!$&'()*+,;=:[\]<>"]/.test(c);

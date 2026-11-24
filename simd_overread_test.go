@@ -1,4 +1,4 @@
-//go:build goexperiment.simd && unix
+//go:build goexperiment.simd && amd64 && unix
 
 package ggen
 
@@ -90,6 +90,20 @@ func overReadProbe(t *testing.T) {
 							t.Fatalf("%s(%q, validate=%v) = (%q, %d, %v), scalar (%q, %d, %v)", tier.name, payload, validate, s, p, err, ws, wp, we)
 						}
 					}
+				}
+			}
+		}
+	}
+
+	// Element counters, with and without a closing ']' at every length.
+	for n := 0; n <= 2*maxN; n++ {
+		row := strings.Repeat("1,", n/2) + strings.Repeat("2", n%2)
+		for _, payload := range []string{row, row + "]", row + "],3"} {
+			in := place([]byte(payload))
+			want := elemCountRef(in)
+			for _, tier := range elemCountTiers {
+				if got := tier.fn(in); got != want {
+					t.Fatalf("%s(%q) = %d, want %d", tier.name, payload, got, want)
 				}
 			}
 		}

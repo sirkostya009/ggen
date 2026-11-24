@@ -153,6 +153,11 @@ func inspectType(t types.Type, std stdInterfaces) FieldInterfaces {
 		}
 		t = p.Elem()
 	}
+	// types.Implements holds for an invalid type, which would claim every
+	// interface.
+	if b, ok := t.Underlying().(*types.Basic); ok && b.Kind() == types.Invalid {
+		return FieldInterfaces{}
+	}
 	iface := FieldInterfaces{Resolved: true}
 	ptr := types.NewPointer(t)
 
@@ -176,9 +181,14 @@ func inspectType(t types.Type, std stdInterfaces) FieldInterfaces {
 	}
 
 	// The ggen methods return T, the receiver type, so no single interface
-	// can describe them. Match the signatures by shape instead.
+	// can describe them. Match the signatures by shape instead. A method
+	// promoted from an embedded field encodes only that field, so only the
+	// methods declared on t count.
 	ms := types.NewMethodSet(t)
 	for sel := range ms.Methods() {
+		if len(sel.Index()) != 1 {
+			continue
+		}
 		fn, ok := sel.Obj().(*types.Func)
 		if !ok {
 			continue

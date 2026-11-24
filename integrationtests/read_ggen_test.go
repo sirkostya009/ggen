@@ -3,11 +3,12 @@
 package integrationtests
 
 import (
-	"strings"
 	"unsafe"
 
 	"github.com/sirkostya009/ggen"
 )
+
+var ggenKeys_read_test_0 = []string{"name"}
 
 func (recv IgnoreUnknownStruct) DecodeFrom(data []byte) (result IgnoreUnknownStruct, i int, err error) {
 	result = recv
@@ -60,7 +61,7 @@ func (recv IgnoreUnknownStruct) DecodeFrom(data []byte) (result IgnoreUnknownStr
 		switch key {
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_read_test_0}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -150,7 +151,7 @@ func (recv IgnoreUnknownStruct) DecodeFromStream(s *ggen.Stream) (result IgnoreU
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_read_test_0}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -158,14 +159,15 @@ func (recv IgnoreUnknownStruct) DecodeFromStream(s *ggen.Stream) (result IgnoreU
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 		default:
-			ownKey := strings.Clone(key)
+			var keyBuf [64]byte
+			ownKey := append(keyBuf[:0], key...)
 			err = s.ConsumeColon()
 			if err != nil {
-				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+				return result, ggen.NewParseErr(string(ownKey), s.Offset(), err)
 			}
 			err = s.SkipValue()
 			if err != nil {
-				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+				return result, ggen.NewParseErr(string(ownKey), s.Offset(), err)
 			}
 		}
 

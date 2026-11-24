@@ -34,14 +34,54 @@ import (
 	"simd/archsimd"
 )
 
+// Compare constants, one byte repeated across the vector. The 16-lane tier
+// loads them (VMOVDQU, plain AVX), because BroadcastUint8x16 compiles to
+// VPBROADCASTB, which needs AVX2. The exported tables serve the inline scan
+// in generated code and hold 64 lanes, so a wider scan can load its prefix.
+// The compiler folds such a load into the compare as a memory operand, where
+// a Broadcast is rebuilt at every generated scan site.
+var (
+	VecQuote     = splat64('"')
+	VecBackslash = splat64('\\')
+	VecSpace     = splat64(0x20) // subtracted, so control bytes wrap above VecHigh
+	VecHigh      = splat64(0x60) // (v - 0x20) >= 0x60: control byte or non-ASCII
+	VecCtrl      = splat64(0x1F)
+
+	vec7F   = splat16(0x7F)
+	vec80   = splat16(0x80)
+	vec0F   = splat16(0x0F)
+	vecSub3 = splat16(0xE0 - 0x80)
+	vecSub4 = splat16(0xF0 - 0x80)
+	vecTab  = splat16('\t')
+	vecNL   = splat16('\n')
+	vecCR   = splat16('\r')
+	vecLT   = splat16('<')
+	vecGT   = splat16('>')
+	vecAmp  = splat16('&')
+	vecComma = splat16(',')
+	vecRBr  = splat16(']')
+)
+
+func splat64(c uint8) (o [64]uint8) {
+	for i := range o {
+		o[i] = c
+	}
+	return
+}
+
+func splat16(c uint8) (o [16]uint8) {
+	for i := range o {
+		o[i] = c
+	}
+	return
+}
+
 // classifyStructural finishes a vector scan. rest[k] is the first quote,
 // backslash or control byte in the string body. Results match String
 // exactly:
 //   - On '"' it returns a string that aliases data, meaning it points into
 //     the caller's bytes with no copy. If hasHigh is set it first checks that
-//     the body is valid UTF-8. hasHigh can be a false positive, because it
-//     also covers bytes past k in the last vector. Validating the exact body
-//     settles it.
+//     the body is valid UTF-8. hasHigh covers exactly the bytes before k.
 //   - On '\\' it hands off to stringSlow, which decodes escapes and validates
 //     its own output. The scratch buffer is sized from the real closing
 //     quote, found with stringSpanEnd, as String does. If no quote follows,
@@ -113,34 +153,37 @@ func StringAVX(data []byte, i int, validate bool) (string, int, error) {
 	}
 	start := i + 1
 	rest := data[start:]
-	quote := archsimd.BroadcastUint8x16('"')
-	bslash := archsimd.BroadcastUint8x16('\\')
+	quote := archsimd.LoadUint8x16(VecQuote[:])
+	bslash := archsimd.LoadUint8x16(VecBackslash[:])
 	// v <= 0x1F is the same as min(v, 0x1F) == v, which is two instructions.
 	// Below 512 bits the CPU has no unsigned byte compare, so Less would be
 	// emulated with extra work on every step.
-	ctrl := archsimd.BroadcastUint8x16(0x1F)
-	ascii := archsimd.BroadcastUint8x16(0x7F)
-	// acc ORs together every vector scanned. min(acc, 0x7F) == acc only when
-	// no byte was >= 0x80. That costs one OR per step and lets pure ASCII
-	// bodies skip UTF-8 validation.
-	acc := archsimd.BroadcastUint8x16(0)
+	ctrl := archsimd.LoadUint8x16(VecCtrl[:])
+	ascii := archsimd.LoadUint8x16(vec7F[:])
+	// acc ORs together every vector scanned without a hit. min(acc, 0x7F) ==
+	// acc only when no byte was >= 0x80. That costs one OR per step and lets
+	// pure ASCII bodies skip UTF-8 validation. In the vector that holds the
+	// hit only the lanes below it count: the bytes after the closing quote
+	// belong to the next token.
+	acc := archsimd.Uint8x16{}
 	j := 0
 	for ; j+16 <= len(rest); j += 16 {
 		v := archsimd.LoadUint8x16(rest[j:])
-		acc = acc.Or(v)
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
-			hi := validate && acc.Min(ascii).Equal(acc).ToBits() != 0xFFFF
+			hi := validate && (acc.Min(ascii).Equal(acc).ToBits() != 0xFFFF ||
+				^v.Min(ascii).Equal(v).ToBits()&(m-1)&^m != 0)
 			return classifyStructural(data, rest, start, j+bits.TrailingZeros16(m), hi, validate)
 		}
+		acc = acc.Or(v)
 	}
 	if j < len(rest) {
 		v, _ := archsimd.LoadUint8x16Part(rest[j:])
-		acc = acc.Or(v)
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
 			if k := j + bits.TrailingZeros16(m); k < len(rest) {
-				hi := validate && acc.Min(ascii).Equal(acc).ToBits() != 0xFFFF
+				hi := validate && (acc.Min(ascii).Equal(acc).ToBits() != 0xFFFF ||
+					^v.Min(ascii).Equal(v).ToBits()&(m-1)&^m != 0)
 				return classifyStructural(data, rest, start, k, hi, validate)
 			}
 		}
@@ -160,24 +203,25 @@ func StringAVX2(data []byte, i int, validate bool) (string, int, error) {
 	// Min and Equal instead of an emulated unsigned Less. See StringAVX.
 	ctrl := archsimd.BroadcastUint8x32(0x1F)
 	ascii := archsimd.BroadcastUint8x32(0x7F)
-	acc := archsimd.BroadcastUint8x32(0) // OR of all bytes, see StringAVX
+	acc := archsimd.BroadcastUint8x32(0) // OR of the bytes before the hit, see StringAVX
 	j := 0
 	for ; j+32 <= len(rest); j += 32 {
 		v := archsimd.LoadUint8x32(rest[j:])
-		acc = acc.Or(v)
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
-			hi := validate && acc.Min(ascii).Equal(acc).ToBits() != 0xFFFFFFFF
+			hi := validate && (acc.Min(ascii).Equal(acc).ToBits() != 0xFFFFFFFF ||
+				^v.Min(ascii).Equal(v).ToBits()&(m-1)&^m != 0)
 			return classifyStructural(data, rest, start, j+bits.TrailingZeros32(m), hi, validate)
 		}
+		acc = acc.Or(v)
 	}
 	if j < len(rest) {
 		v, _ := archsimd.LoadUint8x32Part(rest[j:])
-		acc = acc.Or(v)
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
 			if k := j + bits.TrailingZeros32(m); k < len(rest) {
-				hi := validate && acc.Min(ascii).Equal(acc).ToBits() != 0xFFFFFFFF
+				hi := validate && (acc.Min(ascii).Equal(acc).ToBits() != 0xFFFFFFFF ||
+					^v.Min(ascii).Equal(v).ToBits()&(m-1)&^m != 0)
 				return classifyStructural(data, rest, start, k, hi, validate)
 			}
 		}
@@ -196,19 +240,20 @@ func StringAVX512(data []byte, i int, validate bool) (string, int, error) {
 	bslash := archsimd.BroadcastUint8x64('\\')
 	space := archsimd.BroadcastUint8x64(0x20)
 	high := archsimd.BroadcastUint8x64(0x80)
-	acc := archsimd.BroadcastUint8x64(0) // OR of all bytes, see StringAVX
+	acc := archsimd.BroadcastUint8x64(0) // OR of the bytes before the hit, see StringAVX
 	j := 0
 	// At 512 bits, Mask.Or moves the masks back into vector registers and out
 	// again, which takes three instructions. Converting each mask to a uint64
 	// with ToBits and ORing those is cheaper.
 	for ; j+64 <= len(rest); j += 64 {
 		v := archsimd.LoadUint8x64(rest[j:])
-		acc = acc.Or(v)
 		m := v.Equal(quote).ToBits() | v.Equal(bslash).ToBits() | v.Less(space).ToBits()
 		if m != 0 {
-			hi := validate && acc.Less(high).ToBits() != ^uint64(0)
+			hi := validate && (acc.Less(high).ToBits() != ^uint64(0) ||
+				^v.Less(high).ToBits()&(m-1)&^m != 0)
 			return classifyStructural64(data, rest, start, j+bits.TrailingZeros64(m), hi, validate)
 		}
+		acc = acc.Or(v)
 	}
 	if j < len(rest) {
 		// Load the last partial vector without reading past len(rest). If
@@ -226,14 +271,105 @@ func StringAVX512(data []byte, i int, validate bool) (string, int, error) {
 			copy(lane[:], rest[j:])
 			v = archsimd.LoadUint8x64(lane[:])
 		}
-		acc = acc.Or(v)
 		m := v.Equal(quote).ToBits() | v.Equal(bslash).ToBits() | v.Less(space).ToBits()
 		if m != 0 {
 			if k := j + bits.TrailingZeros64(m); k < len(rest) {
-				hi := validate && acc.Less(high).ToBits() != ^uint64(0)
+				hi := validate && (acc.Less(high).ToBits() != ^uint64(0) ||
+					^v.Less(high).ToBits()&(m-1)&^m != 0)
 				return classifyStructural64(data, rest, start, k, hi, validate)
 			}
 		}
 	}
 	return "", len(data), ErrUnterminated
+}
+
+// ElemCountAVX returns one more than the number of ',' before the first ']'
+// in b, or 1 when b has no ']'. Generated -simd decoders size a slice of
+// numbers or bools with it. Those elements never contain ',' or ']', so on
+// well-formed input the count is exact. One pass replaces bytes.IndexByte
+// plus bytes.Count.
+func ElemCountAVX(b []byte) int {
+	comma := archsimd.LoadUint8x16(vecComma[:])
+	closing := archsimd.LoadUint8x16(vecRBr[:])
+	n := 1
+	j := 0
+	for ; j+16 <= len(b); j += 16 {
+		v := archsimd.LoadUint8x16(b[j:])
+		e := v.Equal(closing).ToBits()
+		c := v.Equal(comma).ToBits()
+		if e != 0 {
+			return n + bits.OnesCount16(c&(e-1))
+		}
+		n += bits.OnesCount16(c)
+	}
+	return elemCountTail(b[j:], n)
+}
+
+// ElemCountAVX2 is ElemCountAVX at 32 bytes per step.
+func ElemCountAVX2(b []byte) int {
+	comma := archsimd.BroadcastUint8x32(',')
+	closing := archsimd.BroadcastUint8x32(']')
+	n := 1
+	j := 0
+	for ; j+32 <= len(b); j += 32 {
+		v := archsimd.LoadUint8x32(b[j:])
+		e := v.Equal(closing).ToBits()
+		c := v.Equal(comma).ToBits()
+		if e != 0 {
+			return n + bits.OnesCount32(c&(e-1))
+		}
+		n += bits.OnesCount32(c)
+	}
+	return elemCountTail(b[j:], n)
+}
+
+// ElemCountAVX512 is ElemCountAVX at 64 bytes per step. The last partial
+// vector is the last 64 bytes of b reloaded, with the bits for bytes already
+// counted shifted out, or a zeroed stack copy when b is shorter than 64
+// bytes. Neither reads past len(b).
+func ElemCountAVX512(b []byte) int {
+	comma := archsimd.BroadcastUint8x64(',')
+	closing := archsimd.BroadcastUint8x64(']')
+	n := 1
+	j := 0
+	for ; j+64 <= len(b); j += 64 {
+		v := archsimd.LoadUint8x64(b[j:])
+		e := v.Equal(closing).ToBits()
+		c := v.Equal(comma).ToBits()
+		if e != 0 {
+			return n + bits.OnesCount64(c&(e-1))
+		}
+		n += bits.OnesCount64(c)
+	}
+	if j < len(b) {
+		var e, c uint64
+		if len(b) >= 64 {
+			v := archsimd.LoadUint8x64(b[len(b)-64:])
+			drop := uint(64 - (len(b) - j))
+			e = v.Equal(closing).ToBits() >> drop
+			c = v.Equal(comma).ToBits() >> drop
+		} else {
+			var lane [64]byte
+			copy(lane[:], b)
+			v := archsimd.LoadUint8x64(lane[:])
+			e = v.Equal(closing).ToBits()
+			c = v.Equal(comma).ToBits()
+		}
+		if e != 0 {
+			return n + bits.OnesCount64(c&(e-1))
+		}
+	}
+	return 1
+}
+
+func elemCountTail(b []byte, n int) int {
+	for _, c := range b {
+		switch c {
+		case ']':
+			return n
+		case ',':
+			n++
+		}
+	}
+	return 1
 }

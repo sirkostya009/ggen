@@ -68,3 +68,41 @@ func BenchmarkSkipHeavy_Unmarshal(b *testing.B) {
 		}
 	}
 }
+
+// BenchmarkSkipKeys_Unmarshal decodes 64 SkipKeysDoc objects that each carry
+// 48 unknown members around the two matched ones. Every row skips 3072 short
+// members, so it shows what one skipped key costs, apart from the bytes under
+// it.
+func BenchmarkSkipKeys_Unmarshal(b *testing.B) {
+	codecs := []struct {
+		name string
+		fn   func([]byte) error
+	}{
+		{"jsonv2", func(p []byte) error { var v []SkipKeysDoc; return jsonv2.Unmarshal(p, &v) }},
+		{"ggen", func(p []byte) error { _, err := ggen.UnmarshalSlice[SkipKeysDoc](p); return err }},
+		// Stream path: a fresh 4 KiB buffer per decode, as in SkipHeavy.
+		{"ggen_stream", func(p []byte) error {
+			var st ggen.Stream
+			st.Reset(bytes.NewReader(p), make([]byte, 0, 4096))
+			_, err := st.Slice[SkipKeysDoc]()
+			return err
+		}},
+	}
+	for _, c := range codecs {
+		b.Run(c.name, func(b *testing.B) {
+			for range 8 {
+				if err := c.fn(SkipKeysPayload); err != nil {
+					b.Fatal(err)
+				}
+			}
+			runBench(b, int64(len(SkipKeysPayload)),
+				func() struct{} { return struct{}{} },
+				func(_ *struct{}) {
+					if err := c.fn(SkipKeysPayload); err != nil {
+						b.Fatal(err)
+					}
+				},
+			)
+		})
+	}
+}

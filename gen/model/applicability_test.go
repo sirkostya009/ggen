@@ -51,6 +51,7 @@ var allKindEntries = []kindEntry{
 	{KindBigFloat, "big.Float"},
 	{KindBigRat, "big.Rat"},
 	{KindRawJSON, "json.RawMessage"},
+	{KindNumber, "json.Number"},
 	{KindAny, "any"},
 	{KindSQLNull, "sql.NullString"},
 	{KindStruct, "Foo"},
@@ -214,6 +215,16 @@ func TestCheckOneValRule_ValueShape(t *testing.T) {
 		{"gt_int64_overflow", ValidationRule{Name: "gt", Value: "9223372036854775808"}, KindInt64, "out of the field type's range", "int64"},
 		{"gt_fractional_int", ValidationRule{Name: "gt", Value: "1.5"}, KindInt, "integer field needs an integer bound", "int"},
 		{"gt_uint8_negative", ValidationRule{Name: "gt", Value: "-1"}, KindUint8, "out of the field type's range", "uint8"},
+		// gt at the kind's maximum and lt at its minimum reject every value.
+		{"lt_uint_zero", ValidationRule{Name: "lt", Value: "0"}, KindUint, "no value of the field's type satisfies", "uint"},
+		{"gt_int8_max", ValidationRule{Name: "gt", Value: "127"}, KindInt8, "no value of the field's type satisfies", "int8"},
+		{"lt_int8_min", ValidationRule{Name: "lt", Value: "-128"}, KindInt8, "no value of the field's type satisfies", "int8"},
+		{"gt_uint16_max", ValidationRule{Name: "gt", Value: "65535"}, KindUint16, "no value of the field's type satisfies", "uint16"},
+		{"gt_uint64_max", ValidationRule{Name: "gt", Value: "18446744073709551615"}, KindUint64, "no value of the field's type satisfies", "uint64"},
+		{"lt_int64_min", ValidationRule{Name: "lt", Value: "-9223372036854775808"}, KindInt64, "no value of the field's type satisfies", "int64"},
+		{"gte_int8_max_ok", ValidationRule{Name: "gte", Value: "127"}, KindInt8, "", "int8"},
+		{"gt_int8_below_max_ok", ValidationRule{Name: "gt", Value: "126"}, KindInt8, "", "int8"},
+		{"lt_uint_one_ok", ValidationRule{Name: "lt", Value: "1"}, KindUint, "", "uint"},
 
 		// multiple needs an integer.
 		{"multiple_good", ValidationRule{Name: "multiple", Value: "2"}, KindInt, "", "int"},
@@ -250,6 +261,17 @@ func TestCheckOneValRule_ValueShape(t *testing.T) {
 		{"oneof_int_plus_dup", ValidationRule{Name: "oneof", Value: "1|+1"}, KindInt, "is a duplicate", "int"},
 		{"oneof_float_neg_zero_dup", ValidationRule{Name: "oneof", Value: "0|-0.0"}, KindFloat64, "is a duplicate", "float64"},
 		{"oneof_float_distinct", ValidationRule{Name: "oneof", Value: "1.5|2.5"}, KindFloat64, "", "float64"},
+		// Parts are written as Go constants, which have no NaN or Inf.
+		{"oneof_float_nan", ValidationRule{Name: "oneof", Value: "NaN|1"}, KindFloat64, "NaN/Inf are not valid parts", "float64"},
+		{"oneof_float_neg_inf", ValidationRule{Name: "oneof", Value: "1|-Inf"}, KindFloat64, "NaN/Inf are not valid parts", "float64"},
+		{"oneof_float32_infinity", ValidationRule{Name: "oneof", Value: "infinity"}, KindFloat32, "NaN/Inf are not valid parts", "float32"},
+		{"oneof_int_inf", ValidationRule{Name: "oneof", Value: "1|inf"}, KindInt, "NaN/Inf are not valid parts", "int"},
+		// float32 parts compare after rounding to float32, as the switch does.
+		{"oneof_float32_rounded_dup", ValidationRule{Name: "oneof", Value: "16777216|16777217"}, KindFloat32, `part "16777217" is a duplicate`, "float32"},
+		{"oneof_float32_fraction_dup", ValidationRule{Name: "oneof", Value: "0.1|0.10000000001"}, KindFloat32, "is a duplicate", "float32"},
+		{"oneof_float32_neg_zero_dup", ValidationRule{Name: "oneof", Value: "0|-0.0"}, KindFloat32, "is a duplicate", "float32"},
+		{"oneof_float64_same_parts_distinct", ValidationRule{Name: "oneof", Value: "16777216|16777217"}, KindFloat64, "", "float64"},
+		{"oneof_float32_overflow_range", ValidationRule{Name: "oneof", Value: "1e39|2e39"}, KindFloat32, "out of the field type's range", "float32"},
 
 		// len and minlen set the capacity of the container's make(). A
 		// capacity make() cannot handle is rejected here instead of
@@ -263,6 +285,20 @@ func TestCheckOneValRule_ValueShape(t *testing.T) {
 		{"len_slice_over_ceiling", ValidationRule{Name: "len", Value: "2147483648"}, KindSlice, "prealloc ceiling", "[]int"},
 		{"maxlen_slice_no_ceiling", ValidationRule{Name: "maxlen", Value: "4294967296"}, KindSlice, "", "[]int"},
 		{"len_string_no_ceiling", ValidationRule{Name: "len", Value: "4294967296"}, KindString, "", "string"},
+
+		// Rule numbers are pasted into Go and JS source, so they must be
+		// plain decimal: a leading zero is octal there.
+		{"gte_leading_zero", ValidationRule{Name: "gte", Value: "010"}, KindInt, "must be plain decimal", "int"},
+		{"lte_float_leading_zero", ValidationRule{Name: "lte", Value: "00.5"}, KindFloat64, "must be plain decimal", "float64"},
+		{"gt_hex_float", ValidationRule{Name: "gt", Value: "0x1p4"}, KindFloat64, "must be plain decimal", "float64"},
+		{"eq_signed_leading_zero", ValidationRule{Name: "eq", Value: "-07"}, KindInt, "must be plain decimal", "int"},
+		{"maxlen_leading_zero", ValidationRule{Name: "maxlen", Value: "010"}, KindString, "must be plain decimal", "string"},
+		{"maxrunes_leading_zero", ValidationRule{Name: "maxrunes", Value: "010"}, KindString, "must be plain decimal", "string"},
+		{"multiple_leading_zero", ValidationRule{Name: "multiple", Value: "010"}, KindInt, "must be plain decimal", "int"},
+		{"oneof_leading_zero", ValidationRule{Name: "oneof", Value: "1|010"}, KindInt, `"010" must be plain decimal`, "int"},
+		{"oneof_str_leading_zero_ok", ValidationRule{Name: "oneof", Value: "010|020"}, KindString, "", "string"},
+		{"gte_zero_forms_ok", ValidationRule{Name: "gte", Value: "-0.5"}, KindFloat64, "", "float64"},
+		{"gte_zero_exp_ok", ValidationRule{Name: "gte", Value: "0e3"}, KindFloat64, "", "float64"},
 
 		// starts, ends and contains need a non-empty value.
 		{"starts_good", ValidationRule{Name: "starts", Value: "x"}, KindString, "", "string"},
@@ -410,6 +446,15 @@ func TestCheckOneModRule_ValueShape(t *testing.T) {
 		{"clamp_uint64_max_hi", ModRule{Name: "clamp", Value: "|18446744073709551615"}, KindUint64, ""},
 		{"clamp_fractional_int", ModRule{Name: "clamp", Value: "0|1.5"}, KindInt, "integer field needs integer bounds"},
 		{"clamp_int8_overflow", ModRule{Name: "clamp", Value: "0|300"}, KindInt8, "out of the field type's range"},
+		{"clamp_leading_zero", ModRule{Name: "clamp", Value: "010|020"}, KindInt, "must be plain decimal"},
+		// lo above hi would map every value to hi.
+		{"clamp_inverted", ModRule{Name: "clamp", Value: "10|5"}, KindInt, "lo 10 is greater than hi 5"},
+		{"clamp_inverted_negative", ModRule{Name: "clamp", Value: "-1|-5"}, KindInt64, "is greater than hi"},
+		{"clamp_inverted_float", ModRule{Name: "clamp", Value: "1.5|1.25"}, KindFloat64, "is greater than hi"},
+		{"clamp_inverted_uint64_top", ModRule{Name: "clamp", Value: "18446744073709551615|9223372036854775808"}, KindUint64, "is greater than hi"},
+		{"clamp_equal_ok", ModRule{Name: "clamp", Value: "5|5"}, KindInt, ""},
+		{"clamp_negative_range_ok", ModRule{Name: "clamp", Value: "-10|-5"}, KindInt, ""},
+		{"clamp_uint64_wide_ok", ModRule{Name: "clamp", Value: "1|18446744073709551615"}, KindUint64, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

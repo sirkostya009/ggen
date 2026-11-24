@@ -26,6 +26,21 @@ const ggenCap_CopyDoc_Refs_PtrCopyRef = (min((80/max(int(unsafe.Sizeof(*new(*Cop
 // Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
 const ggenCap_CopyDoc_Tags_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
 
+var ggenKeys_copy_test_0 = []string{"children"}
+var ggenKeys_copy_test_1 = []string{"extra"}
+var ggenKeys_copy_test_2 = []string{"name"}
+var ggenKeys_copy_test_3 = []string{"props"}
+var ggenKeys_copy_test_4 = []string{"raw"}
+var ggenKeys_copy_test_5 = []string{"rawMap"}
+var ggenKeys_copy_test_6 = []string{"refs"}
+var ggenKeys_copy_test_7 = []string{"tags"}
+var ggenKeys_copy_test_8 = []string{"label"}
+var ggenKeys_copy_test_9 = []string{"u"}
+var ggenKeys_copy_test_10 = []string{"ip"}
+var ggenKeys_copy_test_11 = []string{"a"}
+var ggenKeys_copy_test_12 = []string{"d"}
+var ggenKeys_copy_test_13 = []string{"p"}
+
 func (recv CopyDoc) DecodeFrom(data []byte) (CopyDoc, int, error) {
 	return recv.decodeFromDepth(data, 0)
 }
@@ -35,12 +50,14 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 	if depth > 10000 { // runtime maxDepth
 		return result, 0, ggen.ErrMaxDepth
 	}
+	held0 := len(result.Children)
 	if result.Children != nil {
 		result.Children = result.Children[:0]
 	}
 	if result.Props != nil {
 		clear(result.Props)
 	}
+	held1 := len(result.Refs)
 	if result.Refs != nil {
 		result.Refs = result.Refs[:0]
 	}
@@ -112,11 +129,12 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 		switch key {
 		case "children":
 			if seenChildren {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"children"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_0}
 			}
 			seenChildren = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("children", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -130,6 +148,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
+			live0 := held0
 			if i < len(data) && data[i] == ']' {
 				if result.Children == nil {
 					result.Children = []CopyDoc{}
@@ -137,14 +156,18 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 			} else {
 				if result.Children == nil {
 					result.Children = make([]CopyDoc, 0, ggenCap_CopyDoc_Children_CopyDoc)
+					live0 = cap(result.Children)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					if len(result.Children) < cap(result.Children) {
+					if len(result.Children) < live0 {
 						result.Children = result.Children[:len(result.Children)+1]
+					} else if len(result.Children) < cap(result.Children) {
+						result.Children = append(result.Children, CopyDoc{})
 					} else {
 						result.Children = append(result.Children, CopyDoc{})
+						live0 = cap(result.Children)
 					}
 					var consumed int
 					result.Children[len(result.Children)-1], consumed, err = result.Children[len(result.Children)-1].decodeFromDepth(data[i:], depth+1)
@@ -174,7 +197,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 			i++
 		case "extra":
 			if seenExtra {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"extra"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_1}
 			}
 			seenExtra = true
 			result.Extra, i, err = ggen.AnyCopy(data, i, true)
@@ -183,7 +206,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 			}
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_2}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -209,11 +232,12 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 			}
 		case "props":
 			if seenProps {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"props"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_3}
 			}
 			seenProps = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("props", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -313,7 +337,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 			i++
 		case "raw":
 			if seenRaw {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"raw"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_4}
 			}
 			seenRaw = true
 			start := i
@@ -328,11 +352,12 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 			result.Raw = append(result.Raw[:0], data[start:i]...)
 		case "rawMap":
 			if seenRawMap {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rawMap"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_5}
 			}
 			seenRawMap = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("rawMap", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -422,11 +447,12 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 			i++
 		case "refs":
 			if seenRefs {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"refs"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_6}
 			}
 			seenRefs = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("refs", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -440,6 +466,7 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
+			live0 := held1
 			var slab0 []CopyRef
 			if i < len(data) && data[i] == ']' {
 				if result.Refs == nil {
@@ -448,13 +475,14 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 			} else {
 				if result.Refs == nil {
 					result.Refs = make([]*CopyRef, 0, ggenCap_CopyDoc_Refs_PtrCopyRef)
+					live0 = cap(result.Refs)
 				}
-				slab0 = make([]CopyRef, 0, ggenCap_CopyDoc_Refs_CopyRef)
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("refs", i, ggen.ErrBadLiteral)
 						}
 						i += 4
@@ -474,18 +502,28 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 						}
 						break
 					}
-					if len(slab0) < cap(slab0) {
-						slab0 = slab0[:len(slab0)+1]
-					} else {
-						slab0 = append(slab0, CopyRef{})
+					var pe0 *CopyRef
+					if len(result.Refs) < live0 {
+						pe0 = result.Refs[:len(result.Refs)+1][len(result.Refs)]
+					}
+					if pe0 == nil {
+						if slab0 == nil {
+							slab0 = make([]CopyRef, 0, ggenCap_CopyDoc_Refs_CopyRef)
+						}
+						if len(slab0) < cap(slab0) {
+							slab0 = slab0[:len(slab0)+1]
+						} else {
+							slab0 = append(slab0, CopyRef{})
+						}
+						pe0 = &slab0[len(slab0)-1]
 					}
 					var consumed int
-					slab0[len(slab0)-1], consumed, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					(*pe0), consumed, err = (*pe0).DecodeFrom(data[i:])
 					i += consumed
 					if err != nil {
 						return result, i, ggen.NewParseErrShift("refs", i, consumed, err)
 					}
-					result.Refs = append(result.Refs, &slab0[len(slab0)-1])
+					result.Refs = append(result.Refs, pe0)
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
 					}
@@ -508,11 +546,12 @@ func (recv CopyDoc) decodeFromDepth(data []byte, depth int) (result CopyDoc, i i
 			i++
 		case "tags":
 			if seenTags {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"tags"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_7}
 			}
 			seenTags = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("tags", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -624,6 +663,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 	if depth > 10000 { // runtime maxDepth
 		return result, ggen.ErrMaxDepth
 	}
+	held0 := len(result.Children)
 	if result.Children != nil {
 		result.Children = result.Children[:0]
 	}
@@ -633,6 +673,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 	if result.RawMap != nil {
 		clear(result.RawMap)
 	}
+	held1 := len(result.Refs)
 	if result.Refs != nil {
 		result.Refs = result.Refs[:0]
 	}
@@ -687,7 +728,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 				return result, ggen.NewParseErr("children", s.Offset(), err)
 			}
 			if seenChildren {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"children"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_0}
 			}
 			seenChildren = true
 			err = s.SkipSpace()
@@ -703,11 +744,11 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("children", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("children", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("children", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("children", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -727,6 +768,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 					return result, ggen.NewParseErr("children", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
+			live0 := held0
 			if s.Bytes()[s.Pos] == ']' {
 				if result.Children == nil {
 					result.Children = []CopyDoc{}
@@ -734,13 +776,17 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 			} else {
 				if result.Children == nil {
 					result.Children = make([]CopyDoc, 0, ggenCap_CopyDoc_Children_CopyDoc)
+					live0 = cap(result.Children)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				if len(result.Children) < cap(result.Children) {
+				if len(result.Children) < live0 {
 					result.Children = result.Children[:len(result.Children)+1]
+				} else if len(result.Children) < cap(result.Children) {
+					result.Children = append(result.Children, CopyDoc{})
 				} else {
 					result.Children = append(result.Children, CopyDoc{})
+					live0 = cap(result.Children)
 				}
 				result.Children[len(result.Children)-1], err = result.Children[len(result.Children)-1].decodeFromStreamDepth(s, depth+1)
 				if err != nil {
@@ -778,7 +824,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 				return result, ggen.NewParseErr("extra", s.Offset(), err)
 			}
 			if seenExtra {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"extra"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_1}
 			}
 			seenExtra = true
 			result.Extra, err = s.Any(true)
@@ -791,7 +837,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_2}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -804,7 +850,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 				return result, ggen.NewParseErr("props", s.Offset(), err)
 			}
 			if seenProps {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"props"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_3}
 			}
 			seenProps = true
 			err = s.SkipSpace()
@@ -820,11 +866,11 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("props", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("props", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("props", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("props", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -912,7 +958,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 				return result, ggen.NewParseErr("raw", s.Offset(), err)
 			}
 			if seenRaw {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"raw"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_4}
 			}
 			seenRaw = true
 			span, err := s.CaptureValue()
@@ -930,7 +976,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 				return result, ggen.NewParseErr("rawMap", s.Offset(), err)
 			}
 			if seenRawMap {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rawMap"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_5}
 			}
 			seenRawMap = true
 			err = s.SkipSpace()
@@ -946,11 +992,11 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("rawMap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("rawMap", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("rawMap", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("rawMap", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1047,7 +1093,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 				return result, ggen.NewParseErr("refs", s.Offset(), err)
 			}
 			if seenRefs {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"refs"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_6}
 			}
 			seenRefs = true
 			err = s.SkipSpace()
@@ -1063,11 +1109,11 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("refs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("refs", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("refs", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("refs", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1088,6 +1134,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 				}
 			}
 			var slab0 []CopyRef
+			live0 := held1
 			if s.Bytes()[s.Pos] == ']' {
 				if result.Refs == nil {
 					result.Refs = []*CopyRef{}
@@ -1095,8 +1142,8 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 			} else {
 				if result.Refs == nil {
 					result.Refs = make([]*CopyRef, 0, ggenCap_CopyDoc_Refs_PtrCopyRef)
+					live0 = cap(result.Refs)
 				}
-				slab0 = make([]CopyRef, 0, ggenCap_CopyDoc_Refs_CopyRef)
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				if s.Pos >= len(s.Bytes()) {
@@ -1108,11 +1155,11 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("refs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("refs", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("refs", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("refs", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -1139,16 +1186,26 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 					}
 					break
 				}
-				if len(slab0) < cap(slab0) {
-					slab0 = slab0[:len(slab0)+1]
-				} else {
-					slab0 = append(slab0, CopyRef{})
+				var pe0 *CopyRef
+				if len(result.Refs) < live0 {
+					pe0 = result.Refs[:len(result.Refs)+1][len(result.Refs)]
 				}
-				slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
+				if pe0 == nil {
+					if slab0 == nil {
+						slab0 = make([]CopyRef, 0, ggenCap_CopyDoc_Refs_CopyRef)
+					}
+					if len(slab0) < cap(slab0) {
+						slab0 = slab0[:len(slab0)+1]
+					} else {
+						slab0 = append(slab0, CopyRef{})
+					}
+					pe0 = &slab0[len(slab0)-1]
+				}
+				(*pe0), err = (*pe0).DecodeFromStream(s)
 				if err != nil {
 					return result, ggen.NewParseErr("refs", s.Offset(), err)
 				}
-				result.Refs = append(result.Refs, &slab0[len(slab0)-1])
+				result.Refs = append(result.Refs, pe0)
 				err = s.SkipSpace()
 				if err != nil {
 					return result, ggen.NewParseErr("refs", s.Offset(), err)
@@ -1181,7 +1238,7 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 				return result, ggen.NewParseErr("tags", s.Offset(), err)
 			}
 			if seenTags {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"tags"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_7}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -1197,11 +1254,11 @@ func (recv CopyDoc) decodeFromStreamDepth(s *ggen.Stream, depth int) (result Cop
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("tags", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("tags", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("tags", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("tags", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1526,7 +1583,7 @@ func (recv CopyRef) DecodeFrom(data []byte) (result CopyRef, i int, err error) {
 		switch key {
 		case "label":
 			if seenLabel {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"label"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_8}
 			}
 			seenLabel = true
 			if i >= len(data) || data[i] != '"' {
@@ -1614,7 +1671,7 @@ func (recv CopyRef) DecodeFromStream(s *ggen.Stream) (result CopyRef, err error)
 				return result, ggen.NewParseErr("label", s.Offset(), err)
 			}
 			if seenLabel {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"label"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_8}
 			}
 			seenLabel = true
 			result.Label, err = s.String(true)
@@ -1725,7 +1782,7 @@ func (recv AliasDoc) DecodeFrom(data []byte) (result AliasDoc, i int, err error)
 		switch key {
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_2}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -1812,7 +1869,7 @@ func (recv AliasDoc) DecodeFromStream(s *ggen.Stream) (result AliasDoc, err erro
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_2}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -1923,7 +1980,7 @@ func (recv CopyURLDoc) DecodeFrom(data []byte) (result CopyURLDoc, i int, err er
 		switch key {
 		case "u":
 			if seenU {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"u"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_9}
 			}
 			seenU = true
 			var s string
@@ -2018,7 +2075,7 @@ func (recv CopyURLDoc) DecodeFromStream(s *ggen.Stream) (result CopyURLDoc, err 
 				return result, ggen.NewParseErr("u", s.Offset(), err)
 			}
 			if seenU {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"u"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_9}
 			}
 			seenU = true
 			var sv string
@@ -2072,7 +2129,7 @@ func (recv CopyURLDoc) DecodeFromStream(s *ggen.Stream) (result CopyURLDoc, err 
 
 func (s CopyURLDoc) JSONSize() int {
 	size := 14
-	size += len(s.U.Scheme) + len(s.U.Host)*3 + len(s.U.Path)*3 + len(s.U.RawQuery)*2 + len(s.U.Fragment)*3 + len(s.U.Opaque)*2
+	size += (len(s.U.Scheme)+len(s.U.RawQuery)+len(s.U.Opaque))*2 + (len(s.U.Host)+len(s.U.Path)+len(s.U.Fragment))*3
 	if s.U.User != nil {
 		pw, _ := s.U.User.Password()
 		size += (len(s.U.User.Username())+len(pw))*3 + 2
@@ -2139,11 +2196,12 @@ func (recv CopyIPDoc) DecodeFrom(data []byte) (result CopyIPDoc, i int, err erro
 		switch key {
 		case "ip":
 			if seenIP {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"ip"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_10}
 			}
 			seenIP = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("ip", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -2243,7 +2301,7 @@ func (recv CopyIPDoc) DecodeFromStream(s *ggen.Stream) (result CopyIPDoc, err er
 				return result, ggen.NewParseErr("ip", s.Offset(), err)
 			}
 			if seenIP {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"ip"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_10}
 			}
 			seenIP = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2255,11 +2313,11 @@ func (recv CopyIPDoc) DecodeFromStream(s *ggen.Stream) (result CopyIPDoc, err er
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("ip", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("ip", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("ip", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("ip", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -2399,7 +2457,7 @@ func (recv CopyParseErrDoc) DecodeFrom(data []byte) (result CopyParseErrDoc, i i
 		switch key {
 		case "a":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_11}
 			}
 			seenA = true
 			var s string
@@ -2434,7 +2492,7 @@ func (recv CopyParseErrDoc) DecodeFrom(data []byte) (result CopyParseErrDoc, i i
 			}
 		case "d":
 			if seenD {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"d"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_12}
 			}
 			seenD = true
 			var s string
@@ -2465,7 +2523,7 @@ func (recv CopyParseErrDoc) DecodeFrom(data []byte) (result CopyParseErrDoc, i i
 			}
 		case "p":
 			if seenP {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"p"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_copy_test_13}
 			}
 			seenP = true
 			var s string
@@ -2576,7 +2634,7 @@ func (recv CopyParseErrDoc) DecodeFromStream(s *ggen.Stream) (result CopyParseEr
 				return result, ggen.NewParseErr("a", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_11}
 			}
 			seenA = true
 			var sv string
@@ -2599,7 +2657,7 @@ func (recv CopyParseErrDoc) DecodeFromStream(s *ggen.Stream) (result CopyParseEr
 				return result, ggen.NewParseErr("d", s.Offset(), err)
 			}
 			if seenD {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"d"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_12}
 			}
 			seenD = true
 			var sv string
@@ -2618,7 +2676,7 @@ func (recv CopyParseErrDoc) DecodeFromStream(s *ggen.Stream) (result CopyParseEr
 				return result, ggen.NewParseErr("p", s.Offset(), err)
 			}
 			if seenP {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"p"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_copy_test_13}
 			}
 			seenP = true
 			var sv string

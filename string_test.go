@@ -466,7 +466,7 @@ func stringSlowRef(data []byte, start, j, capHint int, validate bool) (string, i
 								}
 							}
 						}
-					} else if validate && uEscapePrefixRef(data[j:]) {
+					} else if validate && lowSurrogatePrefixRef(r, data[j:]) {
 						return "", len(data), ErrInvalidUTF8
 					}
 					if validate && utf16.IsSurrogate(r) {
@@ -498,6 +498,23 @@ func uEscapePrefixRef(tail []byte) bool {
 		case k == 0 && c == '\\', k == 1 && c == 'u':
 		case k >= 2 && (c >= '0' && c <= '9' || c >= 'a' && c <= 'f' || c >= 'A' && c <= 'F'):
 		default:
+			return false
+		}
+	}
+	return true
+}
+
+// lowSurrogatePrefixRef reports whether tail could still grow into the low
+// surrogate escape that pairs with r.
+func lowSurrogatePrefixRef(r rune, tail []byte) bool {
+	if !utf16.IsSurrogate(r) || r > 0xDBFF || !uEscapePrefixRef(tail) {
+		return false
+	}
+	for k, c := range tail {
+		switch {
+		case k == 2 && c != 'd' && c != 'D':
+			return false
+		case k == 3 && !strings.ContainsRune("cdefCDEF", rune(c)):
 			return false
 		}
 	}

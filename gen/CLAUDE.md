@@ -42,10 +42,15 @@ target themselves; the core has no opinion about syntax.
 - `Load(patterns...)` walks the patterns with `model.WalkPackages` and parses
   each directory. Every `ParsePackage` call type-checks on its own, so the
   same Go type reached from two packages is two distinct `types.Object`
-  values: the core keys types by import path + name, never by identity, and
-  resolves positions with the file set of the load that produced them
-  (`TypeDecl.fset`).
+  values: the core keys types by import path + name, never by identity. A
+  type seen from another package comes from that package's export data, whose
+  positions name no real file, so `File` is resolved through the declaring
+  package's own load (`Set.declFile`).
 - Test-file types are skipped.
+- A package that does not parse, has an import that does not resolve, or has
+  a type declaration that does not type-check fails `Load` with the loader's
+  `model.BrokenPackageError` (cmd/ggen/CLAUDE.md has the rule). Calls to
+  not-yet-generated methods do not.
 - `Annotated` is "carries `//ggen:generate` itself"; reached structs are
   generated too but not annotated.
 - Constants merge across every loaded package (a package may add constants to
@@ -71,7 +76,8 @@ Every rule below mirrors what the generated decoder or encoder does.
   value. `nullzero` (the pipe variant, or the struct annotation) decodes it
   to the Go zero value only where cmd/ggen's `nullZeroApplies` adds a null
   branch: a non-pointer whose kind has no null of its own (not a slice,
-  map, `[]byte`/`[N]byte`, `net.IP`, raw JSON, `sql.Null*` or `any`).
+  map, `[]byte`, `net.IP`, raw JSON, `sql.Null*` or `any`; a `[N]byte`
+  qualifies).
   Either way the decoder then runs the field's rules on that value, so the
   type is `Nullable` only when the zero value passes them. `zeroPasses`
   answers both cases: it runs every built-in rule on the zero value
@@ -105,7 +111,8 @@ Every rule below mirrors what the generated decoder or encoder does.
   `StrictFields` clear the widenings at every depth on script request.
 - **`oneof`.** Narrows the type to an `Enum` (no `Decl`, no `Ref`) when no
   transform precedes it in input, and always in output with the zero widening;
-  after a transform in input it stays a `OneOf` rule. Every other rule is
+  after a transform in input, or on a float32 input, it stays a `OneOf` rule
+  (Go matches the float32-rounded value, not the literal). Every other rule is
   input-only. A map key's enum (`keys:oneof`) gets no zero widening, because
   a map writes only the keys it holds.
 - **Enums from constants** are a closed set in both modes, although the
@@ -115,7 +122,14 @@ Every rule below mirrors what the generated decoder or encoder does.
   its fields live on its own shape. JSON methods → `External`, wire `Any`;
   text methods → `External`, wire `String`; a plain foreign struct →
   `External`, wire `Object`; a named primitive or container without codec
-  methods → its underlying shape with `Name`/`Pkg` kept.
+  methods → its underlying shape with `Name`/`Pkg` kept. Such a container that
+  holds itself (`type Nest []Nest`) has no decl to reference, so it is `Any`
+  where it recurs.
+- **Recursive aliases.** A reference to a generated alias takes the alias's
+  wire (`aliasWire`) from its own shape, built with the decls already being
+  lowered on a stack (`lowerer.active`). A reference to one of those
+  (`type Tree []Tree`, `type Ping []Pong` + `type Pong []Ping`) takes the wire
+  of its underlying kind instead, so lowering terminates.
 - **`=` aliases** are seen through (`types.Unalias`), and the Go side
   matches it (cmd/ggen/CLAUDE.md #90): a field written through an alias,
   and each field of a struct alias, lowers as the type it names. A defined
@@ -130,6 +144,14 @@ Every rule below mirrors what the generated decoder or encoder does.
   package when `AliasUnderlyingImport` is empty: `stdKind` gives a
   standard-library T its shape, a T with only text methods is a string, and
   the rest are wire `Any`. So every `External` type carries a `Pkg`.
+- **Unloaded generated types.** A type with ggen methods in a package no
+  pattern matched is `External` with its underlying wire, and goes to
+  `Set.Unloaded`. Export data does not name a struct alias's target, so
+  `delegatedWire` finds it by its struct: the one type without ggen methods in
+  the struct's package whose underlying is that struct (pointer-equal in the
+  alias's own package, `types.Identical` across packages), lowered as
+  `delegatingAlias` lowers a non-generated T. No such type means the struct is
+  the type's own (wire `Object`); several mean wire `Any`.
 - **Converters.** Each `@Conv` input shape is appended to `OneOf` (without
   rules — they run after conversion). Null comes only from the field's own
   `nullzero` variant, when the zero value passes the rules, or from a
@@ -138,10 +160,11 @@ Every rule below mirrors what the generated decoder or encoder does.
 - **`json.Number`** is a number in output. In input it also carries the
   quoted spelling in `OneOf` and is `Nullable`, because the decoder hands the
   span to `encoding/json`, which reads `"12"` and null.
-- **Pointers do not open a pipe level**; slices, arrays and maps do. Map key
-  rules come from `keys:` and lower only onto the field's own map, through
-  any pointers (`*map`, `**map`), never onto a map nested in its values, as
-  the decoder applies them.
+- **Pointers do not open a pipe level**; slices, arrays and maps do, and so
+  does a `[N]byte` under `format:array`, whose `Elem` byte takes the `inner:`
+  steps. Map key rules come from `keys:` and lower only onto the field's own
+  map, through any pointers (`*map`, `**map`), never onto a map nested in its
+  values, as the decoder applies them.
 - `,string` keeps the Go kind (width) and switches the wire to string with an
   `int-string` / `uint-string` / `number-string` format.
 
@@ -154,7 +177,10 @@ Every rule below mirrors what the generated decoder or encoder does.
 - `Write` validates references, orders each file's placements so a shape
   follows the shapes of its file it references (cycles keep placement order;
   `Context.Later` tells an emitter the reference points forward), renders every
-  file, and writes only if every file rendered.
+  file, and writes only if every file rendered. Before staging it checks that
+  each path can take a regular file (`checkPaths`: not `.`, not the directory
+  of another placed file, not an existing directory, no parent that is a
+  file), because the renames that follow staging cannot be rolled back.
 - `Context.Lookup` / `Resolve` / `FileOf` / `Rel` give an emitter the name and
   file of a referenced shape; an unplaced enum type is the one soft reference
   and should be inlined from `Type.Enum`.
@@ -184,7 +210,9 @@ a whole TypeScript project (`ImportExt`, `Indent`) stay plain.
 
 - A struct is `export interface`; with a `json:",embed"` catch-all it is
   `export type X = {…} & Record<string, Rest>` (an interface index signature
-  would have to accept every declared field's type). `ts.TypeAliases()` uses
+  would have to accept every declared field's type). A recursive shape
+  spells each `Record<string, V>` as `{ [key: string]: V }`: TypeScript
+  rejects a type alias that reaches itself through `Record`. `ts.TypeAliases()` uses
   `type` for every object, `ts.TypeAliasesFor` per type. Aliases and enum types
   are `export type`.
 - Wire drives the TypeScript type: string, number (every integer width and
@@ -204,8 +232,14 @@ a whole TypeScript project (`ImportExt`, `Indent`) stay plain.
   `ts.ExternalFor` per use, and an unmapped external of unknown shape is
   reported. `Printer.ExternalFor` is the hook the schema emitters use for
   their annotations.
-- A placement name that is not a TypeScript identifier, or is a reserved word,
-  fails `Write`; nothing is renamed silently.
+- A placement name that is not an ASCII TypeScript identifier, is a reserved word,
+  or would shadow a name the emitted code refers to (`Record`, `Number`,
+  `Object`, `Math`, `BigInt` and the other globals the helpers use, the
+  library bindings `z` and `v`, anything starting with `ggen`) fails `Write`;
+  nothing is renamed silently. The three JavaScript emitters share one list.
+- An object key is left unquoted only when it is an ASCII identifier. Go's
+  letter tables differ from JavaScript's ID_Start and are newer than the
+  TypeScript scanner's, so a non-ASCII key is always quoted.
 - `ts.Header(line)` writes a first line (e.g. a generated-code marker),
   `ts.HeaderFor` per file;
   `ts.Indent` sets the indentation.
@@ -225,7 +259,9 @@ and skips when there is neither.
 `zod.New(opts...)` renders each placed shape as `export const X = …` plus
 `export type X = z.output<typeof X>`. A recursive shape (`Shape.Recursive`) is
 `export type X = <ts.Printer type>; export const X: z.ZodType<X> = …`, and a
-reference that `Context.Later` reports forward is `z.lazy(() => X)`.
+reference that `Context.Later` reports forward is `z.lazy(() => X)`. A
+self-recursive object without a catch-all is the exception: its getters defer
+the reference, so it keeps the inferred form.
 
 - Objects: `z.strictObject` (reject), `z.object` (ignore: zod strips),
   `.catchall(Rest)` (collect); `Optional` is `.optional()`, `Nullable`
@@ -244,19 +280,40 @@ reference that `Context.Later` reports forward is `z.lazy(() => X)`.
   length such as `64.5`, `NaN` or `1e-7`, which `netip.ParsePrefix`
   rejects), `ip-port` (`ggenIsAddrPort`: `netip.ParseAddrPort` plus the `":port"`
   form for no IP, minus a zone on an IPv4-mapped address), and ports of the Go parsers behind text-typed values: `time.Parse`
-  for custom layouts, `big.Float.Parse(s, 10)`, `big.Rat.SetString` and
+  for custom layouts, `big.Float.Parse(s, 0)`, `big.Rat.SetString` and
   `url.Parse` (strict colons in http/https hosts, the go1.26+ default).
 - Integers: `z.int()` with the Go width's range; 64-bit stays `z.int()` (safe
-  integers) and big.Int `z.number().refine(Number.isInteger)`. A `unixmicro`
+  integers) and big.Int `z.number().refine(Number.isInteger)`. Every unsigned
+  width also rejects `-0`, which passes `gte(0)` and the Go decoder refuses;
+  same in valibot. A `unixmicro`
   or `unixnano` time asserts only integer-ness and is reported: every real
   value of one is past 2^53, so the safe-integer check would reject the whole
   range. `zod.Override` replaces the rendering of any type, e.g. for bigint.
+- Decimal seconds: a `unix` time is bounded to `[-2^63, 2^63)` (Go reads
+  int64 seconds), a `duration-sec` to `(-9223372036.854776, 9223372036.854776)`
+  (the int64 nanosecond ends round to that double, which Go rejects); valibot
+  uses the same bounds. Go refuses an exponent in either, which no schema can
+  see after `JSON.parse` (a TestDifferential divergence).
 - Transforms use `.overwrite`, so later checks keep chaining. String methods
   (`.min`, `.regex`, `.trim`, …) are used only on schemas that are ZodString;
   anything else gets `.refine`.
+- Rules on a `,string` number read the parsed number, as Go does: an
+  integer through `ggenBigInt` and bigint literals, so 64-bit values stay
+  exact, a float through `Number`. `oneof` is a membership check on that
+  number, so `"1.0"` and `"1e0"` match `1`. `clamp` writes the clamped number
+  back as a string. Either clamp bound may be open.
+- Comparisons on a float32 (`gt`/`gte`/`lt`/`lte`, `eq`/`neq`, `oneof`)
+  round both sides with `Math.fround`, as Go compares the rounded value with
+  the bound converted to float32. Same in valibot.
+- A `number-string` checks its range at the Go width: `ggenIsNumber` for a
+  float64, `ggenIsFloat32` (through `Math.fround`) for a float32. A quoted
+  `json.Number` checks only the grammar (`ggenNumber`), since
+  `encoding/json` reads `"1e400"` as one. Same in valibot.
 - Enums: placed → the constant name (with the output zero as
   `z.union([Role, z.literal("")])`), unplaced or `oneof` → `z.enum` for strings,
-  `z.literal([…])` for numbers.
+  `z.literal([…])` for numbers. A post-transform `oneof` that other rules
+  follow is a `.refine` membership check instead: a pipe into the enum would
+  hide the base schema's methods from them.
 - `zod.Func(ref, action)` appends a chain for an `@Func`, keyed by the
   reference as written or by import path and name (`Rule.FuncPkg` is always
   set, the type's own package for an unqualified reference); `zod.FuncFor`
@@ -278,7 +335,7 @@ of a zoned IPv4-mapped address, at each position the mapped prefix spans),
 `TestTimeHelperMatchesGo` (random times
 formatted in 25 layouts, then mutated), and `TestBigFloatHelperMatchesGo` /
 `TestRationalHelperMatchesGo` / `TestURLHelperMatchesGo` (every string up to four characters over a grammar
-alphabet, plus edge cases). A change to a helper must keep these green.
+alphabet, plus edge cases), and `TestQuotedNumberHelpersMatchGo`. A change to a helper must keep these green.
 
 `zod/zod_test.go` compares a requests/responses/shared layout with
 `zod/testdata/*.ts`, importing helpers from a `ts.Runtime` file, as
@@ -299,7 +356,9 @@ built-ins differ from Go in other places:
 
 - Native and exact: `v.bytes`/`v.minBytes`/`v.maxBytes` (UTF-8 bytes),
   `v.minLength`… for arrays, `v.minEntries`… for maps, `v.trim`,
-  `v.toLowerCase`, `v.startsWith`, `v.values` for a post-transform `oneof`,
+  `v.toLowerCase`, `v.startsWith`, `v.picklist` for a post-transform `oneof`
+  (`v.values` when rules follow it, which `v.picklist` would type against the
+  narrowed set),
   `v.value`/`v.notValue` for `eq`/`neq`, `v.base64()`.
 - Replaced by helpers: dates (`v.isoTimestamp` accepts a space separator and
   `+0100`; the helper also checks the day of month), IPs (`v.ip` accepts an IPv6 zone, which `net.IP` rejects), hex and
@@ -309,11 +368,15 @@ built-ins differ from Go in other places:
   `JSON.parse("1e400")` produces and Go rejects.
 - Objects: `v.strictObject` / `v.object` / `v.objectWithRest(shape, Rest)`;
   fixed arrays are `v.strictTuple`; `Optional` wraps as `v.optional(...)`.
-  Every object and record schema accepts an array in Valibot, so each is
-  wrapped in `ggenObject(...)`, a function written into the file (it needs
-  `v`, so it cannot live in the shared runtime) that pipes a
-  `v.custom<v.InferInput<T>>` array check before the schema and keeps its
-  input and output types.
+  Valibot's object and record schemas accept an array whose keys satisfy
+  them, testing each with `in`. So every record schema, and every object
+  schema an array can satisfy (a rest schema, or required fields that are
+  all `length`, a canonical index or an `Array.prototype` /
+  `Object.prototype` member), is wrapped in `ggenObject(...)`, a function
+  written into the file (it needs `v`, so it cannot live in the shared
+  runtime) that pipes a `v.custom<v.InferInput<T>>` array check before the
+  schema and keeps its input and output types. Other object schemas stay
+  plain, keeping `v.pick`, `v.omit` and `.entries`.
 - The same options as `zod`. `valibot.Func(ref, action)` takes a pipe action, e.g.
   `v.check((x) => x >= 18, "must be an adult")`.
 
@@ -348,6 +411,8 @@ rendering it forces:
   an integer enum type is a `typealias` to its integer type, reported. A field
   whose enum still admits the zero value, and an unplaced or `oneof` enum,
   renders as the underlying type; the former is reported.
+- A recursive alias (`type Tree []Tree`) fails the write: a `typealias` cannot
+  refer to itself.
 - Integers map by Go width (`Byte`…`Long`, `UByte`…`ULong`, whose ranges
   kotlinx enforces), floats to `Float`/`Double`, `big.Int` and `json.Number`
   to `JsonPrimitive` (which kotlinx re-encodes as a double beyond `Long` and
@@ -415,7 +480,8 @@ with swiftc, and the rendering it forces:
   constants (`RoleAdmin` → `admin`); raw values are enforced. An enum admitting
   Go's zero value renders as its raw type, reported, as in `kotlin`.
 - A `typealias` is never optional itself; a reference to an alias whose type
-  admits null is. Decode a nullable alias at the top level as `X?`.
+  admits null is. Decode a nullable alias at the top level as `X?`. A recursive
+  alias fails the write: a `typealias` cannot refer to itself.
 - `any`, raw JSON, converter unions and unmapped externals of unknown shape
   are `JSONValue`, a Codable enum. It and `Indirect` are written by the
   `swift.NewRuntime(module)` emitter into a file of its own, passed with
@@ -445,6 +511,8 @@ package adds for consumers other than the emitter.
   package it imports transitively, keyed `"import/path.TypeName"`, in
   declaration order. That is the raw material for treating `type Role
   string` + its consts as an enum, and it deliberately crosses packages.
+  `TypeDocs` holds the doc comment and directives of each named string or
+  integer type the package declares, which an enum `TypeDecl` copies.
 - `ParseFile(file, names) (FileParse, error)` — single-file mode.
 - `WalkPackages(targets, act, report)` — the `./...` walker, post-order.
 - `StructInfo` / `FieldInfo` carry, besides what the emitter needs, `Doc`

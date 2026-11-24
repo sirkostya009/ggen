@@ -83,7 +83,7 @@ Four steps, always: **load → shape → place → write**.
 set, err := gen.Load("./internal/api", "./internal/shared/...")
 ```
 
-Patterns are directories or `...` patterns relative to working directory. Test-file types skipped.
+Patterns are directories or `...` patterns relative to working directory. Test-file types skipped. A package with a syntax error, an unresolved import or an ill-typed type declaration = error.
 
 | call                         | gives                                                                        |
 | ---------------------------- | ---------------------------------------------------------------------------- |
@@ -108,7 +108,7 @@ Patterns are directories or `...` patterns relative to working directory. Test-f
 | `Type.OneOf`     | extra shapes a `@Conv` converter accepts | empty                                     |
 | `Enum.Zero`      | false                                    | true when Go zero value not a constant, never on a map key (`keys:oneof`) |
 
-Output widenings follow the omit guard exactly: `omitempty`/`omitzero` clear `Nullable`/`Empty`/`Enum.Zero` only where the encoder drops every value carrying them. A non-nil pointer under either option still writes what its pointee writes (`""`, the zero enum, an inner `null`), and `Empty` survives `omitzero` for IP, IPNet, TCPAddr, UDPAddr and URL (a non-nil empty IP, or a non-zero URL with empty text, is written as `""`). Input `Nullable` under `nullzero` (the pipe variant or `//ggen:generate nullzero`) is set only when the Go zero value passes the field's rules, because the decoder runs them on it. Pointers and kinds with a null of their own (slices, maps, `[]byte`, `[N]byte`, `net.IP`, raw JSON, `sql.Null*`, `any`) are not changed by it.
+Output widenings follow the omit guard exactly: `omitempty`/`omitzero` clear `Nullable`/`Empty`/`Enum.Zero` only where the encoder drops every value carrying them. A non-nil pointer under either option still writes what its pointee writes (`""`, the zero enum, an inner `null`), and `Empty` survives `omitzero` for IP, IPNet, TCPAddr, UDPAddr and URL (a non-nil empty IP, or a non-zero URL with empty text, is written as `""`). Input `Nullable` under `nullzero` (the pipe variant or `//ggen:generate nullzero`) is set only when the Go zero value passes the field's rules, because the decoder runs them on it. Pointers and kinds with a null of their own (slices, maps, `[]byte`, `net.IP`, raw JSON, `sql.Null*`, `any`) are not changed by it.
 
 `Shape`: `Decl`, `Mode`, `Fields` (struct) or `Alias` (alias/enum type), `Recursive`, `Unknown` + `Rest`, `Field(jsonName)`.
 
@@ -121,7 +121,7 @@ Output widenings follow the omit guard exactly: `omitempty`/`omitzero` clear `Nu
 | `Go`                            | Go kind: `String`, `Int8`…`Uint64`, `Float32/64`, `Time`, `Duration`, `Bytes`, `IP`, `Addr`, `Prefix`, `IPNet`, `TCPAddr`, `UDPAddr`, `URL`, `BigInt`, `BigFloat`, `BigRat`, `RawJSON`, `Number`, `Slice`, `Array`, `Map`, `Struct`, `Any`                               |
 | `Wire`                          | JSON shape: `WireString`, `WireInteger`, `WireNumber`, `WireBool`, `WireArray`, `WireObject`, `WireAny`                                                                                                                                                                  |
 | `Format`                        | `date-time`, `unix`, `unixmilli/micro/nano`, `duration`, `duration-sec/milli/micro/nano`, `base64`, `base64url`, `base32`, `base32hex`, `hex`, `ip`, `ip-zone`, `cidr`, `ip-port`, `uri`, `int-string`, `uint-string`, `number-string`, `big-float`, `rational`, `time:<Go layout>` |
-| `Elem`, `Key`, `Len`            | slice/array/map parts; `Len` also the decoded length of `[N]byte`                                                                                                                                                                                                        |
+| `Elem`, `Key`, `Len`            | slice/array/map parts; `Elem` also the byte of a `[N]byte` under `format:array`, with its `inner:` rules; `Len` also the decoded length of `[N]byte`                                                                                                                                                                                                        |
 | `Ref`                           | points at another generated type, or an enum type                                                                                                                                                                                                                        |
 | `External`                      | named type ggen does not generate; identify by `Pkg.Path + "." + Name`                                                                                                                                                                                                   |
 | `Enum`                          | closed set of values (`Values[i].Value` is JSON literal, `.Text` the decoded string, `.Name` the Go constant)                                                                                                                                                            |
@@ -151,7 +151,7 @@ f := out.File("web/requests.ts", emitter) // same path + same emitter returns sa
 f.Place(shape, "CreateUser").Place(other, "Address")
 ```
 
-Placement name is what the target calls the type. Nothing renamed silently: name not valid in target fails `Write`.
+Placement name is what the target calls the type. Nothing renamed silently: name not valid in target fails `Write`. In TypeScript that includes any name that is not an ASCII identifier, a global the output uses (`Record`, `Number`, `Object`, …), `z`, `v` and names starting with `ggen`.
 
 ## Step 4: write
 
@@ -161,7 +161,8 @@ Placement name is what the target calls the type. Nothing renamed silently: name
 - same type placed twice in one mode, or one name used by two shapes in a file,
 - one file requested with two different emitters,
 - reference cycle whose members are not all in one file,
-- a type `Set.Type` never loaded.
+- a type `Set.Type` never loaded,
+- a path that cannot hold a file: `.`, the directory of another placed file, an existing directory, or under an existing file.
 
 Ordering handled for you: within a file, a shape follows shapes it references; a genuine cycle keeps placement order and `ctx.Later(...)` tells the emitter the reference points forward.
 
@@ -199,6 +200,12 @@ Same option set, same declaration shape. `zod.New(opts...)` emit `export const X
 | `Override(fn)`                             | render any type yourself (bigint, branded types)                                                            |
 
 Built-ins used only where probing showed they match Go; everything else comes from generated helpers that port the Go parser (time layouts, `big.Float`, `big.Rat`, `url.Parse`, IP/CIDR, ip:port, durations, `,string` grammars). Unmapped `@Func` and unmapped external types are reported, not guessed.
+
+On a `,string` number, rules compare the parsed number, as Go does, exactly for 64-bit integers, so `oneof=1|2` accepts `"1.0"`. `clamp` clamps the parsed number and keeps the value a string, as Go writes it.
+
+On a `float32`, comparison rules and `oneof` compare the value rounded to 32 bits with the bound rounded the same way, as Go does, so `gt=0.1` rejects `0.1000000001`. A `oneof` on a `float32` input is a membership check, not a literal type.
+
+A `oneof` after a transform narrows the parsed type only when it is the last rule. With rules after it, it is a membership check and the type stays the base type.
 
 zod renders a map whose `Key` carries an `Enum` (from `keys:oneof`) as `z.partialRecord`: `z.record` with an enum key requires every member, where Go checks only the keys present.
 
@@ -249,10 +256,12 @@ Returning an error from any method aborts the whole write, so nothing half-writt
 
 - **Enum closed set is an assertion, not a decoder fact.** Generated Go decoder accept any value of the underlying type; the schema rejects. Same class as `Strict()`. Deliberate.
 - **gen reads annotations, not CLI flags.** `gen.Load` has no flags. A decoder generated with `ggen -nullzero`, `-ignoreunknown` or `-novalidate` is described as if the flag were off. When the schema must match, put the same token on the struct (`//ggen:generate nullzero`) instead of passing the flag.
-- **`Set.Unloaded()` is not noise.** A ggen type in an unloaded package lower as external with no fields. Load its package.
+- **`Set.Unloaded()` is not noise.** A ggen type in an unloaded package lower as external with no fields (a struct alias such as `type Instant time.Time` keep its target's wire). Load its package.
 - **Input and output differ.** Placing `t.In()` where you meant `t.Out()` compiles and produces wrong schema. Name the placements accordingly (`CreateUser` vs `CreateUserInput`).
 - **A catch-all (`json:",embed"`) types as `X & Record<string, Rest>` in TypeScript**, so declared fields must fit `Rest` too. Kotlin and Swift have no catch-all at all and report it.
+- **A container type that holds itself** (`type Tree []Tree`, `type Obj map[string]Obj`) renders in TypeScript, zod and valibot, but Kotlin and Swift fail the write: their `typealias` cannot refer to itself. Without `//ggen:generate` such a type has nothing to reference, so it lowers as `any` where it recurs.
 - **Micro/nanosecond Unix times do not fit JavaScript numbers.** zod/valibot assert integer-ness only and report it.
+- **`unix` times and `duration-sec` durations are range-checked, not spelling-checked.** zod/valibot bound them to what Go reads, but Go also refuses an exponent (`1e9`), which a schema cannot see after `JSON.parse`.
 - **Swift and Kotlin leave a nil property out when encoding.** Go reads absent as zero, so round trips agree, but bytes differ from Go's `null`.
 - **Rules are input-only.** Nothing in `t.Out()` carry validation; do not expect output schemas to police values.
 

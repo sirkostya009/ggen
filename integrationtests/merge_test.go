@@ -4,8 +4,10 @@ package integrationtests
 
 import (
 	"bytes"
+	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
 	"reflect"
+	"strings"
 	"testing"
 	"unsafe"
 
@@ -913,5 +915,249 @@ func TestMerge_arrayContainerSlotsReset(t *testing.T) {
 	}
 	if !reflect.DeepEqual(sg.AB, wantB) {
 		t.Errorf("stream [2][]byte: %q", sg.AB)
+	}
+}
+
+// RawMerge holds raw spans, which the bytes path aliases into its input.
+//
+//ggen:generate
+type RawMerge struct {
+	A jsontext.Value            `json:"a"`
+	B jsontext.Value            `json:"b"`
+	L []jsontext.Value          `json:"l"`
+	M map[string]jsontext.Value `json:"m"`
+}
+
+// A stream decode into a value from the bytes path writes its raw spans into
+// fresh memory, not into the earlier input.
+func TestMerge_streamRawIntoBytesReceiver(t *testing.T) {
+	t.Parallel()
+	first := []byte(`{"a":[1,2,3,4],"b":[5,6,7,8],"l":[[9,9,9,9]],"m":{"k":[0,0,0,0]}}`)
+	orig := bytes.Clone(first)
+	recv, _, err := RawMerge{}.DecodeFrom(first)
+	if err != nil {
+		t.Fatalf("bytes decode: %v", err)
+	}
+	second := `{"a":"aaaaaaaaaaaaa","b":"bb","l":["l"],"m":{"k":"m"}}`
+	got, err := recv.DecodeFromStream(ggen.NewStream(strings.NewReader(second), nil))
+	if err != nil {
+		t.Fatalf("stream decode: %v", err)
+	}
+	if !bytes.Equal(first, orig) {
+		t.Errorf("first input overwritten: %s", first)
+	}
+	want, err := RawMerge{}.DecodeFromStream(ggen.NewStream(strings.NewReader(second), nil))
+	if err != nil {
+		t.Fatalf("fresh stream decode: %v", err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("reused receiver = %+v, want %+v", got, want)
+	}
+}
+
+//ggen:generate
+type SpareItem struct {
+	ID   int      `json:"id"`
+	Tags []string `json:"tags"`
+}
+
+//ggen:generate
+type SpareItems []SpareItem
+
+// SpareSlots holds every slice reader that decodes into its receiver's old
+// slots: struct elements, slice rows, multi-level pointer chains, a pointer
+// leaf and a reused map value.
+//
+//ggen:generate
+type SpareSlots struct {
+	Items []SpareItem            `json:"items"`
+	Rows  [][]string             `json:"rows"`
+	PP    []**SpareItem          `json:"pp"`
+	Ptr   *[]SpareItem           `json:"ptr"`
+	Map   map[string][]SpareItem `json:"map"`
+}
+
+// A swap-delete leaves a stale copy of a live element in the spare capacity
+// past len. The next decode into the receiver must not use that copy as a
+// receiver, or two decoded elements share one backing.
+func TestMerge_spareCapacityAfterDelete(t *testing.T) {
+	t.Parallel()
+	const first = `{"items":[{"id":1,"tags":["a"]},{"id":2,"tags":["b"]},{"id":3,"tags":["c"]}],` +
+		`"rows":[["a"],["b"],["c"]],` +
+		`"pp":[{"id":1,"tags":["a"]},{"id":2,"tags":["b"]},{"id":3,"tags":["c"]}],` +
+		`"ptr":[{"id":1,"tags":["a"]},{"id":2,"tags":["b"]},{"id":3,"tags":["c"]}],` +
+		`"map":{"k":[{"id":1,"tags":["a"]},{"id":2,"tags":["b"]},{"id":3,"tags":["c"]}]}}`
+	const second = `{"items":[{"id":10,"tags":["x"]},{"id":20,"tags":["y"]},{"id":30,"tags":["z"]}],` +
+		`"rows":[["x"],["y"],["z"]],` +
+		`"pp":[{"id":10,"tags":["x"]},{"id":20,"tags":["y"]},{"id":30,"tags":["z"]}],` +
+		`"ptr":[{"id":10,"tags":["x"]},{"id":20,"tags":["y"]},{"id":30,"tags":["z"]}],` +
+		`"map":{"k":[{"id":10,"tags":["x"]},{"id":20,"tags":["y"]},{"id":30,"tags":["z"]}]}}`
+	swapDelete := func(s *SpareSlots) {
+		s.Items[0] = s.Items[2]
+		s.Items = s.Items[:2]
+		s.Rows[0] = s.Rows[2]
+		s.Rows = s.Rows[:2]
+		s.PP[0] = s.PP[2]
+		s.PP = s.PP[:2]
+		p := *s.Ptr
+		p[0] = p[2]
+		*s.Ptr = p[:2]
+		m := s.Map["k"]
+		m[0] = m[2]
+		s.Map["k"] = m[:2]
+	}
+	want, _, err := SpareSlots{}.DecodeFrom([]byte(second))
+	if err != nil {
+		t.Fatal(err)
+	}
+	decoders := map[string]func(SpareSlots) (SpareSlots, error){
+		"bytes": func(r SpareSlots) (SpareSlots, error) {
+			v, _, err := r.DecodeFrom([]byte(second))
+			return v, err
+		},
+		"stream": func(r SpareSlots) (SpareSlots, error) {
+			return ggen.NewStream(strings.NewReader(second), nil).Value(r)
+		},
+	}
+	for name, decode := range decoders {
+		recv, _, err := SpareSlots{}.DecodeFrom([]byte(first))
+		if err != nil {
+			t.Fatal(err)
+		}
+		swapDelete(&recv)
+		got, err := decode(recv)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: reused receiver = %s, want %s", name, spareJSON(t, got), spareJSON(t, want))
+		}
+	}
+
+	alias, _, err := SpareItems{}.DecodeFrom([]byte(`[{"id":1,"tags":["a"]},{"id":2,"tags":["b"]},{"id":3,"tags":["c"]}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	alias[0] = alias[2]
+	alias = alias[:2]
+	gotAlias, _, err := alias.DecodeFrom([]byte(`[{"id":10,"tags":["x"]},{"id":20,"tags":["y"]},{"id":30,"tags":["z"]}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wantAlias := (SpareItems{{10, []string{"x"}}, {20, []string{"y"}}, {30, []string{"z"}}}); !reflect.DeepEqual(gotAlias, wantAlias) {
+		t.Errorf("alias: reused receiver = %+v, want %+v", gotAlias, wantAlias)
+	}
+}
+
+// A fresh slice whose backing came from this decode reuses its spare slots,
+// and a same-length redecode keeps every element's inner backing.
+func TestMerge_spareSlotsSameLengthReused(t *testing.T) { //nolint:paralleltest // measures allocations
+	payload := []byte(`{"items":[{"id":1,"tags":["a"]},{"id":2,"tags":["b"]},{"id":3,"tags":["c"]}]}`)
+	first, _, err := SpareSlots{}.DecodeFrom(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := testing.AllocsPerRun(100, func() {
+		first, _, err = first.DecodeFrom(payload)
+	}); err != nil || n != 0 {
+		t.Errorf("same-length redecode: %v allocs, err %v", n, err)
+	}
+}
+
+func spareJSON(t *testing.T, v SpareSlots) string {
+	t.Helper()
+	b, err := ggen.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// A `[]*T` of a generated struct decodes each element into the pointee its
+// live slot carries, so a reused receiver allocates no slab. A slot past the
+// old length, or one the old payload left null, gets a new pointee, and a
+// stale field of a reused pointee does not survive.
+func TestMerge_slicePointerElementsReused(t *testing.T) { //nolint:paralleltest // measures allocations
+	const fat = `{"items":[{"street":"a","city":"b","zipCode":"11111"},null,{"street":"c","city":"d","zipCode":"22222"}]}`
+	const lean = `{"items":[{"street":"e","city":"f","zipCode":"33333"},{"street":"g","city":"h","zipCode":"44444"},{"street":"i","city":"j","zipCode":"55555"},{"street":"k","city":"l","zipCode":"66666"}]}`
+	check := func(t *testing.T, got PtrSliceItemsStruct, carried []*Address) {
+		t.Helper()
+		want := []Address{{"e", "f", "33333"}, {"g", "h", "44444"}, {"i", "j", "55555"}, {"k", "l", "66666"}}
+		if len(got.Items) != len(want) {
+			t.Fatalf("items: %v", got.Items)
+		}
+		for k, w := range want {
+			if got.Items[k] == nil || *got.Items[k] != w {
+				t.Errorf("items[%d] = %v, want %v", k, got.Items[k], w)
+			}
+		}
+		if got.Items[0] != carried[0] || got.Items[2] != carried[2] {
+			t.Error("carried pointee reallocated")
+		}
+		if got.Items[1] == nil || got.Items[1] == got.Items[0] || got.Items[1] == got.Items[2] || got.Items[3] == got.Items[2] {
+			t.Error("new pointee aliases a carried one")
+		}
+	}
+
+	first, _, err := PtrSliceItemsStruct{}.DecodeFrom([]byte(fat))
+	if err != nil {
+		t.Fatal(err)
+	}
+	carried := append([]*Address(nil), first.Items...)
+	got, _, err := first.DecodeFrom([]byte(lean))
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, got, carried)
+
+	var s ggen.Stream
+	s.Reset(bytes.NewReader([]byte(fat)), make([]byte, 0, 8))
+	sf, err := PtrSliceItemsStruct{}.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	carried = append([]*Address(nil), sf.Items...)
+	s.Reset(bytes.NewReader([]byte(lean)), make([]byte, 0, 8))
+	sg, err := sf.DecodeFromStream(&s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check(t, sg, carried)
+
+	// A swap-delete leaves the tail pointer in spare capacity, still held by
+	// slot 0. Past the old length it must not be decoded into.
+	for name, decode := range map[string]func(PtrSliceItemsStruct) (PtrSliceItemsStruct, error){
+		"bytes": func(r PtrSliceItemsStruct) (PtrSliceItemsStruct, error) {
+			v, _, err := r.DecodeFrom([]byte(lean))
+			return v, err
+		},
+		"stream": func(r PtrSliceItemsStruct) (PtrSliceItemsStruct, error) {
+			return ggen.NewStream(strings.NewReader(lean), nil).Value(r)
+		},
+	} {
+		recv, _, err := PtrSliceItemsStruct{}.DecodeFrom([]byte(lean))
+		if err != nil {
+			t.Fatal(err)
+		}
+		recv.Items[0] = recv.Items[3]
+		recv.Items = recv.Items[:3]
+		got, err := decode(recv)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if got.Items[0] == got.Items[3] || *got.Items[0] != (Address{"e", "f", "33333"}) {
+			t.Errorf("%s: spare slot reused: %v %v", name, *got.Items[0], *got.Items[3])
+		}
+	}
+
+	in := []byte(lean)
+	prev, _, err := PtrSliceItemsStruct{}.DecodeFrom(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := testing.AllocsPerRun(10, func() {
+		prev, _, err = prev.DecodeFrom(in)
+	}); err != nil || n != 0 {
+		t.Errorf("reused receiver: %v allocs, err %v", n, err)
 	}
 }

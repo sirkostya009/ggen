@@ -35,98 +35,135 @@ import (
 	"simd/archsimd"
 )
 
-// structuralIndexAVX returns the index of the first '"', '\\' or control
-// byte (< 0x20) in b, or -1. It scans 16 bytes per step and checks the last
-// partial block one byte at a time.
-func structuralIndexAVX(b []byte) int {
-	quote := archsimd.BroadcastUint8x16('"')
-	bslash := archsimd.BroadcastUint8x16('\\')
-	ctrl := archsimd.BroadcastUint8x16(0x1F)
-	j := 0
-	for ; j+16 <= len(b); j += 16 {
-		v := archsimd.LoadUint8x16(b[j:])
+// structuralIndexAVX returns the index, relative to j, of the first '"',
+// '\\' or control byte (< 0x20) in b[j:], or -1. It scans 16 bytes per step.
+// The last partial vector reloads the last 16 bytes of b and shifts out the
+// lanes before the cursor, so it never reads past len(b). Only a b shorter
+// than one vector is checked one byte at a time.
+func structuralIndexAVX(b []byte, j int) int {
+	quote := archsimd.LoadUint8x16(VecQuote[:])
+	bslash := archsimd.LoadUint8x16(VecBackslash[:])
+	ctrl := archsimd.LoadUint8x16(VecCtrl[:])
+	i := j
+	for ; i+16 <= len(b); i += 16 {
+		v := archsimd.LoadUint8x16(b[i:])
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
-			return j + bits.TrailingZeros16(m)
+			return i - j + bits.TrailingZeros16(m)
 		}
 	}
-	for ; j < len(b); j++ {
-		if c := b[j]; c == '"' || c == '\\' || c < 0x20 {
-			return j
+	if i < len(b) && len(b) >= 16 {
+		v := archsimd.LoadUint8x16(b[len(b)-16:])
+		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits() >> uint(16-(len(b)-i))
+		if m != 0 {
+			return i - j + bits.TrailingZeros16(m)
+		}
+		return -1
+	}
+	for ; i < len(b); i++ {
+		if c := b[i]; c == '"' || c == '\\' || c < 0x20 {
+			return i - j
 		}
 	}
 	return -1
 }
 
 // structuralIndexAVX2 is structuralIndexAVX at 32 bytes per step.
-func structuralIndexAVX2(b []byte) int {
+func structuralIndexAVX2(b []byte, j int) int {
 	quote := archsimd.BroadcastUint8x32('"')
 	bslash := archsimd.BroadcastUint8x32('\\')
 	ctrl := archsimd.BroadcastUint8x32(0x1F)
-	j := 0
-	for ; j+32 <= len(b); j += 32 {
-		v := archsimd.LoadUint8x32(b[j:])
+	i := j
+	for ; i+32 <= len(b); i += 32 {
+		v := archsimd.LoadUint8x32(b[i:])
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
-			return j + bits.TrailingZeros32(m)
+			return i - j + bits.TrailingZeros32(m)
 		}
 	}
-	for ; j < len(b); j++ {
-		if c := b[j]; c == '"' || c == '\\' || c < 0x20 {
-			return j
+	if i < len(b) && len(b) >= 32 {
+		v := archsimd.LoadUint8x32(b[len(b)-32:])
+		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits() >> uint(32-(len(b)-i))
+		if m != 0 {
+			return i - j + bits.TrailingZeros32(m)
+		}
+		return -1
+	}
+	for ; i < len(b); i++ {
+		if c := b[i]; c == '"' || c == '\\' || c < 0x20 {
+			return i - j
 		}
 	}
 	return -1
 }
 
 // structuralIndexAVX512 is structuralIndexAVX at 64 bytes per step.
-func structuralIndexAVX512(b []byte) int {
+func structuralIndexAVX512(b []byte, j int) int {
 	quote := archsimd.BroadcastUint8x64('"')
 	bslash := archsimd.BroadcastUint8x64('\\')
 	space := archsimd.BroadcastUint8x64(0x20)
-	j := 0
-	for ; j+64 <= len(b); j += 64 {
-		v := archsimd.LoadUint8x64(b[j:])
+	i := j
+	for ; i+64 <= len(b); i += 64 {
+		v := archsimd.LoadUint8x64(b[i:])
 		m := v.Equal(quote).ToBits() | v.Equal(bslash).ToBits() | v.Less(space).ToBits()
 		if m != 0 {
-			return j + bits.TrailingZeros64(m)
+			return i - j + bits.TrailingZeros64(m)
 		}
 	}
-	for ; j < len(b); j++ {
-		if c := b[j]; c == '"' || c == '\\' || c < 0x20 {
-			return j
+	if i < len(b) && len(b) >= 64 {
+		v := archsimd.LoadUint8x64(b[len(b)-64:])
+		m := (v.Equal(quote).ToBits() | v.Equal(bslash).ToBits() | v.Less(space).ToBits()) >> uint(64-(len(b)-i))
+		if m != 0 {
+			return i - j + bits.TrailingZeros64(m)
+		}
+		return -1
+	}
+	for ; i < len(b); i++ {
+		if c := b[i]; c == '"' || c == '\\' || c < 0x20 {
+			return i - j
 		}
 	}
 	return -1
 }
 
 // structuralIndexHighAVX is structuralIndexAVX that also reports whether any
-// scanned byte was >= 0x80. The string cores use that to skip UTF-8
-// validation on pure ASCII text. The flag covers the whole vector that held
-// the hit, so it can be set by bytes after the hit. The caller validates the
-// exact span, which settles it. It is separate from structuralIndexAVX so the
-// skip tiers do not pay for the extra OR.
-func structuralIndexHighAVX(b []byte) (int, bool) {
-	quote := archsimd.BroadcastUint8x16('"')
-	bslash := archsimd.BroadcastUint8x16('\\')
-	ctrl := archsimd.BroadcastUint8x16(0x1F)
-	ascii := archsimd.BroadcastUint8x16(0x7F)
-	acc := archsimd.BroadcastUint8x16(0)
-	j := 0
-	for ; j+16 <= len(b); j += 16 {
-		v := archsimd.LoadUint8x16(b[j:])
-		acc = acc.Or(v)
+// byte before the hit was >= 0x80. The string cores use that to skip UTF-8
+// validation on pure ASCII text. In the vector that holds the hit only the
+// lanes below it count, since the bytes after a closing quote belong to the
+// next token. It is separate from structuralIndexAVX so the skip tiers do not
+// pay for the extra OR.
+func structuralIndexHighAVX(b []byte, j int) (int, bool) {
+	quote := archsimd.LoadUint8x16(VecQuote[:])
+	bslash := archsimd.LoadUint8x16(VecBackslash[:])
+	ctrl := archsimd.LoadUint8x16(VecCtrl[:])
+	ascii := archsimd.LoadUint8x16(vec7F[:])
+	acc := archsimd.Uint8x16{}
+	i := j
+	for ; i+16 <= len(b); i += 16 {
+		v := archsimd.LoadUint8x16(b[i:])
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
-			return j + bits.TrailingZeros16(m), acc.Min(ascii).Equal(acc).ToBits() != 0xFFFF
+			return i - j + bits.TrailingZeros16(m), acc.Min(ascii).Equal(acc).ToBits() != 0xFFFF ||
+				^v.Min(ascii).Equal(v).ToBits()&(m-1)&^m != 0
 		}
+		acc = acc.Or(v)
 	}
 	hi := acc.Min(ascii).Equal(acc).ToBits() != 0xFFFF
+	if i < len(b) && len(b) >= 16 {
+		v := archsimd.LoadUint8x16(b[len(b)-16:])
+		d := uint(16 - (len(b) - i))
+		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits() >> d
+		h := ^v.Min(ascii).Equal(v).ToBits() >> d
+		if m != 0 {
+			return i - j + bits.TrailingZeros16(m), hi || h&(m-1)&^m != 0
+		}
+		return -1, hi || h != 0
+	}
 	var t byte
-	for ; j < len(b); j++ {
-		c := b[j]
+	for ; i < len(b); i++ {
+		c := b[i]
 		if c == '"' || c == '\\' || c < 0x20 {
-			return j, hi || t&0x80 != 0
+			return i - j, hi || t&0x80 != 0
 		}
 		t |= c
 	}
@@ -134,27 +171,38 @@ func structuralIndexHighAVX(b []byte) (int, bool) {
 }
 
 // structuralIndexHighAVX2 is structuralIndexHighAVX at 32 bytes per step.
-func structuralIndexHighAVX2(b []byte) (int, bool) {
+func structuralIndexHighAVX2(b []byte, j int) (int, bool) {
 	quote := archsimd.BroadcastUint8x32('"')
 	bslash := archsimd.BroadcastUint8x32('\\')
 	ctrl := archsimd.BroadcastUint8x32(0x1F)
 	ascii := archsimd.BroadcastUint8x32(0x7F)
 	acc := archsimd.BroadcastUint8x32(0)
-	j := 0
-	for ; j+32 <= len(b); j += 32 {
-		v := archsimd.LoadUint8x32(b[j:])
-		acc = acc.Or(v)
+	i := j
+	for ; i+32 <= len(b); i += 32 {
+		v := archsimd.LoadUint8x32(b[i:])
 		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits()
 		if m != 0 {
-			return j + bits.TrailingZeros32(m), acc.Min(ascii).Equal(acc).ToBits() != 0xFFFFFFFF
+			return i - j + bits.TrailingZeros32(m), acc.Min(ascii).Equal(acc).ToBits() != 0xFFFFFFFF ||
+				^v.Min(ascii).Equal(v).ToBits()&(m-1)&^m != 0
 		}
+		acc = acc.Or(v)
 	}
 	hi := acc.Min(ascii).Equal(acc).ToBits() != 0xFFFFFFFF
+	if i < len(b) && len(b) >= 32 {
+		v := archsimd.LoadUint8x32(b[len(b)-32:])
+		d := uint(32 - (len(b) - i))
+		m := v.Equal(quote).Or(v.Equal(bslash)).Or(v.Min(ctrl).Equal(v)).ToBits() >> d
+		h := ^v.Min(ascii).Equal(v).ToBits() >> d
+		if m != 0 {
+			return i - j + bits.TrailingZeros32(m), hi || h&(m-1)&^m != 0
+		}
+		return -1, hi || h != 0
+	}
 	var t byte
-	for ; j < len(b); j++ {
-		c := b[j]
+	for ; i < len(b); i++ {
+		c := b[i]
 		if c == '"' || c == '\\' || c < 0x20 {
-			return j, hi || t&0x80 != 0
+			return i - j, hi || t&0x80 != 0
 		}
 		t |= c
 	}
@@ -162,27 +210,38 @@ func structuralIndexHighAVX2(b []byte) (int, bool) {
 }
 
 // structuralIndexHighAVX512 is structuralIndexHighAVX at 64 bytes per step.
-func structuralIndexHighAVX512(b []byte) (int, bool) {
+func structuralIndexHighAVX512(b []byte, j int) (int, bool) {
 	quote := archsimd.BroadcastUint8x64('"')
 	bslash := archsimd.BroadcastUint8x64('\\')
 	space := archsimd.BroadcastUint8x64(0x20)
 	high := archsimd.BroadcastUint8x64(0x80)
 	acc := archsimd.BroadcastUint8x64(0)
-	j := 0
-	for ; j+64 <= len(b); j += 64 {
-		v := archsimd.LoadUint8x64(b[j:])
-		acc = acc.Or(v)
+	i := j
+	for ; i+64 <= len(b); i += 64 {
+		v := archsimd.LoadUint8x64(b[i:])
 		m := v.Equal(quote).ToBits() | v.Equal(bslash).ToBits() | v.Less(space).ToBits()
 		if m != 0 {
-			return j + bits.TrailingZeros64(m), acc.Less(high).ToBits() != ^uint64(0)
+			return i - j + bits.TrailingZeros64(m), acc.Less(high).ToBits() != ^uint64(0) ||
+				^v.Less(high).ToBits()&(m-1)&^m != 0
 		}
+		acc = acc.Or(v)
 	}
 	hi := acc.Less(high).ToBits() != ^uint64(0)
+	if i < len(b) && len(b) >= 64 {
+		v := archsimd.LoadUint8x64(b[len(b)-64:])
+		d := uint(64 - (len(b) - i))
+		m := (v.Equal(quote).ToBits() | v.Equal(bslash).ToBits() | v.Less(space).ToBits()) >> d
+		h := ^v.Less(high).ToBits() >> d
+		if m != 0 {
+			return i - j + bits.TrailingZeros64(m), hi || h&(m-1)&^m != 0
+		}
+		return -1, hi || h != 0
+	}
 	var t byte
-	for ; j < len(b); j++ {
-		c := b[j]
+	for ; i < len(b); i++ {
+		c := b[i]
 		if c == '"' || c == '\\' || c < 0x20 {
-			return j, hi || t&0x80 != 0
+			return i - j, hi || t&0x80 != 0
 		}
 		t |= c
 	}
@@ -212,7 +271,7 @@ func (s *Stream) stringViewAVX(validate bool) (v string, owned bool, err error) 
 	j := start
 	sawHigh := false
 	for {
-		k, hi := structuralIndexHighAVX(s.buf[j:])
+		k, hi := structuralIndexHighAVX(s.buf, j)
 		sawHigh = sawHigh || hi
 		if k < 0 {
 			j = len(s.buf)
@@ -268,7 +327,7 @@ func (s *Stream) stringViewAVX2(validate bool) (v string, owned bool, err error)
 	j := start
 	sawHigh := false
 	for {
-		k, hi := structuralIndexHighAVX2(s.buf[j:])
+		k, hi := structuralIndexHighAVX2(s.buf, j)
 		sawHigh = sawHigh || hi
 		if k < 0 {
 			j = len(s.buf)
@@ -321,7 +380,7 @@ func (s *Stream) stringViewAVX512(validate bool) (v string, owned bool, err erro
 	j := start
 	sawHigh := false
 	for {
-		k, hi := structuralIndexHighAVX512(s.buf[j:])
+		k, hi := structuralIndexHighAVX512(s.buf, j)
 		sawHigh = sawHigh || hi
 		if k < 0 {
 			j = len(s.buf)

@@ -2,30 +2,30 @@ package ggen
 
 import (
 	"errors"
+	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 )
 
-// Collect must prepend the outer path segment to a single leaf error, not
-// only to a nested Errors aggregate, and shift both by d.
+// Collect takes a nested Errors, prepends the outer path segment to each
+// leaf and shifts it by d. A single ValidationError means the callee stopped
+// mid-value, so Collect refuses it like a parse error.
 func TestErrorsCollect_PrependsLeafPath(t *testing.T) {
 	t.Parallel()
 	var es Errors
-	if !es.Collect("outer", 10, &LenError{Pos: 1, Keys: []string{"inner"}, Want: 5, Got: 3}) {
-		t.Fatal("Collect rejected a ValidationError")
+	if !es.Collect("outer", 10, Errors{&LenError{Pos: 1, Keys: []string{"inner"}, Want: 5, Got: 3}}) {
+		t.Fatal("Collect rejected an Errors")
 	}
 	le, ok := es[0].(*LenError)
 	if !ok || len(le.Keys) != 2 || le.Keys[0] != "outer" || le.Keys[1] != "inner" || le.Pos != 11 {
 		t.Errorf("leaf = %+v, want [outer inner] at 11", le)
 	}
-	// A nested aggregate is flattened and each leaf gets the prefix.
-	var parent Errors
-	parent.Collect("p", 0, Errors{&NotEmptyError{Keys: []string{"q"}}})
-	ne := parent[0].(*NotEmptyError)
-	if len(ne.Keys) != 2 || ne.Keys[0] != "p" {
-		t.Errorf("nested path = %v", ne.Keys)
+	if es.Collect("outer", 0, &LenError{Keys: []string{"inner"}}) || len(es) != 1 {
+		t.Errorf("Collect took a single ValidationError: %v", es)
 	}
-	if parent.Collect("p", 0, &ParseError{Err: ErrBadString}) || len(parent) != 1 {
-		t.Errorf("Collect took a parse error: %v", parent)
+	if es.Collect("p", 0, &ParseError{Err: ErrBadString}) || len(es) != 1 {
+		t.Errorf("Collect took a parse error: %v", es)
 	}
 }
 
@@ -49,6 +49,18 @@ func TestIsLowerIsUpper_CaselessPass(t *testing.T) {
 	}
 	if IsUpper("AbC") {
 		t.Error("IsUpper(AbC) = true")
+	}
+}
+
+// The character-class predicates need at least one byte. The case
+// predicates test for an absence, so "" passes them.
+func TestPredicates_EmptyString(t *testing.T) {
+	t.Parallel()
+	if IsAlphanum("") || IsNumeric("") || IsHex("") || IsURL("") {
+		t.Error(`a character-class predicate accepts ""`)
+	}
+	if !IsLower("") || !IsUpper("") {
+		t.Error(`a case predicate rejects ""`)
 	}
 }
 
@@ -79,6 +91,39 @@ func TestParseErrShiftCascadesToModError(t *testing.T) {
 	}
 	if me.Pos != 105 {
 		t.Errorf("ModError.Pos = %d, want 105", me.Pos)
+	}
+}
+
+// A hand-written decoder that wraps a nested error with %w or errors.Join
+// keeps its wrapper, and the *ParseError inside gets the outer segment and a
+// payload offset, the same as a bare one.
+func TestParseErrShiftReachesWrappedErrors(t *testing.T) {
+	t.Parallel()
+	sentinel := errors.New("context")
+	wraps := map[string]func(error) error{
+		"bare": func(e error) error { return e },
+		"%w":   func(e error) error { return fmt.Errorf("wrapped: %w", e) },
+		"join": func(e error) error { return errors.Join(sentinel, e) },
+	}
+	for name, wrap := range wraps {
+		in := wrap(&ParseError{Keys: []string{"value"}, Pos: 3, Err: ErrBadNumber})
+		out := NewParseErrShift("w", 150, 50, in)
+		if out != in {
+			t.Errorf("%s: returned %v, want the callee's error itself", name, out)
+		}
+		pe, ok := errors.AsType[*ParseError](out)
+		if !ok || pe.Pos != 103 || strings.Join(pe.Keys, ".") != "w.value" {
+			t.Errorf("%s: got %+v, want w.value at 103", name, pe)
+		}
+	}
+	mod := NewParseErr("value", 3, &ModError{Name: "m", Pos: 3})
+	out := NewParseErrShift("w", 150, 50, fmt.Errorf("wrapped: %w", mod))
+	if me, ok := errors.AsType[*ModError](out); !ok || me.Pos != 103 {
+		t.Errorf("wrapped ModError = %+v, want Pos 103", me)
+	}
+	le := NewParseErrShift("w", 150, 50, fmt.Errorf("wrapped: %w", &LenError{Pos: 3}))
+	if e, ok := errors.AsType[*LenError](le); !ok || e.Pos != 103 {
+		t.Errorf("wrapped LenError = %+v, want Pos 103", e)
 	}
 }
 
@@ -144,5 +189,55 @@ func TestPathMessage(t *testing.T) {
 	pe := &ParseError{Keys: []string{"tags[]"}, Err: ErrBadString}
 	if p := pe.Path(); len(p) != 1 || p[0] != "tags[]" || pe.Message() != ErrBadString.Error() {
 		t.Errorf("ParseError: Path() = %v, Message() = %q", p, pe.Message())
+	}
+}
+
+// A path grows in front without being copied at every level, and relocate
+// never writes through keys it does not own: a slice two errors share, or the
+// view of an error copied by value.
+func TestRelocate_PathGrowsInFront(t *testing.T) {
+	t.Parallel()
+	backing := []string{"leaf", "canary"}
+	a := &LenError{Keys: backing[:1]}
+	b := &MinLenError{Keys: backing[:1]}
+	for i := range 100 {
+		relocate(a, "a"+strconv.Itoa(i), 1)
+		relocate(b, "b"+strconv.Itoa(i), 1)
+	}
+	if backing[0] != "leaf" || backing[1] != "canary" {
+		t.Errorf("shared keys written to: %v", backing)
+	}
+	if len(a.Keys) != 101 || a.Keys[0] != "a99" || a.Keys[99] != "a0" || a.Keys[100] != "leaf" || a.Pos != 100 {
+		t.Errorf("a = %v at %d", a.Keys, a.Pos)
+	}
+	if len(b.Keys) != 101 || b.Keys[0] != "b99" || b.Keys[100] != "leaf" {
+		t.Errorf("b = %v", b.Keys)
+	}
+
+	c := *a
+	relocate(a, "x", 0)
+	relocate(&c, "y", 0)
+	if a.Keys[0] != "x" || a.Keys[1] != "a99" || c.Keys[0] != "y" || c.Keys[1] != "a99" || len(a.Keys) != 102 || len(c.Keys) != 102 {
+		t.Errorf("copy shares the path: a = %v, c = %v", a.Keys[:2], c.Keys[:2])
+	}
+
+	pe := &ParseError{Keys: backing[:1], Err: ErrBadString}
+	for range 100 {
+		NewParseErr("p", 0, pe)
+	}
+	if len(pe.Keys) != 101 || pe.Keys[0] != "p" || pe.Keys[100] != "leaf" || backing[1] != "canary" {
+		t.Errorf("pe = %v, backing = %v", pe.Keys, backing)
+	}
+}
+
+func TestRelocate_PathAllocs(t *testing.T) { //nolint:paralleltest // measures allocations
+	allocs := testing.AllocsPerRun(10, func() {
+		e := &LenError{Keys: []string{"leaf"}}
+		for range 4096 {
+			relocate(e, "s", 0)
+		}
+	})
+	if allocs > 32 {
+		t.Errorf("%v allocations for a path of 4096 segments", allocs)
 	}
 }

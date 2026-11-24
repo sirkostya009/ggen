@@ -21,7 +21,8 @@ type Set struct {
 	decls    map[string]*TypeDecl // generated types and enum types, keyed by "path.Name"
 	consts   map[string][]model.Const
 	enums    []*TypeDecl
-	unloaded map[string]struct{} // ggen-generated types found in packages no pattern matched
+	unloaded map[string]struct{}      // ggen-generated types found in packages no pattern matched
+	loads    map[string]model.Package // each loaded package's own type check, by import path
 }
 
 // Package is one Go package. Every named type in the loaded packages points at
@@ -44,7 +45,6 @@ type TypeDecl struct {
 	Annotated  bool     // carries //ggen:generate itself, not only reached from a type that does
 
 	set       *Set
-	fset      *token.FileSet // positions of the load that produced info or named
 	info      model.StructInfo
 	named     *types.Named // set for an enum type that is not generated
 	missing   bool         // Set.Type found no such type
@@ -59,6 +59,7 @@ func Load(patterns ...string) (*Set, error) {
 		decls:    map[string]*TypeDecl{},
 		consts:   map[string][]model.Const{},
 		unloaded: map[string]struct{}{},
+		loads:    map[string]model.Package{},
 	}
 	var parsed []model.Package
 	var errs []error
@@ -87,6 +88,7 @@ func Load(patterns ...string) (*Set, error) {
 		p := s.pkg(mp.Types)
 		p.Loaded = true
 		s.Packages = append(s.Packages, p)
+		s.loads[p.Path] = mp
 		for k, cs := range mp.Consts {
 			for _, c := range cs {
 				if !slices.Contains(s.consts[k], c) {
@@ -106,7 +108,6 @@ func Load(patterns ...string) (*Set, error) {
 				Directives: info.Directives,
 				Annotated:  slices.ContainsFunc(info.Directives, isAnnotation),
 				set:        s,
-				fset:       mp.Fset,
 				info:       info,
 			}
 			p.Types = append(p.Types, d)
@@ -264,7 +265,7 @@ func (t *TypeDecl) Has(directive string) bool {
 // enumDecl returns the enum type for a named string or integer type with
 // constants, creating it on first use. It returns nil when the type has no
 // constants.
-func (s *Set) enumDecl(n *types.Named, fset *token.FileSet) *TypeDecl {
+func (s *Set) enumDecl(n *types.Named) *TypeDecl {
 	obj := n.Obj()
 	if obj.Pkg() == nil {
 		return nil
@@ -287,21 +288,38 @@ func (s *Set) enumDecl(n *types.Named, fset *token.FileSet) *TypeDecl {
 	if e == nil {
 		return nil
 	}
+	doc := s.loads[pkg.Path].TypeDocs[obj.Name()]
 	d := &TypeDecl{
-		Pkg:   pkg,
-		Name:  obj.Name(),
-		Enum:  e,
-		set:   s,
-		fset:  fset,
-		named: n,
+		Pkg:        pkg,
+		File:       s.declFile(obj),
+		Name:       obj.Name(),
+		Doc:        doc.Doc,
+		Directives: doc.Directives,
+		Enum:       e,
+		set:        s,
+		named:      n,
 	}
 	e.Decl = d
-	if d.Pkg.Loaded {
-		d.File = fset.Position(obj.Pos()).Filename
-	}
 	s.decls[key] = d
 	s.enums = append(s.enums, d)
 	return d
+}
+
+// declFile returns the source file declaring obj, a type of a loaded package,
+// or "" when its package was not loaded. A type reached from another package
+// is that package's view of it, whose positions name no real file, so the
+// position comes from the declaring package's own load.
+func (s *Set) declFile(obj types.Object) string {
+	ld, ok := s.loads[obj.Pkg().Path()]
+	if !ok {
+		return ""
+	}
+	if obj.Pkg() != ld.Types {
+		if own := ld.Types.Scope().Lookup(obj.Name()); own != nil {
+			obj = own
+		}
+	}
+	return ld.File(obj.Pos())
 }
 
 // markRecursive flags every type that reaches itself through references.

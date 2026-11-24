@@ -49,10 +49,10 @@ func SkipSpaceAVX(data []byte, i int) int {
 }
 
 func skipSpaceAVXSlow(data []byte, i int) int {
-	sp := archsimd.BroadcastUint8x16(' ')
-	tb := archsimd.BroadcastUint8x16('\t')
-	nl := archsimd.BroadcastUint8x16('\n')
-	cr := archsimd.BroadcastUint8x16('\r')
+	sp := archsimd.LoadUint8x16(VecSpace[:])
+	tb := archsimd.LoadUint8x16(vecTab[:])
+	nl := archsimd.LoadUint8x16(vecNL[:])
+	cr := archsimd.LoadUint8x16(vecCR[:])
 	for ; i+16 <= len(data); i += 16 {
 		v := archsimd.LoadUint8x16(data[i:])
 		m := v.Equal(sp).Or(v.Equal(tb)).Or(v.Equal(nl)).Or(v.Equal(cr)).ToBits()
@@ -146,7 +146,7 @@ func skipStringTail(data []byte, bs int) (int, error) {
 func skipStringAVX(data []byte, i int) (int, error) {
 	j := i + 1
 	for {
-		k := structuralIndexAVX(data[j:])
+		k := structuralIndexAVX(data, j)
 		if k < 0 {
 			return len(data), ErrUnterminated
 		}
@@ -171,7 +171,7 @@ func skipStringAVX(data []byte, i int) (int, error) {
 func skipStringAVX2(data []byte, i int) (int, error) {
 	j := i + 1
 	for {
-		k := structuralIndexAVX2(data[j:])
+		k := structuralIndexAVX2(data, j)
 		if k < 0 {
 			return len(data), ErrUnterminated
 		}
@@ -196,7 +196,7 @@ func skipStringAVX2(data []byte, i int) (int, error) {
 func skipStringAVX512(data []byte, i int) (int, error) {
 	j := i + 1
 	for {
-		k := structuralIndexAVX512(data[j:])
+		k := structuralIndexAVX512(data, j)
 		if k < 0 {
 			return len(data), ErrUnterminated
 		}
@@ -253,7 +253,7 @@ func skipValueAVX(data []byte, i, depth int) (int, error) {
 
 func skipArrayAVX(data []byte, i, depth int) (int, error) {
 	if depth > maxDepth {
-		return i, ErrMaxDepth
+		return i - 1, ErrMaxDepth
 	}
 	i = SkipSpaceAVX(data, i)
 	if i < len(data) && data[i] == ']' {
@@ -281,7 +281,7 @@ func skipArrayAVX(data []byte, i, depth int) (int, error) {
 
 func skipObjectAVX(data []byte, i, depth int) (int, error) {
 	if depth > maxDepth {
-		return i, ErrMaxDepth
+		return i - 1, ErrMaxDepth
 	}
 	i = SkipSpaceAVX(data, i)
 	if i < len(data) && data[i] == '}' {
@@ -355,7 +355,7 @@ func skipValueAVX2(data []byte, i, depth int) (int, error) {
 
 func skipArrayAVX2(data []byte, i, depth int) (int, error) {
 	if depth > maxDepth {
-		return i, ErrMaxDepth
+		return i - 1, ErrMaxDepth
 	}
 	i = SkipSpaceAVX2(data, i)
 	if i < len(data) && data[i] == ']' {
@@ -383,7 +383,7 @@ func skipArrayAVX2(data []byte, i, depth int) (int, error) {
 
 func skipObjectAVX2(data []byte, i, depth int) (int, error) {
 	if depth > maxDepth {
-		return i, ErrMaxDepth
+		return i - 1, ErrMaxDepth
 	}
 	i = SkipSpaceAVX2(data, i)
 	if i < len(data) && data[i] == '}' {
@@ -457,7 +457,7 @@ func skipValueAVX512(data []byte, i, depth int) (int, error) {
 
 func skipArrayAVX512(data []byte, i, depth int) (int, error) {
 	if depth > maxDepth {
-		return i, ErrMaxDepth
+		return i - 1, ErrMaxDepth
 	}
 	i = SkipSpaceAVX512(data, i)
 	if i < len(data) && data[i] == ']' {
@@ -485,7 +485,7 @@ func skipArrayAVX512(data []byte, i, depth int) (int, error) {
 
 func skipObjectAVX512(data []byte, i, depth int) (int, error) {
 	if depth > maxDepth {
-		return i, ErrMaxDepth
+		return i - 1, ErrMaxDepth
 	}
 	i = SkipSpaceAVX512(data, i)
 	if i < len(data) && data[i] == '}' {

@@ -9,6 +9,11 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
+var ggenKeys_escape_0 = []string{"a"}
+var ggenKeys_escape_1 = []string{"b"}
+var ggenKeys_escape_2 = []string{"c"}
+var ggenKeys_escape_3 = []string{"d"}
+
 func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err error) {
 	result = recv
 	seenA := false
@@ -72,7 +77,7 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 		switch key {
 		case "a":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_escape_0}
 			}
 			seenA = true
 			if i >= len(data) || data[i] != '"' {
@@ -97,7 +102,7 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 			}
 		case "b":
 			if seenB {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_escape_1}
 			}
 			seenB = true
 			if i >= len(data) || data[i] != '"' {
@@ -122,7 +127,7 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 			}
 		case "c":
 			if seenC {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"c"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_escape_2}
 			}
 			seenC = true
 			if i >= len(data) || data[i] != '"' {
@@ -147,7 +152,7 @@ func (recv EscapeDoc) DecodeFrom(data []byte) (result EscapeDoc, i int, err erro
 			}
 		case "d":
 			if seenD {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"d"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_escape_3}
 			}
 			seenD = true
 			if i >= len(data) || data[i] != '"' {
@@ -255,7 +260,7 @@ func (recv EscapeDoc) DecodeFromStream(s *ggen.Stream) (result EscapeDoc, err er
 				return result, ggen.NewParseErr("a", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_escape_0}
 			}
 			seenA = true
 			result.A, err = s.String(true)
@@ -268,7 +273,7 @@ func (recv EscapeDoc) DecodeFromStream(s *ggen.Stream) (result EscapeDoc, err er
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_escape_1}
 			}
 			seenB = true
 			result.B, err = s.String(true)
@@ -281,7 +286,7 @@ func (recv EscapeDoc) DecodeFromStream(s *ggen.Stream) (result EscapeDoc, err er
 				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
 			if seenC {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"c"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_escape_2}
 			}
 			seenC = true
 			result.C, err = s.String(true)
@@ -294,7 +299,7 @@ func (recv EscapeDoc) DecodeFromStream(s *ggen.Stream) (result EscapeDoc, err er
 				return result, ggen.NewParseErr("d", s.Offset(), err)
 			}
 			if seenD {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"d"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_escape_3}
 			}
 			seenD = true
 			result.D, err = s.String(true)
@@ -435,7 +440,7 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 		switch key {
 		case "a":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_escape_0}
 			}
 			seenA = true
 			if i >= len(data) || data[i] != '"' {
@@ -461,7 +466,7 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 			}
 		case "b":
 			if seenB {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_escape_1}
 			}
 			seenB = true
 			if i >= len(data) || data[i] != '"' {
@@ -487,7 +492,7 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 			}
 		case "c":
 			if seenC {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"c"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_escape_2}
 			}
 			seenC = true
 			if i >= len(data) || data[i] != '"' {
@@ -513,7 +518,7 @@ func (recv CopyEscapeDoc) DecodeFrom(data []byte) (result CopyEscapeDoc, i int, 
 			}
 		case "d":
 			if seenD {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"d"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_escape_3}
 			}
 			seenD = true
 			if i >= len(data) || data[i] != '"' {
@@ -622,7 +627,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *ggen.Stream) (result CopyEscapeDoc
 				return result, ggen.NewParseErr("a", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_escape_0}
 			}
 			seenA = true
 			result.A, err = s.String(true)
@@ -635,7 +640,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *ggen.Stream) (result CopyEscapeDoc
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_escape_1}
 			}
 			seenB = true
 			result.B, err = s.String(true)
@@ -648,7 +653,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *ggen.Stream) (result CopyEscapeDoc
 				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
 			if seenC {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"c"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_escape_2}
 			}
 			seenC = true
 			result.C, err = s.String(true)
@@ -661,7 +666,7 @@ func (recv CopyEscapeDoc) DecodeFromStream(s *ggen.Stream) (result CopyEscapeDoc
 				return result, ggen.NewParseErr("d", s.Offset(), err)
 			}
 			if seenD {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"d"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_escape_3}
 			}
 			seenD = true
 			result.D, err = s.String(true)

@@ -16,7 +16,7 @@ func TestNamedPrimitive_RulesResolveUnderlying(t *testing.T) {
 		t.Helper()
 		// generate() seeds the globals only when they are nil. Without this
 		// reset, a second call would reuse the first call's namedKinds.
-		generatedTypes, namedKinds, cyclicTypes = nil, nil, nil
+		generatedTypes, namedKinds, cyclicTypes, aliasingDecode = nil, nil, nil, nil
 		code, err := generate("p", []model.StructInfo{{
 			Name: "V",
 			Fields: []model.FieldInfo{{
@@ -120,7 +120,7 @@ func TestNamedPrimitive_ZeroLit(t *testing.T) {
 func TestPointerContainer_LeafSeedEmptied(t *testing.T) {
 	gen := func(goType string) string {
 		t.Helper()
-		generatedTypes, namedKinds, cyclicTypes = nil, nil, nil
+		generatedTypes, namedKinds, cyclicTypes, aliasingDecode = nil, nil, nil, nil
 		depth, leaf := model.PointerDepth(goType)
 		code, err := generate("p", []model.StructInfo{{
 			Name: "V",
@@ -167,7 +167,7 @@ func TestPointerContainer_LeafSeedEmptied(t *testing.T) {
 func TestNamedPrimitive_InlineDecode(t *testing.T) {
 	gen := func(alias model.StructInfo, field model.FieldInfo) string {
 		t.Helper()
-		generatedTypes, namedKinds, cyclicTypes = nil, nil, nil
+		generatedTypes, namedKinds, cyclicTypes, aliasingDecode = nil, nil, nil, nil
 		field.GoName, field.JSONName = "S", "s"
 		code, err := generate("p", []model.StructInfo{alias, {Name: "V", Fields: []model.FieldInfo{field}}})
 		if err != nil {

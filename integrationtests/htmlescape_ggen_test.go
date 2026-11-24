@@ -4,6 +4,7 @@ package integrationtests
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/netip"
 	"strings"
 	"unsafe"
@@ -40,6 +41,25 @@ const ggenCap_HTMLEscapeNested_Rows___string = (min((80/max(int(unsafe.Sizeof(*n
 
 // Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
 const ggenCap_HTMLEscapeNested_Rows_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_HTMLEscapeRaw_Metas_json_RawMessage = (min((80/max(int(unsafe.Sizeof(*new(json.RawMessage))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(json.RawMessage))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(json.RawMessage))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(json.RawMessage))), 1)), 1)
+
+var ggenKeys_htmlescape_test_0 = []string{"note"}
+var ggenKeys_htmlescape_test_1 = []string{"payload"}
+var ggenKeys_htmlescape_test_2 = []string{"addrs"}
+var ggenKeys_htmlescape_test_3 = []string{"anys"}
+var ggenKeys_htmlescape_test_4 = []string{"deep"}
+var ggenKeys_htmlescape_test_5 = []string{"fixed"}
+var ggenKeys_htmlescape_test_6 = []string{"null"}
+var ggenKeys_htmlescape_test_7 = []string{"pairs"}
+var ggenKeys_htmlescape_test_8 = []string{"pairs[]"}
+var ggenKeys_htmlescape_test_9 = []string{"rows"}
+var ggenKeys_htmlescape_test_10 = []string{"any"}
+var ggenKeys_htmlescape_test_11 = []string{"byKey"}
+var ggenKeys_htmlescape_test_12 = []string{"meta"}
+var ggenKeys_htmlescape_test_13 = []string{"metas"}
+var ggenKeys_htmlescape_test_14 = []string{"val"}
 
 func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, err error) {
 	result = recv
@@ -92,7 +112,7 @@ func (recv HTMLRawStruct) DecodeFrom(data []byte) (result HTMLRawStruct, i int, 
 		switch key {
 		case "note":
 			if seenNote {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"note"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_0}
 			}
 			seenNote = true
 			if i >= len(data) || data[i] != '"' {
@@ -179,7 +199,7 @@ func (recv HTMLRawStruct) DecodeFromStream(s *ggen.Stream) (result HTMLRawStruct
 				return result, ggen.NewParseErr("note", s.Offset(), err)
 			}
 			if seenNote {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"note"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_0}
 			}
 			seenNote = true
 			result.Note, err = s.String(true)
@@ -294,7 +314,7 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 		switch key {
 		case "note":
 			if seenNote {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"note"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_0}
 			}
 			seenNote = true
 			if i >= len(data) || data[i] != '"' {
@@ -319,7 +339,7 @@ func (recv HTMLEscapeStruct) DecodeFrom(data []byte) (result HTMLEscapeStruct, i
 			}
 		case "payload":
 			if seenPayload {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"payload"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_1}
 			}
 			seenPayload = true
 			result.Payload, i, err = ggen.Any(data, i, true)
@@ -397,7 +417,7 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				return result, ggen.NewParseErr("note", s.Offset(), err)
 			}
 			if seenNote {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"note"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_0}
 			}
 			seenNote = true
 			result.Note, err = s.String(true)
@@ -410,7 +430,7 @@ func (recv HTMLEscapeStruct) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				return result, ggen.NewParseErr("payload", s.Offset(), err)
 			}
 			if seenPayload {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"payload"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_1}
 			}
 			seenPayload = true
 			result.Payload, err = s.Any(true)
@@ -493,15 +513,18 @@ func (s HTMLEscapeStruct) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i int, err error) {
 	result = recv
+	held0 := len(result.Addrs)
 	if result.Addrs != nil {
 		result.Addrs = result.Addrs[:0]
 	}
+	held1 := len(result.Anys)
 	if result.Anys != nil {
 		result.Anys = result.Anys[:0]
 	}
 	if result.Pairs != nil {
 		result.Pairs = result.Pairs[:0]
 	}
+	held2 := len(result.Rows)
 	if result.Rows != nil {
 		result.Rows = result.Rows[:0]
 	}
@@ -566,11 +589,12 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 		switch key {
 		case "addrs":
 			if seenAddrs {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"addrs"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_2}
 			}
 			seenAddrs = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("addrs", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -584,6 +608,7 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
+			live0 := held0
 			if i < len(data) && data[i] == ']' {
 				if result.Addrs == nil {
 					result.Addrs = [][]netip.Addr{}
@@ -591,17 +616,22 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 			} else {
 				if result.Addrs == nil {
 					result.Addrs = make([][]netip.Addr, 0, ggenCap_HTMLEscapeNested_Addrs___netip_Addr)
+					live0 = cap(result.Addrs)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					if len(result.Addrs) < cap(result.Addrs) {
+					if len(result.Addrs) < live0 {
 						result.Addrs = result.Addrs[:len(result.Addrs)+1]
+					} else if len(result.Addrs) < cap(result.Addrs) {
+						result.Addrs = append(result.Addrs, nil)
 					} else {
 						result.Addrs = append(result.Addrs, nil)
+						live0 = cap(result.Addrs)
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("addrs", i, ggen.ErrBadLiteral)
 						}
 						i += 4
@@ -716,11 +746,12 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 			i++
 		case "anys":
 			if seenAnys {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"anys"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_3}
 			}
 			seenAnys = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("anys", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -734,6 +765,7 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
+			live0 := held1
 			if i < len(data) && data[i] == ']' {
 				if result.Anys == nil {
 					result.Anys = [][]any{}
@@ -741,17 +773,22 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 			} else {
 				if result.Anys == nil {
 					result.Anys = make([][]any, 0, ggenCap_HTMLEscapeNested_Anys___any)
+					live0 = cap(result.Anys)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					if len(result.Anys) < cap(result.Anys) {
+					if len(result.Anys) < live0 {
 						result.Anys = result.Anys[:len(result.Anys)+1]
+					} else if len(result.Anys) < cap(result.Anys) {
+						result.Anys = append(result.Anys, nil)
 					} else {
 						result.Anys = append(result.Anys, nil)
+						live0 = cap(result.Anys)
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("anys", i, ggen.ErrBadLiteral)
 						}
 						i += 4
@@ -841,11 +878,12 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 			i++
 		case "deep":
 			if seenDeep {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"deep"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_4}
 			}
 			seenDeep = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -898,10 +936,13 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 					{
 						var mv [][]string
 						if reuse {
-							mv = carried[mk][:0]
+							mv = carried[mk]
 						}
+						held3 := len(mv)
+						mv = mv[:0]
 						if i < len(data) && data[i] == 'n' {
 							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								i = ggen.NullEnd(data, i)
 								return result, i, ggen.NewParseErr("deep.value", i, ggen.ErrBadLiteral)
 							}
 							i += 4
@@ -914,6 +955,7 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 								i++
 							}
+							live0 := held3
 							if i < len(data) && data[i] == ']' {
 								if mv == nil {
 									mv = [][]string{}
@@ -921,17 +963,22 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 							} else {
 								if mv == nil {
 									mv = make([][]string, 0, ggenCap_HTMLEscapeNested_Deep___string)
+									live0 = cap(mv)
 								}
 							}
 							if i < len(data) && data[i] != ']' {
 								for {
-									if len(mv) < cap(mv) {
+									if len(mv) < live0 {
 										mv = mv[:len(mv)+1]
+									} else if len(mv) < cap(mv) {
+										mv = append(mv, nil)
 									} else {
 										mv = append(mv, nil)
+										live0 = cap(mv)
 									}
 									if i < len(data) && data[i] == 'n' {
 										if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+											i = ggen.NullEnd(data, i)
 											return result, i, ggen.NewParseErr("deep.value", i, ggen.ErrBadLiteral)
 										}
 										i += 4
@@ -1060,7 +1107,7 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 			i++
 		case "fixed":
 			if seenFixed {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"fixed"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_5}
 			}
 			seenFixed = true
 			if i >= len(data) || data[i] != '[' {
@@ -1074,10 +1121,11 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Keys: []string{"fixed"}, Want: 2, Got: 3, AtLeast: true}
+						return result, i, &ggen.LenError{Pos: i, Keys: ggenKeys_htmlescape_test_5, Want: 2, Got: 3, AtLeast: true}
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("fixed", i, ggen.ErrBadLiteral)
 						}
 						i += 4
@@ -1183,16 +1231,17 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 				return result, i, ggen.NewParseErr("fixed", i, ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, i, &ggen.LenError{Pos: i, Keys: []string{"fixed"}, Want: 2, Got: idx0}
+				return result, i, &ggen.LenError{Pos: i, Keys: ggenKeys_htmlescape_test_5, Want: 2, Got: idx0}
 			}
 			i++
 		case "null":
 			if seenNull {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"null"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_6}
 			}
 			seenNull = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("null", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -1224,11 +1273,12 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 			}
 		case "pairs":
 			if seenPairs {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"pairs"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_7}
 			}
 			seenPairs = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("pairs", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -1266,7 +1316,7 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 					if i < len(data) && data[i] != ']' {
 						for {
 							if idx1 >= 2 {
-								return result, i, &ggen.LenError{Pos: i, Keys: []string{"pairs[]"}, Want: 2, Got: 3, AtLeast: true}
+								return result, i, &ggen.LenError{Pos: i, Keys: ggenKeys_htmlescape_test_8, Want: 2, Got: 3, AtLeast: true}
 							}
 							if i >= len(data) || data[i] != '"' {
 								return result, i, ggen.NewParseErr("pairs[]", i, ggen.ErrExpectString)
@@ -1309,7 +1359,7 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 						return result, i, ggen.NewParseErr("pairs[]", i, ggen.ErrBadArray)
 					}
 					if idx1 != 2 {
-						return result, i, &ggen.LenError{Pos: i, Keys: []string{"pairs[]"}, Want: 2, Got: idx1}
+						return result, i, &ggen.LenError{Pos: i, Keys: ggenKeys_htmlescape_test_8, Want: 2, Got: idx1}
 					}
 					i++
 					result.Pairs[len(result.Pairs)-1] = row0
@@ -1335,11 +1385,12 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 			i++
 		case "rows":
 			if seenRows {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rows"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_9}
 			}
 			seenRows = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("rows", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -1353,6 +1404,7 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
+			live0 := held2
 			if i < len(data) && data[i] == ']' {
 				if result.Rows == nil {
 					result.Rows = [][]string{}
@@ -1360,17 +1412,22 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 			} else {
 				if result.Rows == nil {
 					result.Rows = make([][]string, 0, ggenCap_HTMLEscapeNested_Rows___string)
+					live0 = cap(result.Rows)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					if len(result.Rows) < cap(result.Rows) {
+					if len(result.Rows) < live0 {
 						result.Rows = result.Rows[:len(result.Rows)+1]
+					} else if len(result.Rows) < cap(result.Rows) {
+						result.Rows = append(result.Rows, nil)
 					} else {
 						result.Rows = append(result.Rows, nil)
+						live0 = cap(result.Rows)
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("rows", i, ggen.ErrBadLiteral)
 						}
 						i += 4
@@ -1509,9 +1566,11 @@ func (recv HTMLEscapeNested) DecodeFrom(data []byte) (result HTMLEscapeNested, i
 
 func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscapeNested, err error) {
 	result = recv
+	held0 := len(result.Addrs)
 	if result.Addrs != nil {
 		result.Addrs = result.Addrs[:0]
 	}
+	held1 := len(result.Anys)
 	if result.Anys != nil {
 		result.Anys = result.Anys[:0]
 	}
@@ -1521,6 +1580,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 	if result.Pairs != nil {
 		result.Pairs = result.Pairs[:0]
 	}
+	held2 := len(result.Rows)
 	if result.Rows != nil {
 		result.Rows = result.Rows[:0]
 	}
@@ -1568,7 +1628,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				return result, ggen.NewParseErr("addrs", s.Offset(), err)
 			}
 			if seenAddrs {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"addrs"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_2}
 			}
 			seenAddrs = true
 			err = s.SkipSpace()
@@ -1584,11 +1644,11 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("addrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("addrs", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("addrs", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("addrs", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1608,6 +1668,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 					return result, ggen.NewParseErr("addrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
+			live0 := held0
 			if s.Bytes()[s.Pos] == ']' {
 				if result.Addrs == nil {
 					result.Addrs = [][]netip.Addr{}
@@ -1615,13 +1676,17 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 			} else {
 				if result.Addrs == nil {
 					result.Addrs = make([][]netip.Addr, 0, ggenCap_HTMLEscapeNested_Addrs___netip_Addr)
+					live0 = cap(result.Addrs)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				if len(result.Addrs) < cap(result.Addrs) {
+				if len(result.Addrs) < live0 {
 					result.Addrs = result.Addrs[:len(result.Addrs)+1]
+				} else if len(result.Addrs) < cap(result.Addrs) {
+					result.Addrs = append(result.Addrs, nil)
 				} else {
 					result.Addrs = append(result.Addrs, nil)
+					live0 = cap(result.Addrs)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -1632,11 +1697,11 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("addrs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("addrs", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("addrs", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("addrs", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -1764,7 +1829,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				return result, ggen.NewParseErr("anys", s.Offset(), err)
 			}
 			if seenAnys {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"anys"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_3}
 			}
 			seenAnys = true
 			err = s.SkipSpace()
@@ -1780,11 +1845,11 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("anys", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("anys", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("anys", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("anys", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1804,6 +1869,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 					return result, ggen.NewParseErr("anys", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
+			live0 := held1
 			if s.Bytes()[s.Pos] == ']' {
 				if result.Anys == nil {
 					result.Anys = [][]any{}
@@ -1811,13 +1877,17 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 			} else {
 				if result.Anys == nil {
 					result.Anys = make([][]any, 0, ggenCap_HTMLEscapeNested_Anys___any)
+					live0 = cap(result.Anys)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				if len(result.Anys) < cap(result.Anys) {
+				if len(result.Anys) < live0 {
 					result.Anys = result.Anys[:len(result.Anys)+1]
+				} else if len(result.Anys) < cap(result.Anys) {
+					result.Anys = append(result.Anys, nil)
 				} else {
 					result.Anys = append(result.Anys, nil)
+					live0 = cap(result.Anys)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -1828,11 +1898,11 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("anys", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("anys", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("anys", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("anys", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -1950,7 +2020,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				return result, ggen.NewParseErr("deep", s.Offset(), err)
 			}
 			if seenDeep {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"deep"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_4}
 			}
 			seenDeep = true
 			err = s.SkipSpace()
@@ -1966,11 +2036,11 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("deep", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("deep", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("deep", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("deep", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -2037,11 +2107,11 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 						for ki := 1; ki < 4; ki++ {
 							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, ggen.NewParseErr("deep.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+									return result, ggen.NewParseErr("deep.value", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 								}
 							}
 							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, ggen.NewParseErr("deep.value", s.Offset(), ggen.ErrBadLiteral)
+								return result, ggen.NewParseErr("deep.value", s.Offset()+ki, ggen.ErrBadLiteral)
 							}
 						}
 						s.Pos += 4
@@ -2060,6 +2130,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 								return result, ggen.NewParseErr("deep.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 							}
 						}
+						live0 := 0
 						if s.Bytes()[s.Pos] == ']' {
 							if mv == nil {
 								mv = [][]string{}
@@ -2067,13 +2138,17 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 						} else {
 							if mv == nil {
 								mv = make([][]string, 0, ggenCap_HTMLEscapeNested_Deep___string)
+								live0 = cap(mv)
 							}
 						}
 						for s.Bytes()[s.Pos] != ']' {
-							if len(mv) < cap(mv) {
+							if len(mv) < live0 {
 								mv = mv[:len(mv)+1]
+							} else if len(mv) < cap(mv) {
+								mv = append(mv, nil)
 							} else {
 								mv = append(mv, nil)
+								live0 = cap(mv)
 							}
 							if s.Pos >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
@@ -2084,11 +2159,11 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 								for ki := 1; ki < 4; ki++ {
 									if s.Pos+ki >= len(s.Bytes()) {
 										if err = s.ReadMore(0); err != nil {
-											return result, ggen.NewParseErr("deep.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+											return result, ggen.NewParseErr("deep.value", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 										}
 									}
 									if s.Bytes()[s.Pos+ki] != "null"[ki] {
-										return result, ggen.NewParseErr("deep.value", s.Offset(), ggen.ErrBadLiteral)
+										return result, ggen.NewParseErr("deep.value", s.Offset()+ki, ggen.ErrBadLiteral)
 									}
 								}
 								s.Pos += 4
@@ -2235,7 +2310,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				return result, ggen.NewParseErr("fixed", s.Offset(), err)
 			}
 			if seenFixed {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"fixed"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_5}
 			}
 			seenFixed = true
 			err = s.ArrayOpen()
@@ -2254,7 +2329,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{"fixed"}, Want: 2, Got: 3, AtLeast: true}
+					return result, &ggen.LenError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_5, Want: 2, Got: 3, AtLeast: true}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -2265,11 +2340,11 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("fixed", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("fixed", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("fixed", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("fixed", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -2383,7 +2458,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				return result, ggen.NewParseErr("fixed", s.Offset(), ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{"fixed"}, Want: 2, Got: idx0}
+				return result, &ggen.LenError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_5, Want: 2, Got: idx0}
 			}
 			s.Pos++
 		case "null":
@@ -2392,7 +2467,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				return result, ggen.NewParseErr("null", s.Offset(), err)
 			}
 			if seenNull {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"null"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_6}
 			}
 			seenNull = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2404,11 +2479,11 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("null", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("null", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("null", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("null", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.Null = sql.NullString{}
@@ -2428,7 +2503,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				return result, ggen.NewParseErr("pairs", s.Offset(), err)
 			}
 			if seenPairs {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"pairs"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_7}
 			}
 			seenPairs = true
 			err = s.SkipSpace()
@@ -2444,11 +2519,11 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("pairs", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("pairs", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("pairs", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("pairs", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -2496,7 +2571,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				var idx1 int
 				for s.Bytes()[s.Pos] != ']' {
 					if idx1 >= 2 {
-						return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{"pairs[]"}, Want: 2, Got: 3, AtLeast: true}
+						return result, &ggen.LenError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_8, Want: 2, Got: 3, AtLeast: true}
 					}
 					row0[idx1], err = s.String(true)
 					if err != nil {
@@ -2529,7 +2604,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 					return result, ggen.NewParseErr("pairs[]", s.Offset(), ggen.ErrBadArray)
 				}
 				if idx1 != 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{"pairs[]"}, Want: 2, Got: idx1}
+					return result, &ggen.LenError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_8, Want: 2, Got: idx1}
 				}
 				s.Pos++
 				result.Pairs[len(result.Pairs)-1] = row0
@@ -2565,7 +2640,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				return result, ggen.NewParseErr("rows", s.Offset(), err)
 			}
 			if seenRows {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rows"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_9}
 			}
 			seenRows = true
 			err = s.SkipSpace()
@@ -2581,11 +2656,11 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("rows", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("rows", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("rows", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("rows", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -2605,6 +2680,7 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 					return result, ggen.NewParseErr("rows", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
+			live0 := held2
 			if s.Bytes()[s.Pos] == ']' {
 				if result.Rows == nil {
 					result.Rows = [][]string{}
@@ -2612,13 +2688,17 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 			} else {
 				if result.Rows == nil {
 					result.Rows = make([][]string, 0, ggenCap_HTMLEscapeNested_Rows___string)
+					live0 = cap(result.Rows)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				if len(result.Rows) < cap(result.Rows) {
+				if len(result.Rows) < live0 {
 					result.Rows = result.Rows[:len(result.Rows)+1]
+				} else if len(result.Rows) < cap(result.Rows) {
+					result.Rows = append(result.Rows, nil)
 				} else {
 					result.Rows = append(result.Rows, nil)
+					live0 = cap(result.Rows)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -2629,11 +2709,11 @@ func (recv HTMLEscapeNested) DecodeFromStream(s *ggen.Stream) (result HTMLEscape
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("rows", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("rows", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("rows", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("rows", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -3135,6 +3215,831 @@ func (s HTMLEscapeNested) AppendJSON(dst []byte) ([]byte, error) {
 			}
 		}
 		dst = append(dst, ']')
+	}
+	return append(dst, '}'), nil
+}
+
+func (recv HTMLEscapeRaw) DecodeFrom(data []byte) (result HTMLEscapeRaw, i int, err error) {
+	result = recv
+	if result.ByKey != nil {
+		clear(result.ByKey)
+	}
+	if result.Metas != nil {
+		result.Metas = result.Metas[:0]
+	}
+	if result.Rest != nil {
+		clear(result.Rest)
+	}
+	seenAny := false
+	seenByKey := false
+	seenMeta := false
+	seenMetas := false
+	seenVal := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenAny {
+			result.Any = nil
+		}
+		if !seenMeta {
+			result.Meta = nil
+		}
+		if !seenVal {
+			result.Val = nil
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "any":
+			if seenAny {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_10}
+			}
+			seenAny = true
+			result.Any, i, err = ggen.Any(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("any", i, err)
+			}
+		case "byKey":
+			if seenByKey {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_11}
+			}
+			seenByKey = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
+					return result, i, ggen.NewParseErr("byKey", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.ByKey = nil
+				break
+			}
+			if i >= len(data) || data[i] != '{' {
+				return result, i, ggen.NewParseErr("byKey", i, ggen.ErrBadObject)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == '}' {
+				if result.ByKey == nil {
+					result.ByKey = map[string]json.RawMessage{}
+				}
+			} else {
+				if result.ByKey == nil {
+					result.ByKey = make(map[string]json.RawMessage)
+				}
+			}
+			if i < len(data) && data[i] != '}' {
+				for {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("byKey", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("byKey", i, err)
+						}
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, ggen.NewParseErr("byKey", i, ggen.ErrBadObject)
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					{
+						var mv json.RawMessage
+						start := i
+						i, err = ggen.SkipValue(data, start)
+						if err != nil {
+							return result, i, ggen.NewParseErr("byKey.value", i, err)
+						}
+						err = ggen.CheckUTF8(data[start:i])
+						if err != nil {
+							return result, i, ggen.NewParseErr("byKey.value", i, err)
+						}
+						mv = data[start:i]
+						result.ByKey[mk] = mv
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, ggen.NewParseErr("byKey", i, ggen.ErrBadObject)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != '}' {
+				return result, i, ggen.NewParseErr("byKey", i, ggen.ErrBadObject)
+			}
+			i++
+		case "meta":
+			if seenMeta {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_12}
+			}
+			seenMeta = true
+			start := i
+			i, err = ggen.SkipValue(data, start)
+			if err != nil {
+				return result, i, ggen.NewParseErr("meta", i, err)
+			}
+			err = ggen.CheckUTF8(data[start:i])
+			if err != nil {
+				return result, i, ggen.NewParseErr("meta", i, err)
+			}
+			result.Meta = data[start:i]
+		case "metas":
+			if seenMetas {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_13}
+			}
+			seenMetas = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
+					return result, i, ggen.NewParseErr("metas", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.Metas = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, ggen.NewParseErr("metas", i, ggen.ErrBadArray)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.Metas == nil {
+					result.Metas = []json.RawMessage{}
+				}
+			} else {
+				if result.Metas == nil {
+					result.Metas = make([]json.RawMessage, 0, ggenCap_HTMLEscapeRaw_Metas_json_RawMessage)
+				}
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.Metas = append(result.Metas, nil)
+					start := i
+					i, err = ggen.SkipValue(data, start)
+					if err != nil {
+						return result, i, ggen.NewParseErr("metas[]", i, err)
+					}
+					err = ggen.CheckUTF8(data[start:i])
+					if err != nil {
+						return result, i, ggen.NewParseErr("metas[]", i, err)
+					}
+					result.Metas[len(result.Metas)-1] = data[start:i]
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, ggen.NewParseErr("metas", i, ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, ggen.NewParseErr("metas", i, ggen.ErrBadArray)
+			}
+			i++
+		case "val":
+			if seenVal {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_htmlescape_test_14}
+			}
+			seenVal = true
+			start := i
+			i, err = ggen.SkipValue(data, start)
+			if err != nil {
+				return result, i, ggen.NewParseErr("val", i, err)
+			}
+			err = ggen.CheckUTF8(data[start:i])
+			if err != nil {
+				return result, i, ggen.NewParseErr("val", i, err)
+			}
+			result.Val = data[start:i]
+		default:
+			if result.Rest == nil {
+				result.Rest = make(map[string]json.RawMessage)
+			}
+			spanStart := i
+			i, err = ggen.SkipValue(data, i)
+			if err != nil {
+				return result, i, ggen.NewParseErr(key, i, err)
+			}
+			err = ggen.CheckUTF8(data[spanStart:i])
+			if err != nil {
+				return result, i, ggen.NewParseErr(key, i, err)
+			}
+			var entry json.RawMessage
+			if err = json.Unmarshal(data[spanStart:i], &entry); err != nil {
+				return result, i, ggen.NewParseErrOpaque(key, i, err)
+			}
+			result.Rest[key] = entry
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenAny {
+				result.Any = nil
+			}
+			if !seenMeta {
+				result.Meta = nil
+			}
+			if !seenVal {
+				result.Val = nil
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv HTMLEscapeRaw) DecodeFromStream(s *ggen.Stream) (result HTMLEscapeRaw, err error) {
+	result = recv
+	if result.ByKey != nil {
+		clear(result.ByKey)
+	}
+	if result.Metas != nil {
+		result.Metas = result.Metas[:0]
+	}
+	if result.Rest != nil {
+		clear(result.Rest)
+	}
+	seenAny := false
+	seenByKey := false
+	seenMeta := false
+	seenMetas := false
+	seenVal := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenAny {
+			result.Any = nil
+		}
+		if !seenMeta {
+			result.Meta = nil
+		}
+		if !seenVal {
+			result.Val = nil
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "any":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("any", s.Offset(), err)
+			}
+			if seenAny {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_10}
+			}
+			seenAny = true
+			result.Any, err = s.Any(true)
+			if err != nil {
+				return result, ggen.NewParseErr("any", s.Offset(), err)
+			}
+		case "byKey":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("byKey", s.Offset(), err)
+			}
+			if seenByKey {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_11}
+			}
+			seenByKey = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("byKey", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("byKey", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("byKey", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("byKey", s.Offset()+ki, ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.ByKey = nil
+				break
+			}
+			err = s.ObjectOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("byKey", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("byKey", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("byKey", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == '}' {
+				if result.ByKey == nil {
+					result.ByKey = map[string]json.RawMessage{}
+				}
+			} else {
+				if result.ByKey == nil {
+					result.ByKey = make(map[string]json.RawMessage)
+				}
+			}
+			for s.Bytes()[s.Pos] != '}' {
+				var mk string
+				mk, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("byKey", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("byKey", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("byKey", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] != ':' {
+					return result, ggen.NewParseErr("byKey", s.Offset(), ggen.ErrBadObject)
+				}
+				s.Pos++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("byKey", s.Offset(), err)
+				}
+				{
+					var mv json.RawMessage
+					span, err := s.CaptureValue()
+					if err != nil {
+						return result, ggen.NewParseErr("byKey.value", s.Offset(), err)
+					}
+					err = ggen.CheckUTF8(span)
+					if err != nil {
+						return result, ggen.NewParseErr("byKey.value", s.Offset(), err)
+					}
+					mv = append(mv[:0:0], span...)
+					result.ByKey[mk] = mv
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("byKey", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("byKey", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("byKey", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, ggen.NewParseErr("byKey", s.Offset(), ggen.ErrBadObject)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != '}' {
+				return result, ggen.NewParseErr("byKey", s.Offset(), ggen.ErrBadObject)
+			}
+			s.Pos++
+		case "meta":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("meta", s.Offset(), err)
+			}
+			if seenMeta {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_12}
+			}
+			seenMeta = true
+			span, err := s.CaptureValue()
+			if err != nil {
+				return result, ggen.NewParseErr("meta", s.Offset(), err)
+			}
+			err = ggen.CheckUTF8(span)
+			if err != nil {
+				return result, ggen.NewParseErr("meta", s.Offset(), err)
+			}
+			result.Meta = append(result.Meta[:0:0], span...)
+		case "metas":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("metas", s.Offset(), err)
+			}
+			if seenMetas {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_13}
+			}
+			seenMetas = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("metas", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("metas", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("metas", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("metas", s.Offset()+ki, ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.Metas = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("metas", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("metas", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("metas", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.Metas == nil {
+					result.Metas = []json.RawMessage{}
+				}
+			} else {
+				if result.Metas == nil {
+					result.Metas = make([]json.RawMessage, 0, ggenCap_HTMLEscapeRaw_Metas_json_RawMessage)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				result.Metas = append(result.Metas, nil)
+				span, err := s.CaptureValue()
+				if err != nil {
+					return result, ggen.NewParseErr("metas[]", s.Offset(), err)
+				}
+				err = ggen.CheckUTF8(span)
+				if err != nil {
+					return result, ggen.NewParseErr("metas[]", s.Offset(), err)
+				}
+				result.Metas[len(result.Metas)-1] = append(result.Metas[len(result.Metas)-1][:0:0], span...)
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("metas", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("metas", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("metas", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, ggen.NewParseErr("metas", s.Offset(), ggen.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, ggen.NewParseErr("metas", s.Offset(), ggen.ErrBadArray)
+			}
+			s.Pos++
+		case "val":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("val", s.Offset(), err)
+			}
+			if seenVal {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_htmlescape_test_14}
+			}
+			seenVal = true
+			span, err := s.CaptureValue()
+			if err != nil {
+				return result, ggen.NewParseErr("val", s.Offset(), err)
+			}
+			err = ggen.CheckUTF8(span)
+			if err != nil {
+				return result, ggen.NewParseErr("val", s.Offset(), err)
+			}
+			result.Val = append(result.Val[:0:0], span...)
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			if result.Rest == nil {
+				result.Rest = make(map[string]json.RawMessage)
+			}
+			span, err := s.CaptureValue()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			err = ggen.CheckUTF8(span)
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			var entry json.RawMessage
+			if err = json.Unmarshal(span, &entry); err != nil {
+				return result, ggen.NewParseErrOpaque(ownKey, s.Offset(), err)
+			}
+			result.Rest[ownKey] = entry
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenAny {
+				result.Any = nil
+			}
+			if !seenMeta {
+				result.Meta = nil
+			}
+			if !seenVal {
+				result.Val = nil
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s HTMLEscapeRaw) JSONSize() int {
+	size := 49
+	size += ggen.AnySizeHTML(s.Any)
+	size += len(s.ByKey) * 4
+	for k, v := range s.ByKey {
+		size += len(k) * 6
+		if n := len(v); n > 0 {
+			size += n * 6
+		} else {
+			size += 4
+		}
+	}
+	if n := len(s.Meta); n > 0 {
+		size += n * 6
+	} else {
+		size += 4
+	}
+	if n := len(s.Metas); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.Metas {
+		if n := len(s.Metas[i0]); n > 0 {
+			size += n * 6
+		} else {
+			size += 4
+		}
+	}
+	if n := len(s.Val); n > 0 {
+		size += n * 6
+	} else {
+		size += 4
+	}
+	size += len(s.Rest) * 4
+	for k, v := range s.Rest {
+		size += len(k) * 6
+		if n := len(v); n > 0 {
+			size += n * 6
+		} else {
+			size += 4
+		}
+	}
+	return size
+}
+
+func (s HTMLEscapeRaw) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, '{')
+	start := len(dst)
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"any\":"...)
+	if dst, err = ggen.AppendAnyHTML(dst, s.Any); err != nil {
+		return dst, err
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"byKey\":"...)
+	if s.ByKey == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '{')
+		firstByKey := true
+		for k, v := range s.ByKey {
+			if firstByKey {
+				firstByKey = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
+			}
+			dst = ggen.AppendString(dst, k)
+			dst = append(dst, ':')
+			if len(v) == 0 {
+				dst = append(dst, "null"...)
+			} else {
+				dst = ggen.AppendRawHTML(dst, v)
+			}
+		}
+		dst = append(dst, '}')
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"meta\":"...)
+	if len(s.Meta) == 0 {
+		dst = append(dst, "null"...)
+	} else {
+		dst = ggen.AppendRawHTML(dst, s.Meta)
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"metas\":"...)
+	if s.Metas == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.Metas) > 0 {
+			if len(s.Metas[0]) == 0 {
+				dst = append(dst, "null"...)
+			} else {
+				dst = ggen.AppendRawHTML(dst, s.Metas[0])
+			}
+			for _, v0 := range s.Metas[1:] {
+				dst = append(dst, ',')
+				if len(v0) == 0 {
+					dst = append(dst, "null"...)
+				} else {
+					dst = ggen.AppendRawHTML(dst, v0)
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	if len(dst) > start {
+		dst = append(dst, ',')
+	}
+	dst = append(dst, "\"val\":"...)
+	if len(s.Val) == 0 {
+		dst = append(dst, "null"...)
+	} else {
+		dst = ggen.AppendRawHTML(dst, s.Val)
+	}
+	for k, v := range s.Rest {
+		if len(dst) > start {
+			dst = append(dst, ',')
+		}
+		dst = append(dst, '"')
+		dst = ggen.AppendString(dst, k)
+		dst = append(dst, ':')
+		if len(v) == 0 {
+			dst = append(dst, "null"...)
+		} else {
+			dst = ggen.AppendRawHTML(dst, v)
+		}
 	}
 	return append(dst, '}'), nil
 }

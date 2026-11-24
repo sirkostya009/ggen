@@ -11,6 +11,21 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
+var ggenKeys_fuzz_test_0 = []string{"b"}
+var ggenKeys_fuzz_test_1 = []string{"f32"}
+var ggenKeys_fuzz_test_2 = []string{"f64"}
+var ggenKeys_fuzz_test_3 = []string{"i"}
+var ggenKeys_fuzz_test_4 = []string{"i16"}
+var ggenKeys_fuzz_test_5 = []string{"i32"}
+var ggenKeys_fuzz_test_6 = []string{"i64"}
+var ggenKeys_fuzz_test_7 = []string{"i8"}
+var ggenKeys_fuzz_test_8 = []string{"str"}
+var ggenKeys_fuzz_test_9 = []string{"u"}
+var ggenKeys_fuzz_test_10 = []string{"u16"}
+var ggenKeys_fuzz_test_11 = []string{"u32"}
+var ggenKeys_fuzz_test_12 = []string{"u64"}
+var ggenKeys_fuzz_test_13 = []string{"u8"}
+
 func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err error) {
 	result = recv
 	seenB := false
@@ -114,7 +129,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 		switch key {
 		case "b":
 			if seenB {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_fuzz_test_0}
 			}
 			seenB = true
 			result.B, i, err = ggen.Bool(data, i)
@@ -124,7 +139,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 		case "f32":
 			if seenF32 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"f32"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_fuzz_test_1}
 			}
 			seenF32 = true
 			result.F32, i, err = ggen.Float32(data, i)
@@ -133,7 +148,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 		case "f64":
 			if seenF64 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"f64"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_fuzz_test_2}
 			}
 			seenF64 = true
 			result.F64, i, err = ggen.Float64(data, i)
@@ -142,7 +157,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 		case "i":
 			if seenI {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_fuzz_test_3}
 			}
 			seenI = true
 			neg := false
@@ -193,10 +208,13 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			} else {
 				n = int64(u)
 			}
+			if int64(int(n)) != n {
+				return result, i, ggen.NewParseErr("i", i, ggen.ErrNumberOverflow)
+			}
 			result.I = int(n)
 		case "i16":
 			if seenI16 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i16"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_fuzz_test_4}
 			}
 			seenI16 = true
 			neg := false
@@ -253,7 +271,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.I16 = int16(n)
 		case "i32":
 			if seenI32 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i32"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_fuzz_test_5}
 			}
 			seenI32 = true
 			neg := false
@@ -310,7 +328,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.I32 = int32(n)
 		case "i64":
 			if seenI64 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i64"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_fuzz_test_6}
 			}
 			seenI64 = true
 			neg := false
@@ -364,7 +382,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.I64 = n
 		case "i8":
 			if seenI8 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i8"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_fuzz_test_7}
 			}
 			seenI8 = true
 			neg := false
@@ -421,7 +439,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.I8 = int8(n)
 		case "str":
 			if seenStr {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"str"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_fuzz_test_8}
 			}
 			seenStr = true
 			if i >= len(data) || data[i] != '"' {
@@ -446,7 +464,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			}
 		case "u":
 			if seenU {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"u"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_fuzz_test_9}
 			}
 			seenU = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -478,10 +496,13 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 					return result, i, ggen.NewParseErr("u", i, ggen.ErrBadNumber)
 				}
 			}
+			if uint64(uint(n)) != n {
+				return result, i, ggen.NewParseErr("u", i, ggen.ErrNumberOverflow)
+			}
 			result.U = uint(n)
 		case "u16":
 			if seenU16 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"u16"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_fuzz_test_10}
 			}
 			seenU16 = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -519,7 +540,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.U16 = uint16(n)
 		case "u32":
 			if seenU32 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"u32"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_fuzz_test_11}
 			}
 			seenU32 = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -557,7 +578,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.U32 = uint32(n)
 		case "u64":
 			if seenU64 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"u64"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_fuzz_test_12}
 			}
 			seenU64 = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -592,7 +613,7 @@ func (recv PrimStruct) DecodeFrom(data []byte) (result PrimStruct, i int, err er
 			result.U64 = n
 		case "u8":
 			if seenU8 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"u8"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_fuzz_test_13}
 			}
 			seenU8 = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -783,7 +804,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_fuzz_test_0}
 			}
 			seenB = true
 			result.B, err = s.Bool()
@@ -796,7 +817,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("f32", s.Offset(), err)
 			}
 			if seenF32 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"f32"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_fuzz_test_1}
 			}
 			seenF32 = true
 			result.F32, err = s.Float32()
@@ -809,7 +830,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("f64", s.Offset(), err)
 			}
 			if seenF64 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"f64"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_fuzz_test_2}
 			}
 			seenF64 = true
 			result.F64, err = s.Float64()
@@ -822,13 +843,16 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_fuzz_test_3}
 			}
 			seenI = true
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
 				return result, ggen.NewParseErr("i", s.Offset(), err)
+			}
+			if int64(int(iv)) != iv {
+				return result, ggen.NewParseErr("i", s.Offset(), ggen.ErrNumberOverflow)
 			}
 			result.I = int(iv)
 		case "i16":
@@ -837,7 +861,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("i16", s.Offset(), err)
 			}
 			if seenI16 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i16"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_fuzz_test_4}
 			}
 			seenI16 = true
 			var iv int64
@@ -855,7 +879,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("i32", s.Offset(), err)
 			}
 			if seenI32 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i32"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_fuzz_test_5}
 			}
 			seenI32 = true
 			var iv int64
@@ -873,7 +897,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("i64", s.Offset(), err)
 			}
 			if seenI64 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i64"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_fuzz_test_6}
 			}
 			seenI64 = true
 			result.I64, err = s.Int64()
@@ -886,7 +910,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("i8", s.Offset(), err)
 			}
 			if seenI8 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i8"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_fuzz_test_7}
 			}
 			seenI8 = true
 			var iv int64
@@ -904,7 +928,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("str", s.Offset(), err)
 			}
 			if seenStr {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"str"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_fuzz_test_8}
 			}
 			seenStr = true
 			result.Str, err = s.String(true)
@@ -917,13 +941,16 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("u", s.Offset(), err)
 			}
 			if seenU {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"u"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_fuzz_test_9}
 			}
 			seenU = true
 			var uv uint64
 			uv, err = s.Uint64()
 			if err != nil {
 				return result, ggen.NewParseErr("u", s.Offset(), err)
+			}
+			if uint64(uint(uv)) != uv {
+				return result, ggen.NewParseErr("u", s.Offset(), ggen.ErrNumberOverflow)
 			}
 			result.U = uint(uv)
 		case "u16":
@@ -932,7 +959,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("u16", s.Offset(), err)
 			}
 			if seenU16 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"u16"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_fuzz_test_10}
 			}
 			seenU16 = true
 			var uv uint64
@@ -950,7 +977,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("u32", s.Offset(), err)
 			}
 			if seenU32 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"u32"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_fuzz_test_11}
 			}
 			seenU32 = true
 			var uv uint64
@@ -968,7 +995,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("u64", s.Offset(), err)
 			}
 			if seenU64 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"u64"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_fuzz_test_12}
 			}
 			seenU64 = true
 			result.U64, err = s.Uint64()
@@ -981,7 +1008,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 				return result, ggen.NewParseErr("u8", s.Offset(), err)
 			}
 			if seenU8 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"u8"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_fuzz_test_13}
 			}
 			seenU8 = true
 			var uv uint64
@@ -1072,7 +1099,7 @@ func (recv PrimStruct) DecodeFromStream(s *ggen.Stream) (result PrimStruct, err 
 }
 
 func (s PrimStruct) JSONSize() int {
-	size := 348
+	size := 264
 	size += len(s.Str) * 2
 	return size
 }

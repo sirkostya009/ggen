@@ -9,6 +9,8 @@ package integrationtests
 import (
 	"bytes"
 	"database/sql"
+	"encoding/json"
+	"encoding/json/jsontext"
 	"errors"
 	"net"
 	"strings"
@@ -488,5 +490,49 @@ func TestSQLNull_GenericInContainerAlias(t *testing.T) {
 		if err != nil || string(b) != c.want || string(s) != c.want {
 			t.Errorf("round trip: bytes %s, stream %s, %v; want %s", b, s, err, c.want)
 		}
+	}
+}
+
+// SQLNullRaw wraps raw JSON spans in a generic sql.Null[T] at every position.
+//
+//ggen:generate
+type SQLNullRaw struct {
+	R sql.Null[json.RawMessage]           `json:"r"`
+	V []sql.Null[jsontext.Value]          `json:"v"`
+	P *sql.Null[json.RawMessage]          `json:"p"`
+	M map[string]sql.Null[jsontext.Value] `json:"m"`
+}
+
+// SQLNullRawCopy is SQLNullRaw's field shapes with owned spans.
+//
+//ggen:generate copy
+type SQLNullRawCopy struct {
+	R sql.Null[json.RawMessage]           `json:"r"`
+	V []sql.Null[jsontext.Value]          `json:"v"`
+	M map[string]sql.Null[jsontext.Value] `json:"m"`
+}
+
+func TestSQLNull_GenericRawSpan(t *testing.T) {
+	t.Parallel()
+	const want = `{"m":{"k":{"b":null}},"p":3,"r":{"a":[1,2]},"v":[true,null,"x"]}`
+	b, s, err := remarshalBoth[SQLNullRaw]([]byte(want))
+	if err != nil || string(b) != want || string(s) != want {
+		t.Errorf("round trip: bytes %s, stream %s, %v; want %s", b, s, err, want)
+	}
+	const inCopy = `{"m":{"k":"s"},"r":{"a":1},"v":[null,[2]]}`
+	data := []byte(inCopy)
+	v, _, err := SQLNullRawCopy{}.DecodeFrom(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range data {
+		data[i] = ' '
+	}
+	if out, err := ggen.Marshal(v); err != nil || string(out) != inCopy {
+		t.Errorf("copy decode aliases input: %s %v, want %s", out, err, inCopy)
+	}
+	b, s, err = remarshalBoth[SQLNullRawCopy]([]byte(inCopy))
+	if err != nil || string(b) != inCopy || string(s) != inCopy {
+		t.Errorf("copy round trip: bytes %s, stream %s, %v; want %s", b, s, err, inCopy)
 	}
 }

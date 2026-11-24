@@ -49,3 +49,33 @@ type Grant struct {
 type Quota struct {
 	TTL time.Duration `json:"ttl"`
 }
+
+// Pair is multierr: a decoder in another package collects both of its
+// failures alongside its own.
+//
+//ggen:generate multierr
+type Pair struct {
+	A string `json:"a" pipe:"minlen=3"`
+	B string `json:"b" pipe:"minlen=3"`
+}
+
+// Box is not annotated, so another package's generated code decodes it with
+// encoding/json, which calls External2's UnmarshalJSON hook.
+type Box struct {
+	Label string
+	In    External2
+}
+
+// Base2 has generated methods and no MarshalJSON.
+//
+//ggen:generate
+type Base2 struct {
+	ID int `json:"id"`
+}
+
+// Outer2 is not annotated. It embeds Base2 and gets its generated methods
+// by promotion, but they encode only the embedded fields.
+type Outer2 struct {
+	Base2
+	Extra int `json:"extra"`
+}

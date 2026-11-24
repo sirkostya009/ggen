@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"unicode/utf8"
 
 	"github.com/sirkostya009/ggen/gen/model"
 )
@@ -520,9 +521,9 @@ func (l *prettyLogger) highlightSpans(line string, errs []*model.RichError) stri
 	return b.String()
 }
 
-// multiCaretLine builds a caret line with one `^` per error column. Tabs in
-// the source are copied so the carets line up. Errors on the same column share
-// one caret.
+// multiCaretLine builds a caret line with one `^` per error column. It pads
+// one space per rune, and tabs in the source are copied so the carets line
+// up. Errors on the same column share one caret.
 func (l *prettyLogger) multiCaretLine(line string, errs []*model.RichError) string {
 	cols := make([]int, len(errs))
 	for i, re := range errs {
@@ -534,37 +535,38 @@ func (l *prettyLogger) multiCaretLine(line string, errs []*model.RichError) stri
 	var b strings.Builder
 	pos := 0
 	for _, c := range cols {
-		for i := pos; i < c; i++ {
-			if i < len(line) && line[i] == '\t' {
-				b.WriteByte('\t')
-			} else {
-				b.WriteByte(' ')
-			}
+		if c < pos {
+			continue
 		}
+		writePad(&b, line[pos:c])
 		b.WriteString(l.paint(ansiRed+ansiBold, "^"))
-		pos = c + 1
+		_, size := utf8.DecodeRuneInString(line[c:])
+		pos = c + max(size, 1)
 	}
 	return b.String()
 }
 
 // caretIndent builds the whitespace that puts the caret under the bad token.
-// It is one space per byte of the header prefix, then one space or tab per
-// source byte up to the CodeSpan column. Tabs are copied so they line up.
+// It is one space per rune of the header prefix, then one space or tab per
+// source rune up to the CodeSpan column. Tabs are copied so they line up.
 func caretIndent(line, prefix string, posCol int, span, anchor string) string {
 	col := min(max(model.ResolveSpanCol(line, posCol, span, anchor)-1, 0), len(line))
 	var b strings.Builder
 	b.Grow(len(prefix) + col)
-	for range len(prefix) {
-		b.WriteByte(' ')
-	}
-	for i := range col {
-		if line[i] == '\t' {
+	writePad(&b, prefix)
+	writePad(&b, line[:col])
+	return b.String()
+}
+
+// writePad writes one space per rune of s, copying tabs.
+func writePad(b *strings.Builder, s string) {
+	for _, r := range s {
+		if r == '\t' {
 			b.WriteByte('\t')
 		} else {
 			b.WriteByte(' ')
 		}
 	}
-	return b.String()
 }
 
 // highlightSpan makes the first occurrence of span red and bold. If span is

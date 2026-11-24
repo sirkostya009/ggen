@@ -9,6 +9,7 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonIgnoreUnknownKeys
 
+/** Role is an enum. */
 @Serializable
 enum class Role {
     @SerialName("admin")
@@ -17,6 +18,7 @@ enum class Role {
     MEMBER,
 }
 
+/** Plan is an integer enum without a zero member. */
 typealias Plan = Long
 
 /** Address is reached from both. */

@@ -1,4 +1,4 @@
-//go:build goexperiment.simd
+//go:build goexperiment.simd && amd64
 
 package ggen
 

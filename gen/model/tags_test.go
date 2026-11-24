@@ -1,6 +1,8 @@
 package model
 
 import (
+	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -28,6 +30,9 @@ func TestParseJSONTag(t *testing.T) {
 		{"'a,b'", "a,b", JSONOptions{}, false, false},
 		{`'it\'s',omitempty`, "it's", JSONOptions{OmitEmpty: true}, false, false},
 		{"'-'", "-", JSONOptions{}, false, false},
+		{"a\xffb", "", JSONOptions{}, false, true},
+		{"'a\xff',omitempty", "", JSONOptions{}, false, true},
+		{"héllo", "héllo", JSONOptions{}, false, false},
 		// The catch-all map has no name and no other option, and `inline` is
 		// rejected instead of being read as a name.
 		{",embed", "", JSONOptions{Embed: true}, false, false},
@@ -75,6 +80,34 @@ func TestParseJSONTag(t *testing.T) {
 		if name != tt.wantName || opts != tt.wantOpts || ignored != tt.wantIgnored {
 			t.Errorf("parseJSONTag(%q) = (%q, %+v, %v), want (%q, %+v, %v)",
 				tt.input, name, opts, ignored, tt.wantName, tt.wantOpts, tt.wantIgnored)
+		}
+	}
+}
+
+func TestCheckTagReadable(t *testing.T) {
+	t.Parallel()
+	for tag, wantErr := range map[string]string{
+		`uihint:"wide" json:"a"`:             "",
+		`xjson:"b"`:                          "",
+		`db:"x" json:"a" pipe:"gte=1"`:       "",
+		`json:""`:                            "",
+		`json:"a" json:"b"`:                  "",
+		`other:"\q" json:"a"`:                "",
+		`json:"a" pipe: "gte=1"`:             "`pipe` tag is present but unreadable",
+		`json :"a"`:                          "`json` tag is present but unreadable",
+		`db:x json:"a"`:                      "`json` tag is present but unreadable",
+		`json:"a" pipe:"gte=1`:               "`pipe` tag is present but unreadable",
+		`json:"a" pipe:"x\'y"`:               "`pipe` tag is present but unreadable",
+		`json:"a" pipe:"gte=1" pipe:"lte=5"`: "`pipe` tag appears twice",
+		`hint:"2" json:"a" hint:"4"`:         "`hint` tag appears twice",
+		`db:x`:                               "",
+	} {
+		err := checkTagReadable(reflect.StructTag(tag), "F")
+		switch {
+		case wantErr == "" && err != nil:
+			t.Errorf("%s: unexpected error %v", tag, err)
+		case wantErr != "" && (err == nil || !strings.Contains(err.Error(), wantErr)):
+			t.Errorf("%s: error %v, want %q", tag, err, wantErr)
 		}
 	}
 }

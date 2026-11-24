@@ -5,6 +5,7 @@ package integrationtests
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"slices"
 	"strings"
 	"testing"
@@ -218,6 +219,48 @@ func TestCrossPkgValidator_accepts(t *testing.T) {
 	}
 }
 
+// CrossPkgNameStruct pins the Name a cross-package @pkg.Func reports: the
+// bare function name, whatever the role.
+//
+//ggen:generate
+type CrossPkgNameStruct struct {
+	Code  string `json:"code"  pipe:"@thirdparty.ValidateUpper"`
+	Short string `json:"short" pipe:"@thirdparty.IsShort"`
+	Bang  string `json:"bang"  pipe:"@thirdparty.NoBang"`
+}
+
+func TestCrossPkgFunc_errorNameIsBare(t *testing.T) {
+	t.Parallel()
+	name := func(err error) string {
+		var ce *ggen.CustomError
+		var pe *ggen.PredicateError
+		var me *ggen.ModError
+		switch {
+		case errors.As(err, &ce):
+			return ce.Name
+		case errors.As(err, &pe):
+			return pe.Name
+		case errors.As(err, &me):
+			return me.Name
+		}
+		return fmt.Sprintf("unexpected error %v", err)
+	}
+	for in, want := range map[string]string{
+		`{"code":"low"}`:   "ValidateUpper",
+		`{"short":"long"}`: "IsShort",
+		`{"bang":"a!"}`:    "NoBang",
+	} {
+		_, _, err := CrossPkgNameStruct{}.DecodeFrom([]byte(in))
+		if got := name(err); got != want {
+			t.Errorf("bytes %s: Name = %q, want %q", in, got, want)
+		}
+		_, serr := ggen.NewStream(strings.NewReader(in), nil).Value[CrossPkgNameStruct]()
+		if got := name(serr); got != want {
+			t.Errorf("stream %s: Name = %q, want %q", in, got, want)
+		}
+	}
+}
+
 // NestedMultierrStruct wraps a multierr struct and adds its own rules. The
 // outer struct must collect the inner validation errors into one aggregate,
 // not stop at the first one.
@@ -401,6 +444,118 @@ func TestMultierr_NoCursorDesyncOnSingleErrorCallee(t *testing.T) {
 	}
 }
 
+// DrainMid is a multierr callee that still stops mid-value: its fail-fast
+// child failed, so it hands up one error. DrainTop must stop too, or the
+// rest of the child's object would be read as its own keys.
+//
+//ggen:generate multierr
+type DrainMid struct {
+	I DrainInner `json:"i"`
+	B string     `json:"b"`
+}
+
+//ggen:generate multierr
+type DrainTop struct {
+	M    DrainMid   `json:"m"`
+	L    []DrainMid `json:"l"`
+	B    string     `json:"b"`
+	Name string     `json:"name"`
+}
+
+func TestMultierr_NoCursorDesyncOnStoppedMultierrCallee(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct{ in, root string }{
+		{`{"m":{"i":{"a":"x","b":"stolen"},"b":"mid"},"b":"top","name":"t"}`, "m"},
+		{`{"l":[{"i":{"a":"x","b":"stolen"}}],"b":"top","name":"t"}`, "l"},
+	} {
+		v, _, err := DrainTop{}.DecodeFrom([]byte(tc.in))
+		sv, serr := ggen.NewStream(strings.NewReader(tc.in), nil).Value[DrainTop]()
+		for i, err := range []error{err, serr} {
+			if _, ok := err.(ggen.Errors); ok {
+				t.Errorf("%s path %d: bare ggen.Errors for a value not read whole: %v", tc.in, i, err)
+			}
+			me, ok := errors.AsType[*ggen.MinLenError](err)
+			if !ok || me.Keys[0] != tc.root || !strings.HasSuffix(strings.Join(me.Keys, "."), "i.a") {
+				t.Errorf("%s path %d: want MinLenError at %s...i.a, got %v", tc.in, i, tc.root, err)
+			}
+		}
+		if v.B == "stolen" || sv.B == "stolen" {
+			t.Errorf("%s: child key read into the parent: %q / %q", tc.in, v.B, sv.B)
+		}
+	}
+}
+
+// LenME's strict-length failures are validation failures like any other: a
+// multierr decoder collects them and reads on to its closing brace.
+//
+//ggen:generate multierr
+type LenME struct {
+	Name string  `json:"name" pipe:"minlen=3"`
+	Tup  [2]int  `json:"tup"`
+	Sum  [4]byte `json:"sum"`
+	Zero [0]int  `json:"zero"`
+	Tail string  `json:"tail" pipe:"minlen=3"`
+}
+
+//ggen:generate multierr
+type LenMEParent struct {
+	C LenME  `json:"c"`
+	B string `json:"b"`
+}
+
+func TestMultierr_CollectsStrictLengthFailures(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		in   string
+		want []string
+	}{
+		{
+			`{"name":"x","tup":[1],"sum":"AQID","zero":[1,2],"tail":"y"}`,
+			[]string{"name", "tup", "sum", "zero", "tail"},
+		},
+		{`{"tup":[1,2,3,[4,{"a":5}]],"name":"abc","tail":"abc"}`, []string{"tup"}},
+	} {
+		_, n, err := LenME{}.DecodeFrom([]byte(tc.in))
+		_, serr := ggen.NewStream(strings.NewReader(tc.in), nil).Value[LenME]()
+		if n != len(tc.in) {
+			t.Errorf("%s: consumed %d of %d", tc.in, n, len(tc.in))
+		}
+		for i, err := range []error{err, serr} {
+			es, ok := err.(ggen.Errors)
+			if !ok {
+				t.Fatalf("%s path %d: want ggen.Errors, got %T: %v", tc.in, i, err, err)
+			}
+			var got []string
+			for _, e := range es {
+				got = append(got, strings.Join(e.Path(), "."))
+			}
+			if !slices.Equal(got, tc.want) {
+				t.Errorf("%s path %d: paths %v, want %v", tc.in, i, got, tc.want)
+			}
+		}
+		if err.Error() != serr.Error() {
+			t.Errorf("%s: bytes %v, stream %v", tc.in, err, serr)
+		}
+	}
+	_, _, err := LenME{}.DecodeFrom([]byte(`{"tup":[1,2,3,4]}`))
+	if le, ok := errors.AsType[*ggen.LenError](err); !ok || le.Got != 4 || le.AtLeast {
+		t.Errorf("want the true count 4, got %v", err)
+	}
+
+	in := `{"c":{"tup":[1,2,3],"sum":"AQIDBA==","name":"abc","tail":"abc"},"b":"outer"}`
+	v, _, err := LenMEParent{}.DecodeFrom([]byte(in))
+	sv, serr := ggen.NewStream(strings.NewReader(in), nil).Value[LenMEParent]()
+	for i, err := range []error{err, serr} {
+		es, ok := err.(ggen.Errors)
+		if !ok || len(es) != 1 || strings.Join(es[0].Path(), ".") != "c.tup" {
+			t.Errorf("path %d: want one failure at c.tup, got %v", i, err)
+		}
+	}
+	if v.B != "outer" || sv.B != "outer" || v.C.Sum != [4]byte{1, 2, 3, 4} {
+		t.Errorf("parent lost its fields: %+v / %+v", v, sv)
+	}
+}
+
 // DrainFailFast is a single-error parent of a multierr callee. It stops in
 // the middle of its own object, so it must hand up one error, not the
 // callee's ggen.Errors: a bare Errors would tell Stream.Array the element was
@@ -487,7 +642,7 @@ func TestMultierr_StreamArray_StopsOnFailFastElement(t *testing.T) {
 	}
 }
 
-// A top-level slice keeps every failure of the element it stopped on.
+// A top-level slice keeps every failure of a multierr element.
 func TestMultierr_UnmarshalSlice_KeepsElementErrors(t *testing.T) {
 	t.Parallel()
 	in := `[{"a":"long"}, {"a":"x","c":1}]`
@@ -502,6 +657,32 @@ func TestMultierr_UnmarshalSlice_KeepsElementErrors(t *testing.T) {
 	}
 	if want := strings.Index(in, `"x"`) + len(`"x"`); me.Pos != want {
 		t.Errorf("Pos = %d, want %d (full-payload offset)", me.Pos, want)
+	}
+}
+
+// Slice helpers read past a multierr element to the closing bracket, collect
+// every element's failures and return the whole slice with them. The stream
+// cursor ends after the array, so the next value reads cleanly.
+func TestMultierr_SliceHelpers_CollectAcrossElements(t *testing.T) {
+	t.Parallel()
+	in := `[{"a":"x","b":"one"}, {"a":"long","b":"two"}, {"a":"y","b":"three"}]`
+	got, err := ggen.UnmarshalSlice[DrainInnerME]([]byte(in))
+	errs, ok := err.(ggen.Errors)
+	if !ok || len(errs) != 2 || len(got) != 3 || got[2].B != "three" {
+		t.Fatalf("UnmarshalSlice = %v, %T %v; want 3 values and 2 ggen.Errors", got, err, err)
+	}
+	if p0, p1 := strings.Join(errs[0].Path(), "."), strings.Join(errs[1].Path(), "."); p0 != "[0].a" || p1 != "[2].a" {
+		t.Errorf("paths = %q, %q; want [0].a, [2].a", p0, p1)
+	}
+
+	s := ggen.NewStream(strings.NewReader(in+` {"a":"next"}`), make([]byte, 0, 16))
+	sgot, serr := s.Slice[DrainInnerME]()
+	serrs, ok := serr.(ggen.Errors)
+	if !ok || len(serrs) != 2 || len(sgot) != 3 || sgot[2].B != "three" {
+		t.Fatalf("Stream.Slice = %v, %T %v; want 3 values and 2 ggen.Errors", sgot, serr, serr)
+	}
+	if next, err := s.Value[DrainInnerME](); err != nil || next.A != "next" {
+		t.Errorf("Value after Slice = %+v, %v; want a=next", next, err)
 	}
 }
 

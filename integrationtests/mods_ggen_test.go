@@ -3,6 +3,7 @@
 package integrationtests
 
 import (
+	"encoding/base64"
 	"math"
 	"strconv"
 	"strings"
@@ -14,6 +15,9 @@ import (
 
 // Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
 const ggenCap_ModStruct_Tags_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_DrainTop_L_DrainMid = (min((80/max(int(unsafe.Sizeof(*new(DrainMid))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(DrainMid))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(DrainMid))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(DrainMid))), 1)), 1)
 
 // Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
 const ggenCap_PtrElemPipe_C_int = (min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(int))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(int))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(int))), 1)), 1)
@@ -59,6 +63,49 @@ const ggenCap_PtrElemPipeME_I_Ptrint = (min((80/max(int(unsafe.Sizeof(*new(*int)
 
 var ggenOneof_mods_test_0 = []string{"New York", "Los Angeles", "LA"}
 var ggenOneof_mods_test_1 = []string{"AB"}
+var ggenKeys_mods_test_0 = []string{"email"}
+var ggenKeys_mods_test_1 = []string{"sku"}
+var ggenKeys_mods_test_2 = []string{"tags"}
+var ggenKeys_mods_test_3 = []string{"code"}
+var ggenKeys_mods_test_4 = []string{"nonEmpty"}
+var ggenKeys_mods_test_5 = []string{"tag"}
+var ggenKeys_mods_test_6 = []string{"bang"}
+var ggenKeys_mods_test_7 = []string{"short"}
+var ggenKeys_mods_test_8 = []string{"name"}
+var ggenKeys_mods_test_9 = []string{"inner"}
+var ggenKeys_mods_test_10 = []string{"city"}
+var ggenKeys_mods_test_11 = []string{"note"}
+var ggenKeys_mods_test_12 = []string{"slug"}
+var ggenKeys_mods_test_13 = []string{"a"}
+var ggenKeys_mods_test_14 = []string{"b"}
+var ggenKeys_mods_test_15 = []string{"i"}
+var ggenKeys_mods_test_16 = []string{"ime"}
+var ggenKeys_mods_test_17 = []string{"tail"}
+var ggenKeys_mods_test_18 = []string{"l"}
+var ggenKeys_mods_test_19 = []string{"m"}
+var ggenKeys_mods_test_20 = []string{"sum"}
+var ggenKeys_mods_test_21 = []string{"tup"}
+var ggenKeys_mods_test_22 = []string{"zero"}
+var ggenKeys_mods_test_23 = []string{"c"}
+var ggenKeys_mods_test_24 = []string{"cp"}
+var ggenKeys_mods_test_25 = []string{"p"}
+var ggenKeys_mods_test_26 = []string{"q"}
+var ggenKeys_mods_test_27 = []string{"qp"}
+var ggenKeys_mods_test_28 = []string{"v"}
+var ggenKeys_mods_test_29 = []string{"e"}
+var ggenKeys_mods_test_30 = []string{"f"}
+var ggenKeys_mods_test_31 = []string{"a[]"}
+var ggenKeys_mods_test_32 = []string{"g"}
+var ggenKeys_mods_test_33 = []string{"g[]"}
+var ggenKeys_mods_test_34 = []string{"i[]"}
+var ggenKeys_mods_test_35 = []string{"mv"}
+var ggenKeys_mods_test_36 = []string{"mv.value"}
+var ggenKeys_mods_test_37 = []string{"pp"}
+var ggenKeys_mods_test_38 = []string{"pp[]"}
+var ggenKeys_mods_test_39 = []string{"s"}
+var ggenKeys_mods_test_40 = []string{"z"}
+var ggenKeys_mods_test_41 = []string{"z[]"}
+var ggenKeys_mods_test_42 = []string{"n"}
 
 func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err error) {
 	result = recv
@@ -119,7 +166,7 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 		switch key {
 		case "email":
 			if seenEmail {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"email"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_0}
 			}
 			seenEmail = true
 			if i >= len(data) || data[i] != '"' {
@@ -146,7 +193,7 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 			result.Email = strings.ToLower(result.Email)
 		case "sku":
 			if seenSKU {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"sku"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_1}
 			}
 			seenSKU = true
 			if i >= len(data) || data[i] != '"' {
@@ -172,11 +219,12 @@ func (recv ModStruct) DecodeFrom(data []byte) (result ModStruct, i int, err erro
 			result.SKU = strings.TrimPrefix(result.SKU, "SKU-")
 		case "tags":
 			if seenTags {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"tags"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_2}
 			}
 			seenTags = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("tags", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -319,7 +367,7 @@ func (recv ModStruct) DecodeFromStream(s *ggen.Stream) (result ModStruct, err er
 				return result, ggen.NewParseErr("email", s.Offset(), err)
 			}
 			if seenEmail {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"email"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_0}
 			}
 			seenEmail = true
 			result.Email, err = s.String(true)
@@ -334,7 +382,7 @@ func (recv ModStruct) DecodeFromStream(s *ggen.Stream) (result ModStruct, err er
 				return result, ggen.NewParseErr("sku", s.Offset(), err)
 			}
 			if seenSKU {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"sku"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_1}
 			}
 			seenSKU = true
 			result.SKU, err = s.String(true)
@@ -348,7 +396,7 @@ func (recv ModStruct) DecodeFromStream(s *ggen.Stream) (result ModStruct, err er
 				return result, ggen.NewParseErr("tags", s.Offset(), err)
 			}
 			if seenTags {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"tags"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_2}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -364,11 +412,11 @@ func (recv ModStruct) DecodeFromStream(s *ggen.Stream) (result ModStruct, err er
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("tags", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("tags", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("tags", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("tags", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -530,7 +578,7 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 			result.Email = ""
 		}
 		if !seenEmail {
-			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"email"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: ggenKeys_mods_test_0}
 		}
 		return result, i, nil
 	}
@@ -565,7 +613,7 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 		switch key {
 		case "email":
 			if seenEmail {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"email"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_0}
 			}
 			seenEmail = true
 			if i >= len(data) || data[i] != '"' {
@@ -589,15 +637,15 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 				}
 			}
 			if v, err := RejectShort(result.Email); err != nil {
-				return result, i, ggen.NewParseErr("email", i, err)
+				return result, i, ggen.NewParseErrOpaque("email", i, err)
 			} else {
 				result.Email = v
 			}
 			if !strings.Contains(result.Email, "@") {
-				return result, i, &ggen.ContainsError{Pos: i, Keys: []string{"email"}, Want: "@", Value: result.Email}
+				return result, i, &ggen.ContainsError{Pos: i, Keys: ggenKeys_mods_test_0, Want: "@", Value: result.Email}
 			}
 			if len(result.Email) < 10 {
-				return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"email"}, Limit: 10, Got: len(result.Email)}
+				return result, i, &ggen.MinLenError{Pos: i, Keys: ggenKeys_mods_test_0, Limit: 10, Got: len(result.Email)}
 			}
 		default:
 			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
@@ -621,7 +669,7 @@ func (recv FallibleModStruct) DecodeFrom(data []byte) (result FallibleModStruct,
 				result.Email = ""
 			}
 			if !seenEmail {
-				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"email"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: ggenKeys_mods_test_0}
 			}
 			return result, i, nil
 		}
@@ -652,7 +700,7 @@ func (recv FallibleModStruct) DecodeFromStream(s *ggen.Stream) (result FallibleM
 			result.Email = ""
 		}
 		if !seenEmail {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"email"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: ggenKeys_mods_test_0}
 		}
 		return result, nil
 	}
@@ -669,7 +717,7 @@ func (recv FallibleModStruct) DecodeFromStream(s *ggen.Stream) (result FallibleM
 				return result, ggen.NewParseErr("email", s.Offset(), err)
 			}
 			if seenEmail {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"email"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_0}
 			}
 			seenEmail = true
 			result.Email, err = s.String(true)
@@ -677,15 +725,15 @@ func (recv FallibleModStruct) DecodeFromStream(s *ggen.Stream) (result FallibleM
 				return result, ggen.NewParseErr("email", s.Offset(), err)
 			}
 			if v, err := RejectShort(result.Email); err != nil {
-				return result, ggen.NewParseErr("email", s.Offset(), err)
+				return result, ggen.NewParseErrOpaque("email", s.Offset(), err)
 			} else {
 				result.Email = v
 			}
 			if !strings.Contains(result.Email, "@") {
-				return result, &ggen.ContainsError{Pos: s.Offset(), Keys: []string{"email"}, Want: "@", Value: result.Email}
+				return result, &ggen.ContainsError{Pos: s.Offset(), Keys: ggenKeys_mods_test_0, Want: "@", Value: result.Email}
 			}
 			if len(result.Email) < 10 {
-				return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"email"}, Limit: 10, Got: len(result.Email)}
+				return result, &ggen.MinLenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_0, Limit: 10, Got: len(result.Email)}
 			}
 		default:
 			ownKey := strings.Clone(key)
@@ -721,7 +769,7 @@ func (recv FallibleModStruct) DecodeFromStream(s *ggen.Stream) (result FallibleM
 				result.Email = ""
 			}
 			if !seenEmail {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"email"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: ggenKeys_mods_test_0}
 			}
 			return result, nil
 		}
@@ -763,7 +811,7 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 			result.Email = ""
 		}
 		if !seenEmail {
-			errs = append(errs, &ggen.RequiredError{Pos: i, Keys: []string{"email"}})
+			errs = append(errs, &ggen.RequiredError{Pos: i, Keys: ggenKeys_mods_test_0})
 		}
 		if len(errs) > 0 {
 			return result, i, errs
@@ -801,7 +849,7 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 		switch key {
 		case "email":
 			if seenEmail {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"email"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_0})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("email", i, err)
@@ -829,15 +877,15 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 					}
 				}
 				if v, err := RejectShort(result.Email); err != nil {
-					return result, i, ggen.NewParseErr("email", i, err)
+					return result, i, ggen.NewParseErrOpaque("email", i, err)
 				} else {
 					result.Email = v
 				}
 				if !strings.Contains(result.Email, "@") {
-					errs = append(errs, &ggen.ContainsError{Pos: i, Keys: []string{"email"}, Want: "@", Value: result.Email})
+					errs = append(errs, &ggen.ContainsError{Pos: i, Keys: ggenKeys_mods_test_0, Want: "@", Value: result.Email})
 				}
 				if len(result.Email) < 10 {
-					errs = append(errs, &ggen.MinLenError{Pos: i, Keys: []string{"email"}, Limit: 10, Got: len(result.Email)})
+					errs = append(errs, &ggen.MinLenError{Pos: i, Keys: ggenKeys_mods_test_0, Limit: 10, Got: len(result.Email)})
 				}
 			}
 		default:
@@ -866,7 +914,7 @@ func (recv FallibleModMultierrStruct) DecodeFrom(data []byte) (result FallibleMo
 				result.Email = ""
 			}
 			if !seenEmail {
-				errs = append(errs, &ggen.RequiredError{Pos: i, Keys: []string{"email"}})
+				errs = append(errs, &ggen.RequiredError{Pos: i, Keys: ggenKeys_mods_test_0})
 			}
 			if len(errs) > 0 {
 				return result, i, errs
@@ -901,7 +949,7 @@ func (recv FallibleModMultierrStruct) DecodeFromStream(s *ggen.Stream) (result F
 			result.Email = ""
 		}
 		if !seenEmail {
-			errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"email"}})
+			errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Keys: ggenKeys_mods_test_0})
 		}
 		if len(errs) > 0 {
 			return result, errs
@@ -921,7 +969,7 @@ func (recv FallibleModMultierrStruct) DecodeFromStream(s *ggen.Stream) (result F
 				return result, ggen.NewParseErr("email", s.Offset(), err)
 			}
 			if seenEmail {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"email"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_0})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("email", s.Offset(), err)
@@ -933,15 +981,15 @@ func (recv FallibleModMultierrStruct) DecodeFromStream(s *ggen.Stream) (result F
 					return result, ggen.NewParseErr("email", s.Offset(), err)
 				}
 				if v, err := RejectShort(result.Email); err != nil {
-					return result, ggen.NewParseErr("email", s.Offset(), err)
+					return result, ggen.NewParseErrOpaque("email", s.Offset(), err)
 				} else {
 					result.Email = v
 				}
 				if !strings.Contains(result.Email, "@") {
-					errs = append(errs, &ggen.ContainsError{Pos: s.Offset(), Keys: []string{"email"}, Want: "@", Value: result.Email})
+					errs = append(errs, &ggen.ContainsError{Pos: s.Offset(), Keys: ggenKeys_mods_test_0, Want: "@", Value: result.Email})
 				}
 				if len(result.Email) < 10 {
-					errs = append(errs, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"email"}, Limit: 10, Got: len(result.Email)})
+					errs = append(errs, &ggen.MinLenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_0, Limit: 10, Got: len(result.Email)})
 				}
 
 			}
@@ -983,7 +1031,7 @@ func (recv FallibleModMultierrStruct) DecodeFromStream(s *ggen.Stream) (result F
 				result.Email = ""
 			}
 			if !seenEmail {
-				errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"email"}})
+				errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Keys: ggenKeys_mods_test_0})
 			}
 			if len(errs) > 0 {
 				return result, errs
@@ -1067,7 +1115,7 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 		switch key {
 		case "code":
 			if seenCode {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"code"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_3}
 			}
 			seenCode = true
 			if i >= len(data) || data[i] != '"' {
@@ -1091,11 +1139,11 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 				}
 			}
 			if err := thirdparty.ValidateUpper(result.Code); err != nil {
-				return result, i, &ggen.CustomError{Pos: i, Keys: []string{"code"}, Name: "thirdparty.ValidateUpper", Value: result.Code, Cause: err}
+				return result, i, &ggen.CustomError{Pos: i, Keys: ggenKeys_mods_test_3, Name: "ValidateUpper", Value: result.Code, Cause: err}
 			}
 		case "nonEmpty":
 			if seenNonEmpty {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"nonEmpty"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_4}
 			}
 			seenNonEmpty = true
 			if i >= len(data) || data[i] != '"' {
@@ -1119,13 +1167,13 @@ func (recv CrossPkgModStruct) DecodeFrom(data []byte) (result CrossPkgModStruct,
 				}
 			}
 			if v, err := thirdparty.ParseNonEmpty(result.NonEmpty); err != nil {
-				return result, i, ggen.NewParseErr("nonEmpty", i, err)
+				return result, i, ggen.NewParseErrOpaque("nonEmpty", i, err)
 			} else {
 				result.NonEmpty = v
 			}
 		case "tag":
 			if seenTag {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"tag"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_5}
 			}
 			seenTag = true
 			if i >= len(data) || data[i] != '"' {
@@ -1227,7 +1275,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *ggen.Stream) (result CrossPkgM
 				return result, ggen.NewParseErr("code", s.Offset(), err)
 			}
 			if seenCode {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"code"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_3}
 			}
 			seenCode = true
 			result.Code, err = s.String(true)
@@ -1235,7 +1283,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *ggen.Stream) (result CrossPkgM
 				return result, ggen.NewParseErr("code", s.Offset(), err)
 			}
 			if err := thirdparty.ValidateUpper(result.Code); err != nil {
-				return result, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"code"}, Name: "thirdparty.ValidateUpper", Value: result.Code, Cause: err}
+				return result, &ggen.CustomError{Pos: s.Offset(), Keys: ggenKeys_mods_test_3, Name: "ValidateUpper", Value: result.Code, Cause: err}
 			}
 		case "nonEmpty":
 			err = s.ConsumeColon()
@@ -1243,7 +1291,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *ggen.Stream) (result CrossPkgM
 				return result, ggen.NewParseErr("nonEmpty", s.Offset(), err)
 			}
 			if seenNonEmpty {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"nonEmpty"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_4}
 			}
 			seenNonEmpty = true
 			result.NonEmpty, err = s.String(true)
@@ -1251,7 +1299,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *ggen.Stream) (result CrossPkgM
 				return result, ggen.NewParseErr("nonEmpty", s.Offset(), err)
 			}
 			if v, err := thirdparty.ParseNonEmpty(result.NonEmpty); err != nil {
-				return result, ggen.NewParseErr("nonEmpty", s.Offset(), err)
+				return result, ggen.NewParseErrOpaque("nonEmpty", s.Offset(), err)
 			} else {
 				result.NonEmpty = v
 			}
@@ -1261,7 +1309,7 @@ func (recv CrossPkgModStruct) DecodeFromStream(s *ggen.Stream) (result CrossPkgM
 				return result, ggen.NewParseErr("tag", s.Offset(), err)
 			}
 			if seenTag {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"tag"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_5}
 			}
 			seenTag = true
 			result.Tag, err = s.String(true)
@@ -1334,6 +1382,336 @@ func (s CrossPkgModStruct) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
+func (recv CrossPkgNameStruct) DecodeFrom(data []byte) (result CrossPkgNameStruct, i int, err error) {
+	result = recv
+	seenBang := false
+	seenCode := false
+	seenShort := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenBang {
+			result.Bang = ""
+		}
+		if !seenCode {
+			result.Code = ""
+		}
+		if !seenShort {
+			result.Short = ""
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "bang":
+			if seenBang {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_6}
+			}
+			seenBang = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("bang", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.Bang = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Bang, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("bang", i, err)
+				}
+			}
+			if v, ok := thirdparty.NoBang(result.Bang); !ok {
+				return result, i, ggen.NewParseErr("bang", i, &ggen.ModError{Pos: i, Name: "NoBang", Msg: "", Value: result.Bang})
+			} else {
+				result.Bang = v
+			}
+		case "code":
+			if seenCode {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_3}
+			}
+			seenCode = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("code", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.Code = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Code, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("code", i, err)
+				}
+			}
+			if err := thirdparty.ValidateUpper(result.Code); err != nil {
+				return result, i, &ggen.CustomError{Pos: i, Keys: ggenKeys_mods_test_3, Name: "ValidateUpper", Value: result.Code, Cause: err}
+			}
+		case "short":
+			if seenShort {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_7}
+			}
+			seenShort = true
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("short", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 32
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				result.Short = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				result.Short, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("short", i, err)
+				}
+			}
+			if !thirdparty.IsShort(result.Short) {
+				return result, i, &ggen.PredicateError{Pos: i, Keys: ggenKeys_mods_test_7, Name: "IsShort", Msg: "", Value: result.Short}
+			}
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenBang {
+				result.Bang = ""
+			}
+			if !seenCode {
+				result.Code = ""
+			}
+			if !seenShort {
+				result.Short = ""
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv CrossPkgNameStruct) DecodeFromStream(s *ggen.Stream) (result CrossPkgNameStruct, err error) {
+	result = recv
+	seenBang := false
+	seenCode := false
+	seenShort := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenBang {
+			result.Bang = ""
+		}
+		if !seenCode {
+			result.Code = ""
+		}
+		if !seenShort {
+			result.Short = ""
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "bang":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("bang", s.Offset(), err)
+			}
+			if seenBang {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_6}
+			}
+			seenBang = true
+			result.Bang, err = s.String(true)
+			if err != nil {
+				return result, ggen.NewParseErr("bang", s.Offset(), err)
+			}
+			if v, ok := thirdparty.NoBang(result.Bang); !ok {
+				return result, ggen.NewParseErr("bang", s.Offset(), &ggen.ModError{Pos: s.Offset(), Name: "NoBang", Msg: "", Value: result.Bang})
+			} else {
+				result.Bang = v
+			}
+		case "code":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("code", s.Offset(), err)
+			}
+			if seenCode {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_3}
+			}
+			seenCode = true
+			result.Code, err = s.String(true)
+			if err != nil {
+				return result, ggen.NewParseErr("code", s.Offset(), err)
+			}
+			if err := thirdparty.ValidateUpper(result.Code); err != nil {
+				return result, &ggen.CustomError{Pos: s.Offset(), Keys: ggenKeys_mods_test_3, Name: "ValidateUpper", Value: result.Code, Cause: err}
+			}
+		case "short":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("short", s.Offset(), err)
+			}
+			if seenShort {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_7}
+			}
+			seenShort = true
+			result.Short, err = s.String(true)
+			if err != nil {
+				return result, ggen.NewParseErr("short", s.Offset(), err)
+			}
+			if !thirdparty.IsShort(result.Short) {
+				return result, &ggen.PredicateError{Pos: s.Offset(), Keys: ggenKeys_mods_test_7, Name: "IsShort", Msg: "", Value: result.Short}
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenBang {
+				result.Bang = ""
+			}
+			if !seenCode {
+				result.Code = ""
+			}
+			if !seenShort {
+				result.Short = ""
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s CrossPkgNameStruct) JSONSize() int {
+	size := 32
+	size += len(s.Bang) * 2
+	size += len(s.Code) * 2
+	size += len(s.Short) * 2
+	return size
+}
+
+func (s CrossPkgNameStruct) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"bang\":\""...)
+	dst = ggen.AppendStringNoHTML(dst, s.Bang)
+	dst = append(dst, ",\"code\":\""...)
+	dst = ggen.AppendStringNoHTML(dst, s.Code)
+	dst = append(dst, ",\"short\":\""...)
+	dst = ggen.AppendStringNoHTML(dst, s.Short)
+	return append(dst, '}'), nil
+}
+
 func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrStruct, i int, err error) {
 	result = recv
 	var errs ggen.Errors
@@ -1362,7 +1740,7 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 			result.Name = ""
 		}
 		if !seenName {
-			errs = append(errs, &ggen.RequiredError{Pos: i, Keys: []string{"name"}})
+			errs = append(errs, &ggen.RequiredError{Pos: i, Keys: ggenKeys_mods_test_8})
 		}
 		if len(errs) > 0 {
 			return result, i, errs
@@ -1400,7 +1778,7 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 		switch key {
 		case "code":
 			if seenCode {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"code"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_3})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("code", i, err)
@@ -1455,17 +1833,20 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 				} else {
 					n = int64(u)
 				}
+				if int64(int(n)) != n {
+					return result, i, ggen.NewParseErr("code", i, ggen.ErrNumberOverflow)
+				}
 				result.Code = int(n)
 				if result.Code < 0 {
-					errs = append(errs, &ggen.GTEError{Pos: i, Keys: []string{"code"}, Limit: int(0), Value: result.Code})
+					errs = append(errs, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_3, Limit: int(0), Value: result.Code})
 				}
 				if result.Code > 100 {
-					errs = append(errs, &ggen.LTEError{Pos: i, Keys: []string{"code"}, Limit: int(100), Value: result.Code})
+					errs = append(errs, &ggen.LTEError{Pos: i, Keys: ggenKeys_mods_test_3, Limit: int(100), Value: result.Code})
 				}
 			}
 		case "inner":
 			if seenInner {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"inner"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_9})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("inner", i, err)
@@ -1481,7 +1862,7 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 			}
 		case "name":
 			if seenName {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_8})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("name", i, err)
@@ -1509,7 +1890,7 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 					}
 				}
 				if len(result.Name) < 2 {
-					errs = append(errs, &ggen.MinLenError{Pos: i, Keys: []string{"name"}, Limit: 2, Got: len(result.Name)})
+					errs = append(errs, &ggen.MinLenError{Pos: i, Keys: ggenKeys_mods_test_8, Limit: 2, Got: len(result.Name)})
 				}
 			}
 		default:
@@ -1544,7 +1925,7 @@ func (recv NestedMultierrStruct) DecodeFrom(data []byte) (result NestedMultierrS
 				result.Name = ""
 			}
 			if !seenName {
-				errs = append(errs, &ggen.RequiredError{Pos: i, Keys: []string{"name"}})
+				errs = append(errs, &ggen.RequiredError{Pos: i, Keys: ggenKeys_mods_test_8})
 			}
 			if len(errs) > 0 {
 				return result, i, errs
@@ -1587,7 +1968,7 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *ggen.Stream) (result Nested
 			result.Name = ""
 		}
 		if !seenName {
-			errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}})
+			errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Keys: ggenKeys_mods_test_8})
 		}
 		if len(errs) > 0 {
 			return result, errs
@@ -1607,7 +1988,7 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *ggen.Stream) (result Nested
 				return result, ggen.NewParseErr("code", s.Offset(), err)
 			}
 			if seenCode {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"code"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_3})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("code", s.Offset(), err)
@@ -1619,12 +2000,15 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *ggen.Stream) (result Nested
 				if err != nil {
 					return result, ggen.NewParseErr("code", s.Offset(), err)
 				}
+				if int64(int(iv)) != iv {
+					return result, ggen.NewParseErr("code", s.Offset(), ggen.ErrNumberOverflow)
+				}
 				result.Code = int(iv)
 				if result.Code < 0 {
-					errs = append(errs, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"code"}, Limit: int(0), Value: result.Code})
+					errs = append(errs, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_3, Limit: int(0), Value: result.Code})
 				}
 				if result.Code > 100 {
-					errs = append(errs, &ggen.LTEError{Pos: s.Offset(), Keys: []string{"code"}, Limit: int(100), Value: result.Code})
+					errs = append(errs, &ggen.LTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_3, Limit: int(100), Value: result.Code})
 				}
 
 			}
@@ -1634,7 +2018,7 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *ggen.Stream) (result Nested
 				return result, ggen.NewParseErr("inner", s.Offset(), err)
 			}
 			if seenInner {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"inner"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_9})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("inner", s.Offset(), err)
@@ -1653,7 +2037,7 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *ggen.Stream) (result Nested
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_8})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("name", s.Offset(), err)
@@ -1665,7 +2049,7 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *ggen.Stream) (result Nested
 					return result, ggen.NewParseErr("name", s.Offset(), err)
 				}
 				if len(result.Name) < 2 {
-					errs = append(errs, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 2, Got: len(result.Name)})
+					errs = append(errs, &ggen.MinLenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_8, Limit: 2, Got: len(result.Name)})
 				}
 
 			}
@@ -1713,7 +2097,7 @@ func (recv NestedMultierrStruct) DecodeFromStream(s *ggen.Stream) (result Nested
 				result.Name = ""
 			}
 			if !seenName {
-				errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}})
+				errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Keys: ggenKeys_mods_test_8})
 			}
 			if len(errs) > 0 {
 				return result, errs
@@ -1800,7 +2184,7 @@ func (recv QuotedParts) DecodeFrom(data []byte) (result QuotedParts, i int, err 
 		switch key {
 		case "city":
 			if seenCity {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"city"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_10}
 			}
 			seenCity = true
 			if i >= len(data) || data[i] != '"' {
@@ -1826,11 +2210,11 @@ func (recv QuotedParts) DecodeFrom(data []byte) (result QuotedParts, i int, err 
 			switch result.City {
 			case "New York", "Los Angeles", "LA":
 			default:
-				return result, i, &ggen.OneOfError{Pos: i, Keys: []string{"city"}, Allowed: ggenOneof_mods_test_0, Value: result.City}
+				return result, i, &ggen.OneOfError{Pos: i, Keys: ggenKeys_mods_test_10, Allowed: ggenOneof_mods_test_0, Value: result.City}
 			}
 		case "note":
 			if seenNote {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"note"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_11}
 			}
 			seenNote = true
 			if i >= len(data) || data[i] != '"' {
@@ -1925,7 +2309,7 @@ func (recv QuotedParts) DecodeFromStream(s *ggen.Stream) (result QuotedParts, er
 				return result, ggen.NewParseErr("city", s.Offset(), err)
 			}
 			if seenCity {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"city"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_10}
 			}
 			seenCity = true
 			result.City, err = s.String(true)
@@ -1935,7 +2319,7 @@ func (recv QuotedParts) DecodeFromStream(s *ggen.Stream) (result QuotedParts, er
 			switch result.City {
 			case "New York", "Los Angeles", "LA":
 			default:
-				return result, &ggen.OneOfError{Pos: s.Offset(), Keys: []string{"city"}, Allowed: ggenOneof_mods_test_0, Value: result.City}
+				return result, &ggen.OneOfError{Pos: s.Offset(), Keys: ggenKeys_mods_test_10, Allowed: ggenOneof_mods_test_0, Value: result.City}
 			}
 		case "note":
 			err = s.ConsumeColon()
@@ -1943,7 +2327,7 @@ func (recv QuotedParts) DecodeFromStream(s *ggen.Stream) (result QuotedParts, er
 				return result, ggen.NewParseErr("note", s.Offset(), err)
 			}
 			if seenNote {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"note"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_11}
 			}
 			seenNote = true
 			result.Note, err = s.String(true)
@@ -2065,7 +2449,7 @@ func (recv CaseRules) DecodeFrom(data []byte) (result CaseRules, i int, err erro
 		switch key {
 		case "code":
 			if seenCode {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"code"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_3}
 			}
 			seenCode = true
 			if i >= len(data) || data[i] != '"' {
@@ -2089,11 +2473,11 @@ func (recv CaseRules) DecodeFrom(data []byte) (result CaseRules, i int, err erro
 				}
 			}
 			if !ggen.IsUpper(result.Code) {
-				return result, i, &ggen.UpperError{Pos: i, Keys: []string{"code"}, Value: result.Code}
+				return result, i, &ggen.UpperError{Pos: i, Keys: ggenKeys_mods_test_3, Value: result.Code}
 			}
 		case "slug":
 			if seenSlug {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"slug"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_12}
 			}
 			seenSlug = true
 			if i >= len(data) || data[i] != '"' {
@@ -2117,7 +2501,7 @@ func (recv CaseRules) DecodeFrom(data []byte) (result CaseRules, i int, err erro
 				}
 			}
 			if !ggen.IsLower(result.Slug) {
-				return result, i, &ggen.LowerError{Pos: i, Keys: []string{"slug"}, Value: result.Slug}
+				return result, i, &ggen.LowerError{Pos: i, Keys: ggenKeys_mods_test_12, Value: result.Slug}
 			}
 		default:
 			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
@@ -2190,7 +2574,7 @@ func (recv CaseRules) DecodeFromStream(s *ggen.Stream) (result CaseRules, err er
 				return result, ggen.NewParseErr("code", s.Offset(), err)
 			}
 			if seenCode {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"code"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_3}
 			}
 			seenCode = true
 			result.Code, err = s.String(true)
@@ -2198,7 +2582,7 @@ func (recv CaseRules) DecodeFromStream(s *ggen.Stream) (result CaseRules, err er
 				return result, ggen.NewParseErr("code", s.Offset(), err)
 			}
 			if !ggen.IsUpper(result.Code) {
-				return result, &ggen.UpperError{Pos: s.Offset(), Keys: []string{"code"}, Value: result.Code}
+				return result, &ggen.UpperError{Pos: s.Offset(), Keys: ggenKeys_mods_test_3, Value: result.Code}
 			}
 		case "slug":
 			err = s.ConsumeColon()
@@ -2206,7 +2590,7 @@ func (recv CaseRules) DecodeFromStream(s *ggen.Stream) (result CaseRules, err er
 				return result, ggen.NewParseErr("slug", s.Offset(), err)
 			}
 			if seenSlug {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"slug"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_12}
 			}
 			seenSlug = true
 			result.Slug, err = s.String(true)
@@ -2214,7 +2598,7 @@ func (recv CaseRules) DecodeFromStream(s *ggen.Stream) (result CaseRules, err er
 				return result, ggen.NewParseErr("slug", s.Offset(), err)
 			}
 			if !ggen.IsLower(result.Slug) {
-				return result, &ggen.LowerError{Pos: s.Offset(), Keys: []string{"slug"}, Value: result.Slug}
+				return result, &ggen.LowerError{Pos: s.Offset(), Keys: ggenKeys_mods_test_12, Value: result.Slug}
 			}
 		default:
 			ownKey := strings.Clone(key)
@@ -2330,7 +2714,7 @@ func (recv DrainInner) DecodeFrom(data []byte) (result DrainInner, i int, err er
 		switch key {
 		case "a":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_13}
 			}
 			seenA = true
 			if i >= len(data) || data[i] != '"' {
@@ -2354,11 +2738,11 @@ func (recv DrainInner) DecodeFrom(data []byte) (result DrainInner, i int, err er
 				}
 			}
 			if len(result.A) < 3 {
-				return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"a"}, Limit: 3, Got: len(result.A)}
+				return result, i, &ggen.MinLenError{Pos: i, Keys: ggenKeys_mods_test_13, Limit: 3, Got: len(result.A)}
 			}
 		case "b":
 			if seenB {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_14}
 			}
 			seenB = true
 			if i >= len(data) || data[i] != '"' {
@@ -2452,7 +2836,7 @@ func (recv DrainInner) DecodeFromStream(s *ggen.Stream) (result DrainInner, err 
 				return result, ggen.NewParseErr("a", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_13}
 			}
 			seenA = true
 			result.A, err = s.String(true)
@@ -2460,7 +2844,7 @@ func (recv DrainInner) DecodeFromStream(s *ggen.Stream) (result DrainInner, err 
 				return result, ggen.NewParseErr("a", s.Offset(), err)
 			}
 			if len(result.A) < 3 {
-				return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"a"}, Limit: 3, Got: len(result.A)}
+				return result, &ggen.MinLenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_13, Limit: 3, Got: len(result.A)}
 			}
 		case "b":
 			err = s.ConsumeColon()
@@ -2468,7 +2852,7 @@ func (recv DrainInner) DecodeFromStream(s *ggen.Stream) (result DrainInner, err 
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_14}
 			}
 			seenB = true
 			result.B, err = s.String(true)
@@ -2593,7 +2977,7 @@ func (recv DrainInnerME) DecodeFrom(data []byte) (result DrainInnerME, i int, er
 		switch key {
 		case "a":
 			if seenA {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_13})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("a", i, err)
@@ -2621,12 +3005,12 @@ func (recv DrainInnerME) DecodeFrom(data []byte) (result DrainInnerME, i int, er
 					}
 				}
 				if len(result.A) < 3 {
-					errs = append(errs, &ggen.MinLenError{Pos: i, Keys: []string{"a"}, Limit: 3, Got: len(result.A)})
+					errs = append(errs, &ggen.MinLenError{Pos: i, Keys: ggenKeys_mods_test_13, Limit: 3, Got: len(result.A)})
 				}
 			}
 		case "b":
 			if seenB {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_14})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("b", i, err)
@@ -2736,7 +3120,7 @@ func (recv DrainInnerME) DecodeFromStream(s *ggen.Stream) (result DrainInnerME, 
 				return result, ggen.NewParseErr("a", s.Offset(), err)
 			}
 			if seenA {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_13})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("a", s.Offset(), err)
@@ -2748,7 +3132,7 @@ func (recv DrainInnerME) DecodeFromStream(s *ggen.Stream) (result DrainInnerME, 
 					return result, ggen.NewParseErr("a", s.Offset(), err)
 				}
 				if len(result.A) < 3 {
-					errs = append(errs, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"a"}, Limit: 3, Got: len(result.A)})
+					errs = append(errs, &ggen.MinLenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_13, Limit: 3, Got: len(result.A)})
 				}
 
 			}
@@ -2758,7 +3142,7 @@ func (recv DrainInnerME) DecodeFromStream(s *ggen.Stream) (result DrainInnerME, 
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_14})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("b", s.Offset(), err)
@@ -2904,7 +3288,7 @@ func (recv DrainOuter) DecodeFrom(data []byte) (result DrainOuter, i int, err er
 		switch key {
 		case "i":
 			if seenI {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_15})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("i", i, err)
@@ -2914,13 +3298,13 @@ func (recv DrainOuter) DecodeFrom(data []byte) (result DrainOuter, i int, err er
 				var consumed int
 				result.I, consumed, err = result.I.DecodeFrom(data[i:])
 				i += consumed
-				if err != nil {
+				if err != nil && !errs.Collect("i", i-consumed, err) {
 					return result, i, ggen.NewParseErrShift("i", i, consumed, err)
 				}
 			}
 		case "ime":
 			if seenIME {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"ime"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_16})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("ime", i, err)
@@ -2936,7 +3320,7 @@ func (recv DrainOuter) DecodeFrom(data []byte) (result DrainOuter, i int, err er
 			}
 		case "name":
 			if seenName {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_8})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("name", i, err)
@@ -2964,12 +3348,12 @@ func (recv DrainOuter) DecodeFrom(data []byte) (result DrainOuter, i int, err er
 					}
 				}
 				if len(result.Name) < 2 {
-					errs = append(errs, &ggen.MinLenError{Pos: i, Keys: []string{"name"}, Limit: 2, Got: len(result.Name)})
+					errs = append(errs, &ggen.MinLenError{Pos: i, Keys: ggenKeys_mods_test_8, Limit: 2, Got: len(result.Name)})
 				}
 			}
 		case "tail":
 			if seenTail {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"tail"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_17})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("tail", i, err)
@@ -3024,9 +3408,12 @@ func (recv DrainOuter) DecodeFrom(data []byte) (result DrainOuter, i int, err er
 				} else {
 					n = int64(u)
 				}
+				if int64(int(n)) != n {
+					return result, i, ggen.NewParseErr("tail", i, ggen.ErrNumberOverflow)
+				}
 				result.Tail = int(n)
 				if result.Tail > 10 {
-					errs = append(errs, &ggen.LTEError{Pos: i, Keys: []string{"tail"}, Limit: int(10), Value: result.Tail})
+					errs = append(errs, &ggen.LTEError{Pos: i, Keys: ggenKeys_mods_test_17, Limit: int(10), Value: result.Tail})
 				}
 			}
 		default:
@@ -3125,7 +3512,7 @@ func (recv DrainOuter) DecodeFromStream(s *ggen.Stream) (result DrainOuter, err 
 				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_15})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("i", s.Offset(), err)
@@ -3133,7 +3520,7 @@ func (recv DrainOuter) DecodeFromStream(s *ggen.Stream) (result DrainOuter, err 
 			} else {
 				seenI = true
 				result.I, err = result.I.DecodeFromStream(s)
-				if err != nil {
+				if err != nil && !errs.Collect("i", 0, err) {
 					return result, ggen.NewParseErr("i", s.Offset(), err)
 				}
 
@@ -3144,7 +3531,7 @@ func (recv DrainOuter) DecodeFromStream(s *ggen.Stream) (result DrainOuter, err 
 				return result, ggen.NewParseErr("ime", s.Offset(), err)
 			}
 			if seenIME {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"ime"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_16})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("ime", s.Offset(), err)
@@ -3163,7 +3550,7 @@ func (recv DrainOuter) DecodeFromStream(s *ggen.Stream) (result DrainOuter, err 
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_8})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("name", s.Offset(), err)
@@ -3175,7 +3562,7 @@ func (recv DrainOuter) DecodeFromStream(s *ggen.Stream) (result DrainOuter, err 
 					return result, ggen.NewParseErr("name", s.Offset(), err)
 				}
 				if len(result.Name) < 2 {
-					errs = append(errs, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 2, Got: len(result.Name)})
+					errs = append(errs, &ggen.MinLenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_8, Limit: 2, Got: len(result.Name)})
 				}
 
 			}
@@ -3185,7 +3572,7 @@ func (recv DrainOuter) DecodeFromStream(s *ggen.Stream) (result DrainOuter, err 
 				return result, ggen.NewParseErr("tail", s.Offset(), err)
 			}
 			if seenTail {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"tail"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_17})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("tail", s.Offset(), err)
@@ -3197,9 +3584,12 @@ func (recv DrainOuter) DecodeFromStream(s *ggen.Stream) (result DrainOuter, err 
 				if err != nil {
 					return result, ggen.NewParseErr("tail", s.Offset(), err)
 				}
+				if int64(int(iv)) != iv {
+					return result, ggen.NewParseErr("tail", s.Offset(), ggen.ErrNumberOverflow)
+				}
 				result.Tail = int(iv)
 				if result.Tail > 10 {
-					errs = append(errs, &ggen.LTEError{Pos: s.Offset(), Keys: []string{"tail"}, Limit: int(10), Value: result.Tail})
+					errs = append(errs, &ggen.LTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_17, Limit: int(10), Value: result.Tail})
 				}
 
 			}
@@ -3284,6 +3674,1910 @@ func (s DrainOuter) AppendJSON(dst []byte) ([]byte, error) {
 	return append(dst, '}'), nil
 }
 
+func (recv DrainMid) DecodeFrom(data []byte) (result DrainMid, i int, err error) {
+	result = recv
+	var errs ggen.Errors
+	seenB := false
+	seenI := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenB {
+			result.B = ""
+		}
+		if !seenI {
+			result.I = DrainInner{}
+		}
+		if len(errs) > 0 {
+			return result, i, errs
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "b":
+			if seenB {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_14})
+				i, err = ggen.SkipValue(data, i)
+				if err != nil {
+					return result, i, ggen.NewParseErr("b", i, err)
+				}
+			} else {
+				seenB = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, ggen.NewParseErr("b", i, ggen.ErrExpectString)
+				}
+				ke := i + 1
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+					ke++
+				}
+				if ke < len(data) && data[ke] == '"' {
+					result.B = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.B, i, err = ggen.String(data, i, true)
+					if err != nil {
+						return result, i, ggen.NewParseErr("b", i, err)
+					}
+				}
+			}
+		case "i":
+			if seenI {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_15})
+				i, err = ggen.SkipValue(data, i)
+				if err != nil {
+					return result, i, ggen.NewParseErr("i", i, err)
+				}
+			} else {
+				seenI = true
+				var consumed int
+				result.I, consumed, err = result.I.DecodeFrom(data[i:])
+				i += consumed
+				if err != nil && !errs.Collect("i", i-consumed, err) {
+					return result, i, ggen.NewParseErrShift("i", i, consumed, err)
+				}
+			}
+		default:
+			errs = append(errs, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}})
+			i, err = ggen.SkipValue(data, i)
+			if err != nil {
+				return result, i, ggen.NewParseErr(key, i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenB {
+				result.B = ""
+			}
+			if !seenI {
+				result.I = DrainInner{}
+			}
+			if len(errs) > 0 {
+				return result, i, errs
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv DrainMid) DecodeFromStream(s *ggen.Stream) (result DrainMid, err error) {
+	result = recv
+	var errs ggen.Errors
+	seenB := false
+	seenI := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenB {
+			result.B = ""
+		}
+		if !seenI {
+			result.I = DrainInner{}
+		}
+		if len(errs) > 0 {
+			return result, errs
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "b":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("b", s.Offset(), err)
+			}
+			if seenB {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_14})
+				err = s.SkipValue()
+				if err != nil {
+					return result, ggen.NewParseErr("b", s.Offset(), err)
+				}
+			} else {
+				seenB = true
+				result.B, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("b", s.Offset(), err)
+				}
+
+			}
+		case "i":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("i", s.Offset(), err)
+			}
+			if seenI {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_15})
+				err = s.SkipValue()
+				if err != nil {
+					return result, ggen.NewParseErr("i", s.Offset(), err)
+				}
+			} else {
+				seenI = true
+				result.I, err = result.I.DecodeFromStream(s)
+				if err != nil && !errs.Collect("i", 0, err) {
+					return result, ggen.NewParseErr("i", s.Offset(), err)
+				}
+
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}})
+			err = s.SkipValue()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenB {
+				result.B = ""
+			}
+			if !seenI {
+				result.I = DrainInner{}
+			}
+			if len(errs) > 0 {
+				return result, errs
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s DrainMid) JSONSize() int {
+	size := 13
+	size += len(s.B) * 2
+	size += s.I.JSONSize()
+	return size
+}
+
+func (s DrainMid) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"b\":\""...)
+	dst = ggen.AppendStringNoHTML(dst, s.B)
+	dst = append(dst, ",\"i\":"...)
+	if dst, err = s.I.AppendJSON(dst); err != nil {
+		return dst, err
+	}
+	return append(dst, '}'), nil
+}
+
+func (recv DrainTop) DecodeFrom(data []byte) (result DrainTop, i int, err error) {
+	result = recv
+	held0 := len(result.L)
+	if result.L != nil {
+		result.L = result.L[:0]
+	}
+	var errs ggen.Errors
+	seenB := false
+	seenL := false
+	seenM := false
+	seenName := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenB {
+			result.B = ""
+		}
+		if !seenM {
+			result.M = DrainMid{}
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if len(errs) > 0 {
+			return result, i, errs
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "b":
+			if seenB {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_14})
+				i, err = ggen.SkipValue(data, i)
+				if err != nil {
+					return result, i, ggen.NewParseErr("b", i, err)
+				}
+			} else {
+				seenB = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, ggen.NewParseErr("b", i, ggen.ErrExpectString)
+				}
+				ke := i + 1
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+					ke++
+				}
+				if ke < len(data) && data[ke] == '"' {
+					result.B = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.B, i, err = ggen.String(data, i, true)
+					if err != nil {
+						return result, i, ggen.NewParseErr("b", i, err)
+					}
+				}
+			}
+		case "l":
+			if seenL {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_18})
+				i, err = ggen.SkipValue(data, i)
+				if err != nil {
+					return result, i, ggen.NewParseErr("l", i, err)
+				}
+			} else {
+				seenL = true
+				if i < len(data) && data[i] == 'n' {
+					if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+						i = ggen.NullEnd(data, i)
+						return result, i, ggen.NewParseErr("l", i, ggen.ErrBadLiteral)
+					}
+					i += 4
+					result.L = nil
+					break
+				}
+				if i >= len(data) || data[i] != '[' {
+					return result, i, ggen.NewParseErr("l", i, ggen.ErrBadArray)
+				}
+				i++
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				live0 := held0
+				if i < len(data) && data[i] == ']' {
+					if result.L == nil {
+						result.L = []DrainMid{}
+					}
+				} else {
+					if result.L == nil {
+						result.L = make([]DrainMid, 0, ggenCap_DrainTop_L_DrainMid)
+						live0 = cap(result.L)
+					}
+				}
+				if i < len(data) && data[i] != ']' {
+					for {
+						if len(result.L) < live0 {
+							result.L = result.L[:len(result.L)+1]
+						} else if len(result.L) < cap(result.L) {
+							result.L = append(result.L, DrainMid{})
+						} else {
+							result.L = append(result.L, DrainMid{})
+							live0 = cap(result.L)
+						}
+						var consumed int
+						result.L[len(result.L)-1], consumed, err = result.L[len(result.L)-1].DecodeFrom(data[i:])
+						i += consumed
+						if err != nil && !errs.Collect("l", i-consumed, err) {
+							return result, i, ggen.NewParseErrShift("l", i, consumed, err)
+						}
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, ggen.NewParseErr("l", i, ggen.ErrBadArray)
+							}
+							continue
+						}
+						break
+					}
+				}
+				if i >= len(data) || data[i] != ']' {
+					return result, i, ggen.NewParseErr("l", i, ggen.ErrBadArray)
+				}
+				i++
+			}
+		case "m":
+			if seenM {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_19})
+				i, err = ggen.SkipValue(data, i)
+				if err != nil {
+					return result, i, ggen.NewParseErr("m", i, err)
+				}
+			} else {
+				seenM = true
+				var consumed int
+				result.M, consumed, err = result.M.DecodeFrom(data[i:])
+				i += consumed
+				if err != nil && !errs.Collect("m", i-consumed, err) {
+					return result, i, ggen.NewParseErrShift("m", i, consumed, err)
+				}
+			}
+		case "name":
+			if seenName {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_8})
+				i, err = ggen.SkipValue(data, i)
+				if err != nil {
+					return result, i, ggen.NewParseErr("name", i, err)
+				}
+			} else {
+				seenName = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, ggen.NewParseErr("name", i, ggen.ErrExpectString)
+				}
+				ke := i + 1
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+					ke++
+				}
+				if ke < len(data) && data[ke] == '"' {
+					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Name, i, err = ggen.String(data, i, true)
+					if err != nil {
+						return result, i, ggen.NewParseErr("name", i, err)
+					}
+				}
+			}
+		default:
+			errs = append(errs, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}})
+			i, err = ggen.SkipValue(data, i)
+			if err != nil {
+				return result, i, ggen.NewParseErr(key, i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenB {
+				result.B = ""
+			}
+			if !seenM {
+				result.M = DrainMid{}
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if len(errs) > 0 {
+				return result, i, errs
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv DrainTop) DecodeFromStream(s *ggen.Stream) (result DrainTop, err error) {
+	result = recv
+	held0 := len(result.L)
+	if result.L != nil {
+		result.L = result.L[:0]
+	}
+	var errs ggen.Errors
+	seenB := false
+	seenL := false
+	seenM := false
+	seenName := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenB {
+			result.B = ""
+		}
+		if !seenM {
+			result.M = DrainMid{}
+		}
+		if !seenName {
+			result.Name = ""
+		}
+		if len(errs) > 0 {
+			return result, errs
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "b":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("b", s.Offset(), err)
+			}
+			if seenB {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_14})
+				err = s.SkipValue()
+				if err != nil {
+					return result, ggen.NewParseErr("b", s.Offset(), err)
+				}
+			} else {
+				seenB = true
+				result.B, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("b", s.Offset(), err)
+				}
+
+			}
+		case "l":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("l", s.Offset(), err)
+			}
+			if seenL {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_18})
+				err = s.SkipValue()
+				if err != nil {
+					return result, ggen.NewParseErr("l", s.Offset(), err)
+				}
+			} else {
+				seenL = true
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("l", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("l", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("l", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr("l", s.Offset()+ki, ggen.ErrBadLiteral)
+						}
+					}
+					s.Pos += 4
+					result.L = nil
+					break
+				}
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, ggen.NewParseErr("l", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("l", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("l", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				live0 := held0
+				if s.Bytes()[s.Pos] == ']' {
+					if result.L == nil {
+						result.L = []DrainMid{}
+					}
+				} else {
+					if result.L == nil {
+						result.L = make([]DrainMid, 0, ggenCap_DrainTop_L_DrainMid)
+						live0 = cap(result.L)
+					}
+				}
+				for s.Bytes()[s.Pos] != ']' {
+					if len(result.L) < live0 {
+						result.L = result.L[:len(result.L)+1]
+					} else if len(result.L) < cap(result.L) {
+						result.L = append(result.L, DrainMid{})
+					} else {
+						result.L = append(result.L, DrainMid{})
+						live0 = cap(result.L)
+					}
+					result.L[len(result.L)-1], err = result.L[len(result.L)-1].DecodeFromStream(s)
+					if err != nil && !errs.Collect("l", 0, err) {
+						return result, ggen.NewParseErr("l", s.Offset(), err)
+					}
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("l", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("l", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, ggen.NewParseErr("l", s.Offset(), err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, ggen.NewParseErr("l", s.Offset(), ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, ggen.NewParseErr("l", s.Offset(), ggen.ErrBadArray)
+				}
+				s.Pos++
+
+			}
+		case "m":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			if seenM {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_19})
+				err = s.SkipValue()
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+			} else {
+				seenM = true
+				result.M, err = result.M.DecodeFromStream(s)
+				if err != nil && !errs.Collect("m", 0, err) {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+
+			}
+		case "name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("name", s.Offset(), err)
+			}
+			if seenName {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_8})
+				err = s.SkipValue()
+				if err != nil {
+					return result, ggen.NewParseErr("name", s.Offset(), err)
+				}
+			} else {
+				seenName = true
+				result.Name, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("name", s.Offset(), err)
+				}
+
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}})
+			err = s.SkipValue()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenB {
+				result.B = ""
+			}
+			if !seenM {
+				result.M = DrainMid{}
+			}
+			if !seenName {
+				result.Name = ""
+			}
+			if len(errs) > 0 {
+				return result, errs
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s DrainTop) JSONSize() int {
+	size := 32
+	size += len(s.B) * 2
+	if n := len(s.L); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.L {
+		size += s.L[i0].JSONSize()
+	}
+	size += s.M.JSONSize()
+	size += len(s.Name) * 2
+	return size
+}
+
+func (s DrainTop) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"b\":\""...)
+	dst = ggen.AppendStringNoHTML(dst, s.B)
+	dst = append(dst, ",\"l\":"...)
+	if s.L == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.L) > 0 {
+			if dst, err = s.L[0].AppendJSON(dst); err != nil {
+				return dst, err
+			}
+			for _, v0 := range s.L[1:] {
+				dst = append(dst, ',')
+				if dst, err = v0.AppendJSON(dst); err != nil {
+					return dst, err
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"m\":"...)
+	if dst, err = s.M.AppendJSON(dst); err != nil {
+		return dst, err
+	}
+	dst = append(dst, ",\"name\":\""...)
+	dst = ggen.AppendStringNoHTML(dst, s.Name)
+	return append(dst, '}'), nil
+}
+
+func (recv LenME) DecodeFrom(data []byte) (result LenME, i int, err error) {
+	result = recv
+	var errs ggen.Errors
+	seenName := false
+	seenSum := false
+	seenTail := false
+	seenTup := false
+	seenZero := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenSum {
+			result.Sum = [4]byte{}
+		}
+		if !seenTail {
+			result.Tail = ""
+		}
+		if !seenTup {
+			result.Tup = [2]int{}
+		}
+		if !seenZero {
+			result.Zero = [0]int{}
+		}
+		if len(errs) > 0 {
+			return result, i, errs
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "name":
+			if seenName {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_8})
+				i, err = ggen.SkipValue(data, i)
+				if err != nil {
+					return result, i, ggen.NewParseErr("name", i, err)
+				}
+			} else {
+				seenName = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, ggen.NewParseErr("name", i, ggen.ErrExpectString)
+				}
+				ke := i + 1
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+					ke++
+				}
+				if ke < len(data) && data[ke] == '"' {
+					result.Name = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Name, i, err = ggen.String(data, i, true)
+					if err != nil {
+						return result, i, ggen.NewParseErr("name", i, err)
+					}
+				}
+				if len(result.Name) < 3 {
+					errs = append(errs, &ggen.MinLenError{Pos: i, Keys: ggenKeys_mods_test_8, Limit: 3, Got: len(result.Name)})
+				}
+			}
+		case "sum":
+			if seenSum {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_20})
+				i, err = ggen.SkipValue(data, i)
+				if err != nil {
+					return result, i, ggen.NewParseErr("sum", i, err)
+				}
+			} else {
+				seenSum = true
+				var s string
+				if i >= len(data) || data[i] != '"' {
+					return result, i, ggen.NewParseErr("sum", i, ggen.ErrExpectString)
+				}
+				ke := i + 1
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+					ke++
+				}
+				if ke < len(data) && data[ke] == '"' {
+					s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					s, i, err = ggen.String(data, i, true)
+					if err != nil {
+						return result, i, ggen.NewParseErr("sum", i, err)
+					}
+				}
+				var bufSum [4]byte
+				var bufSumd []byte
+				bufSumd, err = base64.StdEncoding.AppendDecode(bufSum[:0], unsafe.Slice(unsafe.StringData(s), len(s)))
+				if err != nil {
+					return result, i, ggen.NewParseErr("sum", i, err)
+				}
+				if len(bufSumd) != 4 {
+					errs = append(errs, &ggen.LenError{Pos: i, Keys: ggenKeys_mods_test_20, Want: 4, Got: len(bufSumd)})
+				} else {
+					copy(result.Sum[:], bufSumd)
+				}
+			}
+		case "tail":
+			if seenTail {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_17})
+				i, err = ggen.SkipValue(data, i)
+				if err != nil {
+					return result, i, ggen.NewParseErr("tail", i, err)
+				}
+			} else {
+				seenTail = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, ggen.NewParseErr("tail", i, ggen.ErrExpectString)
+				}
+				ke := i + 1
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+					ke++
+				}
+				if ke < len(data) && data[ke] == '"' {
+					result.Tail = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.Tail, i, err = ggen.String(data, i, true)
+					if err != nil {
+						return result, i, ggen.NewParseErr("tail", i, err)
+					}
+				}
+				if len(result.Tail) < 3 {
+					errs = append(errs, &ggen.MinLenError{Pos: i, Keys: ggenKeys_mods_test_17, Limit: 3, Got: len(result.Tail)})
+				}
+			}
+		case "tup":
+			if seenTup {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_21})
+				i, err = ggen.SkipValue(data, i)
+				if err != nil {
+					return result, i, ggen.NewParseErr("tup", i, err)
+				}
+			} else {
+				seenTup = true
+				if i >= len(data) || data[i] != '[' {
+					return result, i, ggen.NewParseErr("tup", i, ggen.ErrBadArray)
+				}
+				i++
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				var idx0 int
+				if i < len(data) && data[i] != ']' {
+					for {
+						if idx0 >= 2 {
+							for {
+								i, err = ggen.SkipValue(data, i)
+								if err != nil {
+									return result, i, ggen.NewParseErr("tup", i, err)
+								}
+								idx0++
+								for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+									i++
+								}
+								if i < len(data) && data[i] == ',' {
+									i++
+									for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+										i++
+									}
+									if i >= len(data) || data[i] == ']' {
+										return result, i, ggen.NewParseErr("tup", i, ggen.ErrBadArray)
+									}
+									continue
+								}
+								break
+							}
+							break
+						}
+						neg := false
+						if i < len(data) && data[i] == '-' {
+							neg = true
+							i++
+						}
+						if i >= len(data) || data[i] < '0' || data[i] > '9' {
+							return result, i, ggen.NewParseErr("tup", i, ggen.ErrBadNumber)
+						}
+						if data[i] == '0' && i+1 < len(data) && data[i+1] >= '0' && data[i+1] <= '9' {
+							return result, i, ggen.NewParseErr("tup", i, ggen.ErrBadNumber)
+						}
+						limit := uint64(math.MaxInt64)
+						if neg {
+							limit = ggen.SignedNeg
+						}
+						var u uint64
+						de := i + 18
+						if de > len(data) {
+							de = len(data)
+						}
+						for i < de && data[i] >= '0' && data[i] <= '9' {
+							u = u*10 + uint64(data[i]-'0')
+							i++
+						}
+						for i < len(data) && data[i] >= '0' && data[i] <= '9' {
+							d := uint64(data[i] - '0')
+							if u > limit/10 || (u == limit/10 && d > limit%10) {
+								return result, i, ggen.NewParseErr("tup", i, ggen.ErrNumberOverflow)
+							}
+							u = u*10 + d
+							i++
+						}
+						if i < len(data) {
+							c := data[i]
+							if c == '.' || c == 'e' || c == 'E' {
+								return result, i, ggen.NewParseErr("tup", i, ggen.ErrBadNumber)
+							}
+						}
+						var n int64
+						if neg {
+							if u == ggen.SignedNeg {
+								n = math.MinInt64
+							} else {
+								n = -int64(u)
+							}
+						} else {
+							n = int64(u)
+						}
+						if int64(int(n)) != n {
+							return result, i, ggen.NewParseErr("tup", i, ggen.ErrNumberOverflow)
+						}
+						result.Tup[idx0] = int(n)
+						idx0++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, ggen.NewParseErr("tup", i, ggen.ErrBadArray)
+							}
+							continue
+						}
+						break
+					}
+				}
+				if i >= len(data) || data[i] != ']' {
+					return result, i, ggen.NewParseErr("tup", i, ggen.ErrBadArray)
+				}
+				if idx0 != 2 {
+					errs = append(errs, &ggen.LenError{Pos: i, Keys: ggenKeys_mods_test_21, Want: 2, Got: idx0})
+				}
+				i++
+			}
+		case "zero":
+			if seenZero {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_22})
+				i, err = ggen.SkipValue(data, i)
+				if err != nil {
+					return result, i, ggen.NewParseErr("zero", i, err)
+				}
+			} else {
+				seenZero = true
+				if i >= len(data) || data[i] != '[' {
+					return result, i, ggen.NewParseErr("zero", i, ggen.ErrBadArray)
+				}
+				i++
+				for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+					i++
+				}
+				if i < len(data) && data[i] != ']' {
+					var idx0 int
+					for {
+						i, err = ggen.SkipValue(data, i)
+						if err != nil {
+							return result, i, ggen.NewParseErr("zero", i, err)
+						}
+						idx0++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i < len(data) && data[i] == ',' {
+							i++
+							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+								i++
+							}
+							if i >= len(data) || data[i] == ']' {
+								return result, i, ggen.NewParseErr("zero", i, ggen.ErrBadArray)
+							}
+							continue
+						}
+						break
+					}
+					errs = append(errs, &ggen.LenError{Pos: i, Keys: ggenKeys_mods_test_22, Want: 0, Got: idx0})
+				}
+				if i >= len(data) || data[i] != ']' {
+					return result, i, ggen.NewParseErr("zero", i, ggen.ErrBadArray)
+				}
+				i++
+			}
+		default:
+			errs = append(errs, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}})
+			i, err = ggen.SkipValue(data, i)
+			if err != nil {
+				return result, i, ggen.NewParseErr(key, i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenSum {
+				result.Sum = [4]byte{}
+			}
+			if !seenTail {
+				result.Tail = ""
+			}
+			if !seenTup {
+				result.Tup = [2]int{}
+			}
+			if !seenZero {
+				result.Zero = [0]int{}
+			}
+			if len(errs) > 0 {
+				return result, i, errs
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv LenME) DecodeFromStream(s *ggen.Stream) (result LenME, err error) {
+	result = recv
+	var errs ggen.Errors
+	seenName := false
+	seenSum := false
+	seenTail := false
+	seenTup := false
+	seenZero := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenName {
+			result.Name = ""
+		}
+		if !seenSum {
+			result.Sum = [4]byte{}
+		}
+		if !seenTail {
+			result.Tail = ""
+		}
+		if !seenTup {
+			result.Tup = [2]int{}
+		}
+		if !seenZero {
+			result.Zero = [0]int{}
+		}
+		if len(errs) > 0 {
+			return result, errs
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "name":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("name", s.Offset(), err)
+			}
+			if seenName {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_8})
+				err = s.SkipValue()
+				if err != nil {
+					return result, ggen.NewParseErr("name", s.Offset(), err)
+				}
+			} else {
+				seenName = true
+				result.Name, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("name", s.Offset(), err)
+				}
+				if len(result.Name) < 3 {
+					errs = append(errs, &ggen.MinLenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_8, Limit: 3, Got: len(result.Name)})
+				}
+
+			}
+		case "sum":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("sum", s.Offset(), err)
+			}
+			if seenSum {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_20})
+				err = s.SkipValue()
+				if err != nil {
+					return result, ggen.NewParseErr("sum", s.Offset(), err)
+				}
+			} else {
+				seenSum = true
+				var sv string
+				sv, err = s.StringView(true)
+				if err != nil {
+					return result, ggen.NewParseErr("sum", s.Offset(), err)
+				}
+				var bufSum [4]byte
+				var bufSumd []byte
+				bufSumd, err = base64.StdEncoding.AppendDecode(bufSum[:0], unsafe.Slice(unsafe.StringData(sv), len(sv)))
+				if err != nil {
+					return result, ggen.NewParseErr("sum", s.Offset(), err)
+				}
+				if len(bufSumd) != 4 {
+					errs = append(errs, &ggen.LenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_20, Want: 4, Got: len(bufSumd)})
+				} else {
+					copy(result.Sum[:], bufSumd)
+				}
+
+			}
+		case "tail":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("tail", s.Offset(), err)
+			}
+			if seenTail {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_17})
+				err = s.SkipValue()
+				if err != nil {
+					return result, ggen.NewParseErr("tail", s.Offset(), err)
+				}
+			} else {
+				seenTail = true
+				result.Tail, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("tail", s.Offset(), err)
+				}
+				if len(result.Tail) < 3 {
+					errs = append(errs, &ggen.MinLenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_17, Limit: 3, Got: len(result.Tail)})
+				}
+
+			}
+		case "tup":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("tup", s.Offset(), err)
+			}
+			if seenTup {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_21})
+				err = s.SkipValue()
+				if err != nil {
+					return result, ggen.NewParseErr("tup", s.Offset(), err)
+				}
+			} else {
+				seenTup = true
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, ggen.NewParseErr("tup", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("tup", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("tup", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				var idx0 int
+				for s.Bytes()[s.Pos] != ']' {
+					if idx0 >= 2 {
+						for {
+							err = s.SkipValue()
+							if err != nil {
+								return result, ggen.NewParseErr("tup", s.Offset(), err)
+							}
+							idx0++
+							err = s.SkipSpace()
+							if err != nil {
+								return result, ggen.NewParseErr("tup", s.Offset(), err)
+							}
+							if s.Pos >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, ggen.NewParseErr("tup", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+								}
+							}
+							if s.Bytes()[s.Pos] == ',' {
+								s.Pos++
+								err = s.SkipSpace()
+								if err != nil {
+									return result, ggen.NewParseErr("tup", s.Offset(), err)
+								}
+								if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+									return result, ggen.NewParseErr("tup", s.Offset(), ggen.ErrBadArray)
+								}
+								continue
+							}
+							break
+						}
+						break
+					}
+					var iv int64
+					iv, err = s.Int64()
+					if err != nil {
+						return result, ggen.NewParseErr("tup", s.Offset(), err)
+					}
+					if int64(int(iv)) != iv {
+						return result, ggen.NewParseErr("tup", s.Offset(), ggen.ErrNumberOverflow)
+					}
+					result.Tup[idx0] = int(iv)
+					idx0++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("tup", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("tup", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+						}
+					}
+					if s.Bytes()[s.Pos] == ',' {
+						s.Pos++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, ggen.NewParseErr("tup", s.Offset(), err)
+						}
+						if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+							return result, ggen.NewParseErr("tup", s.Offset(), ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+				if s.Bytes()[s.Pos] != ']' {
+					return result, ggen.NewParseErr("tup", s.Offset(), ggen.ErrBadArray)
+				}
+				if idx0 != 2 {
+					errs = append(errs, &ggen.LenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_21, Want: 2, Got: idx0})
+				}
+				s.Pos++
+
+			}
+		case "zero":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("zero", s.Offset(), err)
+			}
+			if seenZero {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_22})
+				err = s.SkipValue()
+				if err != nil {
+					return result, ggen.NewParseErr("zero", s.Offset(), err)
+				}
+			} else {
+				seenZero = true
+				err = s.ArrayOpen()
+				if err != nil {
+					return result, ggen.NewParseErr("zero", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("zero", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("zero", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] != ']' {
+					var idx0 int
+					for {
+						err = s.SkipValue()
+						if err != nil {
+							return result, ggen.NewParseErr("zero", s.Offset(), err)
+						}
+						idx0++
+						err = s.SkipSpace()
+						if err != nil {
+							return result, ggen.NewParseErr("zero", s.Offset(), err)
+						}
+						if s.Pos >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("zero", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+							}
+						}
+						if s.Bytes()[s.Pos] == ',' {
+							s.Pos++
+							err = s.SkipSpace()
+							if err != nil {
+								return result, ggen.NewParseErr("zero", s.Offset(), err)
+							}
+							if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+								return result, ggen.NewParseErr("zero", s.Offset(), ggen.ErrBadArray)
+							}
+							continue
+						}
+						break
+					}
+					errs = append(errs, &ggen.LenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_22, Want: 0, Got: idx0})
+					if s.Bytes()[s.Pos] != ']' {
+						return result, ggen.NewParseErr("zero", s.Offset(), ggen.ErrBadArray)
+					}
+				}
+				s.Pos++
+
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}})
+			err = s.SkipValue()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenName {
+				result.Name = ""
+			}
+			if !seenSum {
+				result.Sum = [4]byte{}
+			}
+			if !seenTail {
+				result.Tail = ""
+			}
+			if !seenTup {
+				result.Tup = [2]int{}
+			}
+			if !seenZero {
+				result.Zero = [0]int{}
+			}
+			if len(errs) > 0 {
+				return result, errs
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s LenME) JSONSize() int {
+	size := 51
+	size += len(s.Name) * 2
+	size += ((len(s.Sum) + 2) / 3) * 4
+	size += len(s.Tail) * 2
+	if n := len(s.Tup); n > 0 {
+		size += n - 1
+	}
+	size += len(s.Tup) * 20
+	if n := len(s.Zero); n > 0 {
+		size += n - 1
+	}
+	size += len(s.Zero) * 20
+	return size
+}
+
+func (s LenME) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"name\":\""...)
+	dst = ggen.AppendStringNoHTML(dst, s.Name)
+	dst = append(dst, ",\"sum\":\""...)
+	dst = base64.StdEncoding.AppendEncode(dst, s.Sum[:])
+	dst = append(dst, '"')
+	dst = append(dst, ",\"tail\":\""...)
+	dst = ggen.AppendStringNoHTML(dst, s.Tail)
+	dst = append(dst, ",\"tup\":["...)
+	if len(s.Tup) > 0 {
+		dst = strconv.AppendInt(dst, int64(s.Tup[0]), 10)
+		for _, v0 := range s.Tup[1:] {
+			dst = append(dst, ',')
+			dst = strconv.AppendInt(dst, int64(v0), 10)
+		}
+	}
+	return append(dst, "],\"zero\":[]}"...), nil
+}
+
+func (recv LenMEParent) DecodeFrom(data []byte) (result LenMEParent, i int, err error) {
+	result = recv
+	var errs ggen.Errors
+	seenB := false
+	seenC := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenB {
+			result.B = ""
+		}
+		if !seenC {
+			result.C = LenME{}
+		}
+		if len(errs) > 0 {
+			return result, i, errs
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "b":
+			if seenB {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_14})
+				i, err = ggen.SkipValue(data, i)
+				if err != nil {
+					return result, i, ggen.NewParseErr("b", i, err)
+				}
+			} else {
+				seenB = true
+				if i >= len(data) || data[i] != '"' {
+					return result, i, ggen.NewParseErr("b", i, ggen.ErrExpectString)
+				}
+				ke := i + 1
+				kew := ke + 32
+				if kew > len(data) {
+					kew = len(data)
+				}
+				for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+					ke++
+				}
+				if ke < len(data) && data[ke] == '"' {
+					result.B = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+					i = ke + 1
+				} else {
+					result.B, i, err = ggen.String(data, i, true)
+					if err != nil {
+						return result, i, ggen.NewParseErr("b", i, err)
+					}
+				}
+			}
+		case "c":
+			if seenC {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_23})
+				i, err = ggen.SkipValue(data, i)
+				if err != nil {
+					return result, i, ggen.NewParseErr("c", i, err)
+				}
+			} else {
+				seenC = true
+				var consumed int
+				result.C, consumed, err = result.C.DecodeFrom(data[i:])
+				i += consumed
+				if err != nil && !errs.Collect("c", i-consumed, err) {
+					return result, i, ggen.NewParseErrShift("c", i, consumed, err)
+				}
+			}
+		default:
+			errs = append(errs, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}})
+			i, err = ggen.SkipValue(data, i)
+			if err != nil {
+				return result, i, ggen.NewParseErr(key, i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenB {
+				result.B = ""
+			}
+			if !seenC {
+				result.C = LenME{}
+			}
+			if len(errs) > 0 {
+				return result, i, errs
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv LenMEParent) DecodeFromStream(s *ggen.Stream) (result LenMEParent, err error) {
+	result = recv
+	var errs ggen.Errors
+	seenB := false
+	seenC := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenB {
+			result.B = ""
+		}
+		if !seenC {
+			result.C = LenME{}
+		}
+		if len(errs) > 0 {
+			return result, errs
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "b":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("b", s.Offset(), err)
+			}
+			if seenB {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_14})
+				err = s.SkipValue()
+				if err != nil {
+					return result, ggen.NewParseErr("b", s.Offset(), err)
+				}
+			} else {
+				seenB = true
+				result.B, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("b", s.Offset(), err)
+				}
+
+			}
+		case "c":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("c", s.Offset(), err)
+			}
+			if seenC {
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_23})
+				err = s.SkipValue()
+				if err != nil {
+					return result, ggen.NewParseErr("c", s.Offset(), err)
+				}
+			} else {
+				seenC = true
+				result.C, err = result.C.DecodeFromStream(s)
+				if err != nil && !errs.Collect("c", 0, err) {
+					return result, ggen.NewParseErr("c", s.Offset(), err)
+				}
+
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			errs = append(errs, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}})
+			err = s.SkipValue()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenB {
+				result.B = ""
+			}
+			if !seenC {
+				result.C = LenME{}
+			}
+			if len(errs) > 0 {
+				return result, errs
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s LenMEParent) JSONSize() int {
+	size := 13
+	size += len(s.B) * 2
+	size += s.C.JSONSize()
+	return size
+}
+
+func (s LenMEParent) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"b\":\""...)
+	dst = ggen.AppendStringNoHTML(dst, s.B)
+	dst = append(dst, ",\"c\":"...)
+	if dst, err = s.C.AppendJSON(dst); err != nil {
+		return dst, err
+	}
+	return append(dst, '}'), nil
+}
+
 func (recv DrainFailFast) DecodeFrom(data []byte) (result DrainFailFast, i int, err error) {
 	result = recv
 	seenIME := false
@@ -3339,7 +5633,7 @@ func (recv DrainFailFast) DecodeFrom(data []byte) (result DrainFailFast, i int, 
 		switch key {
 		case "ime":
 			if seenIME {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"ime"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_16}
 			}
 			seenIME = true
 			var consumed int
@@ -3350,7 +5644,7 @@ func (recv DrainFailFast) DecodeFrom(data []byte) (result DrainFailFast, i int, 
 			}
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_8}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -3444,7 +5738,7 @@ func (recv DrainFailFast) DecodeFromStream(s *ggen.Stream) (result DrainFailFast
 				return result, ggen.NewParseErr("ime", s.Offset(), err)
 			}
 			if seenIME {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"ime"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_16}
 			}
 			seenIME = true
 			result.IME, err = result.IME.DecodeFromStream(s)
@@ -3457,7 +5751,7 @@ func (recv DrainFailFast) DecodeFromStream(s *ggen.Stream) (result DrainFailFast
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_8}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -3592,11 +5886,12 @@ func (recv R10PtrPipeOrder) DecodeFrom(data []byte) (result R10PtrPipeOrder, i i
 		switch key {
 		case "cp":
 			if seenCp {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"cp"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_24}
 			}
 			seenCp = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("cp", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -3659,7 +5954,10 @@ func (recv R10PtrPipeOrder) DecodeFrom(data []byte) (result R10PtrPipeOrder, i i
 					v = 5
 				}
 				if v < 1 {
-					return result, i, &ggen.GTEError{Pos: i, Keys: []string{"cp"}, Limit: int64(1), Value: v}
+					return result, i, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_24, Limit: int64(1), Value: v}
+				}
+				if int64(int(v)) != v {
+					return result, i, ggen.NewParseErr("cp", i, ggen.ErrNumberOverflow)
 				}
 				if result.Cp == nil {
 					result.Cp = new(int(v))
@@ -3669,11 +5967,12 @@ func (recv R10PtrPipeOrder) DecodeFrom(data []byte) (result R10PtrPipeOrder, i i
 			}
 		case "p":
 			if seenP {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"p"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_25}
 			}
 			seenP = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("p", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -3730,13 +6029,16 @@ func (recv R10PtrPipeOrder) DecodeFrom(data []byte) (result R10PtrPipeOrder, i i
 				}
 				v = n
 				if v < 0 {
-					return result, i, &ggen.GTEError{Pos: i, Keys: []string{"p"}, Limit: int64(0), Value: v}
+					return result, i, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_25, Limit: int64(0), Value: v}
 				}
 				if v < 0 {
 					v = 0
 				}
 				if v > 5 {
 					v = 5
+				}
+				if int64(int(v)) != v {
+					return result, i, ggen.NewParseErr("p", i, ggen.ErrNumberOverflow)
 				}
 				if result.P == nil {
 					result.P = new(int(v))
@@ -3746,7 +6048,7 @@ func (recv R10PtrPipeOrder) DecodeFrom(data []byte) (result R10PtrPipeOrder, i i
 			}
 		case "q":
 			if seenQ {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"q"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_26}
 			}
 			seenQ = true
 			if i >= len(data) || data[i] != '"' {
@@ -3770,16 +6072,17 @@ func (recv R10PtrPipeOrder) DecodeFrom(data []byte) (result R10PtrPipeOrder, i i
 				}
 			}
 			if len(result.Q) < 3 {
-				return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"q"}, Limit: 3, Got: len(result.Q)}
+				return result, i, &ggen.MinLenError{Pos: i, Keys: ggenKeys_mods_test_26, Limit: 3, Got: len(result.Q)}
 			}
 			result.Q = strings.TrimSpace(result.Q)
 		case "qp":
 			if seenQp {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"qp"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_27}
 			}
 			seenQp = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("qp", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -3807,7 +6110,7 @@ func (recv R10PtrPipeOrder) DecodeFrom(data []byte) (result R10PtrPipeOrder, i i
 					}
 				}
 				if len(v) < 3 {
-					return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"qp"}, Limit: 3, Got: len(v)}
+					return result, i, &ggen.MinLenError{Pos: i, Keys: ggenKeys_mods_test_27, Limit: 3, Got: len(v)}
 				}
 				v = strings.TrimSpace(v)
 				if result.Qp == nil {
@@ -3818,7 +6121,7 @@ func (recv R10PtrPipeOrder) DecodeFrom(data []byte) (result R10PtrPipeOrder, i i
 			}
 		case "v":
 			if seenV {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"v"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_28}
 			}
 			seenV = true
 			neg := false
@@ -3869,9 +6172,12 @@ func (recv R10PtrPipeOrder) DecodeFrom(data []byte) (result R10PtrPipeOrder, i i
 			} else {
 				n = int64(u)
 			}
+			if int64(int(n)) != n {
+				return result, i, ggen.NewParseErr("v", i, ggen.ErrNumberOverflow)
+			}
 			result.V = int(n)
 			if result.V < 0 {
-				return result, i, &ggen.GTEError{Pos: i, Keys: []string{"v"}, Limit: int(0), Value: result.V}
+				return result, i, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_28, Limit: int(0), Value: result.V}
 			}
 			if result.V < 0 {
 				result.V = 0
@@ -3971,7 +6277,7 @@ func (recv R10PtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10PtrPipeO
 				return result, ggen.NewParseErr("cp", s.Offset(), err)
 			}
 			if seenCp {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"cp"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_24}
 			}
 			seenCp = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3983,11 +6289,11 @@ func (recv R10PtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10PtrPipeO
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("cp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("cp", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("cp", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("cp", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -4005,7 +6311,10 @@ func (recv R10PtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10PtrPipeO
 					v = 5
 				}
 				if v < 1 {
-					return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"cp"}, Limit: int64(1), Value: v}
+					return result, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_24, Limit: int64(1), Value: v}
+				}
+				if int64(int(v)) != v {
+					return result, ggen.NewParseErr("cp", s.Offset(), ggen.ErrNumberOverflow)
 				}
 				if result.Cp == nil {
 					result.Cp = new(int(v))
@@ -4019,7 +6328,7 @@ func (recv R10PtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10PtrPipeO
 				return result, ggen.NewParseErr("p", s.Offset(), err)
 			}
 			if seenP {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"p"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_25}
 			}
 			seenP = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4031,11 +6340,11 @@ func (recv R10PtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10PtrPipeO
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("p", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("p", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("p", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("p", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -4047,13 +6356,16 @@ func (recv R10PtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10PtrPipeO
 					return result, ggen.NewParseErr("p", s.Offset(), err)
 				}
 				if v < 0 {
-					return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"p"}, Limit: int64(0), Value: v}
+					return result, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_25, Limit: int64(0), Value: v}
 				}
 				if v < 0 {
 					v = 0
 				}
 				if v > 5 {
 					v = 5
+				}
+				if int64(int(v)) != v {
+					return result, ggen.NewParseErr("p", s.Offset(), ggen.ErrNumberOverflow)
 				}
 				if result.P == nil {
 					result.P = new(int(v))
@@ -4067,7 +6379,7 @@ func (recv R10PtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10PtrPipeO
 				return result, ggen.NewParseErr("q", s.Offset(), err)
 			}
 			if seenQ {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"q"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_26}
 			}
 			seenQ = true
 			result.Q, err = s.String(true)
@@ -4075,7 +6387,7 @@ func (recv R10PtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10PtrPipeO
 				return result, ggen.NewParseErr("q", s.Offset(), err)
 			}
 			if len(result.Q) < 3 {
-				return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"q"}, Limit: 3, Got: len(result.Q)}
+				return result, &ggen.MinLenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_26, Limit: 3, Got: len(result.Q)}
 			}
 			result.Q = strings.TrimSpace(result.Q)
 		case "qp":
@@ -4084,7 +6396,7 @@ func (recv R10PtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10PtrPipeO
 				return result, ggen.NewParseErr("qp", s.Offset(), err)
 			}
 			if seenQp {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"qp"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_27}
 			}
 			seenQp = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4096,11 +6408,11 @@ func (recv R10PtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10PtrPipeO
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("qp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("qp", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("qp", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("qp", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -4112,7 +6424,7 @@ func (recv R10PtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10PtrPipeO
 					return result, ggen.NewParseErr("qp", s.Offset(), err)
 				}
 				if len(v) < 3 {
-					return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"qp"}, Limit: 3, Got: len(v)}
+					return result, &ggen.MinLenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_27, Limit: 3, Got: len(v)}
 				}
 				v = strings.TrimSpace(v)
 				if result.Qp == nil {
@@ -4127,7 +6439,7 @@ func (recv R10PtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10PtrPipeO
 				return result, ggen.NewParseErr("v", s.Offset(), err)
 			}
 			if seenV {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"v"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_28}
 			}
 			seenV = true
 			var iv int64
@@ -4135,9 +6447,12 @@ func (recv R10PtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10PtrPipeO
 			if err != nil {
 				return result, ggen.NewParseErr("v", s.Offset(), err)
 			}
+			if int64(int(iv)) != iv {
+				return result, ggen.NewParseErr("v", s.Offset(), ggen.ErrNumberOverflow)
+			}
 			result.V = int(iv)
 			if result.V < 0 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"v"}, Limit: int(0), Value: result.V}
+				return result, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_28, Limit: int(0), Value: result.V}
 			}
 			if result.V < 0 {
 				result.V = 0
@@ -4302,7 +6617,7 @@ func (recv R10PtrPipeOrderME) DecodeFrom(data []byte) (result R10PtrPipeOrderME,
 		switch key {
 		case "p":
 			if seenP {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"p"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_25})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("p", i, err)
@@ -4311,6 +6626,7 @@ func (recv R10PtrPipeOrderME) DecodeFrom(data []byte) (result R10PtrPipeOrderME,
 				seenP = true
 				if i < len(data) && data[i] == 'n' {
 					if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+						i = ggen.NullEnd(data, i)
 						return result, i, ggen.NewParseErr("p", i, ggen.ErrBadLiteral)
 					}
 					i += 4
@@ -4367,13 +6683,16 @@ func (recv R10PtrPipeOrderME) DecodeFrom(data []byte) (result R10PtrPipeOrderME,
 					}
 					v = n
 					if v < 0 {
-						errs = append(errs, &ggen.GTEError{Pos: i, Keys: []string{"p"}, Limit: int64(0), Value: v})
+						errs = append(errs, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_25, Limit: int64(0), Value: v})
 					}
 					if v < 0 {
 						v = 0
 					}
 					if v > 5 {
 						v = 5
+					}
+					if int64(int(v)) != v {
+						return result, i, ggen.NewParseErr("p", i, ggen.ErrNumberOverflow)
 					}
 					if result.P == nil {
 						result.P = new(int(v))
@@ -4457,7 +6776,7 @@ func (recv R10PtrPipeOrderME) DecodeFromStream(s *ggen.Stream) (result R10PtrPip
 				return result, ggen.NewParseErr("p", s.Offset(), err)
 			}
 			if seenP {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"p"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_25})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("p", s.Offset(), err)
@@ -4473,11 +6792,11 @@ func (recv R10PtrPipeOrderME) DecodeFromStream(s *ggen.Stream) (result R10PtrPip
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("p", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("p", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("p", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("p", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -4489,13 +6808,16 @@ func (recv R10PtrPipeOrderME) DecodeFromStream(s *ggen.Stream) (result R10PtrPip
 						return result, ggen.NewParseErr("p", s.Offset(), err)
 					}
 					if v < 0 {
-						errs = append(errs, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"p"}, Limit: int64(0), Value: v})
+						errs = append(errs, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_25, Limit: int64(0), Value: v})
 					}
 					if v < 0 {
 						v = 0
 					}
 					if v > 5 {
 						v = 5
+					}
+					if int64(int(v)) != v {
+						return result, ggen.NewParseErr("p", s.Offset(), ggen.ErrNumberOverflow)
 					}
 					if result.P == nil {
 						result.P = new(int(v))
@@ -4632,11 +6954,12 @@ func (recv R10BPtrPipeOrder) DecodeFrom(data []byte) (result R10BPtrPipeOrder, i
 		switch key {
 		case "c":
 			if seenC {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"c"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_23}
 			}
 			seenC = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("c", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -4693,6 +7016,9 @@ func (recv R10BPtrPipeOrder) DecodeFrom(data []byte) (result R10BPtrPipeOrder, i
 					n = int64(u)
 				}
 				v = n
+				if int64(int(v)) != v {
+					return result, i, ggen.NewParseErr("c", i, ggen.ErrNumberOverflow)
+				}
 				if result.C == nil {
 					result.C = new(int(v))
 				} else {
@@ -4701,17 +7027,18 @@ func (recv R10BPtrPipeOrder) DecodeFrom(data []byte) (result R10BPtrPipeOrder, i
 				result.C = zpAdd1(result.C)
 				if result.C != nil {
 					if (*result.C) < 2 {
-						return result, i, &ggen.GTEError{Pos: i, Keys: []string{"c"}, Limit: int(2), Value: (*result.C)}
+						return result, i, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_23, Limit: int(2), Value: (*result.C)}
 					}
 				}
 			}
 		case "e":
 			if seenE {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"e"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_29}
 			}
 			seenE = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("e", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -4749,17 +7076,18 @@ func (recv R10BPtrPipeOrder) DecodeFrom(data []byte) (result R10BPtrPipeOrder, i
 					switch *result.E {
 					case "AB":
 					default:
-						return result, i, &ggen.OneOfError{Pos: i, Keys: []string{"e"}, Allowed: ggenOneof_mods_test_1, Value: (*result.E)}
+						return result, i, &ggen.OneOfError{Pos: i, Keys: ggenKeys_mods_test_29, Allowed: ggenOneof_mods_test_1, Value: (*result.E)}
 					}
 				}
 			}
 		case "f":
 			if seenF {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"f"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_30}
 			}
 			seenF = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("f", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -4816,13 +7144,16 @@ func (recv R10BPtrPipeOrder) DecodeFrom(data []byte) (result R10BPtrPipeOrder, i
 					n = int64(u)
 				}
 				v = n
+				if int64(int(v)) != v {
+					return result, i, ggen.NewParseErr("f", i, ggen.ErrNumberOverflow)
+				}
 				if result.F == nil {
 					result.F = new(int(v))
 				} else {
 					(*result.F) = int(v)
 				}
 				if (*result.F) < 2 {
-					return result, i, &ggen.GTEError{Pos: i, Keys: []string{"f"}, Limit: int(2), Value: (*result.F)}
+					return result, i, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_30, Limit: int(2), Value: (*result.F)}
 				}
 				result.F = zpAdd1(result.F)
 			}
@@ -4904,7 +7235,7 @@ func (recv R10BPtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BPtrPip
 				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
 			if seenC {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"c"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_23}
 			}
 			seenC = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4916,11 +7247,11 @@ func (recv R10BPtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BPtrPip
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("c", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("c", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("c", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("c", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -4932,6 +7263,9 @@ func (recv R10BPtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BPtrPip
 				if err != nil {
 					return result, ggen.NewParseErr("c", s.Offset(), err)
 				}
+				if int64(int(v)) != v {
+					return result, ggen.NewParseErr("c", s.Offset(), ggen.ErrNumberOverflow)
+				}
 				if result.C == nil {
 					result.C = new(int(v))
 				} else {
@@ -4940,7 +7274,7 @@ func (recv R10BPtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BPtrPip
 				result.C = zpAdd1(result.C)
 				if result.C != nil {
 					if (*result.C) < 2 {
-						return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"c"}, Limit: int(2), Value: (*result.C)}
+						return result, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_23, Limit: int(2), Value: (*result.C)}
 					}
 				}
 			}
@@ -4950,7 +7284,7 @@ func (recv R10BPtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BPtrPip
 				return result, ggen.NewParseErr("e", s.Offset(), err)
 			}
 			if seenE {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"e"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_29}
 			}
 			seenE = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4962,11 +7296,11 @@ func (recv R10BPtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BPtrPip
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("e", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("e", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("e", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("e", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -4988,7 +7322,7 @@ func (recv R10BPtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BPtrPip
 					switch *result.E {
 					case "AB":
 					default:
-						return result, &ggen.OneOfError{Pos: s.Offset(), Keys: []string{"e"}, Allowed: ggenOneof_mods_test_1, Value: (*result.E)}
+						return result, &ggen.OneOfError{Pos: s.Offset(), Keys: ggenKeys_mods_test_29, Allowed: ggenOneof_mods_test_1, Value: (*result.E)}
 					}
 				}
 			}
@@ -4998,7 +7332,7 @@ func (recv R10BPtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BPtrPip
 				return result, ggen.NewParseErr("f", s.Offset(), err)
 			}
 			if seenF {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"f"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_30}
 			}
 			seenF = true
 			if s.Pos >= len(s.Bytes()) {
@@ -5010,11 +7344,11 @@ func (recv R10BPtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BPtrPip
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("f", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("f", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("f", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("f", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -5026,13 +7360,16 @@ func (recv R10BPtrPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BPtrPip
 				if err != nil {
 					return result, ggen.NewParseErr("f", s.Offset(), err)
 				}
+				if int64(int(v)) != v {
+					return result, ggen.NewParseErr("f", s.Offset(), ggen.ErrNumberOverflow)
+				}
 				if result.F == nil {
 					result.F = new(int(v))
 				} else {
 					(*result.F) = int(v)
 				}
 				if (*result.F) < 2 {
-					return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"f"}, Limit: int(2), Value: (*result.F)}
+					return result, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_30, Limit: int(2), Value: (*result.F)}
 				}
 				result.F = zpAdd1(result.F)
 			}
@@ -5182,7 +7519,7 @@ func (recv R10BPtrPipeOrderME) DecodeFrom(data []byte) (result R10BPtrPipeOrderM
 		switch key {
 		case "c":
 			if seenC {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"c"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_23})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("c", i, err)
@@ -5191,6 +7528,7 @@ func (recv R10BPtrPipeOrderME) DecodeFrom(data []byte) (result R10BPtrPipeOrderM
 				seenC = true
 				if i < len(data) && data[i] == 'n' {
 					if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+						i = ggen.NullEnd(data, i)
 						return result, i, ggen.NewParseErr("c", i, ggen.ErrBadLiteral)
 					}
 					i += 4
@@ -5247,6 +7585,9 @@ func (recv R10BPtrPipeOrderME) DecodeFrom(data []byte) (result R10BPtrPipeOrderM
 						n = int64(u)
 					}
 					v = n
+					if int64(int(v)) != v {
+						return result, i, ggen.NewParseErr("c", i, ggen.ErrNumberOverflow)
+					}
 					if result.C == nil {
 						result.C = new(int(v))
 					} else {
@@ -5255,7 +7596,7 @@ func (recv R10BPtrPipeOrderME) DecodeFrom(data []byte) (result R10BPtrPipeOrderM
 					result.C = zpAdd1(result.C)
 					if result.C != nil {
 						if (*result.C) < 2 {
-							errs = append(errs, &ggen.GTEError{Pos: i, Keys: []string{"c"}, Limit: int(2), Value: (*result.C)})
+							errs = append(errs, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_23, Limit: int(2), Value: (*result.C)})
 						}
 					}
 				}
@@ -5335,7 +7676,7 @@ func (recv R10BPtrPipeOrderME) DecodeFromStream(s *ggen.Stream) (result R10BPtrP
 				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
 			if seenC {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"c"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_23})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("c", s.Offset(), err)
@@ -5351,11 +7692,11 @@ func (recv R10BPtrPipeOrderME) DecodeFromStream(s *ggen.Stream) (result R10BPtrP
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("c", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("c", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("c", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("c", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -5367,6 +7708,9 @@ func (recv R10BPtrPipeOrderME) DecodeFromStream(s *ggen.Stream) (result R10BPtrP
 					if err != nil {
 						return result, ggen.NewParseErr("c", s.Offset(), err)
 					}
+					if int64(int(v)) != v {
+						return result, ggen.NewParseErr("c", s.Offset(), ggen.ErrNumberOverflow)
+					}
 					if result.C == nil {
 						result.C = new(int(v))
 					} else {
@@ -5375,7 +7719,7 @@ func (recv R10BPtrPipeOrderME) DecodeFromStream(s *ggen.Stream) (result R10BPtrP
 					result.C = zpAdd1(result.C)
 					if result.C != nil {
 						if (*result.C) < 2 {
-							errs = append(errs, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"c"}, Limit: int(2), Value: (*result.C)})
+							errs = append(errs, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_23, Limit: int(2), Value: (*result.C)})
 						}
 					}
 				}
@@ -5508,7 +7852,7 @@ func (recv R10BValPipeOrder) DecodeFrom(data []byte) (result R10BValPipeOrder, i
 		switch key {
 		case "c":
 			if seenC {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"c"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_23}
 			}
 			seenC = true
 			neg := false
@@ -5559,14 +7903,17 @@ func (recv R10BValPipeOrder) DecodeFrom(data []byte) (result R10BValPipeOrder, i
 			} else {
 				n = int64(u)
 			}
+			if int64(int(n)) != n {
+				return result, i, ggen.NewParseErr("c", i, ggen.ErrNumberOverflow)
+			}
 			result.C = int(n)
 			result.C = zpAdd1V(result.C)
 			if result.C < 2 {
-				return result, i, &ggen.GTEError{Pos: i, Keys: []string{"c"}, Limit: int(2), Value: result.C}
+				return result, i, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_23, Limit: int(2), Value: result.C}
 			}
 		case "e":
 			if seenE {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"e"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_29}
 			}
 			seenE = true
 			if i >= len(data) || data[i] != '"' {
@@ -5593,11 +7940,11 @@ func (recv R10BValPipeOrder) DecodeFrom(data []byte) (result R10BValPipeOrder, i
 			switch result.E {
 			case "AB":
 			default:
-				return result, i, &ggen.OneOfError{Pos: i, Keys: []string{"e"}, Allowed: ggenOneof_mods_test_1, Value: result.E}
+				return result, i, &ggen.OneOfError{Pos: i, Keys: ggenKeys_mods_test_29, Allowed: ggenOneof_mods_test_1, Value: result.E}
 			}
 		case "f":
 			if seenF {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"f"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_30}
 			}
 			seenF = true
 			neg := false
@@ -5648,9 +7995,12 @@ func (recv R10BValPipeOrder) DecodeFrom(data []byte) (result R10BValPipeOrder, i
 			} else {
 				n = int64(u)
 			}
+			if int64(int(n)) != n {
+				return result, i, ggen.NewParseErr("f", i, ggen.ErrNumberOverflow)
+			}
 			result.F = int(n)
 			if result.F < 2 {
-				return result, i, &ggen.GTEError{Pos: i, Keys: []string{"f"}, Limit: int(2), Value: result.F}
+				return result, i, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_30, Limit: int(2), Value: result.F}
 			}
 			result.F = zpAdd1V(result.F)
 		default:
@@ -5731,7 +8081,7 @@ func (recv R10BValPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BValPip
 				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
 			if seenC {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"c"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_23}
 			}
 			seenC = true
 			var iv int64
@@ -5739,10 +8089,13 @@ func (recv R10BValPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BValPip
 			if err != nil {
 				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
+			if int64(int(iv)) != iv {
+				return result, ggen.NewParseErr("c", s.Offset(), ggen.ErrNumberOverflow)
+			}
 			result.C = int(iv)
 			result.C = zpAdd1V(result.C)
 			if result.C < 2 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"c"}, Limit: int(2), Value: result.C}
+				return result, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_23, Limit: int(2), Value: result.C}
 			}
 		case "e":
 			err = s.ConsumeColon()
@@ -5750,7 +8103,7 @@ func (recv R10BValPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BValPip
 				return result, ggen.NewParseErr("e", s.Offset(), err)
 			}
 			if seenE {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"e"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_29}
 			}
 			seenE = true
 			result.E, err = s.String(true)
@@ -5761,7 +8114,7 @@ func (recv R10BValPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BValPip
 			switch result.E {
 			case "AB":
 			default:
-				return result, &ggen.OneOfError{Pos: s.Offset(), Keys: []string{"e"}, Allowed: ggenOneof_mods_test_1, Value: result.E}
+				return result, &ggen.OneOfError{Pos: s.Offset(), Keys: ggenKeys_mods_test_29, Allowed: ggenOneof_mods_test_1, Value: result.E}
 			}
 		case "f":
 			err = s.ConsumeColon()
@@ -5769,7 +8122,7 @@ func (recv R10BValPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BValPip
 				return result, ggen.NewParseErr("f", s.Offset(), err)
 			}
 			if seenF {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"f"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_30}
 			}
 			seenF = true
 			var iv int64
@@ -5777,9 +8130,12 @@ func (recv R10BValPipeOrder) DecodeFromStream(s *ggen.Stream) (result R10BValPip
 			if err != nil {
 				return result, ggen.NewParseErr("f", s.Offset(), err)
 			}
+			if int64(int(iv)) != iv {
+				return result, ggen.NewParseErr("f", s.Offset(), ggen.ErrNumberOverflow)
+			}
 			result.F = int(iv)
 			if result.F < 2 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"f"}, Limit: int(2), Value: result.F}
+				return result, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_30, Limit: int(2), Value: result.F}
 			}
 			result.F = zpAdd1V(result.F)
 		default:
@@ -5850,12 +8206,14 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 	if result.C != nil {
 		result.C = result.C[:0]
 	}
+	held0 := len(result.G)
 	if result.G != nil {
 		result.G = result.G[:0]
 	}
 	if result.I != nil {
 		result.I = result.I[:0]
 	}
+	held1 := len(result.PP)
 	if result.PP != nil {
 		result.PP = result.PP[:0]
 	}
@@ -5928,7 +8286,7 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 		switch key {
 		case "a":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_13}
 			}
 			seenA = true
 			if i >= len(data) || data[i] != '[' {
@@ -5943,17 +8301,18 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Keys: []string{"a"}, Want: 2, Got: 3, AtLeast: true}
+						return result, i, &ggen.LenError{Pos: i, Keys: ggenKeys_mods_test_13, Want: 2, Got: 3, AtLeast: true}
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("a", i, ggen.ErrBadLiteral)
 						}
 						i += 4
 						result.A[idx0] = nil
 						result.A[idx0] = zpAdd1(result.A[idx0])
 						if err := peSet(result.A[idx0]); err != nil {
-							return result, i, &ggen.CustomError{Pos: i, Keys: []string{"a[]"}, Name: "peSet", Value: result.A[idx0], Cause: err}
+							return result, i, &ggen.CustomError{Pos: i, Keys: ggenKeys_mods_test_31, Name: "peSet", Value: result.A[idx0], Cause: err}
 						}
 						idx0++
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6019,16 +8378,19 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 					} else {
 						n = int64(u)
 					}
+					if int64(int(n)) != n {
+						return result, i, ggen.NewParseErr("a", i, ggen.ErrNumberOverflow)
+					}
 					slab0[idx0] = int(n)
 					result.A[idx0] = &slab0[idx0]
 					result.A[idx0] = zpAdd1(result.A[idx0])
 					if result.A[idx0] != nil {
 						if (*result.A[idx0]) < 2 {
-							return result, i, &ggen.GTEError{Pos: i, Keys: []string{"a[]"}, Limit: int(2), Value: (*result.A[idx0])}
+							return result, i, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_31, Limit: int(2), Value: (*result.A[idx0])}
 						}
 					}
 					if err := peSet(result.A[idx0]); err != nil {
-						return result, i, &ggen.CustomError{Pos: i, Keys: []string{"a[]"}, Name: "peSet", Value: result.A[idx0], Cause: err}
+						return result, i, &ggen.CustomError{Pos: i, Keys: ggenKeys_mods_test_31, Name: "peSet", Value: result.A[idx0], Cause: err}
 					}
 					idx0++
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6051,16 +8413,17 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 				return result, i, ggen.NewParseErr("a", i, ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, i, &ggen.LenError{Pos: i, Keys: []string{"a"}, Want: 2, Got: idx0}
+				return result, i, &ggen.LenError{Pos: i, Keys: ggenKeys_mods_test_13, Want: 2, Got: idx0}
 			}
 			i++
 		case "c":
 			if seenC {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"c"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_23}
 			}
 			seenC = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("c", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -6089,12 +8452,13 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 				for {
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("c", i, ggen.ErrBadLiteral)
 						}
 						i += 4
 						result.C = append(result.C, nil)
 						if v, err := peCapped(result.C[len(result.C)-1]); err != nil {
-							return result, i, ggen.NewParseErr("c[]", i, err)
+							return result, i, ggen.NewParseErrOpaque("c[]", i, err)
 						} else {
 							result.C[len(result.C)-1] = v
 						}
@@ -6162,10 +8526,13 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 					} else {
 						n = int64(u)
 					}
+					if int64(int(n)) != n {
+						return result, i, ggen.NewParseErr("c", i, ggen.ErrNumberOverflow)
+					}
 					slab0[len(slab0)-1] = int(n)
 					result.C = append(result.C, &slab0[len(slab0)-1])
 					if v, err := peCapped(result.C[len(result.C)-1]); err != nil {
-						return result, i, ggen.NewParseErr("c[]", i, err)
+						return result, i, ggen.NewParseErrOpaque("c[]", i, err)
 					} else {
 						result.C[len(result.C)-1] = v
 					}
@@ -6191,11 +8558,12 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 			i++
 		case "g":
 			if seenG {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"g"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_32}
 			}
 			seenG = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("g", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -6209,6 +8577,7 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
+			live0 := held0
 			var slab0 []PtrElemLeaf
 			if i < len(data) && data[i] == ']' {
 				if result.G == nil {
@@ -6217,19 +8586,20 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 			} else {
 				if result.G == nil {
 					result.G = make([]*PtrElemLeaf, 0, ggenCap_PtrElemPipe_G_PtrPtrElemLeaf)
+					live0 = cap(result.G)
 				}
-				slab0 = make([]PtrElemLeaf, 0, ggenCap_PtrElemPipe_G_PtrElemLeaf)
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("g", i, ggen.ErrBadLiteral)
 						}
 						i += 4
 						result.G = append(result.G, nil)
 						if err := peLeaf(result.G[len(result.G)-1]); err != nil {
-							return result, i, &ggen.CustomError{Pos: i, Keys: []string{"g[]"}, Name: "peLeaf", Value: result.G[len(result.G)-1], Cause: err}
+							return result, i, &ggen.CustomError{Pos: i, Keys: ggenKeys_mods_test_33, Name: "peLeaf", Value: result.G[len(result.G)-1], Cause: err}
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -6246,20 +8616,30 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 						}
 						break
 					}
-					if len(slab0) < cap(slab0) {
-						slab0 = slab0[:len(slab0)+1]
-					} else {
-						slab0 = append(slab0, PtrElemLeaf{})
+					var pe0 *PtrElemLeaf
+					if len(result.G) < live0 {
+						pe0 = result.G[:len(result.G)+1][len(result.G)]
+					}
+					if pe0 == nil {
+						if slab0 == nil {
+							slab0 = make([]PtrElemLeaf, 0, ggenCap_PtrElemPipe_G_PtrElemLeaf)
+						}
+						if len(slab0) < cap(slab0) {
+							slab0 = slab0[:len(slab0)+1]
+						} else {
+							slab0 = append(slab0, PtrElemLeaf{})
+						}
+						pe0 = &slab0[len(slab0)-1]
 					}
 					var consumed int
-					slab0[len(slab0)-1], consumed, err = slab0[len(slab0)-1].DecodeFrom(data[i:])
+					(*pe0), consumed, err = (*pe0).DecodeFrom(data[i:])
 					i += consumed
 					if err != nil {
 						return result, i, ggen.NewParseErrShift("g", i, consumed, err)
 					}
-					result.G = append(result.G, &slab0[len(slab0)-1])
+					result.G = append(result.G, pe0)
 					if err := peLeaf(result.G[len(result.G)-1]); err != nil {
-						return result, i, &ggen.CustomError{Pos: i, Keys: []string{"g[]"}, Name: "peLeaf", Value: result.G[len(result.G)-1], Cause: err}
+						return result, i, &ggen.CustomError{Pos: i, Keys: ggenKeys_mods_test_33, Name: "peLeaf", Value: result.G[len(result.G)-1], Cause: err}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -6283,11 +8663,12 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 			i++
 		case "i":
 			if seenI {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_15}
 			}
 			seenI = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("i", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -6316,13 +8697,14 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 				for {
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("i", i, ggen.ErrBadLiteral)
 						}
 						i += 4
 						result.I = append(result.I, nil)
 						result.I[len(result.I)-1] = zpAdd1(result.I[len(result.I)-1])
 						if err := peSet(result.I[len(result.I)-1]); err != nil {
-							return result, i, &ggen.CustomError{Pos: i, Keys: []string{"i[]"}, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err}
+							return result, i, &ggen.CustomError{Pos: i, Keys: ggenKeys_mods_test_34, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err}
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -6388,16 +8770,19 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 					} else {
 						n = int64(u)
 					}
+					if int64(int(n)) != n {
+						return result, i, ggen.NewParseErr("i", i, ggen.ErrNumberOverflow)
+					}
 					slab0[len(slab0)-1] = int(n)
 					result.I = append(result.I, &slab0[len(slab0)-1])
 					result.I[len(result.I)-1] = zpAdd1(result.I[len(result.I)-1])
 					if result.I[len(result.I)-1] != nil {
 						if (*result.I[len(result.I)-1]) < 2 {
-							return result, i, &ggen.GTEError{Pos: i, Keys: []string{"i[]"}, Limit: int(2), Value: (*result.I[len(result.I)-1])}
+							return result, i, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_34, Limit: int(2), Value: (*result.I[len(result.I)-1])}
 						}
 					}
 					if err := peSet(result.I[len(result.I)-1]); err != nil {
-						return result, i, &ggen.CustomError{Pos: i, Keys: []string{"i[]"}, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err}
+						return result, i, &ggen.CustomError{Pos: i, Keys: ggenKeys_mods_test_34, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -6421,11 +8806,12 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 			i++
 		case "mv":
 			if seenMV {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"mv"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_35}
 			}
 			seenMV = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("mv", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -6482,6 +8868,7 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 						}
 						if i < len(data) && data[i] == 'n' {
 							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								i = ggen.NullEnd(data, i)
 								return result, i, ggen.NewParseErr("mv.value", i, ggen.ErrBadLiteral)
 							}
 							i += 4
@@ -6535,6 +8922,9 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 							} else {
 								n = int64(u)
 							}
+							if int64(int(n)) != n {
+								return result, i, ggen.NewParseErr("mv.value", i, ggen.ErrNumberOverflow)
+							}
 							if mv == nil {
 								mv = new(int(n))
 							} else {
@@ -6542,7 +8932,7 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 							}
 						}
 						if err := pePositive(mv); err != nil {
-							return result, i, &ggen.CustomError{Pos: i, Keys: []string{"mv.value"}, Name: "pePositive", Value: mv, Cause: err}
+							return result, i, &ggen.CustomError{Pos: i, Keys: ggenKeys_mods_test_36, Name: "pePositive", Value: mv, Cause: err}
 						}
 						mv = peAbs(mv)
 						result.MV[mk] = mv
@@ -6569,11 +8959,12 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 			i++
 		case "p":
 			if seenP {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"p"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_25}
 			}
 			seenP = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("p", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -6630,6 +9021,9 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 					n = int64(u)
 				}
 				v = n
+				if int64(int(v)) != v {
+					return result, i, ggen.NewParseErr("p", i, ggen.ErrNumberOverflow)
+				}
 				if result.P == nil {
 					result.P = new(int(v))
 				} else {
@@ -6638,17 +9032,18 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 				result.P = peNilIfZero(result.P)
 				if result.P != nil {
 					if (*result.P) < 1 {
-						return result, i, &ggen.GTEError{Pos: i, Keys: []string{"p"}, Limit: int(1), Value: (*result.P)}
+						return result, i, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_25, Limit: int(1), Value: (*result.P)}
 					}
 				}
 			}
 		case "pp":
 			if seenPP {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"pp"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_37}
 			}
 			seenPP = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("pp", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -6662,6 +9057,7 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
+			live0 := held1
 			if i < len(data) && data[i] == ']' {
 				if result.PP == nil {
 					result.PP = []**int{}
@@ -6669,17 +9065,22 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 			} else {
 				if result.PP == nil {
 					result.PP = make([]**int, 0, ggenCap_PtrElemPipe_PP_PtrPtrint)
+					live0 = cap(result.PP)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					if len(result.PP) < cap(result.PP) {
+					if len(result.PP) < live0 {
 						result.PP = result.PP[:len(result.PP)+1]
+					} else if len(result.PP) < cap(result.PP) {
+						result.PP = append(result.PP, nil)
 					} else {
 						result.PP = append(result.PP, nil)
+						live0 = cap(result.PP)
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("pp[]", i, ggen.ErrBadLiteral)
 						}
 						i += 4
@@ -6733,6 +9134,9 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 						} else {
 							n = int64(u)
 						}
+						if int64(int(n)) != n {
+							return result, i, ggen.NewParseErr("pp[]", i, ggen.ErrNumberOverflow)
+						}
 						if result.PP[len(result.PP)-1] == nil {
 							result.PP[len(result.PP)-1] = new(new(int(n)))
 						} else if (*result.PP[len(result.PP)-1]) == nil {
@@ -6742,7 +9146,7 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 						}
 					}
 					if err := pePositive2(result.PP[len(result.PP)-1]); err != nil {
-						return result, i, &ggen.CustomError{Pos: i, Keys: []string{"pp[]"}, Name: "pePositive2", Value: result.PP[len(result.PP)-1], Cause: err}
+						return result, i, &ggen.CustomError{Pos: i, Keys: ggenKeys_mods_test_38, Name: "pePositive2", Value: result.PP[len(result.PP)-1], Cause: err}
 					}
 					result.PP[len(result.PP)-1] = peAbs2(result.PP[len(result.PP)-1])
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -6767,11 +9171,12 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 			i++
 		case "s":
 			if seenS {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"s"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_39}
 			}
 			seenS = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("s", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -6800,6 +9205,7 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 				for {
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("s", i, ggen.ErrBadLiteral)
 						}
 						i += 4
@@ -6866,11 +9272,12 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 			i++
 		case "z":
 			if seenZ {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"z"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_40}
 			}
 			seenZ = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("z", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -6899,6 +9306,7 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 				for {
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("z", i, ggen.ErrBadLiteral)
 						}
 						i += 4
@@ -6968,12 +9376,15 @@ func (recv PtrElemPipe) DecodeFrom(data []byte) (result PtrElemPipe, i int, err 
 					} else {
 						n = int64(u)
 					}
+					if int64(int(n)) != n {
+						return result, i, ggen.NewParseErr("z", i, ggen.ErrNumberOverflow)
+					}
 					slab0[len(slab0)-1] = int(n)
 					result.Z = append(result.Z, &slab0[len(slab0)-1])
 					result.Z[len(result.Z)-1] = peNilIfZero(result.Z[len(result.Z)-1])
 					if result.Z[len(result.Z)-1] != nil {
 						if (*result.Z[len(result.Z)-1]) < 1 {
-							return result, i, &ggen.GTEError{Pos: i, Keys: []string{"z[]"}, Limit: int(1), Value: (*result.Z[len(result.Z)-1])}
+							return result, i, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_41, Limit: int(1), Value: (*result.Z[len(result.Z)-1])}
 						}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
@@ -7034,6 +9445,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 	if result.C != nil {
 		result.C = result.C[:0]
 	}
+	held0 := len(result.G)
 	if result.G != nil {
 		result.G = result.G[:0]
 	}
@@ -7043,6 +9455,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 	if result.MV != nil {
 		clear(result.MV)
 	}
+	held1 := len(result.PP)
 	if result.PP != nil {
 		result.PP = result.PP[:0]
 	}
@@ -7098,7 +9511,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				return result, ggen.NewParseErr("a", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_13}
 			}
 			seenA = true
 			err = s.ArrayOpen()
@@ -7118,7 +9531,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 			slab0 := make([]int, 2)
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{"a"}, Want: 2, Got: 3, AtLeast: true}
+					return result, &ggen.LenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_13, Want: 2, Got: 3, AtLeast: true}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -7129,18 +9542,18 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("a", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("a", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("a", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("a", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
 					result.A[idx0] = nil
 					result.A[idx0] = zpAdd1(result.A[idx0])
 					if err := peSet(result.A[idx0]); err != nil {
-						return result, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"a[]"}, Name: "peSet", Value: result.A[idx0], Cause: err}
+						return result, &ggen.CustomError{Pos: s.Offset(), Keys: ggenKeys_mods_test_31, Name: "peSet", Value: result.A[idx0], Cause: err}
 					}
 					idx0++
 					err = s.SkipSpace()
@@ -7170,16 +9583,19 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				if err != nil {
 					return result, ggen.NewParseErr("a", s.Offset(), err)
 				}
+				if int64(int(iv)) != iv {
+					return result, ggen.NewParseErr("a", s.Offset(), ggen.ErrNumberOverflow)
+				}
 				slab0[idx0] = int(iv)
 				result.A[idx0] = &slab0[idx0]
 				result.A[idx0] = zpAdd1(result.A[idx0])
 				if result.A[idx0] != nil {
 					if (*result.A[idx0]) < 2 {
-						return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"a[]"}, Limit: int(2), Value: (*result.A[idx0])}
+						return result, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_31, Limit: int(2), Value: (*result.A[idx0])}
 					}
 				}
 				if err := peSet(result.A[idx0]); err != nil {
-					return result, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"a[]"}, Name: "peSet", Value: result.A[idx0], Cause: err}
+					return result, &ggen.CustomError{Pos: s.Offset(), Keys: ggenKeys_mods_test_31, Name: "peSet", Value: result.A[idx0], Cause: err}
 				}
 				idx0++
 				err = s.SkipSpace()
@@ -7208,7 +9624,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				return result, ggen.NewParseErr("a", s.Offset(), ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{"a"}, Want: 2, Got: idx0}
+				return result, &ggen.LenError{Pos: s.Offset(), Keys: ggenKeys_mods_test_13, Want: 2, Got: idx0}
 			}
 			s.Pos++
 		case "c":
@@ -7217,7 +9633,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
 			if seenC {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"c"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_23}
 			}
 			seenC = true
 			err = s.SkipSpace()
@@ -7233,11 +9649,11 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("c", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("c", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("c", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("c", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -7278,17 +9694,17 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("c", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("c", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("c", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("c", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
 					result.C = append(result.C, nil)
 					if v, err := peCapped(result.C[len(result.C)-1]); err != nil {
-						return result, ggen.NewParseErr("c[]", s.Offset(), err)
+						return result, ggen.NewParseErrOpaque("c[]", s.Offset(), err)
 					} else {
 						result.C[len(result.C)-1] = v
 					}
@@ -7320,10 +9736,13 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				if err != nil {
 					return result, ggen.NewParseErr("c", s.Offset(), err)
 				}
+				if int64(int(iv)) != iv {
+					return result, ggen.NewParseErr("c", s.Offset(), ggen.ErrNumberOverflow)
+				}
 				slab0[len(slab0)-1] = int(iv)
 				result.C = append(result.C, &slab0[len(slab0)-1])
 				if v, err := peCapped(result.C[len(result.C)-1]); err != nil {
-					return result, ggen.NewParseErr("c[]", s.Offset(), err)
+					return result, ggen.NewParseErrOpaque("c[]", s.Offset(), err)
 				} else {
 					result.C[len(result.C)-1] = v
 				}
@@ -7359,7 +9778,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				return result, ggen.NewParseErr("g", s.Offset(), err)
 			}
 			if seenG {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"g"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_32}
 			}
 			seenG = true
 			err = s.SkipSpace()
@@ -7375,11 +9794,11 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("g", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("g", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("g", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("g", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -7400,6 +9819,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				}
 			}
 			var slab0 []PtrElemLeaf
+			live0 := held0
 			if s.Bytes()[s.Pos] == ']' {
 				if result.G == nil {
 					result.G = []*PtrElemLeaf{}
@@ -7407,8 +9827,8 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 			} else {
 				if result.G == nil {
 					result.G = make([]*PtrElemLeaf, 0, ggenCap_PtrElemPipe_G_PtrPtrElemLeaf)
+					live0 = cap(result.G)
 				}
-				slab0 = make([]PtrElemLeaf, 0, ggenCap_PtrElemPipe_G_PtrElemLeaf)
 			}
 			for s.Bytes()[s.Pos] != ']' {
 				if s.Pos >= len(s.Bytes()) {
@@ -7420,17 +9840,17 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("g", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("g", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("g", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("g", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
 					result.G = append(result.G, nil)
 					if err := peLeaf(result.G[len(result.G)-1]); err != nil {
-						return result, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"g[]"}, Name: "peLeaf", Value: result.G[len(result.G)-1], Cause: err}
+						return result, &ggen.CustomError{Pos: s.Offset(), Keys: ggenKeys_mods_test_33, Name: "peLeaf", Value: result.G[len(result.G)-1], Cause: err}
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -7454,18 +9874,28 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 					}
 					break
 				}
-				if len(slab0) < cap(slab0) {
-					slab0 = slab0[:len(slab0)+1]
-				} else {
-					slab0 = append(slab0, PtrElemLeaf{})
+				var pe0 *PtrElemLeaf
+				if len(result.G) < live0 {
+					pe0 = result.G[:len(result.G)+1][len(result.G)]
 				}
-				slab0[len(slab0)-1], err = slab0[len(slab0)-1].DecodeFromStream(s)
+				if pe0 == nil {
+					if slab0 == nil {
+						slab0 = make([]PtrElemLeaf, 0, ggenCap_PtrElemPipe_G_PtrElemLeaf)
+					}
+					if len(slab0) < cap(slab0) {
+						slab0 = slab0[:len(slab0)+1]
+					} else {
+						slab0 = append(slab0, PtrElemLeaf{})
+					}
+					pe0 = &slab0[len(slab0)-1]
+				}
+				(*pe0), err = (*pe0).DecodeFromStream(s)
 				if err != nil {
 					return result, ggen.NewParseErr("g", s.Offset(), err)
 				}
-				result.G = append(result.G, &slab0[len(slab0)-1])
+				result.G = append(result.G, pe0)
 				if err := peLeaf(result.G[len(result.G)-1]); err != nil {
-					return result, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"g[]"}, Name: "peLeaf", Value: result.G[len(result.G)-1], Cause: err}
+					return result, &ggen.CustomError{Pos: s.Offset(), Keys: ggenKeys_mods_test_33, Name: "peLeaf", Value: result.G[len(result.G)-1], Cause: err}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -7499,7 +9929,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_15}
 			}
 			seenI = true
 			err = s.SkipSpace()
@@ -7515,11 +9945,11 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("i", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("i", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("i", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("i", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -7560,18 +9990,18 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("i", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("i", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("i", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("i", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
 					result.I = append(result.I, nil)
 					result.I[len(result.I)-1] = zpAdd1(result.I[len(result.I)-1])
 					if err := peSet(result.I[len(result.I)-1]); err != nil {
-						return result, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"i[]"}, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err}
+						return result, &ggen.CustomError{Pos: s.Offset(), Keys: ggenKeys_mods_test_34, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err}
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -7601,16 +10031,19 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				if err != nil {
 					return result, ggen.NewParseErr("i", s.Offset(), err)
 				}
+				if int64(int(iv)) != iv {
+					return result, ggen.NewParseErr("i", s.Offset(), ggen.ErrNumberOverflow)
+				}
 				slab0[len(slab0)-1] = int(iv)
 				result.I = append(result.I, &slab0[len(slab0)-1])
 				result.I[len(result.I)-1] = zpAdd1(result.I[len(result.I)-1])
 				if result.I[len(result.I)-1] != nil {
 					if (*result.I[len(result.I)-1]) < 2 {
-						return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"i[]"}, Limit: int(2), Value: (*result.I[len(result.I)-1])}
+						return result, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_34, Limit: int(2), Value: (*result.I[len(result.I)-1])}
 					}
 				}
 				if err := peSet(result.I[len(result.I)-1]); err != nil {
-					return result, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"i[]"}, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err}
+					return result, &ggen.CustomError{Pos: s.Offset(), Keys: ggenKeys_mods_test_34, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err}
 				}
 				err = s.SkipSpace()
 				if err != nil {
@@ -7644,7 +10077,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				return result, ggen.NewParseErr("mv", s.Offset(), err)
 			}
 			if seenMV {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"mv"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_35}
 			}
 			seenMV = true
 			err = s.SkipSpace()
@@ -7660,11 +10093,11 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("mv", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("mv", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("mv", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("mv", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -7725,11 +10158,11 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("mv.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("mv.value", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("mv.value", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("mv.value", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -7740,10 +10173,13 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 					if err != nil {
 						return result, ggen.NewParseErr("mv.value", s.Offset(), err)
 					}
+					if int64(int(v)) != v {
+						return result, ggen.NewParseErr("mv.value", s.Offset(), ggen.ErrNumberOverflow)
+					}
 					result.MV[mk] = new(int(v))
 				}
 				if err := pePositive(result.MV[mk]); err != nil {
-					return result, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"mv.value"}, Name: "pePositive", Value: result.MV[mk], Cause: err}
+					return result, &ggen.CustomError{Pos: s.Offset(), Keys: ggenKeys_mods_test_36, Name: "pePositive", Value: result.MV[mk], Cause: err}
 				}
 				result.MV[mk] = peAbs(result.MV[mk])
 				err = s.SkipSpace()
@@ -7778,7 +10214,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				return result, ggen.NewParseErr("p", s.Offset(), err)
 			}
 			if seenP {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"p"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_25}
 			}
 			seenP = true
 			if s.Pos >= len(s.Bytes()) {
@@ -7790,11 +10226,11 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("p", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("p", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("p", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("p", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -7806,6 +10242,9 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				if err != nil {
 					return result, ggen.NewParseErr("p", s.Offset(), err)
 				}
+				if int64(int(v)) != v {
+					return result, ggen.NewParseErr("p", s.Offset(), ggen.ErrNumberOverflow)
+				}
 				if result.P == nil {
 					result.P = new(int(v))
 				} else {
@@ -7814,7 +10253,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				result.P = peNilIfZero(result.P)
 				if result.P != nil {
 					if (*result.P) < 1 {
-						return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"p"}, Limit: int(1), Value: (*result.P)}
+						return result, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_25, Limit: int(1), Value: (*result.P)}
 					}
 				}
 			}
@@ -7824,7 +10263,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				return result, ggen.NewParseErr("pp", s.Offset(), err)
 			}
 			if seenPP {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"pp"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_37}
 			}
 			seenPP = true
 			err = s.SkipSpace()
@@ -7840,11 +10279,11 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("pp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("pp", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("pp", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("pp", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -7864,6 +10303,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 					return result, ggen.NewParseErr("pp", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
+			live0 := held1
 			if s.Bytes()[s.Pos] == ']' {
 				if result.PP == nil {
 					result.PP = []**int{}
@@ -7871,13 +10311,17 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 			} else {
 				if result.PP == nil {
 					result.PP = make([]**int, 0, ggenCap_PtrElemPipe_PP_PtrPtrint)
+					live0 = cap(result.PP)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				if len(result.PP) < cap(result.PP) {
+				if len(result.PP) < live0 {
 					result.PP = result.PP[:len(result.PP)+1]
+				} else if len(result.PP) < cap(result.PP) {
+					result.PP = append(result.PP, nil)
 				} else {
 					result.PP = append(result.PP, nil)
+					live0 = cap(result.PP)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -7888,11 +10332,11 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("pp[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("pp[]", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("pp[]", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("pp[]", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -7903,6 +10347,9 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 					if err != nil {
 						return result, ggen.NewParseErr("pp[]", s.Offset(), err)
 					}
+					if int64(int(v)) != v {
+						return result, ggen.NewParseErr("pp[]", s.Offset(), ggen.ErrNumberOverflow)
+					}
 					if result.PP[len(result.PP)-1] == nil {
 						result.PP[len(result.PP)-1] = new(new(int(v)))
 					} else if (*result.PP[len(result.PP)-1]) == nil {
@@ -7912,7 +10359,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 					}
 				}
 				if err := pePositive2(result.PP[len(result.PP)-1]); err != nil {
-					return result, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"pp[]"}, Name: "pePositive2", Value: result.PP[len(result.PP)-1], Cause: err}
+					return result, &ggen.CustomError{Pos: s.Offset(), Keys: ggenKeys_mods_test_38, Name: "pePositive2", Value: result.PP[len(result.PP)-1], Cause: err}
 				}
 				result.PP[len(result.PP)-1] = peAbs2(result.PP[len(result.PP)-1])
 				err = s.SkipSpace()
@@ -7947,7 +10394,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				return result, ggen.NewParseErr("s", s.Offset(), err)
 			}
 			if seenS {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"s"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_39}
 			}
 			seenS = true
 			err = s.SkipSpace()
@@ -7963,11 +10410,11 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("s", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("s", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("s", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("s", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -8008,11 +10455,11 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("s", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("s", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("s", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("s", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -8080,7 +10527,7 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				return result, ggen.NewParseErr("z", s.Offset(), err)
 			}
 			if seenZ {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"z"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_40}
 			}
 			seenZ = true
 			err = s.SkipSpace()
@@ -8096,11 +10543,11 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("z", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("z", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("z", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("z", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -8141,11 +10588,11 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("z", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("z", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("z", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("z", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -8179,12 +10626,15 @@ func (recv PtrElemPipe) DecodeFromStream(s *ggen.Stream) (result PtrElemPipe, er
 				if err != nil {
 					return result, ggen.NewParseErr("z", s.Offset(), err)
 				}
+				if int64(int(iv)) != iv {
+					return result, ggen.NewParseErr("z", s.Offset(), ggen.ErrNumberOverflow)
+				}
 				slab0[len(slab0)-1] = int(iv)
 				result.Z = append(result.Z, &slab0[len(slab0)-1])
 				result.Z[len(result.Z)-1] = peNilIfZero(result.Z[len(result.Z)-1])
 				if result.Z[len(result.Z)-1] != nil {
 					if (*result.Z[len(result.Z)-1]) < 1 {
-						return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"z[]"}, Limit: int(1), Value: (*result.Z[len(result.Z)-1])}
+						return result, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_41, Limit: int(1), Value: (*result.Z[len(result.Z)-1])}
 					}
 				}
 				err = s.SkipSpace()
@@ -8591,7 +11041,7 @@ func (recv PtrElemLeaf) DecodeFrom(data []byte) (result PtrElemLeaf, i int, err 
 		switch key {
 		case "n":
 			if seenN {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"n"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_42}
 			}
 			seenN = true
 			neg := false
@@ -8641,6 +11091,9 @@ func (recv PtrElemLeaf) DecodeFrom(data []byte) (result PtrElemLeaf, i int, err 
 				}
 			} else {
 				n = int64(u)
+			}
+			if int64(int(n)) != n {
+				return result, i, ggen.NewParseErr("n", i, ggen.ErrNumberOverflow)
 			}
 			result.N = int(n)
 		default:
@@ -8707,13 +11160,16 @@ func (recv PtrElemLeaf) DecodeFromStream(s *ggen.Stream) (result PtrElemLeaf, er
 				return result, ggen.NewParseErr("n", s.Offset(), err)
 			}
 			if seenN {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"n"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_42}
 			}
 			seenN = true
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
 				return result, ggen.NewParseErr("n", s.Offset(), err)
+			}
+			if int64(int(iv)) != iv {
+				return result, ggen.NewParseErr("n", s.Offset(), ggen.ErrNumberOverflow)
 			}
 			result.N = int(iv)
 		default:
@@ -8823,7 +11279,7 @@ func (recv PtrElemPipeME) DecodeFrom(data []byte) (result PtrElemPipeME, i int, 
 		switch key {
 		case "i":
 			if seenI {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_15})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("i", i, err)
@@ -8832,6 +11288,7 @@ func (recv PtrElemPipeME) DecodeFrom(data []byte) (result PtrElemPipeME, i int, 
 				seenI = true
 				if i < len(data) && data[i] == 'n' {
 					if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+						i = ggen.NullEnd(data, i)
 						return result, i, ggen.NewParseErr("i", i, ggen.ErrBadLiteral)
 					}
 					i += 4
@@ -8860,13 +11317,14 @@ func (recv PtrElemPipeME) DecodeFrom(data []byte) (result PtrElemPipeME, i int, 
 					for {
 						if i < len(data) && data[i] == 'n' {
 							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								i = ggen.NullEnd(data, i)
 								return result, i, ggen.NewParseErr("i", i, ggen.ErrBadLiteral)
 							}
 							i += 4
 							result.I = append(result.I, nil)
 							result.I[len(result.I)-1] = zpAdd1(result.I[len(result.I)-1])
 							if err := peSet(result.I[len(result.I)-1]); err != nil {
-								errs = append(errs, &ggen.CustomError{Pos: i, Keys: []string{"i[]"}, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err})
+								errs = append(errs, &ggen.CustomError{Pos: i, Keys: ggenKeys_mods_test_34, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err})
 							}
 							for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 								i++
@@ -8932,16 +11390,19 @@ func (recv PtrElemPipeME) DecodeFrom(data []byte) (result PtrElemPipeME, i int, 
 						} else {
 							n = int64(u)
 						}
+						if int64(int(n)) != n {
+							return result, i, ggen.NewParseErr("i", i, ggen.ErrNumberOverflow)
+						}
 						slab0[len(slab0)-1] = int(n)
 						result.I = append(result.I, &slab0[len(slab0)-1])
 						result.I[len(result.I)-1] = zpAdd1(result.I[len(result.I)-1])
 						if result.I[len(result.I)-1] != nil {
 							if (*result.I[len(result.I)-1]) < 2 {
-								errs = append(errs, &ggen.GTEError{Pos: i, Keys: []string{"i[]"}, Limit: int(2), Value: (*result.I[len(result.I)-1])})
+								errs = append(errs, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_34, Limit: int(2), Value: (*result.I[len(result.I)-1])})
 							}
 						}
 						if err := peSet(result.I[len(result.I)-1]); err != nil {
-							errs = append(errs, &ggen.CustomError{Pos: i, Keys: []string{"i[]"}, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err})
+							errs = append(errs, &ggen.CustomError{Pos: i, Keys: ggenKeys_mods_test_34, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err})
 						}
 						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 							i++
@@ -9036,7 +11497,7 @@ func (recv PtrElemPipeME) DecodeFromStream(s *ggen.Stream) (result PtrElemPipeME
 				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_15})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("i", s.Offset(), err)
@@ -9056,11 +11517,11 @@ func (recv PtrElemPipeME) DecodeFromStream(s *ggen.Stream) (result PtrElemPipeME
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("i", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("i", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("i", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("i", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -9101,18 +11562,18 @@ func (recv PtrElemPipeME) DecodeFromStream(s *ggen.Stream) (result PtrElemPipeME
 						for ki := 1; ki < 4; ki++ {
 							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, ggen.NewParseErr("i", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+									return result, ggen.NewParseErr("i", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 								}
 							}
 							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, ggen.NewParseErr("i", s.Offset(), ggen.ErrBadLiteral)
+								return result, ggen.NewParseErr("i", s.Offset()+ki, ggen.ErrBadLiteral)
 							}
 						}
 						s.Pos += 4
 						result.I = append(result.I, nil)
 						result.I[len(result.I)-1] = zpAdd1(result.I[len(result.I)-1])
 						if err := peSet(result.I[len(result.I)-1]); err != nil {
-							errs = append(errs, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"i[]"}, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err})
+							errs = append(errs, &ggen.CustomError{Pos: s.Offset(), Keys: ggenKeys_mods_test_34, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err})
 						}
 						err = s.SkipSpace()
 						if err != nil {
@@ -9142,16 +11603,19 @@ func (recv PtrElemPipeME) DecodeFromStream(s *ggen.Stream) (result PtrElemPipeME
 					if err != nil {
 						return result, ggen.NewParseErr("i", s.Offset(), err)
 					}
+					if int64(int(iv)) != iv {
+						return result, ggen.NewParseErr("i", s.Offset(), ggen.ErrNumberOverflow)
+					}
 					slab0[len(slab0)-1] = int(iv)
 					result.I = append(result.I, &slab0[len(slab0)-1])
 					result.I[len(result.I)-1] = zpAdd1(result.I[len(result.I)-1])
 					if result.I[len(result.I)-1] != nil {
 						if (*result.I[len(result.I)-1]) < 2 {
-							errs = append(errs, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"i[]"}, Limit: int(2), Value: (*result.I[len(result.I)-1])})
+							errs = append(errs, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_34, Limit: int(2), Value: (*result.I[len(result.I)-1])})
 						}
 					}
 					if err := peSet(result.I[len(result.I)-1]); err != nil {
-						errs = append(errs, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"i[]"}, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err})
+						errs = append(errs, &ggen.CustomError{Pos: s.Offset(), Keys: ggenKeys_mods_test_34, Name: "peSet", Value: result.I[len(result.I)-1], Cause: err})
 					}
 					err = s.SkipSpace()
 					if err != nil {
@@ -9326,7 +11790,7 @@ func (recv R10BBigBounds) DecodeFrom(data []byte) (result R10BBigBounds, i int, 
 		switch key {
 		case "a":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_13}
 			}
 			seenA = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -9360,11 +11824,11 @@ func (recv R10BBigBounds) DecodeFrom(data []byte) (result R10BBigBounds, i int, 
 			}
 			result.A = n
 			if result.A < 9223372036854775809 {
-				return result, i, &ggen.GTEError{Pos: i, Keys: []string{"a"}, Limit: uint64(9223372036854775809), Value: result.A}
+				return result, i, &ggen.GTEError{Pos: i, Keys: ggenKeys_mods_test_13, Limit: uint64(9223372036854775809), Value: result.A}
 			}
 		case "b":
 			if seenB {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_14}
 			}
 			seenB = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -9398,11 +11862,11 @@ func (recv R10BBigBounds) DecodeFrom(data []byte) (result R10BBigBounds, i int, 
 			}
 			result.B = n
 			if result.B%9223372036854775809 != 0 {
-				return result, i, &ggen.MultipleError{Pos: i, Keys: []string{"b"}, Of: uint64(9223372036854775809), Value: result.B}
+				return result, i, &ggen.MultipleError{Pos: i, Keys: ggenKeys_mods_test_14, Of: uint64(9223372036854775809), Value: result.B}
 			}
 		case "c":
 			if seenC {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"c"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_mods_test_23}
 			}
 			seenC = true
 			if i >= len(data) || data[i] < '0' || data[i] > '9' {
@@ -9436,7 +11900,7 @@ func (recv R10BBigBounds) DecodeFrom(data []byte) (result R10BBigBounds, i int, 
 			}
 			result.C = n
 			if result.C != 18446744073709551615 {
-				return result, i, &ggen.EqError{Pos: i, Keys: []string{"c"}, Want: uint64(18446744073709551615), Value: result.C}
+				return result, i, &ggen.EqError{Pos: i, Keys: ggenKeys_mods_test_23, Want: uint64(18446744073709551615), Value: result.C}
 			}
 		default:
 			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
@@ -9516,7 +11980,7 @@ func (recv R10BBigBounds) DecodeFromStream(s *ggen.Stream) (result R10BBigBounds
 				return result, ggen.NewParseErr("a", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_13}
 			}
 			seenA = true
 			result.A, err = s.Uint64()
@@ -9524,7 +11988,7 @@ func (recv R10BBigBounds) DecodeFromStream(s *ggen.Stream) (result R10BBigBounds
 				return result, ggen.NewParseErr("a", s.Offset(), err)
 			}
 			if result.A < 9223372036854775809 {
-				return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"a"}, Limit: uint64(9223372036854775809), Value: result.A}
+				return result, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_mods_test_13, Limit: uint64(9223372036854775809), Value: result.A}
 			}
 		case "b":
 			err = s.ConsumeColon()
@@ -9532,7 +11996,7 @@ func (recv R10BBigBounds) DecodeFromStream(s *ggen.Stream) (result R10BBigBounds
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_14}
 			}
 			seenB = true
 			result.B, err = s.Uint64()
@@ -9540,7 +12004,7 @@ func (recv R10BBigBounds) DecodeFromStream(s *ggen.Stream) (result R10BBigBounds
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if result.B%9223372036854775809 != 0 {
-				return result, &ggen.MultipleError{Pos: s.Offset(), Keys: []string{"b"}, Of: uint64(9223372036854775809), Value: result.B}
+				return result, &ggen.MultipleError{Pos: s.Offset(), Keys: ggenKeys_mods_test_14, Of: uint64(9223372036854775809), Value: result.B}
 			}
 		case "c":
 			err = s.ConsumeColon()
@@ -9548,7 +12012,7 @@ func (recv R10BBigBounds) DecodeFromStream(s *ggen.Stream) (result R10BBigBounds
 				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
 			if seenC {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"c"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_mods_test_23}
 			}
 			seenC = true
 			result.C, err = s.Uint64()
@@ -9556,7 +12020,7 @@ func (recv R10BBigBounds) DecodeFromStream(s *ggen.Stream) (result R10BBigBounds
 				return result, ggen.NewParseErr("c", s.Offset(), err)
 			}
 			if result.C != 18446744073709551615 {
-				return result, &ggen.EqError{Pos: s.Offset(), Keys: []string{"c"}, Want: uint64(18446744073709551615), Value: result.C}
+				return result, &ggen.EqError{Pos: s.Offset(), Keys: ggenKeys_mods_test_23, Want: uint64(18446744073709551615), Value: result.C}
 			}
 		default:
 			ownKey := strings.Clone(key)

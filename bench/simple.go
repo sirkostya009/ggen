@@ -373,3 +373,41 @@ func init() {
 
 	AccountPayload = mustMarshal(AccountValue)
 }
+
+// NumRows holds slices of narrow and 64-bit integers and float32s, the shape
+// of id lists, port lists and sensor readings. BenchmarkNumRows_Marshal
+// measures the JSONSize budget of number elements, which decides how much
+// ggen.Marshal allocates.
+//
+//ggen:generate
+type NumRows struct {
+	IDs      []int64   `json:"ids"`
+	Counts   []int     `json:"counts"`
+	Codes    []int32   `json:"codes"`
+	Ports    []uint16  `json:"ports"`
+	Readings []float32 `json:"readings"`
+	Level    int8      `json:"level"`
+}
+
+var NumRowsValue NumRows
+
+func init() {
+	g := gen{n: 7}
+	const n = 512
+	v := NumRows{
+		IDs:      make([]int64, n),
+		Counts:   make([]int, n),
+		Codes:    make([]int32, n),
+		Ports:    make([]uint16, n),
+		Readings: make([]float32, n),
+		Level:    3,
+	}
+	for i := range n {
+		v.IDs[i] = int64(g.next() % 10_000_000)
+		v.Counts[i] = g.intn(1000)
+		v.Codes[i] = int32(g.intn(100_000)) - 50_000
+		v.Ports[i] = uint16(g.next())
+		v.Readings[i] = float32(g.f64() * 100)
+	}
+	NumRowsValue = v
+}

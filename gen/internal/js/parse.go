@@ -330,19 +330,43 @@ const isDateTimeHelper = `function ggenIsDateTime(s: string): boolean {
   return m !== null && Number(m[3]) <= ggenDaysIn(Number(m[1]), Number(m[2]));
 }`
 
-// isBigFloatHelper validates like big.Float.Parse(s, 10): the grammar, and
-// a binary exponent within int32.
-const isBigFloatHelper = `function ggenIsBigFloat(s: string): boolean {
-  const m = /^[+-]?(?:[Ii]nf|(\d*)(?:\.(\d*))?(?:[eEpP]([+-]?\d+))?)$/.exec(s);
-  if (m === null) return false;
-  const [whole, int = "", frac = "", exp = "0"] = m;
-  if (/inf$/i.test(whole)) return true;
-  if (int === "" && frac === "") return false;
-  const e = BigInt(exp);
+// baseMantissas are the base-0 mantissa forms of big.Float.Parse and
+// big.Rat.SetString: 0x/0b/0o prefixes, a fraction, and _ separators.
+var baseMantissas = func() string {
+	seq := func(d string) string { return d + "(?:_?" + d + ")*" }
+	digits := map[string]string{"x": "[0-9a-fA-F]", "b": "[01]", "o": "[0-7]"}
+	mant := make([]string, 0, 4)
+	for _, p := range []string{"x", "b", "o"} {
+		d := digits[p]
+		prefix := "0[" + p + strings.ToUpper(p) + "]"
+		mant = append(mant, prefix+"(?:_?"+seq(d)+`(?:\.(?:`+seq(d)+`)?)?|\.`+seq(d)+")")
+	}
+	mant = append(mant, `(?:`+seq(`\d`)+`(?:\.(?:`+seq(`\d`)+`)?)?|\.`+seq(`\d`)+")")
+	return "(?:" + strings.Join(mant, "|") + `)(?:[eEpP][-+]?\d(?:_?\d)*)?`
+}()
+
+// mantissaParts is the shared TS prologue that splits a base-0 mantissa: it
+// defines bits (bits per digit, 0 for decimal), digits, at, e, int and frac,
+// and returns false for an exponent outside int64.
+const mantissaParts = `const body = s.replace(/^[-+]/, "").replaceAll("_", "");
+  const bits = ({ "0x": 4, "0b": 1, "0o": 3 } as Record<string, number>)[body.slice(0, 2).toLowerCase()] ?? 0;
+  const digits = bits > 0 ? body.slice(2) : body;
+  const at = digits.search(bits === 4 ? /[pP]/ : /[eEpP]/);
+  const mant = at < 0 ? digits : digits.slice(0, at);
+  const e = at < 0 ? 0n : BigInt(digits.slice(at + 1));
   if (e < -(2n ** 63n) || e >= 2n ** 63n) return false;
-  const mant = BigInt(int + frac || "0");
-  if (mant === 0n) return true;
-  const exp2 = BigInt(mant.toString(2).length - frac.length) + e;
+  const [int, frac = ""] = mant.split(".");
+  const prefix = bits === 4 ? "0x" : bits === 1 ? "0b" : bits === 3 ? "0o" : "";`
+
+// isBigFloatHelper validates like big.Float.Parse(s, 0), which UnmarshalText
+// uses: the grammar, and a binary exponent within int32.
+var isBigFloatHelper = `function ggenIsBigFloat(s: string): boolean {
+  if (/^[-+]?[Ii]nf$/.test(s)) return true;
+  if (!` + Regex(`^[-+]?`+baseMantissas+`$`, "") + `.test(s)) return false;
+  ` + mantissaParts + `
+  const m = BigInt(prefix + (int + frac || "0"));
+  if (m === 0n) return true;
+  const exp2 = BigInt(m.toString(2).length) - BigInt(frac.length * Math.max(bits, 1)) + e;
   return exp2 >= -(2n ** 31n) && exp2 < 2n ** 31n;
 }`
 
@@ -352,30 +376,18 @@ var isRationalHelper = func() string {
 	seq := func(d string) string { return d + "(?:_?" + d + ")*" }
 	digits := map[string]string{"x": "[0-9a-fA-F]", "b": "[01]", "o": "[0-7]"}
 	nat := make([]string, 0, 5)
-	mant := make([]string, 0, 4)
 	for _, p := range []string{"x", "b", "o"} {
-		d := digits[p]
-		prefix := "0[" + p + strings.ToUpper(p) + "]"
-		nat = append(nat, prefix+"_?"+seq(d))
-		mant = append(mant, prefix+"(?:_?"+seq(d)+`(?:\.(?:`+seq(d)+`)?)?|\.`+seq(d)+")")
+		nat = append(nat, "0["+p+strings.ToUpper(p)+"]_?"+seq(digits[p]))
 	}
 	nat = append(nat, `0(?:_?[0-7])*`, `[1-9](?:_?\d)*`)
-	mant = append(mant, `(?:`+seq(`\d`)+`(?:\.(?:`+seq(`\d`)+`)?)?|\.`+seq(`\d`)+")")
 	n := "(?:" + strings.Join(nat, "|") + ")"
-	re := `^[-+]?(?:` + n + "/" + n + "|(?:" + strings.Join(mant, "|") + `)(?:[eEpP][-+]?` + seq(`\d`) + ")?)$"
+	re := `^[-+]?(?:` + n + "/" + n + "|" + baseMantissas + ")$"
 	return `function ggenIsRational(s: string): boolean {
   if (!` + Regex(re, "") + `.test(s)) return false;
   const slash = s.indexOf("/");
   if (slash >= 0) return /[1-9a-fA-F]/.test(s.slice(slash + 1).replace(/^0[xXbBoO]/, ""));
-  const body = s.replace(/^[-+]/, "").replaceAll("_", "");
-  const bits = ({ "0x": 4, "0b": 1, "0o": 3 } as Record<string, number>)[body.slice(0, 2).toLowerCase()] ?? 0;
-  const digits = bits > 0 ? body.slice(2) : body;
-  const at = digits.search(bits === 4 ? /[pP]/ : /[eEpP]/);
-  const mant = at < 0 ? digits : digits.slice(0, at);
-  const e = at < 0 ? 0n : BigInt(digits.slice(at + 1));
-  if (e < -(2n ** 63n) || e >= 2n ** 63n) return false;
-  const [int, frac = ""] = mant.split(".");
-  if (BigInt((bits === 4 ? "0x" : bits === 1 ? "0b" : bits === 3 ? "0o" : "") + (int + frac || "0")) === 0n) return true;
+  ` + mantissaParts + `
+  if (BigInt(prefix + (int + frac || "0")) === 0n) return true;
   const point = BigInt(-frac.length);
   const decimal = at >= 0 && /[eE]/.test(digits[at]);
   const exp5 = (bits === 0 ? point : 0n) + (decimal ? e : 0n);

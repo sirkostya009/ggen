@@ -15,6 +15,11 @@ import (
 const ggenCap_CustomBothStruct_Tags_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
 
 var ggenOneof_custom_test_0 = []string{"admin", "user", "guest"}
+var ggenKeys_custom_test_0 = []string{"name"}
+var ggenKeys_custom_test_1 = []string{"age"}
+var ggenKeys_custom_test_2 = []string{"role"}
+var ggenKeys_custom_test_3 = []string{"tags"}
+var ggenKeys_custom_test_4 = []string{"tags[]"}
 
 func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int, err error) {
 	result = recv
@@ -44,7 +49,7 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 			result.Role = ""
 		}
 		if !seenName {
-			errs = append(errs, &ggen.RequiredError{Pos: i, Keys: []string{"name"}})
+			errs = append(errs, &ggen.RequiredError{Pos: i, Keys: ggenKeys_custom_test_0})
 		}
 		if len(errs) > 0 {
 			return result, i, errs
@@ -82,7 +87,7 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 		switch key {
 		case "age":
 			if seenAge {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"age"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_custom_test_1})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("age", i, err)
@@ -137,17 +142,20 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 				} else {
 					n = int64(u)
 				}
+				if int64(int(n)) != n {
+					return result, i, ggen.NewParseErr("age", i, ggen.ErrNumberOverflow)
+				}
 				result.Age = int(n)
 				if result.Age < 0 {
-					errs = append(errs, &ggen.GTEError{Pos: i, Keys: []string{"age"}, Limit: int(0), Value: result.Age})
+					errs = append(errs, &ggen.GTEError{Pos: i, Keys: ggenKeys_custom_test_1, Limit: int(0), Value: result.Age})
 				}
 				if result.Age > 100 {
-					errs = append(errs, &ggen.LTEError{Pos: i, Keys: []string{"age"}, Limit: int(100), Value: result.Age})
+					errs = append(errs, &ggen.LTEError{Pos: i, Keys: ggenKeys_custom_test_1, Limit: int(100), Value: result.Age})
 				}
 			}
 		case "name":
 			if seenName {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_custom_test_0})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("name", i, err)
@@ -175,15 +183,15 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 					}
 				}
 				if len(result.Name) < 1 {
-					errs = append(errs, &ggen.MinLenError{Pos: i, Keys: []string{"name"}, Limit: 1, Got: len(result.Name)})
+					errs = append(errs, &ggen.MinLenError{Pos: i, Keys: ggenKeys_custom_test_0, Limit: 1, Got: len(result.Name)})
 				}
 				if len(result.Name) > 5 {
-					errs = append(errs, &ggen.MaxLenError{Pos: i, Keys: []string{"name"}, Limit: 5, Got: len(result.Name)})
+					errs = append(errs, &ggen.MaxLenError{Pos: i, Keys: ggenKeys_custom_test_0, Limit: 5, Got: len(result.Name)})
 				}
 			}
 		case "role":
 			if seenRole {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"role"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_custom_test_2})
 				i, err = ggen.SkipValue(data, i)
 				if err != nil {
 					return result, i, ggen.NewParseErr("role", i, err)
@@ -213,7 +221,7 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 				switch result.Role {
 				case "admin", "user", "guest":
 				default:
-					errs = append(errs, &ggen.OneOfError{Pos: i, Keys: []string{"role"}, Allowed: ggenOneof_custom_test_0, Value: result.Role})
+					errs = append(errs, &ggen.OneOfError{Pos: i, Keys: ggenKeys_custom_test_2, Allowed: ggenOneof_custom_test_0, Value: result.Role})
 				}
 			}
 		default:
@@ -248,7 +256,7 @@ func (recv MultiErrStruct) DecodeFrom(data []byte) (result MultiErrStruct, i int
 				result.Role = ""
 			}
 			if !seenName {
-				errs = append(errs, &ggen.RequiredError{Pos: i, Keys: []string{"name"}})
+				errs = append(errs, &ggen.RequiredError{Pos: i, Keys: ggenKeys_custom_test_0})
 			}
 			if len(errs) > 0 {
 				return result, i, errs
@@ -291,7 +299,7 @@ func (recv MultiErrStruct) DecodeFromStream(s *ggen.Stream) (result MultiErrStru
 			result.Role = ""
 		}
 		if !seenName {
-			errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}})
+			errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Keys: ggenKeys_custom_test_0})
 		}
 		if len(errs) > 0 {
 			return result, errs
@@ -311,7 +319,7 @@ func (recv MultiErrStruct) DecodeFromStream(s *ggen.Stream) (result MultiErrStru
 				return result, ggen.NewParseErr("age", s.Offset(), err)
 			}
 			if seenAge {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"age"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_custom_test_1})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("age", s.Offset(), err)
@@ -323,12 +331,15 @@ func (recv MultiErrStruct) DecodeFromStream(s *ggen.Stream) (result MultiErrStru
 				if err != nil {
 					return result, ggen.NewParseErr("age", s.Offset(), err)
 				}
+				if int64(int(iv)) != iv {
+					return result, ggen.NewParseErr("age", s.Offset(), ggen.ErrNumberOverflow)
+				}
 				result.Age = int(iv)
 				if result.Age < 0 {
-					errs = append(errs, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"age"}, Limit: int(0), Value: result.Age})
+					errs = append(errs, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_custom_test_1, Limit: int(0), Value: result.Age})
 				}
 				if result.Age > 100 {
-					errs = append(errs, &ggen.LTEError{Pos: s.Offset(), Keys: []string{"age"}, Limit: int(100), Value: result.Age})
+					errs = append(errs, &ggen.LTEError{Pos: s.Offset(), Keys: ggenKeys_custom_test_1, Limit: int(100), Value: result.Age})
 				}
 
 			}
@@ -338,7 +349,7 @@ func (recv MultiErrStruct) DecodeFromStream(s *ggen.Stream) (result MultiErrStru
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_custom_test_0})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("name", s.Offset(), err)
@@ -350,10 +361,10 @@ func (recv MultiErrStruct) DecodeFromStream(s *ggen.Stream) (result MultiErrStru
 					return result, ggen.NewParseErr("name", s.Offset(), err)
 				}
 				if len(result.Name) < 1 {
-					errs = append(errs, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 1, Got: len(result.Name)})
+					errs = append(errs, &ggen.MinLenError{Pos: s.Offset(), Keys: ggenKeys_custom_test_0, Limit: 1, Got: len(result.Name)})
 				}
 				if len(result.Name) > 5 {
-					errs = append(errs, &ggen.MaxLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 5, Got: len(result.Name)})
+					errs = append(errs, &ggen.MaxLenError{Pos: s.Offset(), Keys: ggenKeys_custom_test_0, Limit: 5, Got: len(result.Name)})
 				}
 
 			}
@@ -363,7 +374,7 @@ func (recv MultiErrStruct) DecodeFromStream(s *ggen.Stream) (result MultiErrStru
 				return result, ggen.NewParseErr("role", s.Offset(), err)
 			}
 			if seenRole {
-				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"role"}})
+				errs = append(errs, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_custom_test_2})
 				err = s.SkipValue()
 				if err != nil {
 					return result, ggen.NewParseErr("role", s.Offset(), err)
@@ -377,7 +388,7 @@ func (recv MultiErrStruct) DecodeFromStream(s *ggen.Stream) (result MultiErrStru
 				switch result.Role {
 				case "admin", "user", "guest":
 				default:
-					errs = append(errs, &ggen.OneOfError{Pos: s.Offset(), Keys: []string{"role"}, Allowed: ggenOneof_custom_test_0, Value: result.Role})
+					errs = append(errs, &ggen.OneOfError{Pos: s.Offset(), Keys: ggenKeys_custom_test_2, Allowed: ggenOneof_custom_test_0, Value: result.Role})
 				}
 
 			}
@@ -425,7 +436,7 @@ func (recv MultiErrStruct) DecodeFromStream(s *ggen.Stream) (result MultiErrStru
 				result.Role = ""
 			}
 			if !seenName {
-				errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}})
+				errs = append(errs, &ggen.RequiredError{Pos: s.Offset(), Keys: ggenKeys_custom_test_0})
 			}
 			if len(errs) > 0 {
 				return result, errs
@@ -506,11 +517,12 @@ func (recv CustomBothStruct) DecodeFrom(data []byte) (result CustomBothStruct, i
 		switch key {
 		case "tags":
 			if seenTags {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"tags"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_custom_test_3}
 			}
 			seenTags = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("tags", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -558,7 +570,7 @@ func (recv CustomBothStruct) DecodeFrom(data []byte) (result CustomBothStruct, i
 					}
 					result.Tags[len(result.Tags)-1] = TrimSpace(result.Tags[len(result.Tags)-1])
 					if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
-						return result, i, &ggen.CustomError{Pos: i, Keys: []string{"tags[]"}, Name: "NotBlank", Value: result.Tags[len(result.Tags)-1], Cause: err}
+						return result, i, &ggen.CustomError{Pos: i, Keys: ggenKeys_custom_test_4, Name: "NotBlank", Value: result.Tags[len(result.Tags)-1], Cause: err}
 					}
 					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 						i++
@@ -641,7 +653,7 @@ func (recv CustomBothStruct) DecodeFromStream(s *ggen.Stream) (result CustomBoth
 				return result, ggen.NewParseErr("tags", s.Offset(), err)
 			}
 			if seenTags {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"tags"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_custom_test_3}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -657,11 +669,11 @@ func (recv CustomBothStruct) DecodeFromStream(s *ggen.Stream) (result CustomBoth
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("tags", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("tags", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("tags", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("tags", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -698,7 +710,7 @@ func (recv CustomBothStruct) DecodeFromStream(s *ggen.Stream) (result CustomBoth
 				}
 				result.Tags[len(result.Tags)-1] = TrimSpace(result.Tags[len(result.Tags)-1])
 				if err := NotBlank(result.Tags[len(result.Tags)-1]); err != nil {
-					return result, &ggen.CustomError{Pos: s.Offset(), Keys: []string{"tags[]"}, Name: "NotBlank", Value: result.Tags[len(result.Tags)-1], Cause: err}
+					return result, &ggen.CustomError{Pos: s.Offset(), Keys: ggenKeys_custom_test_4, Name: "NotBlank", Value: result.Tags[len(result.Tags)-1], Cause: err}
 				}
 				err = s.SkipSpace()
 				if err != nil {

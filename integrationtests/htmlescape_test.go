@@ -8,6 +8,9 @@ package integrationtests
 import (
 	"bytes"
 	"database/sql"
+	"encoding/json"
+	"encoding/json/jsontext"
+	jsonv2 "encoding/json/v2"
 	"net/netip"
 	"reflect"
 	"strings"
@@ -112,5 +115,90 @@ func TestHTMLEscape_NestedPositions(t *testing.T) {
 	}
 }
 
-// TestJSONSize_HTMLEscapeStruct and TestJSONSize_HTMLEscapeNested live in
-// jsonsize_test.go.
+// HTMLEscapeRaw passes raw JSON through at every position a raw value takes.
+//
+//ggen:generate htmlescape
+type HTMLEscapeRaw struct {
+	Meta  json.RawMessage            `json:"meta"`
+	Val   jsontext.Value             `json:"val"`
+	Metas []json.RawMessage          `json:"metas"`
+	ByKey map[string]json.RawMessage `json:"byKey"`
+	Any   any                        `json:"any"`
+	Rest  map[string]json.RawMessage `json:",embed"`
+}
+
+// htmlLabel writes itself as a JSON string without HTML escaping.
+type htmlLabel struct{ S string }
+
+func (l htmlLabel) MarshalJSON() ([]byte, error) { return []byte(`"` + l.S + `"`), nil }
+
+const htmlRawInput = `{"meta":"</script>&","val":{"<k>":"a&b"},"metas":["<x>"],"byKey":{"k":"<&>"},"any":null,"extra":"</script>"}`
+
+// Raw values are HTML-escaped like strings, from typed fields and from an
+// any, as encoding/json and jsonv2 with EscapeForHTML do.
+func TestHTMLEscape_RawValues(t *testing.T) {
+	t.Parallel()
+	v, _, err := HTMLEscapeRaw{}.DecodeFrom([]byte(htmlRawInput))
+	if err != nil {
+		t.Fatal(err)
+	}
+	v.Any = []any{v.Meta, htmlLabel{"</script>"}, []json.RawMessage{v.Meta}}
+	out, err := ggen.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if i := bytes.IndexAny(out, "<>&"); i >= 0 {
+		t.Errorf("htmlescape leaked %q at offset %d: %s", out[i], i, out)
+	}
+	var got, want any
+	if err := jsonv2.Unmarshal(out, &got); err != nil {
+		t.Fatalf("output is not JSON: %v\n%s", err, out)
+	}
+	ref, err := json.Marshal(map[string]any{
+		"meta": v.Meta, "val": v.Val, "metas": v.Metas, "byKey": v.ByKey,
+		"any": v.Any, "extra": v.Rest["extra"],
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := jsonv2.Unmarshal(ref, &want); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("value changed:\n got %s\nwant %s", out, ref)
+	}
+}
+
+func TestAppendAnyHTML_RawValues(t *testing.T) {
+	t.Parallel()
+	for _, v := range []any{
+		json.RawMessage(`{"<k>":"a&b"}`),
+		[]json.RawMessage{json.RawMessage(`"<b>"`), nil},
+		htmlLabel{"<b>&"},
+	} {
+		got, err := ggen.AppendAnyHTML(nil, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("%T: got %s, want %s", v, got, want)
+		}
+		if n := ggen.AnySizeHTML(v); len(got) > n {
+			t.Errorf("%T: AnySizeHTML %d under the %d bytes written", v, n, len(got))
+		}
+		plain, err := ggen.AppendAny(nil, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.ContainsAny(plain, "<>&") {
+			t.Errorf("%T: AppendAny escaped a raw value: %s", v, plain)
+		}
+	}
+}
+
+// TestJSONSize_HTMLEscapeStruct, TestJSONSize_HTMLEscapeNested and
+// TestJSONSize_HTMLEscapeRaw live in jsonsize_test.go.

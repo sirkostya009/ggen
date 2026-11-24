@@ -970,3 +970,36 @@ func TestR10BMultiArgGenerics(t *testing.T) {
 		t.Errorf("round trip: bytes %s, stream %s, %v; want %s", b, s, err, want)
 	}
 }
+
+// The stream path counts a numeric slice over the buffered window. An array
+// that closes inside the window gets its exact capacity, one that runs past
+// it decodes the same values from the width default.
+func TestPrealloc_StreamCountsWithinWindow(t *testing.T) {
+	t.Parallel()
+	in := []byte(`{"ints":[1,2,3,4,5,6,7,8,9,10,11,12,13],"nested":[[1,2,3],[4,5,6,7,8,9,10,11,12,13,14]]}`)
+	want, _, err := PreallocWidths{}.DecodeFrom(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, size := range []int{8, 16, 4096} {
+		var s ggen.Stream
+		s.Reset(bytes.NewReader(in), make([]byte, 0, size))
+		got, err := PreallocWidths{}.DecodeFromStream(&s)
+		if err != nil {
+			t.Fatalf("buffer %d: %v", size, err)
+		}
+		if !reflect.DeepEqual(got.Ints, want.Ints) || !reflect.DeepEqual(got.Nested, want.Nested) {
+			t.Errorf("buffer %d: got %v %v, want %v %v", size, got.Ints, got.Nested, want.Ints, want.Nested)
+		}
+		if size == 4096 {
+			if cap(got.Ints) != len(got.Ints) {
+				t.Errorf("ints: cap %d, len %d, want exact", cap(got.Ints), len(got.Ints))
+			}
+			for k, r := range got.Nested {
+				if cap(r) != len(r) {
+					t.Errorf("nested[%d]: cap %d, len %d, want exact", k, cap(r), len(r))
+				}
+			}
+		}
+	}
+}

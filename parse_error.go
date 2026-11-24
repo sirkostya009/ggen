@@ -11,15 +11,19 @@ import (
 // underlying sentinel, such as ErrBadString, stays reachable through
 // errors.Is and errors.Unwrap.
 //
-// Keys lists the keys and indexes from the document root to the failing
-// value, one entry per nesting level. Pos is a byte offset. For DecodeFrom it
-// is an offset into data. For DecodeFromStream it is the value of s.Pos.
+// Keys lists the JSON keys from the document root to the failing value. A
+// container level is folded into its field's entry ("tags[]" for an element,
+// "byID.value" for a map value). Only [UnmarshalSlice] and [ReadSlice] add
+// an index entry, such as "[3]". Pos is a byte offset. For
+// DecodeFrom it is an offset into data. For DecodeFromStream it is
+// s.Offset(), an offset into everything the Stream has read.
 // Validation failures are not wrapped. They carry their own Keys and keep
 // their type, so errors.As finds them.
 type ParseError struct {
 	Keys []string
 	Pos  int
 	Err  error
+	head *pathBuf
 }
 
 // Error renders "parse error[ at <a.b.c>] (pos <n>)[: <cause>]".
@@ -71,6 +75,7 @@ func NewParseErrShift(segment string, pos, n int, err error) error {
 
 // shiftPos adds d to every position err carries. A *ParseError's cause is
 // shifted too: a ModError from a nested mod arrives already wrapped in one.
+// So is anything a hand-written decoder wrapped with %w or errors.Join.
 func shiftPos(err error, d int) {
 	switch e := err.(type) {
 	case ValidationError:
@@ -84,6 +89,12 @@ func shiftPos(err error, d int) {
 		shiftPos(e.Err, d)
 	case *ModError:
 		e.Pos += d
+	case interface{ Unwrap() error }:
+		shiftPos(e.Unwrap(), d)
+	case interface{ Unwrap() []error }:
+		for _, v := range e.Unwrap() {
+			shiftPos(v, d)
+		}
 	}
 }
 
@@ -93,7 +104,9 @@ func shiftPos(err error, d int) {
 //     as is, so errors.As still finds it. [Errors] is cut down to its first
 //     entry first, see below.
 //   - A *ParseError gets segment added to the front of its Keys. Its Pos
-//     keeps pointing at the deeper failure.
+//     keeps pointing at the deeper failure. When err only wraps one (a
+//     hand-written decoder's %w or errors.Join), the one in the chain is
+//     extended and err itself is returned, so the wrapper stays reachable.
 //   - Any other error is wrapped as &ParseError{Keys: {segment}, Pos, Err}.
 //
 // An empty segment leaves the path unchanged.
@@ -117,9 +130,9 @@ func NewParseErr(segment string, pos int, err error) error {
 	}
 	if pe, ok := errors.AsType[*ParseError](err); ok {
 		if segment != "" {
-			pe.Keys = prependSegment(pe.Keys, segment)
+			prepend(&pe.Keys, &pe.head, segment)
 		}
-		return pe
+		return err
 	}
 	var path []string
 	if segment != "" {
@@ -128,11 +141,19 @@ func NewParseErr(segment string, pos int, err error) error {
 	return &ParseError{Keys: path, Pos: pos, Err: err}
 }
 
-// prependSegment returns segment followed by p, in a new backing array.
-// Sibling errors may share p, so it must not be modified in place.
-func prependSegment(p []string, segment string) []string {
-	out := make([]string, len(p)+1)
-	out[0] = segment
-	copy(out[1:], p)
-	return out
+// NewParseErrOpaque wraps err as &ParseError{Keys: {segment}, Pos, Err}
+// without looking inside it. Generated code uses it for callees that are not
+// ggen decoders of this value: encoding/json, UnmarshalText, converters and
+// fallible mods. A ggen error such a callee returns has positions and a path
+// relative to some inner input, so it stays the cause instead of being
+// extended. An empty segment leaves Keys empty.
+func NewParseErrOpaque(segment string, pos int, err error) error {
+	if err == nil {
+		return nil
+	}
+	var path []string
+	if segment != "" {
+		path = []string{segment}
+	}
+	return &ParseError{Keys: path, Pos: pos, Err: err}
 }

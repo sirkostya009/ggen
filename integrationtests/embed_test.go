@@ -152,6 +152,88 @@ type EmbedFlaggedUDPAddrPtrs struct {
 	Extra map[string]*net.UDPAddr `json:",embed"`
 }
 
+// EmbedTag is a named primitive held by a catch-all.
+type EmbedTag string
+
+// The catch-alls below hold numbers, bools and a named primitive, which are
+// written without boxing the value.
+
+//ggen:generate
+type EmbedInt64s struct {
+	Name  string           `json:"name"`
+	Extra map[string]int64 `json:",embed"`
+}
+
+//ggen:generate
+type EmbedUint16s struct {
+	Name  string            `json:"name"`
+	Extra map[string]uint16 `json:",embed"`
+}
+
+//ggen:generate
+type EmbedFloat32s struct {
+	Name  string             `json:"name"`
+	Extra map[string]float32 `json:",embed"`
+}
+
+//ggen:generate
+type EmbedFloat64s struct {
+	Name  string             `json:"name"`
+	Extra map[string]float64 `json:",embed"`
+}
+
+//ggen:generate
+type EmbedBools struct {
+	Name  string          `json:"name"`
+	Extra map[string]bool `json:",embed"`
+}
+
+//ggen:generate
+type EmbedTags struct {
+	Name  string              `json:"name"`
+	Extra map[string]EmbedTag `json:",embed"`
+}
+
+func TestEmbed_scalarValuesNoAlloc(t *testing.T) { //nolint:paralleltest // measures allocations
+	cases := []struct {
+		name string
+		v    interface {
+			AppendJSON(dst []byte) ([]byte, error)
+			JSONSize() int
+		}
+	}{
+		{"int64", EmbedInt64s{Name: "n", Extra: map[string]int64{"a": 1 << 40, "b": -1 << 50}}},
+		{"uint16", EmbedUint16s{Name: "n", Extra: map[string]uint16{"a": 65535, "b": 300}}},
+		{"float32", EmbedFloat32s{Name: "n", Extra: map[string]float32{"a": 3.14159, "b": -1e20}}},
+		{"float64", EmbedFloat64s{Name: "n", Extra: map[string]float64{"a": 2.718281828, "b": 1e300}}},
+		{"bool", EmbedBools{Name: "n", Extra: map[string]bool{"a": true, "b": false}}},
+		{"named", EmbedTags{Name: "n", Extra: map[string]EmbedTag{"a": "x<y", "b": "long enough tag value"}}},
+	}
+	for _, c := range cases {
+		out, err := c.v.AppendJSON(nil)
+		if err != nil {
+			t.Fatalf("%s: %v", c.name, err)
+		}
+		rv := reflect.ValueOf(c.v)
+		flat := map[string]any{"name": rv.Field(0).Interface()}
+		for it := rv.Field(1).MapRange(); it.Next(); {
+			flat[it.Key().String()] = it.Value().Interface()
+		}
+		var got, want map[string]any
+		ref, _ := json.Marshal(flat)
+		if err := json.Unmarshal(out, &got); err != nil {
+			t.Fatalf("%s: %s: %v", c.name, out, err)
+		}
+		if err := json.Unmarshal(ref, &want); err != nil || !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: got %s, want %s", c.name, out, ref)
+		}
+		buf := make([]byte, 0, c.v.JSONSize()+64)
+		if n := testing.AllocsPerRun(50, func() { _, _ = c.v.AppendJSON(buf[:0]) }); n != 0 {
+			t.Errorf("%s: %v allocs per AppendJSON, want 0", c.name, n)
+		}
+	}
+}
+
 func TestEmbed_decodeAbsorbsUnknown(t *testing.T) {
 	t.Parallel()
 	in := []byte(`{"name":"alice","age":30,"city":"Lviv","tags":["a","b"]}`)
@@ -625,5 +707,42 @@ func TestEmbed_typedValueCopyOutlivesInput(t *testing.T) {
 	}
 	if a := got.Extra["edge"]; a == nil || a.Zone != "eth0" || a.Port != 1 {
 		t.Errorf("entry changed with the input: %v", got.Extra)
+	}
+}
+
+// EmbedFirstUnsorted declares its catch-all first under nosortkeys. The
+// entries still follow every named member, as jsonv2 writes them.
+//
+//ggen:generate nosortkeys
+type EmbedFirstUnsorted struct {
+	Rest map[string]int `json:",embed"`
+	B    int            `json:"b"`
+	A    int            `json:"a"`
+}
+
+// EmbedMidUnsorted declares its catch-all between two named fields.
+//
+//ggen:generate nosortkeys
+type EmbedMidUnsorted struct {
+	B    int            `json:"b"`
+	Rest map[string]int `json:",embed"`
+	A    int            `json:"a"`
+}
+
+func TestEmbed_nosortkeysEntriesLast(t *testing.T) {
+	t.Parallel()
+	rest := map[string]int{"k": 3}
+	const want = `{"b":1,"a":2,"k":3}`
+	for name, v := range map[string]ggen.Marshaler{
+		"first": EmbedFirstUnsorted{Rest: rest, B: 1, A: 2},
+		"mid":   EmbedMidUnsorted{B: 1, Rest: rest, A: 2},
+	} {
+		out, err := ggen.Marshal(v)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if string(out) != want {
+			t.Errorf("%s: got %s, want %s", name, out, want)
+		}
 	}
 }

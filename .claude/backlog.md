@@ -14,73 +14,22 @@ shaves routinely vanish in wall clock.
   multierr stops collecting dive errors past the bound. Touches every container
   emitter.
 
-- **GENERATED stream container-loop refills still grow-only (round-7 find,
-  distinct from the runtime skip-tree item below).** `streamReadMore` is
-  emitted with `keep="0"` at ~8 container-loop sites (generate.go array-entry,
-  element-separator, and null-literal refills — visible in
-  `bench/small_ggen.go`); readers fill the window, so these land with
-  `len == cap` and DOUBLE the buffer. The dispatch loop already compacts
-  (`ReadMore(s.Pos); s.Pos = 0`); stream element values are owned copies and
-  `KeyView` aliases are dead past dispatch, so compaction is believed safe at
-  most sites — the null-literal loop holds `s.Pos`-relative offsets needing a
-  rebase. Same class as the skip-tree compaction (8.4 MB → 127 KB/op). B/op
-  win on long arrays/maps through small buffers; wall-clock likely
-  small-to-flat. UNMEASURED, per-site alias-safety audit not completed —
-  house-rule bench + safety pass before landing.
-
-- **Stream skip-tree separator/colon/literal refills still grow-only.** The
-  per-iteration ','/']'/'}' bound checks in (*Stream).skipArray/skipObject,
-  the byte-by-byte literal loops (Bool, the 'null' arms), and anyObject's
-  colon check refill with ReadMore(0); at those points len == cap (readers
-  fill the window), so each refill DOUBLES the buffer for bytes that are
-  being discarded. Compacting needs per-site cursor rebases (the literal
-  loops hold j-relative offsets — same class as the 2026-07 skip-tree
-  compaction pass, which deliberately skipped these). Perf only, house-rule
-  bench-gated (SkipHeavy stream rows + B/op).
+- **Generated stream null-literal peeks still refill grow-only.** The
+  `'n'` arms of generated stream container loops read the rest of `null`
+  byte by byte and refill with `ReadMore(0)`. Readers fill the window, so a
+  `null` cut by a full window DOUBLES the buffer. They are the only live
+  grow-only sites among the generated `ReadMore(0)` refills: an audit of all
+  2157 in bench + integrationtests found 612 null loops, and the rest follow
+  a `SkipSpace` (which refills itself, so they fire only on an empty window at
+  EOF) or are dead. Instrumented runs over the `*_Reader` and SkipHeavy rows
+  saw every generated grow event come from a null loop (`mega_ggen.go`'s
+  `'n'` arms). Compacting needs `ReadMore(s.Pos)` plus a rebase of the
+  loop's `s.Pos`-relative offsets. B/op win on null-heavy streams through
+  small buffers, wall clock likely flat. House-rule bench before landing.
 
 Round-10 audit candidates (2026-09). Prepared patches live outside the tree in
-`~/audit-round10/work/perf_{scan,stream,gen}.patch` — nothing landed, all
-UNMEASURED (the box was on powersave during the audit); house-rule A/B before
-any of them moves:
-
-- **`[]*T` slab allocated fresh on every decode-into-receiver (bytes +
-  stream).** The depth-1 `[]*T` arm emits `slabN = make([]E, 0, cap)`
-  unconditionally in the non-empty arm while the receiver reset only
-  reslices the pointer slice, so the carried pointees are orphaned and
-  `append(dst, &slab[len-1])` overwrites the carried pointers — the one
-  reuse shape that recycles neither pointee nor slab (`*T` fields, `[]T`
-  elements and `[]**T` chains all reuse). Mega: 2426 of the 5337 allocs left
-  on a reused-receiver decode are these slabs (45%); stream `Value(prev)`
-  7 allocs/value where 6 are the inherent string copies. Fix shape: when
-  `directStruct` and the carried `dst[k]` (within the old len) is non-nil,
-  decode into `*dst[k]` (its `DecodeFrom` self-resets, opt #74's gate),
-  allocating a slab lazily for nil/past-cap slots only. Bench: needs a
-  `[]*T` `_reuse` row (only MapValues/MapValuesHeavy carry one today),
-  Mega_Reader via Seq/Value(prev). Allocation counts proven, wall clock not
-  — Mega is memory-bound.
-
-- **`ReadMore(keep)` with a small `keep` on a full window memmoves nearly the
-  whole buffer to reclaim `keep` bytes, then Reads at most `keep` bytes
-  before growing anyway.** The compaction arm always memmoves `buf[keep:]`
-  down and Reads into the freed tail, which is exactly `keep` bytes when
-  the window was full — the state every refill reaches with an eager
-  reader. When the value head sits near the window head (`stringView`/
-  `KeyView`/the number scanners/`CaptureValue`'s first `ReadMore(start)`),
-  the first refill memmoves `len-keep` bytes, issues a tiny Read (a 2-byte
-  `read()` on a file/socket), and the next refill has `start` rebased to 0
-  and takes the doubling arm — so the memmove and the tiny Read bought
-  nothing, and `CaptureValue` re-skips the value once more. Reproduced: Read
-  destinations `[1024 2 1024 2048]` for a 3000 B string at offset 2; fires
-  in situ on Small_Reader/ggen_stream_512 (the 2800 B Bio at payload offset
-  17: `[512 17 512 1024 2048]`), cannot fire on Mega_Reader (raw snippets
-  ≤ ~400 B vs a 4196 B window). Fix: fuse the grow into the compaction arm
-  when the post-compaction tail is small (`cap-(len-keep) < cap/4`) —
-  allocate the doubled backing and copy `buf[keep:]` into it instead of
-  memmoving in place. Passed every bounded-buffer pin in the worktree, but
-  it is a TRADEOFF: 2× residency for values between 3/4 and 1× of the
-  window to save one memmove + one short Read (+ one re-skip); expected
-  wall clock well under 1-2% on Small_Reader_512, the syscall count on real
-  readers is the visible part. Bench: `*_Reader` rows.
+`~/audit-round10/work/perf_{scan,stream,gen}.patch`, all UNMEASURED (the box
+was on powersave during the audit); house-rule A/B before any of them moves:
 
 - **gc's big-function inliner budget defeats the `SkipSpace`/`Bool`/`Detach`/
   `StringView` shells inside the six largest generated decoders** — the
@@ -122,21 +71,15 @@ there; check when a bench pass is next scheduled):
 - Bytes `String`/`skipString` run `hasCtrlByte` over an unterminated
   no-backslash tail — error path only (an unterminated string is always an
   error), one SWAR walk over bytes IndexByte already touched.
-- `AppendAny`'s pointer-marshaler re-dispatch: every NAMED value reaching the
-  reflect fallback pays one `PkgPath()` + one `sync.Map` load (`needsAddr`);
-  containers hoist it to once per container and structs to once per type,
-  but a named-primitive element (`[]MyEnum`) re-enters the fallback per
-  element and re-checks (cached false). Struct fields with a `*T`-only
-  marshaler reached through the reflect fallback copy once per field
-  (the `reflect.Pointer` arm boxes `rv.Elem().Interface()`, so the fields
-  are never addressable) — avoiding it means a `reflect.Value` entry point
-  beside the type switch; not worth it unless a profile shows it.
 - `AppendAny` omitempty is write-then-unwrite (jsonv2's slow path only).
   jsonv2 also has a fast pre-check (`len==0` / `IsNil` for string/map/array/
   slice/pointer/interface kinds, gated on the type having no custom
   marshaler); adding it would save boxing + emitting the empty value + the
   key on the reflect path, at the cost of a per-field "plain type" flag.
-  Candidate if `AppendAny` on omitempty-heavy structs ever shows up.
+  A patch (`~/audit-2026-11/perf/perf-encode-3.patch`) read omitempty/ggen
+  −14…15% in two passes (39614 → 33687, 39662 → 34167 ns/op, B/op and
+  allocs unchanged), but the jsonv2 control moved ±6.4%, so neither pass is
+  valid. Re-run the A/B before landing it.
 - Float number-span assembly is now duplicated: `Stream.Float32` mirrors
   `Stream.Float64`'s refill loop verbatim, and the bytes grammar walk exists
   three times (`skipNumber`, `Float64`, `Float32`). A shared stream
@@ -321,21 +264,15 @@ surface pinned by `Decoder[T]`).
   the `rawHi` gate already skips that walk) — the −5.9% above is a separate win,
   not a revert of that cost.
 
-- **`checkSpan` re-walks the ASCII prefix through `utf8.Valid` (UNMEASURED, HELD).**
-  `checkSpan` accumulates a high-bit flag and then validates from offset 0, so a
-  long mostly-ASCII span with non-ASCII in the tail pays the SWAR walk plus a
-  second full-length pass through `utf8.Valid`'s ASCII skip. The sibling
-  `CheckUTF8` already does the cheaper thing and documents why it is sound: start
-  at the first high-bit word, since the byte before it is ASCII, i.e. a rune
-  boundary. Fix is to track that word in the existing loop. HELD, not landed:
-  wall-clock only, and the box is firmware-capped at 3 GHz (`cpuinfo_max_freq`),
-  where the house-rule A/B is invalid. Land only from an uncapped box.
-
-- **`appendReflectValue` re-derives `PkgPath()` per element (UNMEASURED, HELD).**
-  The named-vs-unnamed guard runs on every call, and the reflect slice/map loops
-  call it once per element while the element type is loop-invariant (they already
-  hoist `elemKind`). Two dynamic method calls plus a string compare per element to
-  re-answer a constant question. Same hold reason as above.
+- **`AnySize`'s reflect walk re-checks and re-boxes every named element
+  (UNMEASURED).** `reflectValueSize` tests `rv.Type().PkgPath()` per
+  element although the element type is loop-invariant (`AppendAny`'s twin
+  classifies it once per container through `elemInfo`), and sends a named or
+  struct element back through `anySize(rv.Interface())`, which copies it to
+  the heap: one allocation per element of a `[]Generated` or `[]NamedInt`.
+  Mirroring `elemInfo` on the size side is the fix shape. A larger reshape of
+  both walkers is in Tried Rejected ("Addressable-element reshape of the
+  reflect walkers"). Bench: `BenchmarkAnyElems`-style rows from that patch.
 
 - **`appendStruct` per-field boxing — NOT A DEFECT, measured (2026-08).**
   An audit flagged `appendAny(dst, fv.Interface(), ...)` as one heap allocation
@@ -412,12 +349,16 @@ surface pinned by `Decoder[T]`).
   `Null`/`Expect`/`SkipSpace`/`SkipValue`/`ArrayOpen`/`ObjectOpen`), the SIMD
   tiers (`StringAVX*`, `SkipSpaceAVX*`, `SkipValueAVX*`, `AppendString*AVX*`),
   encode plumbing (`CloseJSONString*`, `BytesToString`, `AppendFloat`,
-  `AppendUnixSeconds`, `AppendNetipAddr*`, `AppendURL*`, `AppendRFC3339`),
+  `AppendUnixSeconds`, `AppendDurationSeconds`, `AppendNumber`,
+  `AppendRawHTML`, `AppendNetipAddr*`, `AppendURL*`, `AppendRFC3339`), the
+  `-simd` inline-classify tables and prealloc counters (`Vec*`,
+  `ElemCountAVX*`),
   and glue (`NotEOF`, `Detach`, `CheckUTF8`, `SignedNeg`, `Uint64Limit`,
-  `NewParseErr*`, `Errors.Collect`, `BoolEnd` — the bool error-branch give-up
-  position, `AnySize`/`AnySizeHTML` — the `any` JSONSize budget,
-  `AnyIsEmpty` — the
-  `omitempty` predicate for `any`, `Float32`, `ParseRFC3339`; the `Any*`
+  `NewParseErr*` (`NewParseErrOpaque` included), `UnixSeconds`,
+  `DurationSeconds`, `Errors.Collect`, `BoolEnd` / `NullEnd` — the bool and
+  null error-branch give-up positions, `AnySize`/`AnySizeHTML` — the `any` JSONSize budget,
+  `AnyIsEmpty` / `RawIsEmpty` — the
+  `omitempty` predicates for `any` and raw JSON, `Float32`, `ParseRFC3339`; the `Any*`
   families also carry a `validate bool` that only generated code has a
   reason to pass). Exported only because generated code calls
   them; `internal/` cannot host any of it — generated files live in USER
@@ -542,11 +483,10 @@ surface pinned by `Decoder[T]`).
   value-decoder number grammar → opt #52. Its dup-key find was DECIDED as
   intentional — see Tried Rejected.)
 
-- **Revisit `ggen.CustomError` shape.** Today `{Field, Name string, Cause
-  error}` + `Unwrap()`. Rough edges: `Name` doubles as rule identifier and
-  user-facing label (split into `Rule` + `Name`); no `Value any` field like the
-  other typed errors (can't expose what the validator rejected); `Cause` is a bare
-  `error` (a typed sub-interface could improve `errors.As`). Pick when a concrete
+- **Revisit `ggen.CustomError` shape.** Today `{Pos int, Keys []string, Name
+  string, Value any, Cause error}` + `Unwrap()`. Rough edges: `Name` doubles as
+  rule identifier and user-facing label (split into `Rule` + `Name`); `Cause`
+  is a bare `error` (a typed sub-interface could improve `errors.As`). Pick when a concrete
   report-shape ask exists.
 
 - **`validation.*` error position follow-up.** Errors carry `Pos int` (full-payload
@@ -622,14 +562,6 @@ surface pinned by `Decoder[T]`).
   change to the whole user-facing tag surface — only worth it if it comes out
   genuinely smaller to explain, not merely more uniform.
 
-- **`structHasAppendFormatTime` only sees field-level KindTime (round-8 find,
-  probe-negative).** The 64-byte AppendFormat headroom reservation skips
-  `[]time.Time` / `map[string]time.Time` / `sql.NullTime` elements. A 3-elem
-  `[]time.Time` probe did NOT realloc (AppendFormat grew within budget on
-  current Go), so this is an inconsistency between the reservation rule and
-  its coverage, not a demonstrated bug. Revisit only if a time-slice realloc
-  ever shows up.
-
 - **Generated `omitzero` ignores an `IsZero() bool` method (2026-09).** The
   guard for a user struct is the structural `zeroCompare`, where jsonv2,
   v1 1.24+ and `AppendAny` all call an `IsZero() bool` method when the type
@@ -639,7 +571,11 @@ surface pinned by `Decoder[T]`).
   already taken: `omitempty` on `url.URL` tests `!= (url.URL{})` — a non-zero
   URL that still stringifies to `""` (e.g. only `OmitHost` set) is emitted as
   `""`; exact parity would need `String()` (allocates) or a per-component
-  test, not worth it.
+  test, not worth it. The same rule bites `big.Int` / `big.Float` /
+  `big.Rat` (2026-11): omitzero tests `Sign() != 0`, so a numerically zero
+  value that is not the zero value (a computed 0, a precision-set
+  `big.Float`, `-0`) is omitted where jsonv2's struct-zero test writes it.
+  Decide alongside the IsZero arm.
 
 - **`case:ignore` could be implemented rather than refused.** A
   `strings.EqualFold` fallback arm after the exact-match switch (jsonv2
@@ -661,13 +597,22 @@ surface pinned by `Decoder[T]`).
   ggen round-trips its own output, but the `inner:` levels below a map
   (cmd/ggen opt #91) then apply to the single bytes, and inside a
   `json:",embed"` catch-all container the shape does not round-trip (the
-  catch-all residuals item below).
+  catch-all residuals item below). `json:"-,omitempty"` (2026-11) is
+  rejected at generate time "like jsonv2", but stable jsonv2 and
+  `encoding/json` accept it as the name `-`, and the spelling the
+  diagnostic suggests, `json:"'-'"`, is the one stable jsonv2 rejects
+  (quoted names, see the Go 1.27 entry). Decide: accept it as `-`, or fix
+  the diagnostic.
 
 - **Output-name residuals (2026-09).** `emitScope` maps every non-alnum rune
   to `_` via `sanitizeIdent`, so `a-b.go` and `a_b.go` in one package still
   share the oneof scope `a_b` (loud at compile time as a redeclaration);
   making the mapping injective would rename every `ggenCap`/`ggenOneof` in
-  every generated file for a layout nobody has. Single-file mode layout hole,
+  every generated file for a layout nobody has. The cap-constant scope
+  `Struct_Field` has the same hole within one package (2026-11):
+  `User.Roles_List` and `User_Roles.List` both declare
+  `ggenCap_User_Roles_List_string`, a redeclaration across the package's
+  generated files. Same rename, same call. Single-file mode layout hole,
   now explicit in `passTypes`: a dependency declared in file B and reached
   only from file A's root is generated by nobody (A filters to its own file,
   B has no root reaching it) and stays on the json fallback; package mode
@@ -677,7 +622,7 @@ surface pinned by `Decoder[T]`).
   colliding `json`/`time` user package — cross-package types route to
   `encoding/json` there anyway. The external-test bucket + `-pkg X` →
   `package X_test`, and the hook half of `structSet.inspect`'s stale-method
-  masking (`MarshalJSON`/`UnmarshalJSON` from a previous run's `_ggen.go`),
+  masking (`MarshalJSON`/`UnmarshalJSON` from a previous run's generated file),
   are unpinned by tests.
 
 - **`AppendAny` accepts text-marshaler map keys of any kind; the generator
@@ -742,9 +687,9 @@ Found during the 2026-10 review and its fixes, all unfixed:
 - **`json:",embed"` catch-all residuals.** (a) Values `embedValueRoute` leaves
   on `embedViaAny`, such as numbers, bools, `time.Time`, netip, `big.*`,
   `url.URL`, `sql.Null*` and named primitives, decode through `SkipValue` +
-  `encoding/json` v1, which reads `null` into the zero value, and encode
-  through `AppendAny`, which writes `url.URL` and `sql.Null*` as struct
-  objects. gen's `Shape.Rest` lowers every catch-all value in the field form,
+  `encoding/json` v1, which reads `null` into the zero value. Numbers, bools
+  and named primitives encode inline, the rest through `AppendAny`, which
+  writes `url.URL` and `sql.Null*` as struct objects. gen's `Shape.Rest` lowers every catch-all value in the field form,
   so the exported schemas reject the `null` Go accepts and the objects Go
   writes, and accept the URL text Go rejects. `JSONSize` budgets the field
   form too, so it undersizes `url.URL` / `sql.Null*` values and containers of
@@ -758,7 +703,26 @@ Found during the 2026-10 review and its fixes, all unfixed:
   a catch-all container (`[][16]byte`, a `map[string][4]byte` value,
   `[]*[4]byte`) does not round-trip: `AppendAny` writes base64, while
   `encoding/json`, which reads it, and the container emitters both expect a
-  number array.
+  number array. Found in the 2026-11 audit, same routes:
+  (c) a string, `any` or number below a container
+  (`map[string]map[string]string`, `map[string][]any`,
+  `map[string][2]string`) also takes `embedViaAny`, so v1 turns a lone
+  surrogate escape into U+FFFD with a nil error (the top-level
+  `map[string]any` catch-all rejects it, as README promises), ignores
+  `usenumber`, and zero-pads a short `[N]T`. Raw invalid UTF-8 is rejected
+  first, by `ggen.CheckUTF8` over the span. Routing these innermost kinds
+  through `embedViaFieldDecode` would fix all three.
+  (d) `embedValueRoute` has no `KindSQLNull` arm, so a generic
+  `sql.Null[T]` value (`map[string]sql.Null[time.Duration]`) is written by
+  `AppendAny` as `{"V":"1s","Valid":true}`, which v1 rejects on the way
+  back: the struct cannot decode its own output.
+  (e) a nil `[]byte` / `[]Leaf` / map value is written as `""` / `[]` / `{}`
+  through `AppendAny`, where a map field of the same value type writes
+  `null`, so nil-ness does not round-trip.
+  (f) neither the generated splice nor `AppendAny` checks catch-all keys
+  against the declared JSON names, so a colliding key is written as a
+  duplicate member with a nil error. Decide whether to skip it, error, or
+  document it.
 
 - **`encoding/json`'s fallback reads a named `[]byte` without a codec in two
   forms.** A `net.IPMask` in a plain struct or a struct alias also accepts a
@@ -777,15 +741,25 @@ Found during the 2026-10 review and its fixes, all unfixed:
   ways. An `=` alias (`type DursAlias = []time.Duration`) takes the native
   code and agrees. Decode and encode unannotated named containers natively, as
   `inlineNamedPrim` does for named primitives, or lower them in gen as
-  `External` values with `encoding/json` semantics.
+  `External` values with `encoding/json` semantics. Two more costs of the
+  same route (2026-11): `JSONSize` budgets such a container a flat 128
+  whatever its length (`type IDs []int64`, `type Attrs map[string]string`),
+  so a long one grows the buffer. And an unannotated same-package defined
+  type over a STRUCT (`type Line Item`, used as a field, pointer, element or
+  map value) is not generated either, so the wire bypasses every `pipe:`
+  rule on `Item` and ggen's unknown-key, duplicate-key and UTF-8 checks,
+  with no diagnostic. Generating it through the struct-alias introspection
+  path, or at least warning when a same-package type falls to the
+  `encoding/json` rung, is the choice.
 
 - **Struct aliases and embedded fields.** `//ggen:generate type OA Outer` over
   `type Outer struct{ Inner; B int }` writes `{"B":2,"Inner":{"A":1}}` where
   `encoding/json` writes `{"A":1,"B":2}`: `extractAliasFromTypes` treats the
   embedded field as named and does not promote it. An embedded `=` alias
   field (`type AA = Inner; struct{ AA; B int }`) is rejected ("embedded type
-  AA in Emb not found in this package") where `encoding/json` promotes
-  `Inner`'s fields.
+  AA in Emb is not supported: only a type declared as a struct literal in
+  this package can be embedded") where `encoding/json` promotes `Inner`'s
+  fields.
 
 - **Pointer map values are judged inconsistently at generate time.**
   `map[string]*int` with `inner:gte=0` is rejected ("`gte` is inapplicable
@@ -857,7 +831,330 @@ Found during the 2026-10 review and its fixes, all unfixed:
   helper functions would bound compile memory. Measure the runtime cost first
   (house-rule A/B).
 
+Found during the 2026-11 audit, unfixed (reproducers in
+`~/audit-2026-11/repro/`):
+
+- **A cyclic Go value through generated marshal code is a fatal stack
+  overflow.** Generated `AppendJSON` / `JSONSize` of a self-referential
+  struct recurse with no depth cap, and `AppendAny` / `AnySize` restart
+  their depth at 0 at every generated `Marshaler`. A ring (`n.Next = n`) or a
+  parent link stored in an `any` field kills the process instead of
+  returning the `ErrMaxDepth` README and SKILL.md promise. Fix shape:
+  depth-threaded generated cores for cyclic types (`appendJSONDepth` /
+  `jsonSizeDepth`) plus an entry point `AppendAny` can hand its depth to,
+  or a visited-pointer guard. Decide the generated method surface, or
+  document that the cap stops at a `Marshaler`.
+
+- **Self-referential decoders use stack per level in proportion to
+  `sizeof(T)`.** By-value receivers, results and child temps cost several
+  × `sizeof(T)` per level, so for a T above ~12 KB (inline arrays) a ~90 KB
+  document below the 10000 cap overflows the stack, fatally. Decide: a
+  size-aware cap at generate time (`min(10000, budget/(k*sizeof(T)))` via
+  go/types sizes), or decode the child in place through a pointer.
+
+- **`AnyIsEmpty` judges by kind and length.** It ignores marshal methods and
+  `json.Number`, so an `any,omitempty` field drops `json.Number("")`
+  (`AppendAny` writes `0`), an empty named set whose `MarshalJSON` writes
+  `{"count":0}` and a named string with `MarshalText`, although README says a
+  type with its own JSON or text methods is always written. A named interface field (`net.Addr`) under omitempty uses
+  it too: a zero `*net.TCPAddr` counts as empty because `AppendAny` writes
+  `""`, while the field itself is written by `encoding/json` as an object.
+  Decide: test the written bytes (one encode per omitempty check) or keep
+  the kind test and document it.
+
+- **`Marshal`, `MarshalString` and `WriteTo` panic on a nil `*T` or a nil
+  `Marshaler`**, where `AppendSlice`, `AppendAny` and `encoding/json` write
+  `null`. Decide: write `null` (one nilable check per call) or return an
+  error.
+
+- **`AppendFloat(dst, v, 32)` writes `+Inf` / `-Inf` with a nil error for a
+  finite float64 beyond the float32 range.** Generated code passes float32
+  values only, so this is the exported ABI's contract. Decide: an error, or
+  a documented precondition.
+
+- **An escaped string pins its raw-span-sized scratch.** Bytes `stringSlow`
+  returns the scratch it sized from the raw span as the string, so an
+  escaped string holds 2-6.5× its decoded length. The exact-size result
+  regressed short escaped strings (Tried Rejected, "Exact-size result for
+  escaped strings"). Decide whether memory or short-string speed wins, e.g.
+  trim only when the slack is large.
+
+- **`CloseJSONString{,HTML}` heap-copy a dirty body over 32 bytes**
+  (`string(dst[from:])`) before re-escaping it, one 48-64 B allocation per
+  dirty value. A patch that drops the copy (`~/audit-2026-11/perf/rt-strings-4.patch`)
+  goes to 0 allocs, but both A/B passes had invalid controls: URL rows read
+  −24…−40% and the escape-dense `text_backslashes` row +15% / +25%. Needs a
+  valid A/B, and probably a density gate.
+
+- **Error messages render values with bare `%v`.** Validation and mod
+  errors print `Value` / `Limit` that way: floats in exponent form, payload
+  control bytes raw, pointers as addresses. Unknown-key names also reach
+  `Error()` raw. Decide one rendering (quote strings, `'f'` floats,
+  dereference pointers).
+
+- **`PredicateError` / `CustomError` keep the field itself as `Value`**, so a
+  kept error changes after the next `Seq` / `Array` step or a decode into the
+  same receiver. Decide: copy on the error path (deep for slices and maps),
+  or document `Value` as a view.
+
+- **multierr collects without a cap.** One heap-allocated error per failing
+  element, unknown key or duplicate key: ~89× (bytes) / ~106× (stream) the
+  input in allocation, and an `Error()` string 15× the input. Decide a cap
+  and what `Error()` reports past it.
+
+- **`big.Int` / `big.Float` / `big.Rat` decode is unbounded.** The digits and
+  exponent go straight to math/big: `big.Rat` `"1e1000000"` ×50 (612 B)
+  allocates 108 MB, and `big.Int` digit counts cost quadratic time. jsonv2
+  behaves the same (inherited from math/big). Decide digit and exponent
+  limits (a new error), or document it.
+
+- **`len` / `minlen` prealloc is unbounded by the input.** The emitted
+  `make(T, 0, N)` runs before any element is read: `minlen=1e7` makes a 9 B
+  payload allocate 80 MB, and multierr pays it per short row. `maxPrealloc`
+  bounds the count, not count × `sizeof(elem)`, so on GOARCH=386
+  `minlen=MaxInt32` panics in `makeslice`. Decide: bound the hint by the
+  input length or bytes, or make `len` / `minlen` validation-only.
+
+- **Raw JSON fields and the `MarshalJSON` rung are copied without
+  validation.** A `json.RawMessage` / `jsontext.Value` holding `1,"admin":true`,
+  or a `MarshalJSON` returning `{"a":`, writes invalid JSON or injected
+  members with a nil error. jsonv2 validates both. Decide: validate (one scan
+  per value on the encode path) or document it as the caller's job.
+
+- **Decode into a receiver keeps `json:"-"` and unexported fields**, also
+  those of an unrelated earlier record in a reused `[]T` slot. That
+  contradicts the fresh-decode contract of receiver reuse. Decide: zero
+  them in the receiver reset, or document them as carried.
+
+- **Generated code collides with package-scope names.** It calls the
+  predeclared `min` / `max` / `new` / `clear` unqualified (a package with its
+  own pre-1.21 `func max(a, b int) int` fails to build, a same-signature
+  `clear` would be called silently), imports its helper packages (`math`,
+  `strconv`, `strings`, `unsafe`, `encoding/json`, ...) unaliased with no
+  package-scope check, and names parameters and locals (`data`, `result`,
+  `key`, `s`, `n`, `i`) that shadow a same-package type or `@Func` spelled
+  bare in the body. ggen exits 0 and the build fails. Decide: reject at
+  generate time, or rename the generated identifiers (`ggenData`, aliased
+  imports, cap constants without `min` / `max`), which removes the class.
+
+- **Package-mode regeneration never prunes outputs it no longer writes.**
+  Moving a struct out of a tagged file leaves the tagged bucket's old output
+  behind, with duplicate method declarations, although SKILL.md says
+  rerunning ggen is enough after adding or removing types. Now that generated files carry
+  `model.GenHeader`, ggen could delete the ones it recognises in the
+  directory. Decide whether deleting files is in scope.
+
+- **Single-file mode with CLI `-multierr` treats a sibling file's multierr
+  callee as fail-fast**, so the parent returns only the first error. Applying
+  the CLI flags to the package fixes the reproducer but is unsound when the
+  sibling files are generated by their own `//go:generate` lines with other
+  flags: a fail-fast callee would be drained mid-value. Decide: package-wide
+  flags in single-file mode, or accept the lost errors.
+
+- **Parse-error labels of container elements depend on the element type and
+  the error family.** Parse errors at inline scalar elements, map values and
+  generated-struct elements carry the bare container name (`tags`, `byKey`,
+  `items.sku`), where rule errors and delegated element kinds use `tags[]` /
+  `byPtr.value`, and `T` vs `*T` map values differ. README and SKILL.md
+  define `tags[]` for validation errors only and no map-value label. Decide
+  the label scheme, then make every site follow it.
+
+- **`notempty` / `len` / `minlen` / `maxlen` on `[N]T` / `[N]byte` are type
+  constants**: always pass or always reject, and accepted anyway. Two
+  defensible fixes: reject every length rule on `[N]T`, or compare the bound
+  with N and reject only the always-failing ones. The gen fixture
+  `Nulls.Pair` (`[2]int maxlen=1`) relies on the always-failing shape for
+  `TestNullZero`.
+
+- **`format:unixnano` writes `t.UnixNano()` unchecked.** The zero
+  `time.Time` and instants outside ~1678..2262 write a wrapped number with a
+  nil error, which ggen reads back as another date (zero time →
+  1754-08-30). Refusing them breaks `Marshal` of every unset time field.
+  Writing the exact wide decimal needs a decoder that reads counts past
+  int64. Decide which.
+
+- **A struct alias over a named non-struct codec type does not delegate.**
+  README and cmd/ggen/CLAUDE.md promise `type LocalUUID uuid.UUID` delegates
+  to the UUID's text methods, but the code (and jsonv2, where methods do not
+  carry over) writes `[16]byte` as base64. Delegating changes the wire of
+  every such alias (`net.IP`, `slog.Level`, `uuid.UUID`), needs the
+  struct ladder's same-pass fixed point, and gen's `delegatedWire` finds an
+  alias's target only by its struct. Decide: change the code, or the docs.
+
+- **gen schemas accept unpaired surrogates.** zod / valibot string schemas
+  accept `"\ud800"` in fields, elements and map keys, which the Go decoder
+  rejects as invalid UTF-8. Matching needs a well-formedness check on every
+  string leaf and key plus a deep walk of `any` values, and since
+  `allowinvalidutf8` set by CLI flag is not in the export, the schemas of a
+  flag-built decoder would then reject input it accepts. Decide.
+
+- **gen map schemas drop prototype-named keys.** zod and valibot drop
+  `__proto__` (valibot also `constructor` / `prototype`) record keys by
+  design, without checking their values or key rules. Go keeps them.
+  Matching means wrapping every record in a helper that validates and
+  re-adds those keys. Decide: restore, reject, or document.
+
+- **gen lowers a non-empty interface field as any JSON value.** An
+  `fmt.Stringer`, `error` or `interface{ M() }` field is `WireAny` on input,
+  but the decoder accepts only `null`. The model cannot say "null only".
+  Decide: a new `Wire` kind (all five emitters), a marker flag, or a report
+  that the field is not describable.
+
+- **A carried `big.Float` keeps its precision and rounding mode.** Decode
+  into a receiver parses into the carried value, as `UnmarshalText` does in
+  `encoding/json` and jsonv2, so a `SetPrec` / `SetMode` made by user code
+  survives the decode, against the fresh-decode contract of receiver reuse.
+  Decide: emit `SetPrec(0).SetMode(big.ToNearestEven)` before the parse (a
+  call on the success path of every `big.Float` value), or document that
+  both are kept.
+
+- **The `encoding/json` fallback rung is not UTF-8 exact.** A no-codec
+  foreign struct and an `embedViaAny` catch-all value decode through v1.
+  In strict mode `ggen.CheckUTF8` rejects raw invalid bytes first, but an
+  unpaired `\uXXXX` surrogate escape still decodes to U+FFFD (the hole
+  "Raw-span surrogate-escape validation" describes). Under
+  `allowinvalidutf8` v1 rewrites raw invalid bytes to U+FFFD, where the
+  native kinds pass them through. Decide: an escape-parsing validator for
+  the strict half, and document or accept the permissive half.
+
+- **`AppendAny` writes a struct tag name that is not valid UTF-8 raw.** The
+  generator rejects such a `json` tag, but `collectFields` on the reflect
+  path parses tag names on its own and has no error channel for them, so
+  the key goes out as invalid JSON. Decide: return an error from
+  `AppendAny`, or skip the field.
+
+- **An unknown key followed by a missing colon carries a different error
+  path on the two decode paths.** Both report `ErrBadObject` at the same
+  position, but the bytes path leaves the path empty while the stream path
+  labels it with the key (`streamUnknownKey`'s `ConsumeColon` check uses
+  `ownKey`). Applies to every struct. Pick one label and make both follow.
+
+- **One slab per `[][]number` container (measured trade).** Each counted
+  row of a `[][]int` / `[][]float64` / `[][]bool` is its own `make`. A
+  per-container row slab (`~/audit-2026-11/perf/perf-decode-alloc-2.patch`)
+  measured Mega_Unmarshal/ggen −2.6% (14.72 → 14.33 ms), allocs −23.9%
+  (45981 → 35002), but B/op +7.1% (8.75 → 9.37 MB) and GC cycles 93 → 113.
+  ggen_copy is flat. Decide whether allocation count or bytes matter more.
+
+- **Error literals emitted inline at every site (measured trade).**
+  `DuplicateKeyError` / `UnknownKeyError` composite literals repeat at every
+  field and decoder error site. Routing them through two exported
+  constructors, `ggen.NewDuplicateKeyErr` / `ggen.NewUnknownKeyErr`
+  (`~/audit-2026-11/perf/perf-generator-2.patch`), shrinks generated text by
+  5% (integrationtests) to 9.3% (bench), time flat, B/op and allocs
+  identical. Decide whether two more ABI exports are worth it (see "Shrink
+  the exported runtime API").
+
 # Tried Rejected
+
+- **`checkSpan` starting `utf8.Valid` at the first high-bit word — REJECTED,
+  measured (2026-11).** The `CheckUTF8` shape: skip the ASCII prefix, hand
+  the tail to `utf8.Valid`. Under valid controls (+1.0%) RuneGated_Unmarshal
+  +17.6% (10849 → 12753 ns) and Small_Unmarshal/ggen +12.0% (629.1 →
+  704.3 ns), both reproduced from a first pass. NoAlloc flat, B/op and allocs
+  identical. The tail handoff runs `hasCtrlByte` as its own pass before
+  `utf8.Valid`, so an all-non-ASCII span is walked twice where the fused SWAR
+  loop walked it once, and the per-word early-exit branch slows Small's long
+  ASCII Bio. Don't retry unless the control check stays fused and the word
+  loop gains no exit branch.
+
+- **Reshaping `validUTF8x16` to stop spilling its LUTs — REJECTED, measured
+  (2026-11).** HEAD spills the LUTs and constants (0xb0 frame) because
+  `LoadUint8x16Part` is called inside the block loop, and rebuilds constants
+  with broadcasts. The reshape regressed avx512 NoAlloc_Reader/ggen_stream
+  +11.0% (3307 → 3672 ns, control +2.3%) and +12.4% on the rerun (3294 →
+  3702, control −0.4%). NoAlloc_Unmarshal/ggen −1.5% / −3.1% sat inside the
+  ~3% layout band. B/op and allocs unchanged. Don't retry without an
+  objdump-level argument for why the stream row pays.
+
+- **Splat-table constants in the avx2/avx512 runtime kernels — REJECTED,
+  measured (2026-11).** Replacing the per-call `MOVL+VMOVQ+VPBROADCASTB`
+  constant setup in the runtime kernels with table loads made no target row
+  faster under tight controls (jsonv2 −0.03% / −0.17%): SkipHeavy pretty/ggen
+  +0.84%, pretty/ggen_stream +2.23%, and the guard rows regressed,
+  compact/ggen +3.4% and compact/ggen_stream +8.8%. The 3-5% instruction-count
+  drop did not reach wall clock: a table load per call costs more than the
+  broadcast immediates on short compact spans. The avx tier loads from tables
+  because AVX1 has no `VPBROADCASTB`, and the generated inline classify loads
+  the `Vec*` tables, which measured a win. Don't retry in
+  the runtime kernels.
+
+- **Compacting refill in `(*Stream).skipLiteral` — REJECTED, measured
+  (2026-11).** A skipped `true`/`false`/`null` cut by a full window refills
+  with `ReadMore(0)` and doubles the buffer. Compacting it keeps the
+  SkipHeavy stream window at 4 KiB (B/op 258100 → 4148 compact, 127028 →
+  4148 pretty, allocs 8/7 → 3), but wall clock rises on compact in both
+  lanes, +3.9% scalar and +3.4% avx512 (jsonv2 controls within 1%). Pretty
+  +3.0% / +0.9%, Mega_Reader about −1% (noise). The bounded window costs
+  more refills (memmove + Read) than the doubling did. Don't retry unless
+  residency matters more than SkipHeavy stream time, or with a gate that
+  compacts only when the consumed prefix is large.
+
+- **Per-element `JSONSize` budget for integer slices — REJECTED, measured
+  (2026-11).** A flat 20 bytes per int64 element makes Mega reserve 1.96× its
+  output. Budgeting each element by its digits cut Mega_Marshal/ggen B/op
+  9158656 → 5857280 (−36%, GC 92 → 67), but wall clock rose +3.5% scalar /
+  +3.2% avx512 against jsonv2 controls of +1.9% / +1.7%, about +1.5% net in
+  both lanes. ggen_presized (no `JSONSize`) is flat. The extra pass over every
+  int costs more than the smaller reservation saves. Don't retry unless
+  memory matters more than marshal time.
+
+- **Exact-size result for escaped strings in bytes `stringSlow` — REJECTED,
+  measured (2026-11).** Returning a right-sized copy instead of the
+  raw-span-sized scratch drops B/op at equal allocs (EscapeHeavy 19456 →
+  12288, EscapeUnicodeShort 280 → 112, EscapeUnicodeLong 21504 → 8192), but
+  short escaped strings, which take the 128 B stack-scratch-plus-copy path,
+  slow down: EscapeUnicodeShort/ggen scalar +9.6% at 5000x (control −1.8%),
+  avx512 +3.4% (copy +8.3%). EscapeUnicodeLong is 2.5-4% faster, Mega_Unmarshal/ggen
+  +2.1-2.5%. The memory defect stays open (2026-11 audit block). Don't retry
+  the unconditional copy.
+
+- **Addressable-element reshape of the reflect walkers — REJECTED, measured
+  (2026-11).** Reshaping `appendReflectValue` / `reflectValueSize` to stop
+  boxing addressable elements won big on its targets (`[]generated` −52%,
+  65 → 1 allocs, `map[string]generated` −30%, 69 → 5, `[]named_int` −83%,
+  65 → 1), but guard rows slowed in both passes: `[]*generated` through the
+  reshaped function +9.0% / +5.8%, `[]any` / `map[string]any` +4.7…6.3%
+  with unchanged code (partly layout drift), and the reshape calls
+  `netKindOf(rv.Type())` per element. `AppendAny` classifies the element type
+  once per container instead (`elemInfo`). The `AnySize` half is the open perf
+  candidate above. Don't retry the per-element shape.
+
+- **Starting `stringSpanEnd` at the quote the caller already found — flat,
+  measured (2026-11).** `String`/`StringAVX*`'s escape path re-scans
+  `data[start:firstQuote]`, 44 B per EscapeHeavy decode and 340 B per
+  EscapeSparse, roughly 10 ns. B/op and allocs identical. ns/op moved both
+  ways beyond what the mechanism allows (EscapeHeavy/ggen −1.2%, then +4.6%),
+  and EscapeSparse failed its control twice (a layout difference). Could land
+  as a cleanup, not as a win.
+
+- **Reading the pointer word instead of reflect in `nilItem` — flat, measured
+  (2026-11).** `AppendSlice`/`MarshalSlice` test every element of a pointer
+  `T` for nil through `reflect.ValueOf`/`IsNil`, twice in `MarshalSlice`. The
+  direct read cut `nilItem`'s profile share 15.7% → 2.9%, but
+  MarshalSlice_Marshal/ggen_ptr moved only −2.65% (10855 → 10567 ns) with
+  the jsonv2 control +2.45% the other way and the untouched ggen_value guard
+  +1.35%. B/op and allocs identical. Profile share is not wall clock.
+
+- **`VZEROUPPER` before returning from the avx2/avx512 tiers — flat on
+  Zen 5, measured (2026-11).** No wide tier or generated wide inline scan
+  clears the upper bits before SSE code runs, which costs an AVX-SSE
+  transition on Intel only. Here NoAlloc_Unmarshal/ggen +0.29% (control
+  −0.46%). The Small control was off >3% twice, so Small is not judged.
+  Re-measure only on Intel hardware.
+
+- **Fusing the grow into `ReadMore`'s compaction arm — flat, measured
+  (2026-11).** With a small `keep` on a full window, the compaction arm
+  memmoves the window for a `keep`-byte Read and then grows anyway (Read
+  destinations `[512 17 512 1024 2048]` on Small_Reader_512). Allocating the
+  doubled backing when the post-compaction tail is under `cap/4` read
+  Small_Reader/ggen_stream_512 −6.7% scalar (control +1.2%) and +0.7% avx512
+  (control −1.4%), +3.3% in an invalid first pass. That row varies
+  2409-2632 ns across passes of the same binary, and ggen_stream_full, which
+  the patch cannot reach, moved −8.3%, so its noise floor is 5-9%. B/op and
+  allocs identical. The gain is fewer `read()` calls and one memmove saved,
+  which this bench cannot see. Retry only with a syscall-counting bench or a
+  real file/socket reader.
 
 - **Appending scalar slice elements directly instead of pre-grow + re-index —
   REJECTED, measured flat (2026-09).** `row = append(row, int(n))` in place of

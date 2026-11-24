@@ -199,6 +199,21 @@ func TestParseLoad(t *testing.T) {
 		}
 	})
 
+	t.Run("NoDecodableFields_PassesVet", func(t *testing.T) {
+		t.Parallel()
+		dir := t.TempDir()
+		writeGgenModule(t, dir, "empty")
+		writeFixture(t, filepath.Join(dir, "msg.go"), "package empty\n\n//ggen:generate\ntype Ping struct{}\n\n"+
+			"//ggen:generate\ntype Hidden struct {\n\tA int `json:\"-\"`\n}\n\n"+
+			"//ggen:generate ignoreunknown\ntype Lax struct{}\n\n//ggen:generate multierr\ntype Multi struct{}\n")
+		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
+			t.Fatalf("ggen msg.go: %v\n%s", err, out)
+		}
+		if out, err := runGo(t, dir, nil, "vet", "."); err != nil {
+			t.Errorf("go vet: %v\n%s", err, out)
+		}
+	})
+
 	t.Run("ShapelessFieldTypes", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
@@ -318,6 +333,163 @@ func TestParseLoad(t *testing.T) {
 		}
 	})
 
+	t.Run("CgoFile_BucketedBehindCgo", func(t *testing.T) {
+		t.Parallel()
+		if out, err := runGo(t, ".", nil, "env", "CGO_ENABLED"); err != nil || strings.TrimSpace(out) != "1" {
+			t.Skip("cgo is not available")
+		}
+		const cgSrc = "//go:build !nope\n\npackage pkg\n\n// #include <stdlib.h>\nimport \"C\"\n\n//ggen:generate\ntype CG struct {\n\tX int `json:\"x\"`\n}\n"
+		base := t.TempDir()
+		writeGgenModule(t, base, "cgoconstraint")
+		pkg := filepath.Join(base, "pkg")
+		writeFixture(t, filepath.Join(pkg, "cg.go"), cgSrc)
+		writeFixture(t, filepath.Join(pkg, "plain.go"), "package pkg\n\n//ggen:generate\ntype Plain struct {\n\tX int `json:\"x\"`\n}\n")
+		if out, err := runCLI(t, bin, base, "./pkg"); err != nil {
+			t.Fatalf("ggen ./pkg: %v\n%s", err, out)
+		}
+		cg := mustReadOutput(t, filepath.Join(pkg, "pkg_nope_cgo_ggen.go"))
+		if !strings.Contains(cg, "//go:build !nope && cgo\n") || !strings.Contains(cg, "recv CG) DecodeFrom") {
+			t.Errorf("cg.go bucket lacks its constraint:\n%s", cg)
+		}
+		if common := mustReadOutput(t, filepath.Join(pkg, "pkg_ggen.go")); strings.Contains(common, "CG") {
+			t.Errorf("unconstrained bucket holds CG:\n%s", common)
+		}
+		if out, err := runGo(t, base, []string{"CGO_ENABLED=0"}, "vet", "./pkg"); err != nil {
+			t.Errorf("CGO_ENABLED=0 go vet ./pkg: %v\n%s", err, out)
+		}
+
+		if out, err := runCLI(t, bin, base, "pkg/cg.go"); err != nil {
+			t.Fatalf("ggen pkg/cg.go: %v\n%s", err, out)
+		}
+		if single := mustReadOutput(t, filepath.Join(pkg, "cg_ggen.go")); !strings.Contains(single, "//go:build !nope && cgo\n") {
+			t.Errorf("single-file output lacks the cgo constraint:\n%s", single)
+		}
+
+		// The go command caches cgo output by content, so a second copy of
+		// the file is loaded with the first copy's //line paths.
+		other := t.TempDir()
+		writeGgenModule(t, other, "cgoconstraint")
+		writeFixture(t, filepath.Join(other, "pkg", "cg.go"), cgSrc)
+		if out, err := runCLI(t, bin, other, "pkg/cg.go"); err != nil {
+			t.Fatalf("ggen pkg/cg.go in a second copy: %v\n%s", err, out)
+		}
+		mustReadOutput(t, filepath.Join(other, "pkg", "cg_ggen.go"))
+	})
+
+	t.Run("CollidingSlugs_SeparateFiles", func(t *testing.T) {
+		t.Parallel()
+		base := t.TempDir()
+		writeGgenModule(t, base, "slugs")
+		pkg := filepath.Join(base, "pkg")
+		writeFixture(
+			t,
+			filepath.Join(pkg, "x_other.go"),
+			"//go:build !windows\n\npackage pkg\n\n//ggen:generate\ntype A struct {\n\tX int `json:\"x\"`\n}\n\nvar _ = A{}.DecodeFrom\n",
+		)
+		writeFixture(
+			t,
+			filepath.Join(pkg, "x_windows.go"),
+			"package pkg\n\n//ggen:generate\ntype B struct {\n\tX int `json:\"x\"`\n}\n\nvar _ = B{}.DecodeFrom\n",
+		)
+		writeFixture(
+			t,
+			filepath.Join(pkg, "and.go"),
+			"//go:build foo && bar\n\npackage pkg\n\n//ggen:generate\ntype C struct {\n\tX int `json:\"x\"`\n}\n\nvar _ = C{}.DecodeFrom\n",
+		)
+		writeFixture(
+			t,
+			filepath.Join(pkg, "or.go"),
+			"//go:build foo || bar\n\npackage pkg\n\n//ggen:generate\ntype D struct {\n\tX int `json:\"x\"`\n}\n\nvar _ = D{}.DecodeFrom\n",
+		)
+		for _, goos := range []string{"linux", "windows"} {
+			for _, tags := range []string{"foo,bar", ""} {
+				cmd := exec.CommandContext(t.Context(), bin, "./pkg")
+				cmd.Dir = base
+				cmd.Env = append(os.Environ(), "GOOS="+goos, "GOFLAGS=-tags="+tags)
+				if out, err := cmd.CombinedOutput(); err != nil {
+					t.Fatalf("GOOS=%s tags=%q ggen ./pkg: %v\n%s", goos, tags, err, out)
+				}
+			}
+		}
+		if windows := mustReadOutput(
+			t,
+			filepath.Join(pkg, "pkg_windows_ggen.go"),
+		); !strings.Contains(windows, "//go:build windows\n") ||
+			!strings.Contains(windows, "recv B) DecodeFrom") {
+			t.Errorf("windows bucket lost B:\n%s", windows)
+		}
+		for _, goos := range []string{"linux", "windows"} {
+			for _, tags := range []string{"foo,bar", "foo", ""} {
+				if out, err := runGo(t, base, []string{"GOOS=" + goos}, "vet", "-tags="+tags, "./pkg"); err != nil {
+					t.Errorf("GOOS=%s go vet -tags=%q ./pkg: %v\n%s", goos, tags, err, out)
+				}
+			}
+		}
+	})
+
+	t.Run("SymlinkedDir_SameOutputName", func(t *testing.T) {
+		t.Parallel()
+		base := t.TempDir()
+		writeGgenModule(t, base, "symlinked")
+		pkg := filepath.Join(base, "pkg")
+		writeFixture(t, filepath.Join(pkg, "l.go"), "package pkg\n\n//ggen:generate\ntype L struct {\n\tX int `json:\"x\"`\n}\n")
+		if err := os.Symlink("pkg", filepath.Join(base, "alias")); err != nil {
+			t.Fatal(err)
+		}
+		for _, args := range []string{"./pkg", "./alias"} {
+			if out, err := runCLI(t, bin, base, args); err != nil {
+				t.Fatalf("ggen %s: %v\n%s", args, err, out)
+			}
+		}
+		mustReadOutput(t, filepath.Join(pkg, "pkg_ggen.go"))
+		mustNotHaveFile(t, filepath.Join(pkg, "alias_ggen.go"))
+	})
+
+	t.Run("SingleFile_ExcludedByConstraint", func(t *testing.T) {
+		t.Parallel()
+		base := t.TempDir()
+		writeGgenModule(t, base, "excluded")
+		pkg := filepath.Join(base, "pkg")
+		writeFixture(t, filepath.Join(pkg, "lib.go"), "package pkg\n\n//ggen:generate\ntype L struct {\n\tX int `json:\"x\"`\n}\n")
+		writeFixture(t, filepath.Join(pkg, "f.go"), "//go:build foo\n\npackage pkg\n\n//ggen:generate\ntype F struct {\n\tX int `json:\"x\"`\n}\n")
+		for _, args := range [][]string{{"pkg/f.go"}, {"pkg/f.go", "F"}} {
+			out, err := runCLI(t, bin, base, args...)
+			if err == nil || !strings.Contains(out, "excluded by build constraint foo") {
+				t.Errorf("ggen %v: want the build-constraint error, got err=%v:\n%s", args, err, out)
+			}
+		}
+		mustNotHaveFile(t, filepath.Join(pkg, "f_ggen.go"))
+		cmd := exec.CommandContext(t.Context(), bin, "pkg/f.go")
+		cmd.Dir = base
+		cmd.Env = append(os.Environ(), "GOFLAGS=-tags=foo")
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("GOFLAGS=-tags=foo ggen pkg/f.go: %v\n%s", err, out)
+		}
+		if single := mustReadOutput(t, filepath.Join(pkg, "f_ggen.go")); !strings.Contains(single, "//go:build foo\n") {
+			t.Errorf("single-file output lacks the constraint:\n%s", single)
+		}
+	})
+
+	t.Run("CollidingOutputPath_Rejected", func(t *testing.T) {
+		t.Parallel()
+		base := t.TempDir()
+		writeGgenModule(t, base, "xtestclash")
+		pkg := filepath.Join(base, "pkg")
+		writeFixture(t, filepath.Join(pkg, "a.go"), "package pkg\n")
+		writeFixture(t, filepath.Join(pkg, "in_test.go"), "//go:build xtest\n\npackage pkg\n\n//ggen:generate\ntype In struct {\n\tX int `json:\"x\"`\n}\n")
+		writeFixture(t, filepath.Join(pkg, "ext_test.go"), "package pkg_test\n\n//ggen:generate\ntype Ext struct {\n\tX int `json:\"x\"`\n}\n")
+		for _, args := range [][]string{{"-tags=xtest", "./pkg"}, {"-tags=xtest", "-dry", "./pkg"}} {
+			cmd := exec.CommandContext(t.Context(), bin, args[1:]...)
+			cmd.Dir = base
+			cmd.Env = append(os.Environ(), "GOFLAGS="+args[0])
+			out, err := cmd.CombinedOutput()
+			if err == nil || !strings.Contains(string(out), "map to the same output file") {
+				t.Errorf("ggen %v: want the collision error, got err=%v:\n%s", args[1:], err, out)
+			}
+		}
+		mustNotHaveFile(t, filepath.Join(pkg, "pkg_xtest_ggen_test.go"))
+	})
+
 	t.Run("GenericType_Rejected", func(t *testing.T) {
 		t.Parallel()
 		dir := t.TempDir()
@@ -398,8 +570,8 @@ type Baz = Local
 			t.Fatalf("typo'd annotation accepted:\n%s", out)
 		}
 		for _, want := range []string{
-			`msg.go:3:1: unknown //ggen:generate token "marshl"`,
-			`msg.go:8:1: unknown //ggen:generate token "ignore-unknown"`,
+			`msg.go:3:17: unknown //ggen:generate token "marshl"`,
+			`msg.go:8:25: unknown //ggen:generate token "ignore-unknown"`,
 		} {
 			if !strings.Contains(out, want) {
 				t.Errorf("missing %q in:\n%s", want, out)
@@ -834,6 +1006,49 @@ type Only struct {
 	// A struct alias reads a field whose type it cannot name as one value that
 	// encoding/json reads and writes whole. A tag that needs more than that is
 	// rejected rather than dropped.
+	t.Run("FieldNamedLikeGeneratedMethod_Rejected", func(t *testing.T) {
+		t.Parallel()
+		base := t.TempDir()
+		writeGgenModule(t, base, "example.com/clash")
+		writeFixture(t, filepath.Join(base, "dep", "dep.go"), "package dep\n\ntype Wide struct {\n\tJSONSize int `json:\"jsonSize\"`\n}\n")
+		for pkg, c := range map[string]struct{ src, args, want string }{
+			"own": {
+				"type A struct {\n\tJSONSize int `json:\"jsonSize\"`\n}\n", "",
+				"A.JSONSize: a field cannot share its name with the generated JSONSize method",
+			},
+			"ignored": {
+				"type A struct {\n\tX int `json:\"x\"`\n\tDecodeFrom int `json:\"-\"`\n}\n", "",
+				"A.DecodeFrom: a field cannot share its name with the generated DecodeFrom method",
+			},
+			"promoted": {
+				"type Inner struct {\n\tAppendJSON int `json:\"a\"`\n}\n\n//ggen:generate\ntype A struct {\n\tInner\n}\n", "",
+				"Inner.AppendJSON: a field cannot share its name with the generated AppendJSON method",
+			},
+			"alias": {
+				"import \"example.com/clash/dep\"\n\n//ggen:generate\ntype A dep.Wide\n", "",
+				"type A: field JSONSize cannot share its name with the generated JSONSize method",
+			},
+			"hook": {
+				"type A struct {\n\tMarshalJSON int `json:\"m\"`\n}\n", "-marshal",
+				"A.MarshalJSON: a field cannot share its name with the generated MarshalJSON method",
+			},
+		} {
+			src := c.src
+			if !strings.HasPrefix(src, "import") && !strings.Contains(src, "//ggen:generate") {
+				src = "//ggen:generate\n" + src
+			}
+			writeFixture(t, filepath.Join(base, pkg, "a.go"), "package "+pkg+"\n\n"+src)
+			args := []string{"./" + pkg}
+			if c.args != "" {
+				args = append([]string{c.args}, args...)
+			}
+			out, err := runCLI(t, bin, base, args...)
+			if err == nil || !strings.Contains(out, c.want) {
+				t.Errorf("%s: want %q, got %v:\n%s", pkg, c.want, err, out)
+			}
+		}
+	})
+
 	t.Run("StructAlias_UnnameableFieldTags_Rejected", func(t *testing.T) {
 		t.Parallel()
 		base := t.TempDir()

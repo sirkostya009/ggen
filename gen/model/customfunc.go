@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"go/ast"
+	"go/token"
 	"go/types"
 	"maps"
 	"slices"
@@ -21,11 +22,32 @@ type customFunc struct {
 	Fallible  bool   // mods and converters: the function returns a second error or bool result
 }
 
+// funcScope is where a struct's `@Func` references resolve: the file that
+// declares the struct, its package, and whether the struct is declared in a
+// _test.go file, whose output is the only one that sees test-file funcs.
+type funcScope struct {
+	file *ast.File
+	pkg  *types.Package
+	fset *token.FileSet
+	test bool
+}
+
 // lookupFunc resolves a `@Func` or `@pkg.Func` reference, given without the
 // `@`. It returns the *types.Func and the import path and package name the
 // generated call must be qualified with. classifyValueFunc and
 // classifyConverter both use it.
-func lookupFunc(ref string, file *ast.File, pkg *types.Package) (fn *types.Func, pkgImp, pkgName string, err error) {
+func lookupFunc(ref string, sc funcScope) (fn *types.Func, pkgImp, pkgName string, err error) {
+	fn, pkgImp, pkgName, err = lookupFuncObj(ref, sc.file, sc.pkg)
+	if err != nil {
+		return nil, "", "", err
+	}
+	if !sc.test && sc.fset != nil && strings.HasSuffix(sc.fset.Position(fn.Pos()).Filename, "_test.go") {
+		return nil, "", "", fmt.Errorf("func %s is declared in a _test.go file, which the generated non-test file cannot see; move it to a non-test file", ref)
+	}
+	return fn, pkgImp, pkgName, nil
+}
+
+func lookupFuncObj(ref string, file *ast.File, pkg *types.Package) (fn *types.Func, pkgImp, pkgName string, err error) {
 	if ref == "" {
 		return nil, "", "", errors.New("empty @ reference")
 	}
@@ -85,8 +107,8 @@ const (
 //	func(T) (T, error)    mod that can fail with an error
 //	func(T) (T, bool)     mod that can fail, can take an inline message
 //	func(T) U, U != T     converter, not allowed in a value stage
-func classifyValueFunc(ref string, wt types.Type, file *ast.File, pkg *types.Package) (role pipeRole, cf customFunc, boolForm bool, err error) {
-	fn, pkgImp, pkgName, err := lookupFunc(ref, file, pkg)
+func classifyValueFunc(ref string, wt types.Type, sc funcScope) (role pipeRole, cf customFunc, boolForm bool, err error) {
+	fn, pkgImp, pkgName, err := lookupFunc(ref, sc)
 	if err != nil {
 		return 0, customFunc{}, false, err
 	}
@@ -174,8 +196,8 @@ func classifyValueFunc(ref string, wt types.Type, file *ast.File, pkg *types.Pac
 // same-package type, optionally behind pointers. A `*W` input handles W's
 // shape plus null. Types from other packages are not supported, written
 // through an `=` alias or not.
-func classifyConverter(ref string, fieldType types.Type, file *ast.File, pkg *types.Package) (cf customFunc, w types.Type, boolForm bool, err error) {
-	fn, pkgImp, pkgName, err := lookupFunc(ref, file, pkg)
+func classifyConverter(ref string, fieldType types.Type, sc funcScope) (cf customFunc, w types.Type, boolForm bool, err error) {
+	fn, pkgImp, pkgName, err := lookupFunc(ref, sc)
 	if err != nil {
 		return customFunc{}, nil, false, err
 	}
@@ -208,7 +230,7 @@ func classifyConverter(ref string, fieldType types.Type, file *ast.File, pkg *ty
 		}
 		base = p.Elem()
 	}
-	if named, isNamed := base.(*types.Named); isNamed && named.Obj().Pkg() != nil && named.Obj().Pkg() != pkg {
+	if named, isNamed := base.(*types.Named); isNamed && named.Obj().Pkg() != nil && named.Obj().Pkg() != sc.pkg {
 		in := w.String()
 		if aliased {
 			in += " names " + base.String() + ", which"
@@ -328,10 +350,7 @@ func findImportedPackage(pkg *types.Package, path string) *types.Package {
 
 // isErrorType reports whether t is the predeclared error interface.
 func isErrorType(t types.Type) bool {
-	if named, ok := t.(*types.Named); ok {
-		return named.Obj().Name() == "error" && named.Obj().Pkg() == nil
-	}
-	return false
+	return types.Identical(types.Unalias(t), types.Universe.Lookup("error").Type())
 }
 
 // pipeHasCustom reports whether fi's pipe has any `@` step left to classify.
@@ -374,8 +393,8 @@ func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldTy
 	if s.typesInfo == nil || fieldType == nil {
 		return errors.New("`@Func` references require Go module context (run ggen inside a Go module so packages.Load can resolve types)")
 	}
-	file := s.structFile[structName]
-	pkg := s.typesPkg
+	_, inTest := s.fromTest[structName]
+	sc := funcScope{file: s.structFile[structName], pkg: s.typesPkg, fset: s.fileSet, test: inTest}
 	qualifier := s.pkgQualifier()
 	var errs []error
 
@@ -390,7 +409,7 @@ func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldTy
 		if v.Kind != VariantConvert {
 			continue
 		}
-		cf, w, boolForm, err := classifyConverter(v.FuncName, fieldType, file, pkg)
+		cf, w, boolForm, err := classifyConverter(v.FuncName, fieldType, sc)
 		if err != nil {
 			errs = append(errs, &RichError{Msg: err.Error(), CodeSpan: "@" + v.FuncName})
 			continue
@@ -428,6 +447,8 @@ func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldTy
 			base = p.Elem()
 		}
 		v.InKind = ResolveKind(types.TypeString(base, qualifier))
+		v.InIface = s.inspect(base)
+		v.InStruct = underlyingStruct(base)
 		if np := s.namedPrims(w); len(np) > 0 {
 			if fi.NamedPrims == nil {
 				fi.NamedPrims = map[string]TypeKind{}
@@ -444,7 +465,7 @@ func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldTy
 				continue
 			}
 			msg := st.V.Msg
-			role, cf, boolForm, err := classifyValueFunc(name[1:], wt, file, pkg)
+			role, cf, boolForm, err := classifyValueFunc(name[1:], wt, sc)
 			if err != nil {
 				errs = append(errs, &RichError{Msg: err.Error(), CodeSpan: name})
 				continue
@@ -499,6 +520,9 @@ func (s *structSet) resolvePipeCustoms(structName string, fi *FieldInfo, fieldTy
 		wt = elem
 	}
 	if err := checkVariantShapes(*fi); err != nil {
+		errs = append(errs, err)
+	}
+	if err := checkConverterLevels(*fi); err != nil {
 		errs = append(errs, err)
 	}
 	deriveBuckets(fi)
@@ -581,6 +605,9 @@ func kindShapeBytes(k TypeKind, format string) []string {
 		KindUint, KindUint8, KindUint16, KindUint32, KindUint64,
 		KindFloat32, KindFloat64, KindBigInt:
 		return []string{"'-'", "'0'", "'1'", "'2'", "'3'", "'4'", "'5'", "'6'", "'7'", "'8'", "'9'"}
+	case KindNumber:
+		// encoding/json also reads a quoted number into a json.Number.
+		return []string{"'-'", "'0'", "'1'", "'2'", "'3'", "'4'", "'5'", "'6'", "'7'", "'8'", "'9'", "'\"'"}
 	case KindBool:
 		return []string{"'t'", "'f'"}
 	case KindStruct, KindMap:
@@ -589,6 +616,23 @@ func kindShapeBytes(k TypeKind, format string) []string {
 		return []string{"'['"}
 	}
 	return nil
+}
+
+// wireShapeBytes returns the first bytes of the shape a value of kind k is
+// decoded from, once its field options are applied: `,string` quotes a
+// number, a numeric `format:` turns a time or duration into a number, and a
+// named non-struct type with only a text codec reads a string.
+func wireShapeBytes(k TypeKind, format string, quoted bool, iface FieldInterfaces, isStruct bool) []string {
+	switch {
+	case quoted && IsNumeric(k):
+		return kindShapeBytes(KindString, "")
+	case k == KindTime && (format == "unix" || format == "unixmilli" || format == "unixmicro" || format == "unixnano"),
+		k == KindDuration && (format == "sec" || format == "milli" || format == "micro" || format == "nano"):
+		return kindShapeBytes(KindInt64, "")
+	case k == KindStruct && !isStruct && iface.Resolved && iface.TextUnmarshaler && !iface.JSONUnmarshaler && !iface.ByteDecoder:
+		return kindShapeBytes(KindString, "")
+	}
+	return kindShapeBytes(k, format)
 }
 
 // KindResolver maps a named type to the kind of its underlying primitive. It
@@ -621,7 +665,7 @@ func VariantCaseBytes(f FieldInfo, v Variant, resolve KindResolver) []string {
 	case VariantNullZero:
 		return []string{"'n'"}
 	case VariantNative:
-		bs := kindShapeBytes(variantShapeKind(f, f.GoType, f.Kind, resolve), f.Format)
+		bs := wireShapeBytes(variantShapeKind(f, f.GoType, f.Kind, resolve), f.Format, f.String, f.Iface, f.UnderlyingStruct)
 		// Native kinds that accept null keep their null case. Without it, adding
 		// a converter would make {"p":null} an error, while the plain field
 		// decodes null to nil. An explicit nullzero variant claims 'n' itself.
@@ -630,7 +674,7 @@ func VariantCaseBytes(f FieldInfo, v Variant, resolve KindResolver) []string {
 		}
 		return bs
 	case VariantConvert:
-		bs := kindShapeBytes(variantShapeKind(f, v.InType, v.InKind, resolve), "")
+		bs := wireShapeBytes(variantShapeKind(f, v.InType, v.InKind, resolve), "", false, v.InIface, v.InStruct)
 		if v.InPointer {
 			bs = append(bs, "'n'")
 		}
@@ -640,14 +684,14 @@ func VariantCaseBytes(f FieldInfo, v Variant, resolve KindResolver) []string {
 }
 
 // nativeAcceptsNull reports whether f's native decode accepts null. That is
-// true for pointers, slices, maps, []byte, net.IP and raw JSON.
+// true for pointers, slices, maps, []byte, net.IP, raw JSON and json.Number.
 func nativeAcceptsNull(f FieldInfo, resolve KindResolver) bool {
 	if f.Pointer {
 		return true
 	}
 	//exhaustive:ignore not every kind applies here
 	switch variantShapeKind(f, f.GoType, f.Kind, resolve) {
-	case KindSlice, KindMap, KindBytes, KindNetIP, KindRawJSON:
+	case KindSlice, KindMap, KindBytes, KindNetIP, KindRawJSON, KindNumber:
 		return true
 	}
 	return false
@@ -660,6 +704,31 @@ func hasNullZeroVariant(f FieldInfo) bool {
 		}
 	}
 	return false
+}
+
+// checkConverterLevels rejects `inner:` and `keys:` steps on a field with a
+// converter variant. They run inside the native element and key decoders,
+// which a converter's output never passes through.
+func checkConverterLevels(f FieldInfo) error {
+	if !FieldHasConverter(f) {
+		return nil
+	}
+	if len(f.KeyPipe) == 0 && !slices.ContainsFunc(f.Levels, func(l []Step) bool { return len(l) > 0 }) {
+		return nil
+	}
+	return &RichError{
+		Msg:      "inner: and keys: steps do not run on a converter variant's output, check the elements inside the converter instead",
+		CodeSpan: "@" + converterName(f),
+	}
+}
+
+func converterName(f FieldInfo) string {
+	for _, v := range f.Variants {
+		if v.Kind == VariantConvert {
+			return v.FuncName
+		}
+	}
+	return ""
 }
 
 // checkVariantShapes checks that no two decode variants on f claim the same

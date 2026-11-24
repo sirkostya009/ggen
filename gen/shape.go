@@ -195,13 +195,16 @@ func strict(t *Type) {
 	}
 }
 
-func (t *TypeDecl) shape(m Mode) *Shape {
+func (t *TypeDecl) shape(m Mode) *Shape { return t.shapeWithin(m, nil) }
+
+// shapeWithin builds the shape while the decls in active are being lowered.
+func (t *TypeDecl) shapeWithin(m Mode, active []*TypeDecl) *Shape {
 	s := &Shape{Decl: t, Mode: m, Recursive: t.recursive}
 	if t.missing {
 		s.Err(fmt.Errorf("%s: not loaded (no such type in the loaded packages)", declName(t)))
 		return s
 	}
-	l := &lowerer{set: t.set, decl: t, mode: m}
+	l := &lowerer{set: t.set, decl: t, mode: m, active: append(slices.Clip(active), t)}
 	if t.named != nil {
 		s.Alias = l.enumAlias()
 		return s
@@ -251,9 +254,11 @@ func (t *TypeDecl) shape(m Mode) *Shape {
 }
 
 type lowerer struct {
-	set  *Set
-	decl *TypeDecl
-	mode Mode
+	set    *Set
+	decl   *TypeDecl
+	mode   Mode
+	active []*TypeDecl    // decls being lowered, outermost first
+	open   []*types.Named // unannotated named containers being lowered
 }
 
 type fieldCtx struct {
@@ -352,8 +357,10 @@ func (l *lowerer) nullZeroApplies(fi model.FieldInfo) bool {
 	}
 	//exhaustive:ignore not every kind applies here
 	switch fi.Kind {
-	case model.KindSlice, model.KindMap, model.KindBytes, model.KindNetIP, model.KindRawJSON, model.KindSQLNull, model.KindAny:
+	case model.KindSlice, model.KindMap, model.KindNetIP, model.KindRawJSON, model.KindSQLNull, model.KindAny:
 		return false
+	case model.KindBytes:
+		return fi.ArrayLen > 0
 	}
 	return true
 }
@@ -477,7 +484,7 @@ func (l *lowerer) shapeOf(t *Type, gt types.Type, c *fieldCtx, lvl int) (nilable
 		return false
 	case *types.Slice:
 		if isByte(x.Elem()) {
-			l.bytes(t, c, 0)
+			l.bytes(t, c, 0, lvl)
 			return true
 		}
 		t.Go, t.Wire = Slice, WireArray
@@ -485,7 +492,7 @@ func (l *lowerer) shapeOf(t *Type, gt types.Type, c *fieldCtx, lvl int) (nilable
 		return true
 	case *types.Array:
 		if isByte(x.Elem()) {
-			l.bytes(t, c, int(x.Len()))
+			l.bytes(t, c, int(x.Len()), lvl)
 			return false
 		}
 		t.Go, t.Wire, t.Len = Array, WireArray, int(x.Len())
@@ -518,12 +525,13 @@ func isByte(gt types.Type) bool {
 	return ok && b.Kind() == types.Byte
 }
 
-func (l *lowerer) bytes(t *Type, c *fieldCtx, n int) {
+func (l *lowerer) bytes(t *Type, c *fieldCtx, n, lvl int) {
 	t.Go, t.Len = Bytes, n
 	switch c.f.Format {
 	case "array":
 		t.Wire = WireArray
 		t.Elem = &Type{GoType: "byte", Go: Uint8, Wire: WireInteger}
+		l.applySteps(t.Elem, c.steps(lvl+1))
 		return
 	case "base64url":
 		t.Format = FormatBase64URL
@@ -585,9 +593,7 @@ func (l *lowerer) named(t *Type, n *types.Named, c *fieldCtx, lvl int) (nilable 
 		return l.shapeOf(t, n.Underlying(), c, lvl)
 	}
 	t.Pkg = l.set.pkg(obj.Pkg())
-	if t.Pkg.Loaded {
-		t.File = l.decl.fset.Position(obj.Pos()).Filename
-	}
+	t.File = l.set.declFile(obj)
 	key := obj.Pkg().Path() + "." + obj.Name()
 	if handled, nilable := l.stdKind(t, key, c); handled {
 		return nilable
@@ -610,9 +616,13 @@ func (l *lowerer) named(t *Type, n *types.Named, c *fieldCtx, lvl int) (nilable 
 		}
 		switch codec {
 		case codecGgen:
-			// ggen's own methods emit the type's structural shape. The script
-			// did not load the package, so its fields stay unknown.
+			// ggen's own methods emit the type's structural shape, or its
+			// target's for a struct alias. The script did not load the
+			// package, so its fields stay unknown.
 			t.Wire, t.Format = sub.Wire, sub.Format
+			if st, ok := n.Underlying().(*types.Struct); ok {
+				l.delegatedWire(t, n, st)
+			}
 			l.set.markUnloaded(key)
 		case codecJSON:
 			t.Wire = WireAny
@@ -624,14 +634,23 @@ func (l *lowerer) named(t *Type, n *types.Named, c *fieldCtx, lvl int) (nilable 
 	switch n.Underlying().(type) {
 	case *types.Basic:
 		nilable = l.shapeOf(t, n.Underlying(), c, lvl)
-		if d := l.set.enumDecl(n, l.decl.fset); d != nil {
+		if d := l.set.enumDecl(n); d != nil {
 			t.Ref = d
 			t.Enum = &Enum{Decl: d, Values: slices.Clone(d.Enum.Values)}
 			t.Enum.Zero = l.mode == Out && !hasZero(t.Enum.Values, t.Wire)
 		}
 		return nilable
 	case *types.Slice, *types.Array, *types.Map, *types.Interface:
-		return l.shapeOf(t, n.Underlying(), c, lvl)
+		// Without a decl there is no Ref to close a cycle with, so a container
+		// that holds itself is any value below its first level.
+		if slices.ContainsFunc(l.open, func(o *types.Named) bool { return types.Identical(o, n) }) {
+			t.Go, t.Wire = Any, WireAny
+			return true
+		}
+		l.open = append(l.open, n)
+		nilable = l.shapeOf(t, n.Underlying(), c, lvl)
+		l.open = l.open[:len(l.open)-1]
+		return nilable
 	}
 	t.Go, t.Wire, t.External = Struct, WireObject, true
 	return false
@@ -750,9 +769,11 @@ func (l *lowerer) refShape(t *Type, n *types.Named) {
 // aliasWire copies the JSON side of a reference to a generated alias, which
 // decides its own: `type LocalTime time.Time` is a string, not the object its
 // underlying struct would suggest. It reports whether t.Ref is such an alias.
+// An alias already being lowered (`type Tree []Tree`) reports false, so the
+// caller falls back to its underlying kind.
 func (l *lowerer) aliasWire(t *Type) bool {
-	if d := t.Ref; d != nil && d.info.IsAlias {
-		if a := d.shape(l.mode).Alias; a != nil {
+	if d := t.Ref; d != nil && d.info.IsAlias && !slices.Contains(l.active, d) {
+		if a := d.shapeWithin(l.mode, l.active).Alias; a != nil {
 			t.Go, t.Wire, t.Format, t.Empty = a.Go, a.Wire, a.Format, a.Empty
 			return true
 		}
@@ -794,6 +815,51 @@ func (l *lowerer) delegatingAlias() *Type {
 		t.Wire = WireString
 	}
 	return t
+}
+
+// delegatedWire gives t, an unloaded generated type n over struct st, the
+// wire of the type its generated methods delegate to when n is a struct
+// alias: `type Stamp time.Time` is a string. Export data does not name an
+// alias's target, so it is found by its struct: the one named type of the
+// struct's package without ggen methods whose underlying is st. A struct
+// with no such type is n's own, and one with several is any value.
+func (l *lowerer) delegatedWire(t *Type, n *types.Named, st *types.Struct) {
+	pkg := n.Obj().Pkg()
+	if st.NumFields() > 0 {
+		pkg = st.Field(0).Pkg()
+	}
+	var target *types.TypeName
+	scope := pkg.Scope()
+	for _, name := range scope.Names() {
+		tn, ok := scope.Lookup(name).(*types.TypeName)
+		if !ok || tn == n.Obj() || tn.IsAlias() {
+			continue
+		}
+		u := tn.Type().Underlying()
+		if u != st && (pkg == n.Obj().Pkg() || !types.Identical(u, st)) {
+			continue
+		}
+		if m := methodsOf(tn.Type()); m.encodeGgen || m.decodeGgen {
+			continue
+		}
+		if target != nil {
+			t.Wire, t.Format = WireAny, ""
+			return
+		}
+		target = tn
+	}
+	if target == nil {
+		return
+	}
+	sub := &Type{}
+	if handled, _ := l.stdKind(sub, pkg.Path()+"."+target.Name(), &fieldCtx{f: l.aliasField()}); handled {
+		t.Go, t.Wire, t.Format, t.Empty = sub.Go, sub.Wire, sub.Format, sub.Empty
+		return
+	}
+	t.Wire, t.Format = WireAny, ""
+	if m := methodsOf(target.Type()); !m.marshalJSON && !m.unmarshalJSON && (m.marshalText || m.unmarshalText) {
+		t.Wire = WireString
+	}
 }
 
 // aliasField is the pseudo-field a top-level alias lowers as. It has no tag,
@@ -920,7 +986,8 @@ func hasZero(values []EnumValue, w Wire) bool {
 
 // applySteps converts a level's pipe steps onto t. A oneof narrows t to an
 // Enum when no transform precedes it in input, and always in output, where it
-// is the only step that survives.
+// is the only step that survives. On a float32 input it stays a rule: Go
+// matches the value rounded to float32, not the literal.
 func (l *lowerer) applySteps(t *Type, steps []model.Step) {
 	transformed := false
 	for _, st := range steps {
@@ -934,7 +1001,8 @@ func (l *lowerer) applySteps(t *Type, steps []model.Step) {
 			continue
 		}
 		v := st.V
-		if v.Name == "oneof" && (l.mode == Out || !transformed) && (t.Wire == WireString || t.Wire == WireInteger || t.Wire == WireNumber) && t.Format == "" {
+		if v.Name == "oneof" && (l.mode == Out || !transformed && t.Go != Float32) && (t.Wire == WireString || t.Wire == WireInteger || t.Wire == WireNumber) &&
+			t.Format == "" {
 			e := &Enum{}
 			for _, p := range model.SplitPipeParts(v.Value) {
 				ev := EnumValue{Value: p}

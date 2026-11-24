@@ -3,6 +3,7 @@ package model
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // JSONOptions holds the options of a `json` tag other than the name. Decode,
@@ -25,6 +26,7 @@ type JSONOptions struct {
 //   - An empty option or one padded with whitespace is an error.
 //   - A bare `-` name with options is an error. A field named "-" must be
 //     quoted as `'-'`.
+//   - A name that is not valid UTF-8 is an error, as in jsonv2.
 //
 // Unknown option words are ignored, like jsonv2 does. There are three
 // exceptions, because ignoring them would silently do nothing: `inline`,
@@ -48,6 +50,9 @@ func parseJSONTag(tag string) (name string, opts JSONOptions, ignored bool, err 
 		return "", JSONOptions{}, false, fmt.Errorf(`json tag %q: use json:"-" to ignore the field, or json:"'-'" for a field named "-"`, tag)
 	}
 	name = unquoteTagValue(name)
+	if !utf8.ValidString(name) {
+		return "", JSONOptions{}, false, fmt.Errorf("json tag %q: the JSON name %q is not valid UTF-8", tag, name)
+	}
 	for _, opt := range parts[1:] {
 		if opt == "" {
 			return "", JSONOptions{}, false, fmt.Errorf("json tag %q: empty option", tag)

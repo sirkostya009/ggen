@@ -1446,3 +1446,41 @@ func TestNullPeekSentinelParity(t *testing.T) {
 		}
 	}
 }
+
+// A null peek that fails reports Pos on the first byte that breaks `null`, or
+// at the end of input when the input stops inside the literal, as `any` and
+// bool sites do. Every chunk size gives the same position.
+func TestNullPeekGiveUpPosition(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		run  func(string, int) (error, error)
+		in   string
+		pos  int
+	}{
+		{"slice", decodeBothPathsChunked[Node], `{"tags":nulx}`, 11},
+		{"slice_short", decodeBothPathsChunked[Node], `{"tags":n}`, 9},
+		{"slice_truncated", decodeBothPathsChunked[Node], `{"tags":nu`, 10},
+		{"map", decodeBothPathsChunked[Node], `{"props":nul}`, 12},
+		{"struct_slice", decodeBothPathsChunked[Node], `{"children":nx}`, 13},
+		{"ptr_string", decodeBothPathsChunked[PointerStruct], `{"name":nope}`, 9},
+		{"ptr_bool", decodeBothPathsChunked[PointerStruct], `{"enabled":nay}`, 12},
+		{"sqlnull_int", decodeBothPathsChunked[SQLNullStruct], `{"i":nan}`, 6},
+		{"nullzero_int", decodeBothPathsChunked[NullZeroTags], `{"nzInt":nix}`, 10},
+		{"nullzero_variant", decodeBothPathsChunked[NamedPrims], `{"zero":nulx}`, 11},
+		{"bytes", decodeBothPathsChunked[NativeTypes], `{"blob":nb}`, 9},
+		{"ptr_elem", decodeBothPathsChunked[NoValidateInner], `{"ptrs":[null,nuxl]}`, 16},
+		{"ptr_map_value", decodeBothPathsChunked[R10CarriedLeaves], `{"mps":{"a":nul`, 15},
+	}
+	for _, c := range cases {
+		for _, chunk := range []int{1, 3, 64} {
+			bytesErr, streamErr := c.run(c.in, chunk)
+			for side, err := range map[string]error{"bytes": bytesErr, "stream": streamErr} {
+				var pe *ggen.ParseError
+				if !errors.As(err, &pe) || !errors.Is(err, ggen.ErrBadLiteral) || pe.Pos != c.pos {
+					t.Errorf("%s chunk=%d %s: %v, want ErrBadLiteral at %d", c.name, chunk, side, err, c.pos)
+				}
+			}
+		}
+	}
+}

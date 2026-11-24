@@ -11,6 +11,9 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
+var ggenKeys_decode_dups_test_0 = []string{"name"}
+var ggenKeys_decode_dups_test_1 = []string{"n"}
+
 func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i int, err error) {
 	result = recv
 	seenN := false
@@ -34,7 +37,7 @@ func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i i
 			result.Name = ""
 		}
 		if !seenName {
-			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"name"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: ggenKeys_decode_dups_test_0}
 		}
 		return result, i, nil
 	}
@@ -123,12 +126,15 @@ func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i i
 				} else {
 					n = int64(u)
 				}
+				if int64(int(n)) != n {
+					return result, i, ggen.NewParseErr("n", i, ggen.ErrNumberOverflow)
+				}
 				result.N = int(n)
 				if result.N < 0 {
-					return result, i, &ggen.GTEError{Pos: i, Keys: []string{"n"}, Limit: int(0), Value: result.N}
+					return result, i, &ggen.GTEError{Pos: i, Keys: ggenKeys_decode_dups_test_1, Limit: int(0), Value: result.N}
 				}
 				if result.N > 100 {
-					return result, i, &ggen.LTEError{Pos: i, Keys: []string{"n"}, Limit: int(100), Value: result.N}
+					return result, i, &ggen.LTEError{Pos: i, Keys: ggenKeys_decode_dups_test_1, Limit: int(100), Value: result.N}
 				}
 			}
 		case "name":
@@ -160,10 +166,10 @@ func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i i
 					}
 				}
 				if len(result.Name) < 1 {
-					return result, i, &ggen.MinLenError{Pos: i, Keys: []string{"name"}, Limit: 1, Got: len(result.Name)}
+					return result, i, &ggen.MinLenError{Pos: i, Keys: ggenKeys_decode_dups_test_0, Limit: 1, Got: len(result.Name)}
 				}
 				if len(result.Name) > 20 {
-					return result, i, &ggen.MaxLenError{Pos: i, Keys: []string{"name"}, Limit: 20, Got: len(result.Name)}
+					return result, i, &ggen.MaxLenError{Pos: i, Keys: ggenKeys_decode_dups_test_0, Limit: 20, Got: len(result.Name)}
 				}
 			}
 		default:
@@ -191,7 +197,7 @@ func (recv AllowDupsStruct) DecodeFrom(data []byte) (result AllowDupsStruct, i i
 				result.Name = ""
 			}
 			if !seenName {
-				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"name"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: ggenKeys_decode_dups_test_0}
 			}
 			return result, i, nil
 		}
@@ -226,7 +232,7 @@ func (recv AllowDupsStruct) DecodeFromStream(s *ggen.Stream) (result AllowDupsSt
 			result.Name = ""
 		}
 		if !seenName {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: ggenKeys_decode_dups_test_0}
 		}
 		return result, nil
 	}
@@ -254,12 +260,15 @@ func (recv AllowDupsStruct) DecodeFromStream(s *ggen.Stream) (result AllowDupsSt
 				if err != nil {
 					return result, ggen.NewParseErr("n", s.Offset(), err)
 				}
+				if int64(int(iv)) != iv {
+					return result, ggen.NewParseErr("n", s.Offset(), ggen.ErrNumberOverflow)
+				}
 				result.N = int(iv)
 				if result.N < 0 {
-					return result, &ggen.GTEError{Pos: s.Offset(), Keys: []string{"n"}, Limit: int(0), Value: result.N}
+					return result, &ggen.GTEError{Pos: s.Offset(), Keys: ggenKeys_decode_dups_test_1, Limit: int(0), Value: result.N}
 				}
 				if result.N > 100 {
-					return result, &ggen.LTEError{Pos: s.Offset(), Keys: []string{"n"}, Limit: int(100), Value: result.N}
+					return result, &ggen.LTEError{Pos: s.Offset(), Keys: ggenKeys_decode_dups_test_1, Limit: int(100), Value: result.N}
 				}
 
 			}
@@ -280,10 +289,10 @@ func (recv AllowDupsStruct) DecodeFromStream(s *ggen.Stream) (result AllowDupsSt
 					return result, ggen.NewParseErr("name", s.Offset(), err)
 				}
 				if len(result.Name) < 1 {
-					return result, &ggen.MinLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 1, Got: len(result.Name)}
+					return result, &ggen.MinLenError{Pos: s.Offset(), Keys: ggenKeys_decode_dups_test_0, Limit: 1, Got: len(result.Name)}
 				}
 				if len(result.Name) > 20 {
-					return result, &ggen.MaxLenError{Pos: s.Offset(), Keys: []string{"name"}, Limit: 20, Got: len(result.Name)}
+					return result, &ggen.MaxLenError{Pos: s.Offset(), Keys: ggenKeys_decode_dups_test_0, Limit: 20, Got: len(result.Name)}
 				}
 
 			}
@@ -324,7 +333,7 @@ func (recv AllowDupsStruct) DecodeFromStream(s *ggen.Stream) (result AllowDupsSt
 				result.Name = ""
 			}
 			if !seenName {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"name"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: ggenKeys_decode_dups_test_0}
 			}
 			return result, nil
 		}

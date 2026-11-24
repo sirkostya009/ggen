@@ -4,8 +4,8 @@ import "fmt"
 
 // ModError reports that a fallible mod or converter of the form
 // func(W) (T, bool) returned false. It is a parse error, wrapped by
-// [NewParseErr]. Msg is the optional message from the tag. When Msg is empty,
-// Error prints a default message.
+// [NewParseErr]. Name is the bare function name. Msg is the optional message
+// from the tag. When Msg is empty, Error prints a default message.
 type ModError struct {
 	Pos   int
 	Name  string

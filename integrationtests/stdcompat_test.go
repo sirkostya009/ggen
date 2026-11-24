@@ -16,6 +16,7 @@ import (
 	"net"
 	"net/netip"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -422,6 +423,38 @@ func TestStdCompat_TupleStruct(t *testing.T) {
 	})
 }
 
+// LiteralLenArrays spells array lengths in every Go integer literal form.
+//
+//ggen:generate
+type LiteralLenArrays struct {
+	Hex    [0x2]int             `json:"hex"`
+	Oct    [0o10]int            `json:"oct"`
+	Under  [1_0]int             `json:"under"`
+	Bin    [0b11]int            `json:"bin"`
+	HexB   [0x4]byte            `json:"hexB"`
+	Nested [][0x2]int           `json:"nested"`
+	Map    map[string][0b10]int `json:"map"`
+}
+
+func TestStdCompat_LiteralLenArrays(t *testing.T) {
+	t.Parallel()
+	in := LiteralLenArrays{
+		Hex:    [2]int{0, 1},
+		Oct:    [8]int{7: 2},
+		Under:  [10]int{9: 3},
+		Bin:    [3]int{2: 4},
+		HexB:   [4]byte{1, 2, 3, 4},
+		Nested: [][2]int{{5, 6}},
+		Map:    map[string][2]int{"k": {7, 8}},
+	}
+	crossCompat(t, in)
+	stdBytes, _ := jsonv2.Marshal(in)
+	s, err := LiteralLenArrays{}.DecodeFromStream(ggen.NewStream(bytes.NewReader(stdBytes), nil))
+	if err != nil || !reflect.DeepEqual(s, in) {
+		t.Fatalf("stream decode: %+v, %v", s, err)
+	}
+}
+
 func TestStdCompat_ExtraStruct(t *testing.T) {
 	t.Parallel()
 	crossCompat(t, ExtraStruct{
@@ -466,6 +499,45 @@ func TestStdCompat_IgnoredEmbedStruct(t *testing.T) {
 	}
 	crossCompat(t, in)
 	exactWire(t, "wire", in)
+}
+
+type tieUntagged struct {
+	ID int
+}
+
+type tieTagged struct {
+	Key string `json:"ID"`
+}
+
+type tieOmit struct {
+	ID int `json:",omitempty"`
+}
+
+// TaggedTieStruct promotes three fields named "ID" at the same depth. Only
+// tieTagged's name comes from its tag, so it wins, as in encoding/json.
+//
+//ggen:generate
+type TaggedTieStruct struct {
+	tieUntagged
+	tieTagged
+	tieOmit
+
+	N int `json:"n"`
+}
+
+func TestStdCompat_TaggedTieStruct(t *testing.T) {
+	t.Parallel()
+	in := TaggedTieStruct{N: 1, tieUntagged: tieUntagged{ID: 2}, Key: "abc", tieOmit: tieOmit{ID: 3}}
+	crossCompat(t, in)
+	const payload = `{"n":1,"ID":"x"}`
+	b, _, err := TaggedTieStruct{}.DecodeFrom([]byte(payload))
+	if err != nil || b.Key != "x" {
+		t.Fatalf("bytes decode: %+v, %v", b, err)
+	}
+	s, err := TaggedTieStruct{}.DecodeFromStream(ggen.NewStream(strings.NewReader(payload), nil))
+	if err != nil || s != b {
+		t.Fatalf("stream decode: %+v, %v, want %+v", s, err, b)
+	}
 }
 
 // richSubset is RichTypes without url.URL. ggen encodes url.URL as a JSON

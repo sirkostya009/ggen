@@ -60,11 +60,11 @@ func renderAliasStreamDecode(b *bytes.Buffer, s model.StructInfo) {
 		return
 	}
 	const wrap = `if err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }`
-	b.WriteString("err = s.SkipSpace()\n" + wrap + "\n")
+	b.WriteString("err = s.SkipSpace" + streamTier + "()\n" + wrap + "\n")
 	//exhaustive:ignore not every kind applies here
 	switch s.AliasKind {
 	case model.KindString:
-		fmt.Fprintf(b, "var v string\nv, err = s.String("+vArgS(s)+")\n%s\nresult = %s(v)\n", wrap, s.Name)
+		fmt.Fprintf(b, "var v string\nv, err = s.String"+streamTier+"("+vArgS(s)+")\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case model.KindBool:
 		fmt.Fprintf(b, "var v bool\nv, err = s.Bool()\n%s\nresult = %s(v)\n", wrap, s.Name)
 	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64:
@@ -89,12 +89,10 @@ func renderAliasSize(s model.StructInfo) string {
 		return fmt.Sprintf("return len(string(s))*%d + 2\n", strMult(s.HTMLEscape))
 	case model.KindBool:
 		return "return 5\n" // "false"
-	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64:
-		return "return 20\n" // -9223372036854775808
-	case model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64:
-		return "return 20\n" // 18446744073709551615
-	case model.KindFloat32, model.KindFloat64:
-		return fmt.Sprintf("return %d\n", sizeFloat)
+	case model.KindInt, model.KindInt8, model.KindInt16, model.KindInt32, model.KindInt64,
+		model.KindUint, model.KindUint8, model.KindUint16, model.KindUint32, model.KindUint64,
+		model.KindFloat32, model.KindFloat64:
+		return fmt.Sprintf("return %d\n", numSize(s.AliasKind))
 	case model.KindBytes:
 		// base64 grows the bytes by about 4/3, plus padding and quotes.
 		return "return len(s)*4/3 + 8\n"
@@ -110,12 +108,9 @@ func renderAliasSize(s model.StructInfo) string {
 		case s.AliasIface.AppendJSON && s.AliasIface.JSONSize:
 			// The underlying type has ggen methods, so use its own bound.
 			return fmt.Sprintf("return %s(s).JSONSize()\n", s.AliasUnderlying)
-		case s.AliasIface.JSONMarshaler, s.AliasIface.TextMarshaler:
-			// MarshalJSON and MarshalText allocate their own result. A nonzero
-			// size here would only add a make() allocation before that one,
-			// and a third one when the result does not fit.
-			return "return 0\n"
 		default:
+			// The same flat budget a struct field of a type without ggen
+			// methods gets. A parent sums it into its own buffer.
 			return "return 128\n"
 		}
 	default:
@@ -192,42 +187,48 @@ result = %[2]s(v)
 return result, nil
 `, s.AliasUnderlying, s.Name)
 	case s.AliasIface.JSONUnmarshaler:
+		// UnmarshalJSON must not see leading whitespace, so skip it before
+		// the span starts.
 		if stream {
-			fmt.Fprintf(b, `span, err := s.CaptureValue()
+			b.WriteString(`if err := s.SkipSpace` + streamTier + `(); err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }` + "\n")
+			// The callee's positions are relative to the captured span.
+			fmt.Fprintf(b, `span, err := s.CaptureValue`+streamTier+`()
 if err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }
 var u %[1]s
-if err := u.UnmarshalJSON(span); err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }
+if err := u.UnmarshalJSON(span); err != nil { return result, ggen.NewParseErrShift("", s.Offset(), len(span), err) }
 result = %[2]s(u)
 return result, nil
 `, s.AliasUnderlying, s.Name)
 		} else {
+			inlineSkipWS(b, "i")
 			fmt.Fprintf(b, `start := i
-k, err := ggen.SkipValue(data, start)
-if err != nil { return result, i, ggen.NewParseErr("", i, err) }
+k, err := ggen.SkipValue`+bytesSkipTier+`(data, start)
+if err != nil { return result, k, ggen.NewParseErr("", k, err) }
 var u %[1]s
-if err := u.UnmarshalJSON(data[start:k]); err != nil { return result, i, ggen.NewParseErr("", i, err) }
+if err := u.UnmarshalJSON(data[start:k]); err != nil { return result, k, ggen.NewParseErrShift("", k, k-start, err) }
 result = %[2]s(u)
 return result, k, nil
 `, s.AliasUnderlying, s.Name)
 		}
 	case s.AliasIface.TextUnmarshaler:
-		// In the cases above, DecodeFrom and SkipValue skip leading
-		// whitespace. The string scans here do not, so skip it first.
+		// The string scans do not skip leading whitespace, so skip it first.
 		if stream {
-			b.WriteString(`if err := s.SkipSpace(); err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }` + "\n")
-			fmt.Fprintf(b, `ts, err := s.String(`+vArgS(s)+`)
+			b.WriteString(`if err := s.SkipSpace` + streamTier + `(); err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }` + "\n")
+			// UnmarshalText must copy what it keeps, so the text can alias
+			// the window, as in the field rungs.
+			fmt.Fprintf(b, `ts, err := s.StringView`+streamTier+`(`+vArgS(s)+`)
 if err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }
 var u %[1]s
-if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }
+if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, ggen.NewParseErrOpaque("", s.Offset(), err) }
 result = %[2]s(u)
 return result, nil
 `, s.AliasUnderlying, s.Name)
 		} else {
 			inlineSkipWS(b, "i")
 			fmt.Fprintf(b, `ts, tj, err := `+scanStringFn+`(data, i, `+vArgS(s)+`)
-if err != nil { return result, i, ggen.NewParseErr("", i, err) }
+if err != nil { return result, tj, ggen.NewParseErr("", tj, err) }
 var u %[1]s
-if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, tj, ggen.NewParseErr("", tj, err) }
+if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil { return result, tj, ggen.NewParseErrOpaque("", tj, err) }
 result = %[2]s(u)
 return result, tj, nil
 `, s.AliasUnderlying, s.Name)
@@ -253,7 +254,9 @@ func renderAliasStructAppendJSON(b *bytes.Buffer, s model.StructInfo) {
 	case s.AliasIface.JSONMarshaler:
 		// An empty result is an error, as in the standard library. Types from
 		// other packages get the same check.
-		fmt.Fprintf(b, `bs, err := %s(s).MarshalJSON()
+		// Bound first, so a pointer-receiver MarshalJSON is callable.
+		fmt.Fprintf(b, `u := %s(s)
+bs, err := u.MarshalJSON()
 if err != nil { return dst, err }
 if len(bs) == 0 { return dst, ggen.ErrEmptyMarshalJSON }
 return append(dst, bs...), nil
@@ -304,18 +307,22 @@ func renderAliasContainerDecode(b *bytes.Buffer, s model.StructInfo, stream bool
 	// The receiver is the container itself. Reset it before decoding so new
 	// elements do not land after old data. An array needs no reset, because
 	// every slot is overwritten.
+	f := aliasContainerField(s)
 	//exhaustive:ignore not every kind applies here
 	switch s.AliasKind {
 	case model.KindSlice, model.KindBytes:
 		// A [N]byte folded into KindBytes is still an array. It cannot be
 		// nil or resliced.
 		if s.AliasField.ArrayLen == 0 {
+			emitHeldLen(b, f, "result")
 			b.WriteString("if result != nil { result = result[:0] }\n")
 		}
 	case model.KindMap:
 		b.WriteString("if result != nil { clear(result) }\n")
 	}
-	f := aliasContainerField(s)
+	if f.MultiErr {
+		b.WriteString("var errs ggen.Errors\n")
+	}
 	// The stream cursor is s.Pos. The bytes path uses the argument `i`.
 	posVar := "i"
 	if stream {
@@ -356,7 +363,7 @@ func renderAliasContainerDecode(b *bytes.Buffer, s model.StructInfo, stream bool
 			// The other stream kinds reach their first byte through
 			// ArrayOpen or ObjectOpen, which skip whitespace.
 			// renderStreamBytes reads s.Pos directly.
-			b.WriteString(`if err := s.SkipSpace(); err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }` + "\n")
+			b.WriteString(`if err := s.SkipSpace` + streamTier + `(); err != nil { return result, ggen.NewParseErr("", s.Offset(), err) }` + "\n")
 			renderStreamBytes(b, f, "result", posVar)
 		} else {
 			renderBytes(b, f, "result", posVar)
@@ -366,9 +373,12 @@ func renderAliasContainerDecode(b *bytes.Buffer, s model.StructInfo, stream bool
 	// of topLevel. Only the stream path and bytes KindBytes need the trailing
 	// return.
 	if stream {
+		if f.MultiErr {
+			b.WriteString("if len(errs) > 0 { return result, errs }\n")
+		}
 		b.WriteString("return result, nil\n")
 	} else if s.AliasKind == model.KindBytes {
-		b.WriteString("return result, i, nil\n")
+		emitTopLevelReturn(b, f, "i")
 	}
 }
 

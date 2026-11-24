@@ -419,7 +419,7 @@ func stringSlow(data []byte, start, j, capHint int, validate bool) (string, int,
 								}
 							}
 						}
-					} else if validate && uEscapePrefix(data[j:]) {
+					} else if validate && lowSurrogatePrefix(r, data[j:]) {
 						// The second half of the pair may still follow. The
 						// input is cut short, not an unpaired surrogate.
 						return "", len(data), ErrInvalidUTF8
@@ -487,7 +487,7 @@ func stringUnterminated(data []byte, start, j int, validate bool) (string, int, 
 							}
 						}
 					}
-				} else if validate && uEscapePrefix(data[j:]) {
+				} else if validate && lowSurrogatePrefix(r, data[j:]) {
 					return "", len(data), ErrInvalidUTF8
 				}
 				if validate {
@@ -537,6 +537,20 @@ func uEscapePrefix(tail []byte) bool {
 	}
 	_, ok := parseHex4(tail[2:])
 	return ok
+}
+
+// lowSurrogatePrefix reports whether tail, which is shorter than a full
+// `\uXXXX` escape, could still become the low surrogate that pairs with r.
+// Only a high surrogate r has a pair, and only `\uDC00`-`\uDFFF` completes
+// it. Any other tail leaves r unpaired no matter what follows.
+func lowSurrogatePrefix(r rune, tail []byte) bool {
+	if r >= 0xDC00 || !uEscapePrefix(tail) {
+		return false
+	}
+	if len(tail) > 2 && tail[2] != 'd' && tail[2] != 'D' {
+		return false
+	}
+	return len(tail) <= 3 || (tail[3]|0x20 >= 'c' && tail[3]|0x20 <= 'f')
 }
 
 // uEscapeEnd returns the error position for a `\uXXXX` escape at bs that the
@@ -1047,6 +1061,12 @@ func BoolEnd(data []byte, i int) int {
 	return litEnd(data, i, "true")
 }
 
+// NullEnd is the [BoolEnd] of a failed `null` scan at i. Generated null
+// peeks use it as the error position.
+func NullEnd(data []byte, i int) int {
+	return litEnd(data, i, "null")
+}
+
 // Null consumes a null literal. It returns the new position and true on a
 // match, and (i, false) otherwise.
 func Null(data []byte, i int) (int, bool) {
@@ -1112,7 +1132,7 @@ func skipValue(data []byte, i, depth int) (int, error) {
 
 func skipArray(data []byte, i, depth int) (int, error) {
 	if depth > maxDepth {
-		return i, ErrMaxDepth
+		return i - 1, ErrMaxDepth
 	}
 	i = SkipSpace(data, i)
 	if i < len(data) && data[i] == ']' {
@@ -1140,7 +1160,7 @@ func skipArray(data []byte, i, depth int) (int, error) {
 
 func skipObject(data []byte, i, depth int) (int, error) {
 	if depth > maxDepth {
-		return i, ErrMaxDepth
+		return i - 1, ErrMaxDepth
 	}
 	i = SkipSpace(data, i)
 	if i < len(data) && data[i] == '}' {
@@ -1216,7 +1236,7 @@ func anyValue(data []byte, i, depth int, validate bool) (any, int, error) {
 	case c == '{':
 		return anyObject(data, i, depth+1, validate)
 	}
-	return nil, i, ErrBadLiteral
+	return nil, i, ErrBadValue
 }
 
 func anyArray(data []byte, i, depth int, validate bool) ([]any, int, error) {
@@ -1339,7 +1359,7 @@ func anyNumberValue(data []byte, i, depth int, validate bool) (any, int, error) 
 	case c == '{':
 		return anyNumberObject(data, i, depth+1, validate)
 	}
-	return nil, i, ErrBadLiteral
+	return nil, i, ErrBadValue
 }
 
 func anyNumberArray(data []byte, i, depth int, validate bool) ([]any, int, error) {
@@ -1455,7 +1475,7 @@ func anyCopyValue(data []byte, i, depth int, validate bool) (any, int, error) {
 	case c == '{':
 		return anyObjectCopy(data, i, depth+1, validate)
 	}
-	return nil, i, ErrBadLiteral
+	return nil, i, ErrBadValue
 }
 
 func anyArrayCopy(data []byte, i, depth int, validate bool) ([]any, int, error) {
@@ -1571,7 +1591,7 @@ func anyNumberCopyValue(data []byte, i, depth int, validate bool) (any, int, err
 	case c == '{':
 		return anyNumberObjectCopy(data, i, depth+1, validate)
 	}
-	return nil, i, ErrBadLiteral
+	return nil, i, ErrBadValue
 }
 
 func anyNumberArrayCopy(data []byte, i, depth int, validate bool) ([]any, int, error) {

@@ -121,14 +121,14 @@ func validUTF8x16(b []byte) bool {
 	lut1 := archsimd.LoadUint8x16(utf8Byte1High[:])
 	lut2 := archsimd.LoadUint8x16(utf8Byte1Low[:])
 	lut3 := archsimd.LoadUint8x16(utf8Byte2High[:])
-	nib := archsimd.BroadcastUint8x16(0x0F)
+	nib := archsimd.LoadUint8x16(vec0F[:])
 	// Saturating subtract thresholds. The result has its high bit set only
 	// when the byte is >= 0xE0 (a 3- or 4-byte lead two back) or >= 0xF0 (a
 	// 4-byte lead three back).
-	sub3 := archsimd.BroadcastUint8x16(0xE0 - 0x80)
-	sub4 := archsimd.BroadcastUint8x16(0xF0 - 0x80)
-	high := archsimd.BroadcastUint8x16(0x80)
-	zero := archsimd.BroadcastUint8x16(0)
+	sub3 := archsimd.LoadUint8x16(vecSub3[:])
+	sub4 := archsimd.LoadUint8x16(vecSub4[:])
+	high := archsimd.LoadUint8x16(vec80[:])
+	zero := archsimd.Uint8x16{}
 	prev := zero
 	errAcc := zero
 	for i := 0; i < len(b); i += 16 {

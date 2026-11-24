@@ -101,9 +101,9 @@ func AppendStringNoHTMLAVX(dst []byte, s string) []byte {
 	if len(s) < 16 {
 		return AppendStringNoHTML(dst, s)
 	}
-	q := archsimd.BroadcastUint8x16('"')
-	bs := archsimd.BroadcastUint8x16('\\')
-	ctrl := archsimd.BroadcastUint8x16(0x1F)
+	q := archsimd.LoadUint8x16(VecQuote[:])
+	bs := archsimd.LoadUint8x16(VecBackslash[:])
+	ctrl := archsimd.LoadUint8x16(VecCtrl[:])
 	start, j := 0, 0
 	for ; j+16 <= len(s); j += 16 {
 		v := archsimd.LoadUint8x16(byteview(s)[j:])
@@ -191,12 +191,12 @@ func AppendStringAVX(dst []byte, s string) []byte {
 	if len(s) < 16 {
 		return AppendString(dst, s)
 	}
-	q := archsimd.BroadcastUint8x16('"')
-	bs := archsimd.BroadcastUint8x16('\\')
-	ctrl := archsimd.BroadcastUint8x16(0x1F)
-	lt := archsimd.BroadcastUint8x16('<')
-	gt := archsimd.BroadcastUint8x16('>')
-	amp := archsimd.BroadcastUint8x16('&')
+	q := archsimd.LoadUint8x16(VecQuote[:])
+	bs := archsimd.LoadUint8x16(VecBackslash[:])
+	ctrl := archsimd.LoadUint8x16(VecCtrl[:])
+	lt := archsimd.LoadUint8x16(vecLT[:])
+	gt := archsimd.LoadUint8x16(vecGT[:])
+	amp := archsimd.LoadUint8x16(vecAmp[:])
 	start, j := 0, 0
 	for ; j+16 <= len(s); j += 16 {
 		v := archsimd.LoadUint8x16(byteview(s)[j:])

@@ -130,12 +130,16 @@ var divergences = []struct {
 }{
 	{"JSON.parse reads a number JavaScript cannot tell from an integer, like 1e2 or 1.0", func(c probeCase) bool {
 		// The schema sees the parsed double, so any number whose value is a
-		// whole one passes an integer check whatever its spelling was.
-		return !c.goOK && !c.output && integer(c.t) && jsWholeNumber(c.probe)
+		// whole one passes an integer check whatever its spelling was. A
+		// -0 is told apart for a Go uint.
+		return !c.goOK && !c.output && integer(c.t) && jsWholeNumber(c.probe) && (!unsigned(c.t) || !jsNegZero(c.probe))
 	}},
 	{"JSON.parse rounds integers beyond 2^53, which Go reads exactly", func(c probeCase) bool {
 		n, ok := new(big.Int).SetString(c.probe, 10)
-		return ok && integer(c.t) && n.CmpAbs(big.NewInt(1<<53)) >= 0
+		return ok && (integer(c.t) || decimalSeconds(c.t)) && n.CmpAbs(big.NewInt(1<<53)) >= 0
+	}},
+	{"JSON.parse drops a number's spelling; format:unix and format:sec refuse an exponent", func(c probeCase) bool {
+		return !c.goOK && !c.output && decimalSeconds(c.t) && strings.ContainsAny(c.probe, "eE") && !strings.HasPrefix(c.probe, `"`)
 	}},
 	{"an enum type is a closed set in a schema; Go accepts any value of the underlying type", func(c probeCase) bool {
 		if !c.goOK || c.t == nil || c.t.Enum == nil || c.t.Enum.Decl == nil {
@@ -164,6 +168,30 @@ var divergences = []struct {
 func jsWholeNumber(probe string) bool {
 	f, err := strconv.ParseFloat(probe, 64)
 	return err == nil && !math.IsInf(f, 0) && f == math.Trunc(f)
+}
+
+// jsNegZero reports whether a JSON number literal parses to -0.
+func jsNegZero(probe string) bool {
+	f, err := strconv.ParseFloat(probe, 64)
+	return err == nil && f == 0 && math.Signbit(f)
+}
+
+// unsigned reports whether t is a Go unsigned integer.
+func unsigned(t *gen.Type) bool {
+	if t == nil || t.Wire != gen.WireInteger {
+		return false
+	}
+	//exhaustive:ignore only the unsigned kinds apply here
+	switch t.Go {
+	case gen.Uint, gen.Uint8, gen.Uint16, gen.Uint32, gen.Uint64:
+		return true
+	}
+	return false
+}
+
+// decimalSeconds reports whether Go reads t's number as exact decimal text.
+func decimalSeconds(t *gen.Type) bool {
+	return t != nil && (t.Format == gen.FormatUnix || t.Format == gen.FormatDurationSec)
 }
 
 func integer(t *gen.Type) bool {
@@ -951,12 +979,23 @@ func TestUnloaded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := []string{otherPkg + ".Money"}; !slices.Equal(set.Unloaded(), want) {
+	if want := []string{otherPkg + ".Instant", otherPkg + ".Money", otherPkg + ".Tint"}; !slices.Equal(set.Unloaded(), want) {
 		t.Fatalf("Unloaded = %v, want %v", set.Unloaded(), want)
 	}
 	money := set.Type(fixturePkg, "Containers").Out().Field("money")
 	if money == nil || !money.Type.External || money.Type.Wire != gen.WireObject {
 		t.Errorf("an unloaded type is external with its wire shape: %#v", money)
+	}
+	// A struct alias takes the wire of the type its methods delegate to.
+	decl := set.Type(fixturePkg, "Delegates")
+	for mode, d := range map[string]*gen.Shape{"in": decl.In(), "out": decl.Out()} {
+		stamp, tint := d.Field("instant").Type, d.Field("tint").Type
+		if !stamp.External || stamp.Wire != gen.WireString || stamp.Format != gen.FormatDateTime {
+			t.Errorf("%s instant: wire %s format %s", mode, stamp.Wire, stamp.Format)
+		}
+		if !tint.External || tint.Wire != gen.WireString {
+			t.Errorf("%s tint: wire %s", mode, tint.Wire)
+		}
 	}
 }
 

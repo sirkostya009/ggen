@@ -4,6 +4,8 @@ package integrationtests
 
 import (
 	"database/sql"
+	"encoding/json"
+	"encoding/json/jsontext"
 	"math"
 	"net"
 	"strconv"
@@ -29,6 +31,36 @@ const ggenCap_SQLNullNested_Nets_sql_Null_net_IPNet_ = (min((80/max(int(unsafe.S
 
 // Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
 const ggenCap_SQLNullNested_V_sql_Null_net_IPNet_ = (min((80/max(int(unsafe.Sizeof(*new(sql.Null[net.IPNet]))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(sql.Null[net.IPNet]))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(sql.Null[net.IPNet]))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(sql.Null[net.IPNet]))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_SQLNullRaw_V_sql_Null_jsontext_Value_ = (min((80/max(int(unsafe.Sizeof(*new(sql.Null[jsontext.Value]))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(sql.Null[jsontext.Value]))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(sql.Null[jsontext.Value]))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(sql.Null[jsontext.Value]))), 1)), 1)
+
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_SQLNullRawCopy_V_sql_Null_jsontext_Value_ = (min((80/max(int(unsafe.Sizeof(*new(sql.Null[jsontext.Value]))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(sql.Null[jsontext.Value]))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(sql.Null[jsontext.Value]))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(sql.Null[jsontext.Value]))), 1)), 1)
+
+var ggenKeys_sql_test_0 = []string{"s"}
+var ggenKeys_sql_test_1 = []string{"i"}
+var ggenKeys_sql_test_2 = []string{"i32"}
+var ggenKeys_sql_test_3 = []string{"i16"}
+var ggenKeys_sql_test_4 = []string{"b"}
+var ggenKeys_sql_test_5 = []string{"bl"}
+var ggenKeys_sql_test_6 = []string{"f"}
+var ggenKeys_sql_test_7 = []string{"t"}
+var ggenKeys_sql_test_8 = []string{"u"}
+var ggenKeys_sql_test_9 = []string{"a"}
+var ggenKeys_sql_test_10 = []string{"l"}
+var ggenKeys_sql_test_11 = []string{"id"}
+var ggenKeys_sql_test_12 = []string{"deep"}
+var ggenKeys_sql_test_13 = []string{"dur"}
+var ggenKeys_sql_test_14 = []string{"field"}
+var ggenKeys_sql_test_15 = []string{"grid"}
+var ggenKeys_sql_test_16 = []string{"m"}
+var ggenKeys_sql_test_17 = []string{"nets"}
+var ggenKeys_sql_test_18 = []string{"pair"}
+var ggenKeys_sql_test_19 = []string{"wrap"}
+var ggenKeys_sql_test_20 = []string{"p"}
+var ggenKeys_sql_test_21 = []string{"r"}
+var ggenKeys_sql_test_22 = []string{"v"}
 
 func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStruct, i int, err error) {
 	result = recv
@@ -81,11 +113,12 @@ func (recv SQLNullStringStruct) DecodeFrom(data []byte) (result SQLNullStringStr
 		switch key {
 		case "s":
 			if seenS {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"s"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_0}
 			}
 			seenS = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("s", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -179,7 +212,7 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *ggen.Stream) (result SQLNull
 				return result, ggen.NewParseErr("s", s.Offset(), err)
 			}
 			if seenS {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"s"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_0}
 			}
 			seenS = true
 			if s.Pos >= len(s.Bytes()) {
@@ -191,11 +224,11 @@ func (recv SQLNullStringStruct) DecodeFromStream(s *ggen.Stream) (result SQLNull
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("s", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("s", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("s", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("s", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.S = sql.NullString{}
@@ -318,11 +351,12 @@ func (recv SQLNullInt64Struct) DecodeFrom(data []byte) (result SQLNullInt64Struc
 		switch key {
 		case "i":
 			if seenI {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_1}
 			}
 			seenI = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("i", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -443,7 +477,7 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_1}
 			}
 			seenI = true
 			if s.Pos >= len(s.Bytes()) {
@@ -455,11 +489,11 @@ func (recv SQLNullInt64Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("i", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("i", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("i", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("i", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.I = sql.NullInt64{}
@@ -580,11 +614,12 @@ func (recv SQLNullInt32Struct) DecodeFrom(data []byte) (result SQLNullInt32Struc
 		switch key {
 		case "i32":
 			if seenI32 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i32"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_2}
 			}
 			seenI32 = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("i32", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -708,7 +743,7 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 				return result, ggen.NewParseErr("i32", s.Offset(), err)
 			}
 			if seenI32 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i32"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_2}
 			}
 			seenI32 = true
 			if s.Pos >= len(s.Bytes()) {
@@ -720,11 +755,11 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("i32", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("i32", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("i32", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("i32", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.I32 = sql.NullInt32{}
@@ -781,7 +816,7 @@ func (recv SQLNullInt32Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 }
 
 func (s SQLNullInt32Struct) JSONSize() int {
-	size := 28
+	size := 19
 	return size
 }
 
@@ -848,11 +883,12 @@ func (recv SQLNullInt16Struct) DecodeFrom(data []byte) (result SQLNullInt16Struc
 		switch key {
 		case "i16":
 			if seenI16 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i16"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_3}
 			}
 			seenI16 = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("i16", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -976,7 +1012,7 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 				return result, ggen.NewParseErr("i16", s.Offset(), err)
 			}
 			if seenI16 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i16"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_3}
 			}
 			seenI16 = true
 			if s.Pos >= len(s.Bytes()) {
@@ -988,11 +1024,11 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("i16", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("i16", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("i16", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("i16", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.I16 = sql.NullInt16{}
@@ -1049,7 +1085,7 @@ func (recv SQLNullInt16Struct) DecodeFromStream(s *ggen.Stream) (result SQLNullI
 }
 
 func (s SQLNullInt16Struct) JSONSize() int {
-	size := 28
+	size := 14
 	return size
 }
 
@@ -1116,11 +1152,12 @@ func (recv SQLNullByteStruct) DecodeFrom(data []byte) (result SQLNullByteStruct,
 		switch key {
 		case "b":
 			if seenB {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_4}
 			}
 			seenB = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("b", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -1225,7 +1262,7 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullBy
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_4}
 			}
 			seenB = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1237,11 +1274,11 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullBy
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("b", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("b", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("b", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("b", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.B = sql.NullByte{}
@@ -1298,7 +1335,7 @@ func (recv SQLNullByteStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullBy
 }
 
 func (s SQLNullByteStruct) JSONSize() int {
-	size := 26
+	size := 10
 	return size
 }
 
@@ -1365,11 +1402,12 @@ func (recv SQLNullBoolStruct) DecodeFrom(data []byte) (result SQLNullBoolStruct,
 		switch key {
 		case "bl":
 			if seenBL {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"bl"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_5}
 			}
 			seenBL = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("bl", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -1448,7 +1486,7 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullBo
 				return result, ggen.NewParseErr("bl", s.Offset(), err)
 			}
 			if seenBL {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"bl"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_5}
 			}
 			seenBL = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1460,11 +1498,11 @@ func (recv SQLNullBoolStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullBo
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("bl", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("bl", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("bl", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("bl", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.BL = sql.NullBool{}
@@ -1585,11 +1623,12 @@ func (recv SQLNullFloat64Struct) DecodeFrom(data []byte) (result SQLNullFloat64S
 		switch key {
 		case "f":
 			if seenF {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"f"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_6}
 			}
 			seenF = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("f", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -1667,7 +1706,7 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 				return result, ggen.NewParseErr("f", s.Offset(), err)
 			}
 			if seenF {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"f"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_6}
 			}
 			seenF = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1679,11 +1718,11 @@ func (recv SQLNullFloat64Struct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("f", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("f", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("f", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("f", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.F = sql.NullFloat64{}
@@ -1806,11 +1845,12 @@ func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct,
 		switch key {
 		case "t":
 			if seenT {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"t"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_7}
 			}
 			seenT = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("t", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -1822,7 +1862,7 @@ func (recv SQLNullTimeStruct) DecodeFrom(data []byte) (result SQLNullTimeStruct,
 					return result, i, ggen.NewParseErr("t", i, ggen.ErrExpectString)
 				}
 				ke := i + 1
-				kew := ke + 32
+				kew := ke + 36
 				if kew > len(data) {
 					kew = len(data)
 				}
@@ -1909,7 +1949,7 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullTi
 				return result, ggen.NewParseErr("t", s.Offset(), err)
 			}
 			if seenT {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"t"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_7}
 			}
 			seenT = true
 			if s.Pos >= len(s.Bytes()) {
@@ -1921,11 +1961,11 @@ func (recv SQLNullTimeStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullTi
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("t", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("t", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("t", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("t", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.T = sql.NullTime{}
@@ -2055,11 +2095,12 @@ func (recv SQLNullGenStringStruct) DecodeFrom(data []byte) (result SQLNullGenStr
 		switch key {
 		case "s":
 			if seenS {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"s"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_0}
 			}
 			seenS = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("s", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -2153,7 +2194,7 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *ggen.Stream) (result SQLN
 				return result, ggen.NewParseErr("s", s.Offset(), err)
 			}
 			if seenS {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"s"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_0}
 			}
 			seenS = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2165,11 +2206,11 @@ func (recv SQLNullGenStringStruct) DecodeFromStream(s *ggen.Stream) (result SQLN
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("s", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("s", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("s", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("s", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.S = sql.Null[string]{}
@@ -2292,11 +2333,12 @@ func (recv SQLNullGenIntStruct) DecodeFrom(data []byte) (result SQLNullGenIntStr
 		switch key {
 		case "i":
 			if seenI {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_1}
 			}
 			seenI = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("i", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -2349,6 +2391,9 @@ func (recv SQLNullGenIntStruct) DecodeFrom(data []byte) (result SQLNullGenIntStr
 					}
 				} else {
 					n = int64(u)
+				}
+				if int64(int(n)) != n {
+					return result, i, ggen.NewParseErr("i", i, ggen.ErrNumberOverflow)
 				}
 
 				result.I = sql.Null[int]{V: int(n), Valid: true}
@@ -2417,7 +2462,7 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *ggen.Stream) (result SQLNull
 				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_1}
 			}
 			seenI = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2429,11 +2474,11 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *ggen.Stream) (result SQLNull
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("i", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("i", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("i", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("i", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.I = sql.Null[int]{}
@@ -2443,6 +2488,9 @@ func (recv SQLNullGenIntStruct) DecodeFromStream(s *ggen.Stream) (result SQLNull
 				iv, err = s.Int64()
 				if err != nil {
 					return result, ggen.NewParseErr("i", s.Offset(), err)
+				}
+				if int64(int(iv)) != iv {
+					return result, ggen.NewParseErr("i", s.Offset(), ggen.ErrNumberOverflow)
 				}
 
 				result.I = sql.Null[int]{V: int(iv), Valid: true}
@@ -2554,11 +2602,12 @@ func (recv SQLNullGenUint64Struct) DecodeFrom(data []byte) (result SQLNullGenUin
 		switch key {
 		case "u":
 			if seenU {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"u"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_8}
 			}
 			seenU = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("u", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -2660,7 +2709,7 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *ggen.Stream) (result SQLN
 				return result, ggen.NewParseErr("u", s.Offset(), err)
 			}
 			if seenU {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"u"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_8}
 			}
 			seenU = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2672,11 +2721,11 @@ func (recv SQLNullGenUint64Struct) DecodeFromStream(s *ggen.Stream) (result SQLN
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("u", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("u", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("u", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("u", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.U = sql.Null[uint64]{}
@@ -2797,11 +2846,12 @@ func (recv SQLNullGenFloat32Struct) DecodeFrom(data []byte) (result SQLNullGenFl
 		switch key {
 		case "f":
 			if seenF {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"f"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_6}
 			}
 			seenF = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("f", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -2879,7 +2929,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *ggen.Stream) (result SQL
 				return result, ggen.NewParseErr("f", s.Offset(), err)
 			}
 			if seenF {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"f"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_6}
 			}
 			seenF = true
 			if s.Pos >= len(s.Bytes()) {
@@ -2891,11 +2941,11 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *ggen.Stream) (result SQL
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("f", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("f", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("f", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("f", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.F = sql.Null[float32]{}
@@ -2949,7 +2999,7 @@ func (recv SQLNullGenFloat32Struct) DecodeFromStream(s *ggen.Stream) (result SQL
 }
 
 func (s SQLNullGenFloat32Struct) JSONSize() int {
-	size := 31
+	size := 28
 	return size
 }
 
@@ -3018,11 +3068,12 @@ func (recv SQLNullGenBoolStruct) DecodeFrom(data []byte) (result SQLNullGenBoolS
 		switch key {
 		case "bl":
 			if seenBL {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"bl"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_5}
 			}
 			seenBL = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("bl", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -3101,7 +3152,7 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 				return result, ggen.NewParseErr("bl", s.Offset(), err)
 			}
 			if seenBL {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"bl"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_5}
 			}
 			seenBL = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3113,11 +3164,11 @@ func (recv SQLNullGenBoolStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("bl", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("bl", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("bl", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("bl", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.BL = sql.Null[bool]{}
@@ -3238,11 +3289,12 @@ func (recv SQLNullGenTimeStruct) DecodeFrom(data []byte) (result SQLNullGenTimeS
 		switch key {
 		case "t":
 			if seenT {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"t"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_7}
 			}
 			seenT = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("t", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -3254,7 +3306,7 @@ func (recv SQLNullGenTimeStruct) DecodeFrom(data []byte) (result SQLNullGenTimeS
 					return result, i, ggen.NewParseErr("t", i, ggen.ErrExpectString)
 				}
 				ke := i + 1
-				kew := ke + 32
+				kew := ke + 36
 				if kew > len(data) {
 					kew = len(data)
 				}
@@ -3341,7 +3393,7 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 				return result, ggen.NewParseErr("t", s.Offset(), err)
 			}
 			if seenT {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"t"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_7}
 			}
 			seenT = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3353,11 +3405,11 @@ func (recv SQLNullGenTimeStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("t", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("t", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("t", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("t", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.T = sql.Null[time.Time]{}
@@ -3487,11 +3539,12 @@ func (recv SQLNullGenAccountStruct) DecodeFrom(data []byte) (result SQLNullGenAc
 		switch key {
 		case "a":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_9}
 			}
 			seenA = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("a", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -3612,7 +3665,7 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *ggen.Stream) (result SQL
 				return result, ggen.NewParseErr("a", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_9}
 			}
 			seenA = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3624,11 +3677,11 @@ func (recv SQLNullGenAccountStruct) DecodeFromStream(s *ggen.Stream) (result SQL
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("a", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("a", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("a", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("a", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.A = sql.Null[SQLAccountID]{}
@@ -3749,11 +3802,12 @@ func (recv SQLNullGenLabelStruct) DecodeFrom(data []byte) (result SQLNullGenLabe
 		switch key {
 		case "l":
 			if seenL {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"l"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_10}
 			}
 			seenL = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("l", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -3847,7 +3901,7 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *ggen.Stream) (result SQLNu
 				return result, ggen.NewParseErr("l", s.Offset(), err)
 			}
 			if seenL {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"l"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_10}
 			}
 			seenL = true
 			if s.Pos >= len(s.Bytes()) {
@@ -3859,11 +3913,11 @@ func (recv SQLNullGenLabelStruct) DecodeFromStream(s *ggen.Stream) (result SQLNu
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("l", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("l", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("l", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("l", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.L = sql.Null[SQLLabel]{}
@@ -3986,11 +4040,12 @@ func (recv SQLNullGenUUIDStruct) DecodeFrom(data []byte) (result SQLNullGenUUIDS
 		switch key {
 		case "id":
 			if seenID {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"id"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_11}
 			}
 			seenID = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("id", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -4005,7 +4060,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFrom(data []byte) (result SQLNullGenUUIDS
 				nv = *new(uuid.UUID)
 				err = nv.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 				if err != nil {
-					return result, i, ggen.NewParseErr("id", i, err)
+					return result, i, ggen.NewParseErrOpaque("id", i, err)
 				}
 
 				result.ID = sql.Null[uuid.UUID]{V: nv, Valid: true}
@@ -4074,23 +4129,23 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 				return result, ggen.NewParseErr("id", s.Offset(), err)
 			}
 			if seenID {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"id"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_11}
 			}
 			seenID = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, ggen.NewParseErr("id", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					return result, ggen.NewParseErr("id", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("id", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("id", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("id", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("id", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.ID = sql.Null[uuid.UUID]{}
@@ -4105,7 +4160,7 @@ func (recv SQLNullGenUUIDStruct) DecodeFromStream(s *ggen.Stream) (result SQLNul
 				nv = *new(uuid.UUID)
 				err = nv.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts)))
 				if err != nil {
-					return result, ggen.NewParseErr("id", s.Offset(), err)
+					return result, ggen.NewParseErrOpaque("id", s.Offset(), err)
 				}
 
 				result.ID = sql.Null[uuid.UUID]{V: nv, Valid: true}
@@ -4251,11 +4306,12 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 		switch key {
 		case "b":
 			if seenB {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_4}
 			}
 			seenB = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("b", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -4298,11 +4354,12 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "bl":
 			if seenBL {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"bl"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_5}
 			}
 			seenBL = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("bl", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -4319,11 +4376,12 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "f":
 			if seenF {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"f"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_6}
 			}
 			seenF = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("f", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -4339,11 +4397,12 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "i":
 			if seenI {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_1}
 			}
 			seenI = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("i", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -4402,11 +4461,12 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "i16":
 			if seenI16 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i16"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_3}
 			}
 			seenI16 = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("i16", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -4468,11 +4528,12 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "i32":
 			if seenI32 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i32"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_2}
 			}
 			seenI32 = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("i32", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -4534,11 +4595,12 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "s":
 			if seenS {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"s"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_0}
 			}
 			seenS = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("s", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -4570,11 +4632,12 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 			}
 		case "t":
 			if seenT {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"t"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_7}
 			}
 			seenT = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("t", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -4586,7 +4649,7 @@ func (recv SQLNullStruct) DecodeFrom(data []byte) (result SQLNullStruct, i int, 
 					return result, i, ggen.NewParseErr("t", i, ggen.ErrExpectString)
 				}
 				ke := i + 1
-				kew := ke + 32
+				kew := ke + 36
 				if kew > len(data) {
 					kew = len(data)
 				}
@@ -4722,7 +4785,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_4}
 			}
 			seenB = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4734,11 +4797,11 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("b", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("b", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("b", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("b", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.B = sql.NullByte{}
@@ -4761,7 +4824,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("bl", s.Offset(), err)
 			}
 			if seenBL {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"bl"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_5}
 			}
 			seenBL = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4773,11 +4836,11 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("bl", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("bl", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("bl", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("bl", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.BL = sql.NullBool{}
@@ -4797,7 +4860,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("f", s.Offset(), err)
 			}
 			if seenF {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"f"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_6}
 			}
 			seenF = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4809,11 +4872,11 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("f", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("f", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("f", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("f", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.F = sql.NullFloat64{}
@@ -4833,7 +4896,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_1}
 			}
 			seenI = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4845,11 +4908,11 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("i", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("i", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("i", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("i", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.I = sql.NullInt64{}
@@ -4869,7 +4932,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("i16", s.Offset(), err)
 			}
 			if seenI16 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i16"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_3}
 			}
 			seenI16 = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4881,11 +4944,11 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("i16", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("i16", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("i16", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("i16", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.I16 = sql.NullInt16{}
@@ -4908,7 +4971,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("i32", s.Offset(), err)
 			}
 			if seenI32 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i32"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_2}
 			}
 			seenI32 = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4920,11 +4983,11 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("i32", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("i32", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("i32", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("i32", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.I32 = sql.NullInt32{}
@@ -4947,7 +5010,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("s", s.Offset(), err)
 			}
 			if seenS {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"s"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_0}
 			}
 			seenS = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4959,11 +5022,11 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("s", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("s", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("s", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("s", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.S = sql.NullString{}
@@ -4983,7 +5046,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				return result, ggen.NewParseErr("t", s.Offset(), err)
 			}
 			if seenT {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"t"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_7}
 			}
 			seenT = true
 			if s.Pos >= len(s.Bytes()) {
@@ -4995,11 +5058,11 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("t", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("t", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("t", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("t", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.T = sql.NullTime{}
@@ -5079,7 +5142,7 @@ func (recv SQLNullStruct) DecodeFromStream(s *ggen.Stream) (result SQLNullStruct
 }
 
 func (s SQLNullStruct) JSONSize() int {
-	size := 197
+	size := 158
 	size += len(s.S.String) * 2
 	return size
 }
@@ -5147,6 +5210,7 @@ func (s SQLNullStruct) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, err error) {
 	result = recv
+	held0 := len(result.Grid)
 	if result.Grid != nil {
 		result.Grid = result.Grid[:0]
 	}
@@ -5224,11 +5288,12 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 		switch key {
 		case "deep":
 			if seenDeep {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"deep"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_12}
 			}
 			seenDeep = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -5237,6 +5302,7 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 				var nvo1 []sql.Null[string]
 				if i < len(data) && data[i] == 'n' {
 					if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+						i = ggen.NullEnd(data, i)
 						return result, i, ggen.NewParseErr("deep", i, ggen.ErrBadLiteral)
 					}
 					i += 4
@@ -5263,6 +5329,7 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 							nvo1 = append(nvo1, sql.Null[string]{})
 							if i < len(data) && data[i] == 'n' {
 								if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+									i = ggen.NullEnd(data, i)
 									return result, i, ggen.NewParseErr("deep[]", i, ggen.ErrBadLiteral)
 								}
 								i += 4
@@ -5318,11 +5385,12 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 			}
 		case "dur":
 			if seenDur {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"dur"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_13}
 			}
 			seenDur = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("dur", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -5332,6 +5400,7 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 			var v sql.Null[time.Duration]
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("dur", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -5373,11 +5442,12 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 			}
 		case "field":
 			if seenField {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"field"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_14}
 			}
 			seenField = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("field", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -5414,11 +5484,12 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 			}
 		case "grid":
 			if seenGrid {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"grid"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_15}
 			}
 			seenGrid = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("grid", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -5432,6 +5503,7 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
+			live0 := held0
 			if i < len(data) && data[i] == ']' {
 				if result.Grid == nil {
 					result.Grid = [][]sql.Null[time.Duration]{}
@@ -5439,17 +5511,22 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 			} else {
 				if result.Grid == nil {
 					result.Grid = make([][]sql.Null[time.Duration], 0, ggenCap_SQLNullNested_Grid___sql_Null_time_Duration_)
+					live0 = cap(result.Grid)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					if len(result.Grid) < cap(result.Grid) {
+					if len(result.Grid) < live0 {
 						result.Grid = result.Grid[:len(result.Grid)+1]
+					} else if len(result.Grid) < cap(result.Grid) {
+						result.Grid = append(result.Grid, nil)
 					} else {
 						result.Grid = append(result.Grid, nil)
+						live0 = cap(result.Grid)
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("grid", i, ggen.ErrBadLiteral)
 						}
 						i += 4
@@ -5494,6 +5571,7 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 							row0 = append(row0, sql.Null[time.Duration]{})
 							if i < len(data) && data[i] == 'n' {
 								if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+									i = ggen.NullEnd(data, i)
 									return result, i, ggen.NewParseErr("grid[][]", i, ggen.ErrBadLiteral)
 								}
 								i += 4
@@ -5571,11 +5649,12 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 			i++
 		case "m":
 			if seenM {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"m"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_16}
 			}
 			seenM = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("m", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -5635,6 +5714,7 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 						var mv sql.Null[time.Duration]
 						if i < len(data) && data[i] == 'n' {
 							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								i = ggen.NullEnd(data, i)
 								return result, i, ggen.NewParseErr("m.value", i, ggen.ErrBadLiteral)
 							}
 							i += 4
@@ -5693,11 +5773,12 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 			i++
 		case "nets":
 			if seenNets {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"nets"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_17}
 			}
 			seenNets = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("nets", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -5725,6 +5806,7 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 					result.Nets = append(result.Nets, sql.Null[net.IPNet]{})
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("nets[]", i, ggen.ErrBadLiteral)
 						}
 						i += 4
@@ -5781,7 +5863,7 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 			i++
 		case "pair":
 			if seenPair {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"pair"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_18}
 			}
 			seenPair = true
 			if i >= len(data) || data[i] != '[' {
@@ -5795,10 +5877,11 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 			if i < len(data) && data[i] != ']' {
 				for {
 					if idx0 >= 2 {
-						return result, i, &ggen.LenError{Pos: i, Keys: []string{"pair"}, Want: 2, Got: 3, AtLeast: true}
+						return result, i, &ggen.LenError{Pos: i, Keys: ggenKeys_sql_test_18, Want: 2, Got: 3, AtLeast: true}
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("pair[]", i, ggen.ErrBadLiteral)
 						}
 						i += 4
@@ -5835,16 +5918,17 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 				return result, i, ggen.NewParseErr("pair", i, ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, i, &ggen.LenError{Pos: i, Keys: []string{"pair"}, Want: 2, Got: idx0}
+				return result, i, &ggen.LenError{Pos: i, Keys: ggenKeys_sql_test_18, Want: 2, Got: idx0}
 			}
 			i++
 		case "wrap":
 			if seenWrap {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"wrap"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_19}
 			}
 			seenWrap = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("wrap", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -5853,6 +5937,7 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 				var nvo1 []sql.Null[net.IPNet]
 				if i < len(data) && data[i] == 'n' {
 					if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+						i = ggen.NullEnd(data, i)
 						return result, i, ggen.NewParseErr("wrap", i, ggen.ErrBadLiteral)
 					}
 					i += 4
@@ -5879,6 +5964,7 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 							nvo1 = append(nvo1, sql.Null[net.IPNet]{})
 							if i < len(data) && data[i] == 'n' {
 								if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+									i = ggen.NullEnd(data, i)
 									return result, i, ggen.NewParseErr("wrap[]", i, ggen.ErrBadLiteral)
 								}
 								i += 4
@@ -5978,6 +6064,7 @@ func (recv SQLNullNested) DecodeFrom(data []byte) (result SQLNullNested, i int, 
 
 func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested, err error) {
 	result = recv
+	held0 := len(result.Grid)
 	if result.Grid != nil {
 		result.Grid = result.Grid[:0]
 	}
@@ -6041,7 +6128,7 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				return result, ggen.NewParseErr("deep", s.Offset(), err)
 			}
 			if seenDeep {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"deep"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_12}
 			}
 			seenDeep = true
 			if s.Pos >= len(s.Bytes()) {
@@ -6053,11 +6140,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("deep", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("deep", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("deep", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("deep", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.Deep = sql.Null[[]sql.Null[string]]{}
@@ -6077,11 +6164,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("deep", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("deep", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("deep", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("deep", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -6120,11 +6207,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 							for ki := 1; ki < 4; ki++ {
 								if s.Pos+ki >= len(s.Bytes()) {
 									if err = s.ReadMore(0); err != nil {
-										return result, ggen.NewParseErr("deep[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+										return result, ggen.NewParseErr("deep[]", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 									}
 								}
 								if s.Bytes()[s.Pos+ki] != "null"[ki] {
-									return result, ggen.NewParseErr("deep[]", s.Offset(), ggen.ErrBadLiteral)
+									return result, ggen.NewParseErr("deep[]", s.Offset()+ki, ggen.ErrBadLiteral)
 								}
 							}
 							nvo1[len(nvo1)-1] = sql.Null[string]{}
@@ -6174,23 +6261,23 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				return result, ggen.NewParseErr("dur", s.Offset(), err)
 			}
 			if seenDur {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"dur"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_13}
 			}
 			seenDur = true
 			if s.Pos >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, ggen.NewParseErr("dur", s.Offset(), ggen.NotEOF(err, ggen.ErrUnexpectedEnd))
+					return result, ggen.NewParseErr("dur", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
 				}
 			}
 			if s.Bytes()[s.Pos] == 'n' {
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("dur", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("dur", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("dur", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("dur", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -6207,11 +6294,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("dur", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("dur", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("dur", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("dur", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				v = sql.Null[time.Duration]{}
@@ -6242,7 +6329,7 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				return result, ggen.NewParseErr("field", s.Offset(), err)
 			}
 			if seenField {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"field"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_14}
 			}
 			seenField = true
 			if s.Pos >= len(s.Bytes()) {
@@ -6254,11 +6341,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("field", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("field", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("field", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("field", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.Field = sql.Null[net.IPNet]{}
@@ -6283,7 +6370,7 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				return result, ggen.NewParseErr("grid", s.Offset(), err)
 			}
 			if seenGrid {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"grid"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_15}
 			}
 			seenGrid = true
 			err = s.SkipSpace()
@@ -6299,11 +6386,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("grid", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("grid", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("grid", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("grid", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -6323,6 +6410,7 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 					return result, ggen.NewParseErr("grid", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
+			live0 := held0
 			if s.Bytes()[s.Pos] == ']' {
 				if result.Grid == nil {
 					result.Grid = [][]sql.Null[time.Duration]{}
@@ -6330,13 +6418,17 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 			} else {
 				if result.Grid == nil {
 					result.Grid = make([][]sql.Null[time.Duration], 0, ggenCap_SQLNullNested_Grid___sql_Null_time_Duration_)
+					live0 = cap(result.Grid)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				if len(result.Grid) < cap(result.Grid) {
+				if len(result.Grid) < live0 {
 					result.Grid = result.Grid[:len(result.Grid)+1]
+				} else if len(result.Grid) < cap(result.Grid) {
+					result.Grid = append(result.Grid, nil)
 				} else {
 					result.Grid = append(result.Grid, nil)
+					live0 = cap(result.Grid)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -6347,11 +6439,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("grid", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("grid", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("grid", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("grid", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -6415,11 +6507,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 						for ki := 1; ki < 4; ki++ {
 							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, ggen.NewParseErr("grid[][]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+									return result, ggen.NewParseErr("grid[][]", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 								}
 							}
 							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, ggen.NewParseErr("grid[][]", s.Offset(), ggen.ErrBadLiteral)
+								return result, ggen.NewParseErr("grid[][]", s.Offset()+ki, ggen.ErrBadLiteral)
 							}
 						}
 						row0[len(row0)-1] = sql.Null[time.Duration]{}
@@ -6498,7 +6590,7 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				return result, ggen.NewParseErr("m", s.Offset(), err)
 			}
 			if seenM {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"m"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_16}
 			}
 			seenM = true
 			err = s.SkipSpace()
@@ -6514,11 +6606,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("m", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("m", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -6581,11 +6673,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 						for ki := 1; ki < 4; ki++ {
 							if s.Pos+ki >= len(s.Bytes()) {
 								if err = s.ReadMore(0); err != nil {
-									return result, ggen.NewParseErr("m.value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+									return result, ggen.NewParseErr("m.value", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 								}
 							}
 							if s.Bytes()[s.Pos+ki] != "null"[ki] {
-								return result, ggen.NewParseErr("m.value", s.Offset(), ggen.ErrBadLiteral)
+								return result, ggen.NewParseErr("m.value", s.Offset()+ki, ggen.ErrBadLiteral)
 							}
 						}
 						mv = sql.Null[time.Duration]{}
@@ -6639,7 +6731,7 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				return result, ggen.NewParseErr("nets", s.Offset(), err)
 			}
 			if seenNets {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"nets"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_17}
 			}
 			seenNets = true
 			err = s.SkipSpace()
@@ -6655,11 +6747,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("nets", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("nets", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("nets", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("nets", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -6699,11 +6791,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("nets[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("nets[]", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("nets[]", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("nets[]", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					result.Nets[len(result.Nets)-1] = sql.Null[net.IPNet]{}
@@ -6754,7 +6846,7 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				return result, ggen.NewParseErr("pair", s.Offset(), err)
 			}
 			if seenPair {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"pair"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_18}
 			}
 			seenPair = true
 			err = s.ArrayOpen()
@@ -6773,7 +6865,7 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 			var idx0 int
 			for s.Bytes()[s.Pos] != ']' {
 				if idx0 >= 2 {
-					return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{"pair"}, Want: 2, Got: 3, AtLeast: true}
+					return result, &ggen.LenError{Pos: s.Offset(), Keys: ggenKeys_sql_test_18, Want: 2, Got: 3, AtLeast: true}
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -6784,11 +6876,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("pair[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("pair[]", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("pair[]", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("pair[]", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					result.Pair[idx0] = sql.Null[Address]{}
@@ -6829,7 +6921,7 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				return result, ggen.NewParseErr("pair", s.Offset(), ggen.ErrBadArray)
 			}
 			if idx0 != 2 {
-				return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{"pair"}, Want: 2, Got: idx0}
+				return result, &ggen.LenError{Pos: s.Offset(), Keys: ggenKeys_sql_test_18, Want: 2, Got: idx0}
 			}
 			s.Pos++
 		case "wrap":
@@ -6838,7 +6930,7 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				return result, ggen.NewParseErr("wrap", s.Offset(), err)
 			}
 			if seenWrap {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"wrap"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_19}
 			}
 			seenWrap = true
 			if s.Pos >= len(s.Bytes()) {
@@ -6850,11 +6942,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("wrap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("wrap", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("wrap", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("wrap", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result.Wrap = sql.Null[[]sql.Null[net.IPNet]]{}
@@ -6874,11 +6966,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("wrap", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("wrap", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("wrap", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("wrap", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -6917,11 +7009,11 @@ func (recv SQLNullNested) DecodeFromStream(s *ggen.Stream) (result SQLNullNested
 							for ki := 1; ki < 4; ki++ {
 								if s.Pos+ki >= len(s.Bytes()) {
 									if err = s.ReadMore(0); err != nil {
-										return result, ggen.NewParseErr("wrap[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+										return result, ggen.NewParseErr("wrap[]", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 									}
 								}
 								if s.Bytes()[s.Pos+ki] != "null"[ki] {
-									return result, ggen.NewParseErr("wrap[]", s.Offset(), ggen.ErrBadLiteral)
+									return result, ggen.NewParseErr("wrap[]", s.Offset()+ki, ggen.ErrBadLiteral)
 								}
 							}
 							nvo1[len(nvo1)-1] = sql.Null[net.IPNet]{}
@@ -7312,6 +7404,7 @@ func (recv SQLNullNets) DecodeFrom(data []byte) (result SQLNullNets, i int, err 
 	}
 	if i < len(data) && data[i] == 'n' {
 		if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+			i = ggen.NullEnd(data, i)
 			return result, i, ggen.NewParseErr("", i, ggen.ErrBadLiteral)
 		}
 		i += 4
@@ -7333,6 +7426,7 @@ func (recv SQLNullNets) DecodeFrom(data []byte) (result SQLNullNets, i int, err 
 			result = append(result, sql.Null[net.IPNet]{})
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("[]", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -7408,11 +7502,11 @@ func (recv SQLNullNets) DecodeFromStream(s *ggen.Stream) (result SQLNullNets, er
 		for ki := 1; ki < 4; ki++ {
 			if s.Pos+ki >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+					return result, ggen.NewParseErr("", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 				}
 			}
 			if s.Bytes()[s.Pos+ki] != "null"[ki] {
-				return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadLiteral)
+				return result, ggen.NewParseErr("", s.Offset()+ki, ggen.ErrBadLiteral)
 			}
 		}
 		s.Pos += 4
@@ -7451,11 +7545,11 @@ func (recv SQLNullNets) DecodeFromStream(s *ggen.Stream) (result SQLNullNets, er
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("[]", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("[]", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("[]", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("[]", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				result[len(result)-1] = sql.Null[net.IPNet]{}
@@ -7563,6 +7657,7 @@ func (recv SQLNullDurMap) DecodeFrom(data []byte) (result SQLNullDurMap, i int, 
 	}
 	if i < len(data) && data[i] == 'n' {
 		if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+			i = ggen.NullEnd(data, i)
 			return result, i, ggen.NewParseErr("", i, ggen.ErrBadLiteral)
 		}
 		i += 4
@@ -7622,6 +7717,7 @@ func (recv SQLNullDurMap) DecodeFrom(data []byte) (result SQLNullDurMap, i int, 
 				var mv sql.Null[time.Duration]
 				if i < len(data) && data[i] == 'n' {
 					if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+						i = ggen.NullEnd(data, i)
 						return result, i, ggen.NewParseErr(".value", i, ggen.ErrBadLiteral)
 					}
 					i += 4
@@ -7699,11 +7795,11 @@ func (recv SQLNullDurMap) DecodeFromStream(s *ggen.Stream) (result SQLNullDurMap
 		for ki := 1; ki < 4; ki++ {
 			if s.Pos+ki >= len(s.Bytes()) {
 				if err = s.ReadMore(0); err != nil {
-					return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+					return result, ggen.NewParseErr("", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 				}
 			}
 			if s.Bytes()[s.Pos+ki] != "null"[ki] {
-				return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadLiteral)
+				return result, ggen.NewParseErr("", s.Offset()+ki, ggen.ErrBadLiteral)
 			}
 		}
 		s.Pos += 4
@@ -7765,11 +7861,11 @@ func (recv SQLNullDurMap) DecodeFromStream(s *ggen.Stream) (result SQLNullDurMap
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr(".value", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr(".value", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr(".value", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr(".value", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					mv = sql.Null[time.Duration]{}
@@ -7857,4 +7953,1690 @@ func (s SQLNullDurMap) AppendJSON(dst []byte) ([]byte, error) {
 		dst = append(dst, '}')
 	}
 	return dst, nil
+}
+
+func (recv SQLNullRaw) DecodeFrom(data []byte) (result SQLNullRaw, i int, err error) {
+	result = recv
+	if result.M != nil {
+		clear(result.M)
+	}
+	if result.V != nil {
+		result.V = result.V[:0]
+	}
+	seenM := false
+	seenP := false
+	seenR := false
+	seenV := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenP {
+			result.P = nil
+		}
+		if !seenR {
+			result.R = (SQLNullRaw{}).R
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "m":
+			if seenM {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_16}
+			}
+			seenM = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
+					return result, i, ggen.NewParseErr("m", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.M = nil
+				break
+			}
+			if i >= len(data) || data[i] != '{' {
+				return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == '}' {
+				if result.M == nil {
+					result.M = map[string]sql.Null[jsontext.Value]{}
+				}
+			} else {
+				if result.M == nil {
+					result.M = make(map[string]sql.Null[jsontext.Value])
+				}
+			}
+			if i < len(data) && data[i] != '}' {
+				for {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("m", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						mk = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						mk, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("m", i, err)
+						}
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					{
+						var mv sql.Null[jsontext.Value]
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								i = ggen.NullEnd(data, i)
+								return result, i, ggen.NewParseErr("m.value", i, ggen.ErrBadLiteral)
+							}
+							i += 4
+							mv = sql.Null[jsontext.Value]{}
+						} else {
+							start := i
+							i, err = ggen.SkipValue(data, start)
+							if err != nil {
+								return result, i, ggen.NewParseErr("m.value", i, err)
+							}
+							err = ggen.CheckUTF8(data[start:i])
+							if err != nil {
+								return result, i, ggen.NewParseErr("m.value", i, err)
+							}
+
+							mv = sql.Null[jsontext.Value]{V: data[start:i], Valid: true}
+						}
+						result.M[mk] = mv
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != '}' {
+				return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+			}
+			i++
+		case "p":
+			if seenP {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_20}
+			}
+			seenP = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
+					return result, i, ggen.NewParseErr("p", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.P = nil
+				break
+			}
+			var v sql.Null[json.RawMessage]
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
+					return result, i, ggen.NewParseErr("p", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				v = sql.Null[json.RawMessage]{}
+			} else {
+				start := i
+				i, err = ggen.SkipValue(data, start)
+				if err != nil {
+					return result, i, ggen.NewParseErr("p", i, err)
+				}
+				err = ggen.CheckUTF8(data[start:i])
+				if err != nil {
+					return result, i, ggen.NewParseErr("p", i, err)
+				}
+
+				v = sql.Null[json.RawMessage]{V: data[start:i], Valid: true}
+			}
+			if result.P == nil {
+				result.P = new(v)
+			} else {
+				(*result.P) = v
+			}
+		case "r":
+			if seenR {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_21}
+			}
+			seenR = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
+					return result, i, ggen.NewParseErr("r", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.R = sql.Null[json.RawMessage]{}
+			} else {
+				start := i
+				i, err = ggen.SkipValue(data, start)
+				if err != nil {
+					return result, i, ggen.NewParseErr("r", i, err)
+				}
+				err = ggen.CheckUTF8(data[start:i])
+				if err != nil {
+					return result, i, ggen.NewParseErr("r", i, err)
+				}
+
+				result.R = sql.Null[json.RawMessage]{V: data[start:i], Valid: true}
+			}
+		case "v":
+			if seenV {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_22}
+			}
+			seenV = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
+					return result, i, ggen.NewParseErr("v", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.V = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, ggen.NewParseErr("v", i, ggen.ErrBadArray)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.V == nil {
+					result.V = []sql.Null[jsontext.Value]{}
+				}
+			} else {
+				if result.V == nil {
+					result.V = make([]sql.Null[jsontext.Value], 0, ggenCap_SQLNullRaw_V_sql_Null_jsontext_Value_)
+				}
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.V = append(result.V, sql.Null[jsontext.Value]{})
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
+							return result, i, ggen.NewParseErr("v[]", i, ggen.ErrBadLiteral)
+						}
+						i += 4
+						result.V[len(result.V)-1] = sql.Null[jsontext.Value]{}
+					} else {
+						start := i
+						i, err = ggen.SkipValue(data, start)
+						if err != nil {
+							return result, i, ggen.NewParseErr("v[]", i, err)
+						}
+						err = ggen.CheckUTF8(data[start:i])
+						if err != nil {
+							return result, i, ggen.NewParseErr("v[]", i, err)
+						}
+
+						result.V[len(result.V)-1] = sql.Null[jsontext.Value]{V: data[start:i], Valid: true}
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, ggen.NewParseErr("v", i, ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, ggen.NewParseErr("v", i, ggen.ErrBadArray)
+			}
+			i++
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenP {
+				result.P = nil
+			}
+			if !seenR {
+				result.R = (SQLNullRaw{}).R
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv SQLNullRaw) DecodeFromStream(s *ggen.Stream) (result SQLNullRaw, err error) {
+	result = recv
+	if result.M != nil {
+		clear(result.M)
+	}
+	if result.V != nil {
+		result.V = result.V[:0]
+	}
+	seenM := false
+	seenP := false
+	seenR := false
+	seenV := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenP {
+			result.P = nil
+		}
+		if !seenR {
+			result.R = (SQLNullRaw{}).R
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "m":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			if seenM {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_16}
+			}
+			seenM = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("m", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("m", s.Offset()+ki, ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.M = nil
+				break
+			}
+			err = s.ObjectOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == '}' {
+				if result.M == nil {
+					result.M = map[string]sql.Null[jsontext.Value]{}
+				}
+			} else {
+				if result.M == nil {
+					result.M = make(map[string]sql.Null[jsontext.Value])
+				}
+			}
+			for s.Bytes()[s.Pos] != '}' {
+				var mk string
+				mk, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] != ':' {
+					return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadObject)
+				}
+				s.Pos++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+				{
+					var mv sql.Null[jsontext.Value]
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("m.value", s.Offset(), ggen.NotEOF(err, ggen.ErrUnexpectedEnd))
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, ggen.NewParseErr("m.value", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, ggen.NewParseErr("m.value", s.Offset()+ki, ggen.ErrBadLiteral)
+							}
+						}
+						mv = sql.Null[jsontext.Value]{}
+						s.Pos += 4
+					} else {
+						var nv jsontext.Value
+						span, err := s.CaptureValue()
+						if err != nil {
+							return result, ggen.NewParseErr("m.value", s.Offset(), err)
+						}
+						err = ggen.CheckUTF8(span)
+						if err != nil {
+							return result, ggen.NewParseErr("m.value", s.Offset(), err)
+						}
+						nv = append(nv[:0:0], span...)
+
+						mv = sql.Null[jsontext.Value]{V: nv, Valid: true}
+					}
+					result.M[mk] = mv
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadObject)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != '}' {
+				return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadObject)
+			}
+			s.Pos++
+		case "p":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("p", s.Offset(), err)
+			}
+			if seenP {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_20}
+			}
+			seenP = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("p", s.Offset(), ggen.NotEOF(err, ggen.ErrUnexpectedEnd))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("p", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("p", s.Offset()+ki, ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.P = nil
+				break
+			}
+			var v sql.Null[json.RawMessage]
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("p", s.Offset(), ggen.NotEOF(err, ggen.ErrUnexpectedEnd))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("p", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("p", s.Offset()+ki, ggen.ErrBadLiteral)
+					}
+				}
+				v = sql.Null[json.RawMessage]{}
+				s.Pos += 4
+			} else {
+				var nv json.RawMessage
+				span, err := s.CaptureValue()
+				if err != nil {
+					return result, ggen.NewParseErr("p", s.Offset(), err)
+				}
+				err = ggen.CheckUTF8(span)
+				if err != nil {
+					return result, ggen.NewParseErr("p", s.Offset(), err)
+				}
+				nv = append(nv[:0:0], span...)
+
+				v = sql.Null[json.RawMessage]{V: nv, Valid: true}
+			}
+			if result.P == nil {
+				result.P = new(v)
+			} else {
+				(*result.P) = v
+			}
+		case "r":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("r", s.Offset(), err)
+			}
+			if seenR {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_21}
+			}
+			seenR = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("r", s.Offset(), ggen.NotEOF(err, ggen.ErrUnexpectedEnd))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("r", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("r", s.Offset()+ki, ggen.ErrBadLiteral)
+					}
+				}
+				result.R = sql.Null[json.RawMessage]{}
+				s.Pos += 4
+			} else {
+				var nv json.RawMessage
+				span, err := s.CaptureValue()
+				if err != nil {
+					return result, ggen.NewParseErr("r", s.Offset(), err)
+				}
+				err = ggen.CheckUTF8(span)
+				if err != nil {
+					return result, ggen.NewParseErr("r", s.Offset(), err)
+				}
+				nv = append(nv[:0:0], span...)
+
+				result.R = sql.Null[json.RawMessage]{V: nv, Valid: true}
+			}
+		case "v":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("v", s.Offset(), err)
+			}
+			if seenV {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_22}
+			}
+			seenV = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("v", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("v", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("v", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("v", s.Offset()+ki, ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.V = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("v", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("v", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("v", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.V == nil {
+					result.V = []sql.Null[jsontext.Value]{}
+				}
+			} else {
+				if result.V == nil {
+					result.V = make([]sql.Null[jsontext.Value], 0, ggenCap_SQLNullRaw_V_sql_Null_jsontext_Value_)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				result.V = append(result.V, sql.Null[jsontext.Value]{})
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("v[]", s.Offset(), ggen.NotEOF(err, ggen.ErrUnexpectedEnd))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("v[]", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr("v[]", s.Offset()+ki, ggen.ErrBadLiteral)
+						}
+					}
+					result.V[len(result.V)-1] = sql.Null[jsontext.Value]{}
+					s.Pos += 4
+				} else {
+					var nv jsontext.Value
+					span, err := s.CaptureValue()
+					if err != nil {
+						return result, ggen.NewParseErr("v[]", s.Offset(), err)
+					}
+					err = ggen.CheckUTF8(span)
+					if err != nil {
+						return result, ggen.NewParseErr("v[]", s.Offset(), err)
+					}
+					nv = append(nv[:0:0], span...)
+
+					result.V[len(result.V)-1] = sql.Null[jsontext.Value]{V: nv, Valid: true}
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("v", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("v", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("v", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, ggen.NewParseErr("v", s.Offset(), ggen.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, ggen.NewParseErr("v", s.Offset(), ggen.ErrBadArray)
+			}
+			s.Pos++
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenP {
+				result.P = nil
+			}
+			if !seenR {
+				result.R = (SQLNullRaw{}).R
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s SQLNullRaw) JSONSize() int {
+	size := 33
+	size += len(s.M) * 4
+	for k, v := range s.M {
+		size += len(k) * 2
+		size += 4
+		if n := len(v.V); n > 0 {
+			size += n
+		} else {
+			size += 4
+		}
+	}
+	if s.P == nil {
+		size += 4
+	} else {
+		size += 4
+		if n := len((*s.P).V); n > 0 {
+			size += n
+		} else {
+			size += 4
+		}
+	}
+	if n := len(s.R.V); n > 0 {
+		size += n
+	} else {
+		size += 4
+	}
+	if n := len(s.V); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.V {
+		size += 4
+		if n := len(s.V[i0].V); n > 0 {
+			size += n
+		} else {
+			size += 4
+		}
+	}
+	return size
+}
+
+func (s SQLNullRaw) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"m\":"...)
+	if s.M == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '{')
+		firstM := true
+		for k, v := range s.M {
+			if firstM {
+				firstM = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
+			}
+			dst = ggen.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			if !v.Valid {
+				dst = append(dst, "null"...)
+			} else {
+				if len(v.V) == 0 {
+					dst = append(dst, "null"...)
+				} else {
+					dst = append(dst, v.V...)
+				}
+			}
+		}
+		dst = append(dst, '}')
+	}
+	dst = append(dst, ",\"p\":"...)
+	if s.P == nil {
+		dst = append(dst, "null"...)
+	} else {
+		if !(*s.P).Valid {
+			dst = append(dst, "null"...)
+		} else {
+			if len((*s.P).V) == 0 {
+				dst = append(dst, "null"...)
+			} else {
+				dst = append(dst, (*s.P).V...)
+			}
+		}
+	}
+	dst = append(dst, ",\"r\":"...)
+	if !s.R.Valid {
+		dst = append(dst, "null"...)
+	} else {
+		if len(s.R.V) == 0 {
+			dst = append(dst, "null"...)
+		} else {
+			dst = append(dst, s.R.V...)
+		}
+	}
+	dst = append(dst, ",\"v\":"...)
+	if s.V == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.V) > 0 {
+			if !s.V[0].Valid {
+				dst = append(dst, "null"...)
+			} else {
+				if len(s.V[0].V) == 0 {
+					dst = append(dst, "null"...)
+				} else {
+					dst = append(dst, s.V[0].V...)
+				}
+			}
+			for _, v0 := range s.V[1:] {
+				dst = append(dst, ',')
+				if !v0.Valid {
+					dst = append(dst, "null"...)
+				} else {
+					if len(v0.V) == 0 {
+						dst = append(dst, "null"...)
+					} else {
+						dst = append(dst, v0.V...)
+					}
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	return append(dst, '}'), nil
+}
+
+func (recv SQLNullRawCopy) DecodeFrom(data []byte) (result SQLNullRawCopy, i int, err error) {
+	result = recv
+	if result.M != nil {
+		clear(result.M)
+	}
+	if result.V != nil {
+		result.V = result.V[:0]
+	}
+	seenM := false
+	seenR := false
+	seenV := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenR {
+			result.R = (SQLNullRawCopy{}).R
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "m":
+			if seenM {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_16}
+			}
+			seenM = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
+					return result, i, ggen.NewParseErr("m", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.M = nil
+				break
+			}
+			if i >= len(data) || data[i] != '{' {
+				return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == '}' {
+				if result.M == nil {
+					result.M = map[string]sql.Null[jsontext.Value]{}
+				}
+			} else {
+				if result.M == nil {
+					result.M = make(map[string]sql.Null[jsontext.Value])
+				}
+			}
+			if i < len(data) && data[i] != '}' {
+				for {
+					var mk string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("m", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 32
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						mk = string(data[i+1 : ke])
+						i = ke + 1
+					} else {
+						mk, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("m", i, err)
+						}
+						mk = ggen.Detach(mk, data)
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i >= len(data) || data[i] != ':' {
+						return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+					}
+					i++
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					{
+						var mv sql.Null[jsontext.Value]
+						if i < len(data) && data[i] == 'n' {
+							if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+								i = ggen.NullEnd(data, i)
+								return result, i, ggen.NewParseErr("m.value", i, ggen.ErrBadLiteral)
+							}
+							i += 4
+							mv = sql.Null[jsontext.Value]{}
+						} else {
+							var nv jsontext.Value
+							start := i
+							i, err = ggen.SkipValue(data, start)
+							if err != nil {
+								return result, i, ggen.NewParseErr("m.value", i, err)
+							}
+							err = ggen.CheckUTF8(data[start:i])
+							if err != nil {
+								return result, i, ggen.NewParseErr("m.value", i, err)
+							}
+							nv = append(nv[:0], data[start:i]...)
+
+							mv = sql.Null[jsontext.Value]{V: nv, Valid: true}
+						}
+						result.M[mk] = mv
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == '}' {
+							return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != '}' {
+				return result, i, ggen.NewParseErr("m", i, ggen.ErrBadObject)
+			}
+			i++
+		case "r":
+			if seenR {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_21}
+			}
+			seenR = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
+					return result, i, ggen.NewParseErr("r", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.R = sql.Null[json.RawMessage]{}
+			} else {
+				var nv json.RawMessage
+				start := i
+				i, err = ggen.SkipValue(data, start)
+				if err != nil {
+					return result, i, ggen.NewParseErr("r", i, err)
+				}
+				err = ggen.CheckUTF8(data[start:i])
+				if err != nil {
+					return result, i, ggen.NewParseErr("r", i, err)
+				}
+				nv = append(nv[:0], data[start:i]...)
+
+				result.R = sql.Null[json.RawMessage]{V: nv, Valid: true}
+			}
+		case "v":
+			if seenV {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_sql_test_22}
+			}
+			seenV = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
+					return result, i, ggen.NewParseErr("v", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.V = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, ggen.NewParseErr("v", i, ggen.ErrBadArray)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.V == nil {
+					result.V = []sql.Null[jsontext.Value]{}
+				}
+			} else {
+				if result.V == nil {
+					result.V = make([]sql.Null[jsontext.Value], 0, ggenCap_SQLNullRawCopy_V_sql_Null_jsontext_Value_)
+				}
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.V = append(result.V, sql.Null[jsontext.Value]{})
+					if i < len(data) && data[i] == 'n' {
+						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
+							return result, i, ggen.NewParseErr("v[]", i, ggen.ErrBadLiteral)
+						}
+						i += 4
+						result.V[len(result.V)-1] = sql.Null[jsontext.Value]{}
+					} else {
+						var nv jsontext.Value
+						start := i
+						i, err = ggen.SkipValue(data, start)
+						if err != nil {
+							return result, i, ggen.NewParseErr("v[]", i, err)
+						}
+						err = ggen.CheckUTF8(data[start:i])
+						if err != nil {
+							return result, i, ggen.NewParseErr("v[]", i, err)
+						}
+						nv = append(nv[:0], data[start:i]...)
+
+						result.V[len(result.V)-1] = sql.Null[jsontext.Value]{V: nv, Valid: true}
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, ggen.NewParseErr("v", i, ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, ggen.NewParseErr("v", i, ggen.ErrBadArray)
+			}
+			i++
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{strings.Clone(key)}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenR {
+				result.R = (SQLNullRawCopy{}).R
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv SQLNullRawCopy) DecodeFromStream(s *ggen.Stream) (result SQLNullRawCopy, err error) {
+	result = recv
+	if result.M != nil {
+		clear(result.M)
+	}
+	if result.V != nil {
+		result.V = result.V[:0]
+	}
+	seenM := false
+	seenR := false
+	seenV := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenR {
+			result.R = (SQLNullRawCopy{}).R
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "m":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			if seenM {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_16}
+			}
+			seenM = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("m", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("m", s.Offset()+ki, ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.M = nil
+				break
+			}
+			err = s.ObjectOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("m", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+				}
+			}
+			if s.Bytes()[s.Pos] == '}' {
+				if result.M == nil {
+					result.M = map[string]sql.Null[jsontext.Value]{}
+				}
+			} else {
+				if result.M == nil {
+					result.M = make(map[string]sql.Null[jsontext.Value])
+				}
+			}
+			for s.Bytes()[s.Pos] != '}' {
+				var mk string
+				mk, err = s.String(true)
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] != ':' {
+					return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadObject)
+				}
+				s.Pos++
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+				{
+					var mv sql.Null[jsontext.Value]
+					if s.Pos >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("m.value", s.Offset(), ggen.NotEOF(err, ggen.ErrUnexpectedEnd))
+						}
+					}
+					if s.Bytes()[s.Pos] == 'n' {
+						for ki := 1; ki < 4; ki++ {
+							if s.Pos+ki >= len(s.Bytes()) {
+								if err = s.ReadMore(0); err != nil {
+									return result, ggen.NewParseErr("m.value", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+								}
+							}
+							if s.Bytes()[s.Pos+ki] != "null"[ki] {
+								return result, ggen.NewParseErr("m.value", s.Offset()+ki, ggen.ErrBadLiteral)
+							}
+						}
+						mv = sql.Null[jsontext.Value]{}
+						s.Pos += 4
+					} else {
+						var nv jsontext.Value
+						span, err := s.CaptureValue()
+						if err != nil {
+							return result, ggen.NewParseErr("m.value", s.Offset(), err)
+						}
+						err = ggen.CheckUTF8(span)
+						if err != nil {
+							return result, ggen.NewParseErr("m.value", s.Offset(), err)
+						}
+						nv = append(nv[:0], span...)
+
+						mv = sql.Null[jsontext.Value]{V: nv, Valid: true}
+					}
+					result.M[mk] = mv
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("m", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("m", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == '}' {
+						return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadObject)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != '}' {
+				return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadObject)
+			}
+			s.Pos++
+		case "r":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("r", s.Offset(), err)
+			}
+			if seenR {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_21}
+			}
+			seenR = true
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("r", s.Offset(), ggen.NotEOF(err, ggen.ErrUnexpectedEnd))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("r", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("r", s.Offset()+ki, ggen.ErrBadLiteral)
+					}
+				}
+				result.R = sql.Null[json.RawMessage]{}
+				s.Pos += 4
+			} else {
+				var nv json.RawMessage
+				span, err := s.CaptureValue()
+				if err != nil {
+					return result, ggen.NewParseErr("r", s.Offset(), err)
+				}
+				err = ggen.CheckUTF8(span)
+				if err != nil {
+					return result, ggen.NewParseErr("r", s.Offset(), err)
+				}
+				nv = append(nv[:0], span...)
+
+				result.R = sql.Null[json.RawMessage]{V: nv, Valid: true}
+			}
+		case "v":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("v", s.Offset(), err)
+			}
+			if seenV {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_sql_test_22}
+			}
+			seenV = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("v", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("v", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("v", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("v", s.Offset()+ki, ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.V = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("v", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("v", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("v", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.V == nil {
+					result.V = []sql.Null[jsontext.Value]{}
+				}
+			} else {
+				if result.V == nil {
+					result.V = make([]sql.Null[jsontext.Value], 0, ggenCap_SQLNullRawCopy_V_sql_Null_jsontext_Value_)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				result.V = append(result.V, sql.Null[jsontext.Value]{})
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("v[]", s.Offset(), ggen.NotEOF(err, ggen.ErrUnexpectedEnd))
+					}
+				}
+				if s.Bytes()[s.Pos] == 'n' {
+					for ki := 1; ki < 4; ki++ {
+						if s.Pos+ki >= len(s.Bytes()) {
+							if err = s.ReadMore(0); err != nil {
+								return result, ggen.NewParseErr("v[]", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+							}
+						}
+						if s.Bytes()[s.Pos+ki] != "null"[ki] {
+							return result, ggen.NewParseErr("v[]", s.Offset()+ki, ggen.ErrBadLiteral)
+						}
+					}
+					result.V[len(result.V)-1] = sql.Null[jsontext.Value]{}
+					s.Pos += 4
+				} else {
+					var nv jsontext.Value
+					span, err := s.CaptureValue()
+					if err != nil {
+						return result, ggen.NewParseErr("v[]", s.Offset(), err)
+					}
+					err = ggen.CheckUTF8(span)
+					if err != nil {
+						return result, ggen.NewParseErr("v[]", s.Offset(), err)
+					}
+					nv = append(nv[:0], span...)
+
+					result.V[len(result.V)-1] = sql.Null[jsontext.Value]{V: nv, Valid: true}
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("v", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("v", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("v", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, ggen.NewParseErr("v", s.Offset(), ggen.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, ggen.NewParseErr("v", s.Offset(), ggen.ErrBadArray)
+			}
+			s.Pos++
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenR {
+				result.R = (SQLNullRawCopy{}).R
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s SQLNullRawCopy) JSONSize() int {
+	size := 28
+	size += len(s.M) * 4
+	for k, v := range s.M {
+		size += len(k) * 2
+		size += 4
+		if n := len(v.V); n > 0 {
+			size += n
+		} else {
+			size += 4
+		}
+	}
+	if n := len(s.R.V); n > 0 {
+		size += n
+	} else {
+		size += 4
+	}
+	if n := len(s.V); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.V {
+		size += 4
+		if n := len(s.V[i0].V); n > 0 {
+			size += n
+		} else {
+			size += 4
+		}
+	}
+	return size
+}
+
+func (s SQLNullRawCopy) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"m\":"...)
+	if s.M == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '{')
+		firstM := true
+		for k, v := range s.M {
+			if firstM {
+				firstM = false
+				dst = append(dst, '"')
+			} else {
+				dst = append(dst, ",\""...)
+			}
+			dst = ggen.AppendStringNoHTML(dst, k)
+			dst = append(dst, ':')
+			if !v.Valid {
+				dst = append(dst, "null"...)
+			} else {
+				if len(v.V) == 0 {
+					dst = append(dst, "null"...)
+				} else {
+					dst = append(dst, v.V...)
+				}
+			}
+		}
+		dst = append(dst, '}')
+	}
+	dst = append(dst, ",\"r\":"...)
+	if !s.R.Valid {
+		dst = append(dst, "null"...)
+	} else {
+		if len(s.R.V) == 0 {
+			dst = append(dst, "null"...)
+		} else {
+			dst = append(dst, s.R.V...)
+		}
+	}
+	dst = append(dst, ",\"v\":"...)
+	if s.V == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.V) > 0 {
+			if !s.V[0].Valid {
+				dst = append(dst, "null"...)
+			} else {
+				if len(s.V[0].V) == 0 {
+					dst = append(dst, "null"...)
+				} else {
+					dst = append(dst, s.V[0].V...)
+				}
+			}
+			for _, v0 := range s.V[1:] {
+				dst = append(dst, ',')
+				if !v0.Valid {
+					dst = append(dst, "null"...)
+				} else {
+					if len(v0.V) == 0 {
+						dst = append(dst, "null"...)
+					} else {
+						dst = append(dst, v0.V...)
+					}
+				}
+			}
+		}
+		dst = append(dst, ']')
+	}
+	return append(dst, '}'), nil
 }

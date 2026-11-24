@@ -6,10 +6,14 @@ import (
 	"math"
 	"strconv"
 	"strings"
+	"time"
 	"unsafe"
 
 	"github.com/sirkostya009/ggen"
 )
+
+var ggenKeys_other_0 = []string{"currency"}
+var ggenKeys_other_1 = []string{"amount"}
 
 func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 	result = recv
@@ -34,7 +38,7 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 			result.Currency = ""
 		}
 		if !seenCurrency {
-			return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"currency"}}
+			return result, i, &ggen.RequiredError{Pos: i, Keys: ggenKeys_other_0}
 		}
 		return result, i, nil
 	}
@@ -69,7 +73,7 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 		switch key {
 		case "amount":
 			if seenAmount {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"amount"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_other_1}
 			}
 			seenAmount = true
 			neg := false
@@ -123,7 +127,7 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 			result.Amount = n
 		case "currency":
 			if seenCurrency {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"currency"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_other_0}
 			}
 			seenCurrency = true
 			if i >= len(data) || data[i] != '"' {
@@ -147,10 +151,10 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 				}
 			}
 			if len(result.Currency) != 3 {
-				return result, i, &ggen.LenError{Pos: i, Keys: []string{"currency"}, Want: 3, Got: len(result.Currency)}
+				return result, i, &ggen.LenError{Pos: i, Keys: ggenKeys_other_0, Want: 3, Got: len(result.Currency)}
 			}
 			if !ggen.IsUpper(result.Currency) {
-				return result, i, &ggen.UpperError{Pos: i, Keys: []string{"currency"}, Value: result.Currency}
+				return result, i, &ggen.UpperError{Pos: i, Keys: ggenKeys_other_0, Value: result.Currency}
 			}
 		default:
 			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
@@ -177,7 +181,7 @@ func (recv Money) DecodeFrom(data []byte) (result Money, i int, err error) {
 				result.Currency = ""
 			}
 			if !seenCurrency {
-				return result, i, &ggen.RequiredError{Pos: i, Keys: []string{"currency"}}
+				return result, i, &ggen.RequiredError{Pos: i, Keys: ggenKeys_other_0}
 			}
 			return result, i, nil
 		}
@@ -212,7 +216,7 @@ func (recv Money) DecodeFromStream(s *ggen.Stream) (result Money, err error) {
 			result.Currency = ""
 		}
 		if !seenCurrency {
-			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"currency"}}
+			return result, &ggen.RequiredError{Pos: s.Offset(), Keys: ggenKeys_other_0}
 		}
 		return result, nil
 	}
@@ -229,7 +233,7 @@ func (recv Money) DecodeFromStream(s *ggen.Stream) (result Money, err error) {
 				return result, ggen.NewParseErr("amount", s.Offset(), err)
 			}
 			if seenAmount {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"amount"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_other_1}
 			}
 			seenAmount = true
 			result.Amount, err = s.Int64()
@@ -242,7 +246,7 @@ func (recv Money) DecodeFromStream(s *ggen.Stream) (result Money, err error) {
 				return result, ggen.NewParseErr("currency", s.Offset(), err)
 			}
 			if seenCurrency {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"currency"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_other_0}
 			}
 			seenCurrency = true
 			result.Currency, err = s.String(true)
@@ -250,10 +254,10 @@ func (recv Money) DecodeFromStream(s *ggen.Stream) (result Money, err error) {
 				return result, ggen.NewParseErr("currency", s.Offset(), err)
 			}
 			if len(result.Currency) != 3 {
-				return result, &ggen.LenError{Pos: s.Offset(), Keys: []string{"currency"}, Want: 3, Got: len(result.Currency)}
+				return result, &ggen.LenError{Pos: s.Offset(), Keys: ggenKeys_other_0, Want: 3, Got: len(result.Currency)}
 			}
 			if !ggen.IsUpper(result.Currency) {
-				return result, &ggen.UpperError{Pos: s.Offset(), Keys: []string{"currency"}, Value: result.Currency}
+				return result, &ggen.UpperError{Pos: s.Offset(), Keys: ggenKeys_other_0, Value: result.Currency}
 			}
 		default:
 			ownKey := strings.Clone(key)
@@ -292,7 +296,7 @@ func (recv Money) DecodeFromStream(s *ggen.Stream) (result Money, err error) {
 				result.Currency = ""
 			}
 			if !seenCurrency {
-				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: []string{"currency"}}
+				return result, &ggen.RequiredError{Pos: s.Offset(), Keys: ggenKeys_other_0}
 			}
 			return result, nil
 		}
@@ -314,4 +318,104 @@ func (s Money) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, ",\"currency\":\""...)
 	dst = ggen.AppendStringNoHTML(dst, s.Currency)
 	return append(dst, '}'), nil
+}
+
+func (recv Instant) DecodeFrom(data []byte) (result Instant, i int, err error) {
+	result = recv
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	start := i
+	k, err := ggen.SkipValue(data, start)
+	if err != nil {
+		return result, k, ggen.NewParseErr("", k, err)
+	}
+	var u time.Time
+	if err := u.UnmarshalJSON(data[start:k]); err != nil {
+		return result, k, ggen.NewParseErrShift("", k, k-start, err)
+	}
+	result = Instant(u)
+	return result, k, nil
+}
+
+func (recv Instant) DecodeFromStream(s *ggen.Stream) (result Instant, err error) {
+	result = recv
+	if err := s.SkipSpace(); err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	span, err := s.CaptureValue()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	var u time.Time
+	if err := u.UnmarshalJSON(span); err != nil {
+		return result, ggen.NewParseErrShift("", s.Offset(), len(span), err)
+	}
+	result = Instant(u)
+	return result, nil
+}
+
+func (s Instant) JSONSize() int {
+	return 128
+}
+
+func (s Instant) AppendJSON(dst []byte) ([]byte, error) {
+	u := time.Time(s)
+	bs, err := u.MarshalJSON()
+	if err != nil {
+		return dst, err
+	}
+	if len(bs) == 0 {
+		return dst, ggen.ErrEmptyMarshalJSON
+	}
+	return append(dst, bs...), nil
+}
+
+func (recv Tint) DecodeFrom(data []byte) (result Tint, i int, err error) {
+	result = recv
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	ts, tj, err := ggen.String(data, i, true)
+	if err != nil {
+		return result, tj, ggen.NewParseErr("", tj, err)
+	}
+	var u Color
+	if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil {
+		return result, tj, ggen.NewParseErrOpaque("", tj, err)
+	}
+	result = Tint(u)
+	return result, tj, nil
+}
+
+func (recv Tint) DecodeFromStream(s *ggen.Stream) (result Tint, err error) {
+	result = recv
+	if err := s.SkipSpace(); err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	ts, err := s.StringView(true)
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	var u Color
+	if err := u.UnmarshalText(unsafe.Slice(unsafe.StringData(ts), len(ts))); err != nil {
+		return result, ggen.NewParseErrOpaque("", s.Offset(), err)
+	}
+	result = Tint(u)
+	return result, nil
+}
+
+func (s Tint) JSONSize() int {
+	return 128
+}
+
+func (s Tint) AppendJSON(dst []byte) ([]byte, error) {
+	u := Color(s)
+	t, err := u.MarshalText()
+	if err != nil {
+		return dst, err
+	}
+	dst = append(dst, '"')
+	dst = ggen.AppendStringNoHTML(dst, ggen.BytesToString(t))
+	return dst, nil
 }

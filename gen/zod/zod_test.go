@@ -47,6 +47,11 @@ func render(t *testing.T) (string, *gen.Output) {
 	requests.Place(set.Type(api, "Keyed").In(), "KeyedInput")
 	requests.Place(set.Type(api, "AddressView").In(), "AddressViewInput")
 	requests.Place(set.Type(api, "Token").In(), "TokenInput")
+	requests.Place(set.Type(api, "Node").In(), "NodeInput")
+	requests.Place(set.Type(api, "Section").In(), "SectionInput")
+	requests.Place(set.Type(api, "Quoted").In(), "QuotedInput")
+	requests.Place(set.Type(api, "Chained").In(), "ChainedInput")
+	requests.Place(set.Type(api, "Narrow").In(), "NarrowInput")
 
 	responses := out.File("web/responses.ts", e)
 	responses.Place(set.Type(api, "User").Out().StrictFields("role"), "User")
@@ -172,6 +177,10 @@ func TestRuntime(t *testing.T) {
 		{"web/requests.ts", "AddressViewInput", `1`, false},
 		{"web/requests.ts", "TokenInput", `"t"`, true},
 		{"web/requests.ts", "TokenInput", `1`, false},
+		{"web/requests.ts", "NodeInput", `{"name":"a","children":[{"children":[null]},null]}`, true},
+		{"web/requests.ts", "NodeInput", `{"children":[{"name":1}]}`, false},
+		{"web/requests.ts", "SectionInput", `{"title":"a","b":{"title":"c","d":{}}}`, true},
+		{"web/requests.ts", "SectionInput", `{"b":{"d":1}}`, false},
 		{"web/responses.ts", "Keyed", `{"two":{"ab":1},"one":{},"nested":{"cd":{"x":1}}}`, true},
 		{"web/responses.ts", "Keyed", `{"two":null,"one":null,"nested":null}`, true},
 		{"web/responses.ts", "Keyed", `{"two":{"":1},"one":{},"nested":{}}`, false},
@@ -183,11 +192,42 @@ func TestRuntime(t *testing.T) {
 		{"web/responses.ts", "User", strings.Replace(user(``), `"status":"active"`, `"status":""`, 1), true},
 		{"web/responses.ts", "User", user(`,"plan":0`), false},
 		{"shared/money.ts", "User", `{"amount":1,"currency":""}`, true},
+		{"web/requests.ts", "QuotedInput", `{"pick":"1.0","sign":"-0"}`, true},
+		{"web/requests.ts", "QuotedInput", `{"pick":"1e0","sign":"1"}`, true},
+		{"web/requests.ts", "QuotedInput", `{"pick":"10e-1"}`, true},
+		{"web/requests.ts", "QuotedInput", `{"pick":"3"}`, false},
+		{"web/requests.ts", "QuotedInput", `{"sign":"2"}`, false},
+		{"web/requests.ts", "QuotedInput", `{"sign":"1.0"}`, false},
+		{"web/requests.ts", "QuotedInput", `{"max":"9223372036854775806","neq":"9007199254740992","mul":"9007199254740993"}`, true},
+		{"web/requests.ts", "QuotedInput", `{"max":"9223372036854775807"}`, false},
+		{"web/requests.ts", "QuotedInput", `{"neq":"9007199254740993"}`, false},
+		{"web/requests.ts", "QuotedInput", `{"mul":"9007199254740995"}`, false},
+		{"web/requests.ts", "ChainedInput", `{"word":"c"}`, false},
+		{"web/requests.ts", "ChainedInput", `{"digit":12}`, false},
+		{"web/requests.ts", "NarrowInput", `{"gt":0.1000000001}`, false},
+		{"web/requests.ts", "NarrowInput", `{"gt":0.1000001}`, true},
+		{"web/requests.ts", "NarrowInput", `{"lte":0.1000000001,"eq":0.1000000001}`, true},
+		{"web/requests.ts", "NarrowInput", `{"lte":0.1000001}`, false},
+		{"web/requests.ts", "NarrowInput", `{"eq":0.1000001}`, false},
+		{"web/requests.ts", "NarrowInput", `{"pick":0.2000000001}`, true},
+		{"web/requests.ts", "NarrowInput", `{"pick":0.3}`, false},
+		{"web/requests.ts", "NarrowInput", `{"text":"0.0999999999"}`, true},
+		{"web/requests.ts", "NarrowInput", `{"text":"0.09"}`, false},
+	}
+	// parsed pins the value a schema parses an input to, which is what Go
+	// writes back after its transforms.
+	parsed := []struct{ schema, input, want string }{
+		{"QuotedInput", `{"clamp":"9","floor":"-9223372036854775808","ratio":"1e0"}`, `{"clamp":"5","floor":"1","ratio":"0.5"}`},
+		{"QuotedInput", `{"clamp":"-0","floor":"9223372036854775807","ratio":"-2"}`, `{"clamp":"1","floor":"9223372036854775807","ratio":"-2"}`},
+		{"ChainedInput", `{"word":" bb ","digit":2}`, `{"word":"BB","digit":2}`},
 	}
 	type jsCase struct{ File, Schema, Input string }
 	var in []jsCase
 	for _, c := range cases {
 		in = append(in, jsCase{filepath.Join(dir, c.file), c.schema, c.input})
+	}
+	for _, c := range parsed {
+		in = append(in, jsCase{filepath.Join(dir, "web/requests.ts"), c.schema, c.input})
 	}
 	payload, _ := json.Marshal(in)
 	script := `
@@ -196,7 +236,7 @@ const out = [];
 for (const c of cases) {
   const mod = await import("file://" + c.File);
   const r = mod[c.Schema].safeParse(JSON.parse(c.Input));
-  out.push(r.success ? "" : r.error.message);
+  out.push(r.success ? "" : r.error.message, r.success ? JSON.stringify(r.data) : "");
 }
 console.log(JSON.stringify(out));
 `
@@ -212,8 +252,13 @@ console.log(JSON.stringify(out));
 		t.Fatalf("%v: %s", err, raw)
 	}
 	for i, c := range cases {
-		if ok := got[i] == ""; ok != c.ok {
-			t.Errorf("%s %s: ok=%v, want %v (%s)", c.schema, c.input, ok, c.ok, strings.Join(strings.Fields(got[i]), " "))
+		if ok := got[2*i] == ""; ok != c.ok {
+			t.Errorf("%s %s: ok=%v, want %v (%s)", c.schema, c.input, ok, c.ok, strings.Join(strings.Fields(got[2*i]), " "))
+		}
+	}
+	for i, c := range parsed {
+		if j := 2 * (len(cases) + i); got[j] != "" || got[j+1] != c.want {
+			t.Errorf("%s %s: parsed %s, want %s (%s)", c.schema, c.input, got[j+1], c.want, strings.Join(strings.Fields(got[j]), " "))
 		}
 	}
 }
@@ -266,7 +311,7 @@ func TestFor(t *testing.T) {
 		t.Fatal(err)
 	}
 	for file, wants := range map[string][]string{
-		"web/users.ts":    {"// web/users.ts\n", "export const CreateUserSchema = ", "x >= 18)", "point: z.object({ X: z.int(), Y: z.int() })", `import { otherMoneySchema } from "../shared/money.ts";`, "money: otherMoneySchema,"},
+		"web/users.ts":    {"// web/users.ts\n", "export const CreateUserSchema = ", "x >= 18)", "point: z.object({ X: z.int(), Y: z.int() })", `import { otherMoneySchema, type Money } from "../shared/money.ts";`, "money: otherMoneySchema,"},
 		"shared/money.ts": {"// shared/money.ts\n", "export const otherMoneySchema = "},
 		"strict/users.ts": {"x >= 21)"},
 	} {
@@ -279,5 +324,62 @@ func TestFor(t *testing.T) {
 				t.Errorf("%s: missing %q in:\n%s", file, want, b)
 			}
 		}
+	}
+}
+
+// TestRecursiveAlias pins that an alias or a catch-all reaching itself is
+// annotated with its type and defers the reference through z.lazy.
+func TestRecursiveAlias(t *testing.T) {
+	t.Parallel()
+	const rec = "github.com/sirkostya009/ggen/gen/testdata/shapes"
+	set, err := gen.Load("../testdata/shapes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	out := gen.NewOutput(dir)
+	f := out.File("rec.ts", zod.New())
+	for _, n := range []string{"Tree", "Obj", "Bag"} {
+		f.Place(set.Type(rec, n).In(), n)
+	}
+	if err := out.Write(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "rec.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"export const Tree: z.ZodType<Tree> = z.array(z.lazy(() => Tree)).nullable();",
+		"export const Obj: z.ZodType<Obj> = z.record(z.string(), z.lazy(() => Obj)).nullable();",
+		".catchall(z.lazy(() => Bag));",
+	} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("missing %q in\n%s", want, b)
+		}
+	}
+}
+
+// TestPrototypeFields pins the report for fields Object.prototype shadows.
+func TestPrototypeFields(t *testing.T) {
+	t.Parallel()
+	set, err := gen.Load("../testdata/shapes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := gen.NewOutput(t.TempDir())
+	out.File("proto.ts", zod.New()).Place(set.Type("github.com/sirkostya009/ggen/gen/testdata/shapes", "Proto").In(), "Proto")
+	if err := out.Write(); err != nil {
+		t.Fatal(err)
+	}
+	var issues []string
+	for _, i := range out.Report().Issues {
+		issues = append(issues, i.String())
+	}
+	if want := []string{
+		"shapes.Proto.__proto__: zod never checks a field named __proto__ and drops it from the parsed value",
+		"shapes.Proto.constructor: Object.prototype defines constructor, and zod tests key presence with `in`, so the field can never be absent",
+	}; !slices.Equal(issues, want) {
+		t.Errorf("report = %q, want %q", issues, want)
 	}
 }

@@ -18,6 +18,7 @@ import (
 	"math"
 	"net"
 	"net/netip"
+	"reflect"
 	"strconv"
 	"testing"
 	"time"
@@ -875,5 +876,67 @@ func TestBoundary_RawControlChar_unmarshal(t *testing.T) {
 	_, _, err := BoundaryStruct{}.DecodeFrom(in)
 	if err == nil {
 		t.Errorf("expected error on raw control char")
+	}
+}
+
+// TimeZoneNameLayouts has the named layouts with the MST element, which
+// prints the name of the time's Location.
+//
+//ggen:generate
+type TimeZoneNameLayouts struct {
+	UnixDate time.Time   `json:"unixDate,format:UnixDate"`
+	RFC822   time.Time   `json:"rfc822,format:RFC822"`
+	RFC850   time.Time   `json:"rfc850,format:RFC850"`
+	RFC1123  []time.Time `json:"rfc1123,format:RFC1123"`
+}
+
+// TimeZoneNameHTML is an MST layout under htmlescape.
+//
+//ggen:generate htmlescape
+type TimeZoneNameHTML struct {
+	At time.Time `json:"at,format:RFC1123"`
+}
+
+func TestFormat_ZoneNameEscapes(t *testing.T) {
+	t.Parallel()
+	when := time.Date(2026, 1, 2, 3, 4, 5, 0, time.FixedZone("\",\"admin\":true,\"x\":\"\\\n<A&B>", 3600))
+	in := TimeZoneNameLayouts{UnixDate: when, RFC822: when, RFC850: when, RFC1123: []time.Time{when}}
+	out, err := ggen.Marshal(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := jsonv2.Unmarshal(out, &got); err != nil {
+		t.Fatalf("invalid JSON: %v (%s)", err, out)
+	}
+	want := map[string]any{
+		"unixDate": when.Format(time.UnixDate),
+		"rfc822":   when.Format(time.RFC822),
+		"rfc850":   when.Format(time.RFC850),
+		"rfc1123":  []any{when.Format(time.RFC1123)},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("got %v, want %v", got, want)
+	}
+	if n := in.JSONSize(); len(out) > n {
+		t.Errorf("JSONSize %d < output %d", n, len(out))
+	}
+
+	h := TimeZoneNameHTML{At: when}
+	hout, err := ggen.Marshal(h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.ContainsAny(hout, "<>&") {
+		t.Errorf("htmlescape left <, > or & raw: %s", hout)
+	}
+	var hv struct {
+		At string `json:"at"`
+	}
+	if err := jsonv2.Unmarshal(hout, &hv); err != nil || hv.At != when.Format(time.RFC1123) {
+		t.Errorf("html value %q (%v), want %q", hv.At, err, when.Format(time.RFC1123))
+	}
+	if n := h.JSONSize(); len(hout) > n {
+		t.Errorf("html JSONSize %d < output %d", n, len(hout))
 	}
 }

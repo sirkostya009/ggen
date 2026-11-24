@@ -498,7 +498,10 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 				"expected numeric type",
 				userHint)
 		}
-		return needFloat(r, fieldDesc, kind)
+		if err := needFloat(r, fieldDesc, kind); err != nil {
+			return err
+		}
+		return needSatisfiableBound(r, fieldDesc, kind)
 
 	case "multiple":
 		if !isIntegralNumeric(kind) {
@@ -521,6 +524,9 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 		}
 		if err != nil {
 			return notIntErr(r, fieldDesc)
+		}
+		if !plainDecimal(v) {
+			return notDecimalErr(fieldDesc, "multiple="+r.Value, v)
 		}
 		// The emitted check is `ref % N != 0`. A zero divisor is a compile
 		// error in the generated file, and a negative one has no meaning.
@@ -591,6 +597,17 @@ func checkOneValRule(r ValidationRule, source string, kind TypeKind, typeName, f
 						BotHint:  "non-numeric part in numeric oneof list",
 						UserHint: "for numeric fields every `oneof=` part must parse as a number",
 					}
+				}
+				if f, _ := strconv.ParseFloat(p, 64); math.IsNaN(f) || math.IsInf(f, 0) {
+					return &RichError{
+						Msg:      fmt.Sprintf("%s: `oneof=%s` part %q — NaN/Inf are not valid parts", fieldDesc, r.Value, p),
+						CodeSpan: p,
+						BotHint:  "NaN/Inf part has no Go constant spelling",
+						UserHint: "use finite numeric parts",
+					}
+				}
+				if !plainDecimal(p) {
+					return notDecimalErr(fieldDesc, "oneof="+r.Value, p)
 				}
 				if _, dup := seen[key]; dup {
 					return dupErr(p)
@@ -774,6 +791,9 @@ func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDes
 					UserHint: "both bounds must be numeric, e.g. `clamp=0|100`",
 				}
 			}
+			if !plainDecimal(v) {
+				return notDecimalErr(fieldDesc, "clamp="+m.Value, v)
+			}
 			// Bounds are written as is into Go comparisons. NaN and Inf
 			// have no Go constant form, and a fractional bound does not fit an
 			// integer kind. Both break the build of the generated file.
@@ -808,6 +828,14 @@ func checkOneModRule(m ModRule, source string, kind TypeKind, typeName, fieldDes
 		if hi != "" {
 			if err := checkBound("hi", hi); err != nil {
 				return err
+			}
+		}
+		if lo != "" && hi != "" && boundLess(hi, lo, kind) {
+			return &RichError{
+				Msg:      fmt.Sprintf("%s: `clamp=%s` lo %s is greater than hi %s", fieldDesc, m.Value, lo, hi),
+				CodeSpan: "clamp=" + m.Value,
+				BotHint:  "inverted clamp range maps every value to hi",
+				UserHint: "write the lower bound first: `clamp=lo|hi`",
 			}
 		}
 		return nil
@@ -894,7 +922,9 @@ func parseIntBound(v string, kind TypeKind) (uint64, error) {
 // numericPartKey returns the key used to find duplicate numeric `oneof`
 // parts. For an integer kind it is the integer itself, and a float spelling
 // of a whole number such as `1.0` maps to the same key. For other kinds it
-// is the float64 value, with -0 mapped to 0.
+// is the value at the field's float width, with -0 mapped to 0: the switch
+// converts each case to the field's type, so parts that round to one
+// float32 are duplicates there.
 func numericPartKey(p string, kind TypeKind) (uint64, error) {
 	if isIntegralNumeric(kind) {
 		if n, err := parseIntBound(p, kind); err == nil {
@@ -914,6 +944,18 @@ func numericPartKey(p string, kind TypeKind) (uint64, error) {
 	if f == 0 {
 		f = 0
 	}
+	if kind == KindFloat32 {
+		// Rounded from the decimal spelling, as the compiler converts
+		// the constant, not through float64.
+		// A part out of float32 range keeps its float64 key, so it
+		// reaches the range error instead of a duplicate one.
+		if f32, err := strconv.ParseFloat(p, 32); err == nil {
+			if f32 == 0 {
+				f32 = 0
+			}
+			return uint64(math.Float32bits(float32(f32))), nil
+		}
+	}
 	return math.Float64bits(f), nil
 }
 
@@ -931,6 +973,53 @@ func boundFits(v string, kind TypeKind) bool {
 		return err == nil && !math.IsInf(float64(float32(f)), 0)
 	}
 	return true
+}
+
+// boundLess reports whether bound a is below bound b. Both already passed
+// the kind's bound checks.
+func boundLess(a, b string, kind TypeKind) bool {
+	if isIntegralNumeric(kind) {
+		x, _ := parseIntBound(a, kind)
+		y, _ := parseIntBound(b, kind)
+		if _, unsigned := kindIntBits(kind); unsigned {
+			return x < y
+		}
+		return int64(x) < int64(y)
+	}
+	x, _ := strconv.ParseFloat(a, 64)
+	y, _ := strconv.ParseFloat(b, 64)
+	return x < y
+}
+
+// needSatisfiableBound rejects `gt` at an integer kind's maximum and `lt` at
+// its minimum (`lt=0` on an unsigned kind). No value passes such a check, so
+// the field would reject every input, the same reason `maxlen=-1` fails.
+func needSatisfiableBound(r ValidationRule, fieldDesc string, kind TypeKind) error {
+	bits, unsigned := kindIntBits(kind)
+	if bits == 0 || (r.Name != "gt" && r.Name != "lt") {
+		return nil
+	}
+	n, _ := parseIntBound(strings.TrimSpace(r.Value), kind)
+	var edge bool
+	switch {
+	case unsigned && r.Name == "gt":
+		edge = n == math.MaxUint64>>(64-bits)
+	case unsigned:
+		edge = n == 0
+	case r.Name == "gt":
+		edge = int64(n) == math.MaxInt64>>(64-bits)
+	default:
+		edge = int64(n) == math.MinInt64>>(64-bits)
+	}
+	if !edge {
+		return nil
+	}
+	return &RichError{
+		Msg:      fmt.Sprintf("%s: `%s=%s` is a bound no value of the field's type satisfies", fieldDesc, r.Name, r.Value),
+		CodeSpan: r.Name + "=" + r.Value,
+		BotHint:  "the emitted comparison fails for every value, so the field rejects every input",
+		UserHint: "use a bound inside the type's range, or a wider type",
+	}
 }
 
 func boundRangeErr(fieldDesc, ruleSpelling, v string) *RichError {
@@ -970,7 +1059,30 @@ func needInt(r ValidationRule, fieldDesc string) error {
 	if _, err := strconv.Atoi(v); err != nil {
 		return notIntErr(r, fieldDesc)
 	}
+	if !plainDecimal(v) {
+		return notDecimalErr(fieldDesc, r.Name+"="+r.Value, v)
+	}
 	return nil
+}
+
+// plainDecimal reports whether v, a number that already parsed, is spelled
+// so Go and JavaScript read the same value. Rule values are written as is
+// into generated Go and JS, where a leading zero reads as octal or is a
+// syntax error, and a base prefix is not decimal.
+func plainDecimal(v string) bool {
+	if v != "" && (v[0] == '+' || v[0] == '-') {
+		v = v[1:]
+	}
+	return len(v) < 2 || v[0] != '0' || v[1] == '.' || v[1] == 'e' || v[1] == 'E'
+}
+
+func notDecimalErr(fieldDesc, ruleSpelling, v string) *RichError {
+	return &RichError{
+		Msg:      fmt.Sprintf("%s: `%s` number %q must be plain decimal", fieldDesc, ruleSpelling, v),
+		CodeSpan: v,
+		BotHint:  "a leading zero is an octal literal in the generated Go and a syntax error in the exported JS",
+		UserHint: "drop the leading zero or base prefix, e.g. `10` instead of `010`",
+	}
 }
 
 func missingIntErr(r ValidationRule, fieldDesc string) *RichError {
@@ -1009,6 +1121,9 @@ func needFloat(r ValidationRule, fieldDesc string, kind TypeKind) error {
 			BotHint:  "non-numeric parameter for numeric rule",
 			UserHint: fmt.Sprintf("use a numeric value like `%s=5` or `%s=1.5`", r.Name, r.Name),
 		}
+	}
+	if !plainDecimal(v) {
+		return notDecimalErr(fieldDesc, r.Name+"="+r.Value, v)
 	}
 	// The value is written as is into a Go comparison. NaN and Inf are not
 	// Go constants, and a fractional bound against an integer kind is a

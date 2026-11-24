@@ -175,11 +175,20 @@ func (p *Printer) Object(ctx *gen.Context, s *gen.Shape) string {
 		if slices.Contains(parts, "unknown") {
 			value = "unknown" // a union with unknown is unknown
 		}
-		b.WriteString(" & Record<string, ")
-		b.WriteString(value)
-		b.WriteByte('>')
+		b.WriteString(" & ")
+		b.WriteString(record(s, value))
 	}
 	return b.String()
+}
+
+// record renders a string-keyed object type. TypeScript rejects a type alias
+// that reaches itself through Record, so a recursive shape spells the index
+// signature out.
+func record(s *gen.Shape, value string) string {
+	if s.Recursive {
+		return "{ [key: string]: " + value + " }"
+	}
+	return "Record<string, " + value + ">"
 }
 
 // splitUnion splits a rendered type at its top-level members, leaving a `|`
@@ -285,7 +294,7 @@ func (p *Printer) base(ctx *gen.Context, s *gen.Shape, t *gen.Type) string {
 		return js.Paren(elem) + "[]"
 	case gen.WireObject:
 		if t.Go == gen.Map {
-			return "Record<string, " + p.Type(ctx, s, t.Elem) + ">"
+			return record(s, p.Type(ctx, s, t.Elem))
 		}
 		return "Record<string, unknown>"
 	}

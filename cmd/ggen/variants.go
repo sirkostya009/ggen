@@ -41,6 +41,8 @@ func converterInputField(f model.FieldInfo, v model.Variant) model.FieldInfo {
 		JSONName:         f.JSONName,
 		GoType:           v.InType,
 		Kind:             v.InKind,
+		Iface:            v.InIface,
+		UnderlyingStruct: v.InStruct,
 		NamedPrims:       f.NamedPrims,
 		MultiErr:         f.MultiErr,
 		NoValidate:       f.NoValidate,
@@ -80,7 +82,9 @@ func renderVariantDispatch(b *bytes.Buffer, f model.FieldInfo, ref, posVar strin
 		case model.VariantNullZero:
 			fmt.Fprintf(
 				b,
-				"if %s+4 > len(data) || data[%s+1] != 'u' || data[%s+2] != 'l' || data[%s+3] != 'l' {\nreturn result, %s, ggen.NewParseErr(%s, %s, ggen.ErrBadLiteral)\n}\n%s += 4\n%s = %s\n",
+				"if %s+4 > len(data) || data[%s+1] != 'u' || data[%s+2] != 'l' || data[%s+3] != 'l' {\n%s = ggen.NullEnd(data, %s)\nreturn result, %s, ggen.NewParseErr(%s, %s, ggen.ErrBadLiteral)\n}\n%s += 4\n%s = %s\n",
+				posVar,
+				posVar,
 				posVar,
 				posVar,
 				posVar,
@@ -90,7 +94,7 @@ func renderVariantDispatch(b *bytes.Buffer, f model.FieldInfo, ref, posVar strin
 				posVar,
 				posVar,
 				ref,
-				zeroLit(f.GoType, f.Kind),
+				nullZeroLit(f),
 			)
 		case model.VariantNative:
 			renderField(b, nativeVariantField(f), ref, posVar)
@@ -109,21 +113,21 @@ func renderVariantDispatchStream(f model.FieldInfo, ref, posVar string) string {
 	b := getSmall()
 	defer putSmall(b)
 	field := fieldLit(f)
-	b.WriteString(streamReadMore(field, "0", false, "ggen.ErrUnexpectedEnd"))
+	b.WriteString(streamReadMore(field, "ggen.ErrUnexpectedEnd"))
 	b.WriteString("switch s.Bytes()[s.Pos] {\n")
 	for idx, v := range f.Variants {
 		labels := strings.Join(model.VariantCaseBytes(f, v, effectiveKind), ", ")
 		fmt.Fprintf(b, "case %s:\n", labels)
 		switch v.Kind {
 		case model.VariantNullZero:
-			rmKi := strings.Replace(streamReadMore(field, "0", false, "ggen.ErrBadLiteral"), "if s.Pos >=", "if s.Pos+ki >=", 1)
+			rmKi := streamNullReadMore(field)
 			fmt.Fprintf(
 				b,
-				"for ki := 1; ki < 4; ki++ {\n%sif s.Bytes()[s.Pos+ki] != \"null\"[ki] {\nreturn result, ggen.NewParseErr(%s, s.Offset(), ggen.ErrBadLiteral)\n}\n}\ns.Pos += 4\n%s = %s\n",
+				"for ki := 1; ki < 4; ki++ {\n%sif s.Bytes()[s.Pos+ki] != \"null\"[ki] {\nreturn result, ggen.NewParseErr(%s, s.Offset()+ki, ggen.ErrBadLiteral)\n}\n}\ns.Pos += 4\n%s = %s\n",
 				rmKi,
 				field,
 				ref,
-				zeroLit(f.GoType, f.Kind),
+				nullZeroLit(f),
 			)
 		case model.VariantNative:
 			b.WriteString(renderStreamField(nativeVariantField(f), ref, posVar))
@@ -157,7 +161,7 @@ func emitConvAssign(b *bytes.Buffer, v model.Variant, field, ref, tmp, posVar st
 	// finds the converter's error through the ParseError.
 	fmt.Fprintf(
 		b,
-		"if cv, err := %s(%s); err != nil {\nreturn result, %s, ggen.NewParseErr(%s, %s, err)\n} else {\n%s = cv\n}\n",
+		"if cv, err := %s(%s); err != nil {\nreturn result, %s, ggen.NewParseErrOpaque(%s, %s, err)\n} else {\n%s = cv\n}\n",
 		call,
 		tmp,
 		posVar,
@@ -180,5 +184,12 @@ func emitConvAssignStream(b *bytes.Buffer, v model.Variant, field, ref, tmp stri
 		fmt.Fprintf(b, "if cv, ok := %s(%s); !ok {\nreturn result, %s\n} else {\n%s = cv\n}\n", call, tmp, modErr, ref)
 		return
 	}
-	fmt.Fprintf(b, "if cv, err := %s(%s); err != nil {\nreturn result, ggen.NewParseErr(%s, s.Offset(), err)\n} else {\n%s = cv\n}\n", call, tmp, field, ref)
+	fmt.Fprintf(
+		b,
+		"if cv, err := %s(%s); err != nil {\nreturn result, ggen.NewParseErrOpaque(%s, s.Offset(), err)\n} else {\n%s = cv\n}\n",
+		call,
+		tmp,
+		field,
+		ref,
+	)
 }

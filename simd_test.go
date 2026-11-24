@@ -1,4 +1,4 @@
-//go:build goexperiment.simd
+//go:build goexperiment.simd && amd64
 
 package ggen
 
@@ -313,6 +313,158 @@ func TestStringSIMD_UnterminatedEscaped(t *testing.T) { //nolint:paralleltest //
 	for _, tier := range stringTiers {
 		if allocs := testing.AllocsPerRun(5, func() { _, _, _ = tier.fn(data, 0, true) }); allocs != 0 {
 			t.Errorf("%s(unterminated escaped) allocates %v per call, want 0", tier.name, allocs)
+		}
+	}
+}
+
+// TestStructuralIndexHighSIMD_Exact checks that the high-byte flag covers
+// exactly the bytes before the hit: a non-ASCII byte after the closing quote
+// must not set it, and an invalid byte before it must still be rejected.
+func TestStructuralIndexHighSIMD_Exact(t *testing.T) {
+	t.Parallel()
+	tiers := []struct {
+		name string
+		fn   func([]byte, int) (int, bool)
+	}{
+		{"AVX", structuralIndexHighAVX},
+		{"AVX2", structuralIndexHighAVX2},
+		{"AVX512", structuralIndexHighAVX512},
+	}
+	for n := range 141 {
+		for after := range 71 {
+			b := append(bytes.Repeat([]byte{'a'}, n), '"')
+			b = append(b, bytes.Repeat([]byte{'b'}, after)...)
+			b = append(b, 0xD0, 0x96, '"')
+			for _, tier := range tiers {
+				if k, hi := tier.fn(b, 0); k != n || hi {
+					t.Fatalf("%s n=%d after=%d: got (%d, %v), want (%d, false)", tier.name, n, after, k, hi, n)
+				}
+			}
+		}
+		for at := range n {
+			b := append(bytes.Repeat([]byte{'a'}, n), '"')
+			b[at] = 0xFF
+			for _, tier := range tiers {
+				if k, hi := tier.fn(b, 0); k != n || !hi {
+					t.Fatalf("%s n=%d high at %d: got (%d, %v), want (%d, true)", tier.name, n, at, k, hi, n)
+				}
+			}
+			doc := append([]byte{'"'}, b...)
+			for _, tier := range stringTiers {
+				if _, _, err := tier.fn(doc, 0, true); err != ErrInvalidUTF8 {
+					t.Fatalf("String%s n=%d invalid at %d: err %v, want ErrInvalidUTF8", tier.name, n, at, err)
+				}
+			}
+		}
+	}
+}
+
+// TestStructuralIndexSIMD_Cursor checks the window scans against a byte loop
+// for every cursor position, so the reloaded last vector is exercised with
+// every shift.
+func TestStructuralIndexSIMD_Cursor(t *testing.T) {
+	t.Parallel()
+	plain := []struct {
+		name string
+		fn   func([]byte, int) int
+	}{
+		{"AVX", structuralIndexAVX},
+		{"AVX2", structuralIndexAVX2},
+		{"AVX512", structuralIndexAVX512},
+	}
+	high := []struct {
+		name string
+		fn   func([]byte, int) (int, bool)
+	}{
+		{"AVX", structuralIndexHighAVX},
+		{"AVX2", structuralIndexHighAVX2},
+		{"AVX512", structuralIndexHighAVX512},
+	}
+	r := rand.New(rand.NewSource(1))
+	alphabet := []byte("abcdefgh  xyz\"\\\x01\x80\xd0")
+	for range 3000 {
+		b := make([]byte, r.Intn(200))
+		for k := range b {
+			if r.Intn(8) == 0 {
+				b[k] = alphabet[r.Intn(len(alphabet))]
+			} else {
+				b[k] = 'a'
+			}
+		}
+		for j := 0; j <= len(b); j++ {
+			want, wantHigh := -1, false
+			for k := j; k < len(b); k++ {
+				if c := b[k]; c == '"' || c == '\\' || c < 0x20 {
+					want = k - j
+					break
+				}
+				wantHigh = wantHigh || b[k] >= 0x80
+			}
+			for _, tier := range plain {
+				if got := tier.fn(b, j); got != want {
+					t.Fatalf("structuralIndex%s(%q, %d) = %d, want %d", tier.name, b, j, got, want)
+				}
+			}
+			for _, tier := range high {
+				if got, hi := tier.fn(b, j); got != want || hi != wantHigh {
+					t.Fatalf("structuralIndexHigh%s(%q, %d) = (%d, %v), want (%d, %v)", tier.name, b, j, got, hi, want, wantHigh)
+				}
+			}
+		}
+	}
+}
+
+var elemCountTiers = []struct {
+	name string
+	fn   func([]byte) int
+}{
+	{"AVX", ElemCountAVX},
+	{"AVX2", ElemCountAVX2},
+	{"AVX512", ElemCountAVX512},
+}
+
+// elemCountRef is the scan generated scalar decoders run.
+func elemCountRef(b []byte) int {
+	if before, _, ok := bytes.Cut(b, []byte{']'}); ok {
+		return bytes.Count(before, []byte{','}) + 1
+	}
+	return 1
+}
+
+// TestElemCountSIMD_Parity checks the vector element counters against the
+// scalar IndexByte plus Count scan, with ']' and ',' at every position
+// around the vector seams and spans cut at every length.
+func TestElemCountSIMD_Parity(t *testing.T) {
+	t.Parallel()
+	r := rand.New(rand.NewSource(1))
+	alphabet := []byte("0123456789,,,]-. ")
+	for range 20000 {
+		b := make([]byte, r.Intn(300))
+		for k := range b {
+			b[k] = alphabet[r.Intn(len(alphabet))]
+		}
+		for _, cut := range []int{len(b), r.Intn(len(b) + 1)} {
+			in := b[:cut]
+			want := elemCountRef(in)
+			for _, tier := range elemCountTiers {
+				if got := tier.fn(in); got != want {
+					t.Fatalf("%s(%q) = %d, want %d", tier.name, in, got, want)
+				}
+			}
+		}
+	}
+	for n := range 201 {
+		for at := 0; at <= n; at++ {
+			b := bytes.Repeat([]byte{','}, n)
+			if at < n {
+				b[at] = ']'
+			}
+			want := elemCountRef(b)
+			for _, tier := range elemCountTiers {
+				if got := tier.fn(b); got != want {
+					t.Fatalf("%s(n=%d, ']' at %d) = %d, want %d", tier.name, n, at, got, want)
+				}
+			}
 		}
 	}
 }

@@ -59,13 +59,15 @@ type Variant struct {
 	PkgImport string
 	PkgName   string
 	FuncName  string
-	Fallible  bool       // func(W) (T, error) or func(W) (T, bool), as opposed to func(W) T
-	BoolForm  bool       // func(W) (T, bool), whose failure can carry an inline message
-	Msg       string     // inline `:message`, bool form only
-	InType    string     // Go type of the converter input W, the type decoded from JSON
-	In        types.Type // resolved W, nil in the AST-only fallback mode
-	InKind    TypeKind   // kind of W with all pointer levels removed
-	InPointer bool       // W is `*T`: decoding null gives nil, so the variant also claims 'n'
+	Fallible  bool            // func(W) (T, error) or func(W) (T, bool), as opposed to func(W) T
+	BoolForm  bool            // func(W) (T, bool), whose failure can carry an inline message
+	Msg       string          // inline `:message`, bool form only
+	InType    string          // Go type of the converter input W, the type decoded from JSON
+	In        types.Type      // resolved W, nil in the AST-only fallback mode
+	InKind    TypeKind        // kind of W with all pointer levels removed
+	InPointer bool            // W is `*T`: decoding null gives nil, so the variant also claims 'n'
+	InIface   FieldInterfaces // methods of W with all pointer levels removed
+	InStruct  bool            // W with all pointer levels removed has a struct as its underlying type
 }
 
 // ParsedPipe is the result of parsePipeTag, before it is copied onto a

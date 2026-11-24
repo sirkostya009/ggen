@@ -193,8 +193,9 @@ func TestGenerate_runeGates(t *testing.T) {
 }
 
 // On the scalar tier the text forms of the net types get a 48-byte inline scan
-// window, so a full "[IPv6 address]:65535" is scanned once. A plain string
-// keeps the default 32.
+// window, so a full "[IPv6 address]:65535" is scanned once. time.Time text
+// gets 36, enough for RFC 3339 with nine fraction digits and a numeric zone.
+// A plain string keeps the default 32.
 func TestGenerate_netTextWindow(t *testing.T) {
 	for _, tc := range []struct {
 		goType string
@@ -207,6 +208,7 @@ func TestGenerate_netTextWindow(t *testing.T) {
 		{"net.IPNet", model.KindIPNet, "kew := ke + 48"},
 		{"net.TCPAddr", model.KindTCPAddr, "kew := ke + 48"},
 		{"net.UDPAddr", model.KindUDPAddr, "kew := ke + 48"},
+		{"time.Time", model.KindTime, "kew := ke + 36"},
 		{"string", model.KindString, "kew := ke + 32"},
 	} {
 		code, err := generate("p", []model.StructInfo{{Name: "V", Fields: []model.FieldInfo{{
@@ -452,8 +454,7 @@ func TestGenerate_syntheticFieldFlagPropagation(t *testing.T) {
 	})
 
 	t.Run("multierr_converter_input", func(t *testing.T) {
-		// generate() seeds multiErrTypes only when it is nil.
-		generatedTypes, generatedFields, multiErrTypes, namedKinds, cyclicTypes = nil, nil, nil, nil, nil
+		generatedTypes, generatedFields, namedKinds, cyclicTypes, aliasingDecode = nil, nil, nil, nil, nil
 		code, err := generate("p", []model.StructInfo{
 			{Name: "W", MultiErr: true, Fields: []model.FieldInfo{{
 				GoName: "N", JSONName: "n", GoType: "int", Kind: model.KindInt, HintLen: -1, MultiErr: true,
@@ -557,14 +558,15 @@ func TestGenerate_round8Fixes(t *testing.T) {
 
 // A catch-all value written in a form encoding/json does not read decodes
 // through the field emitters, and a struct ggen did not generate is written
-// and read like a map value. Every other value keeps AppendAny and
-// encoding/json. Errors name the member's key, so no value label is left in
-// the output.
+// and read like a map value. A number, a bool and a named primitive are
+// written directly and read by encoding/json. Every other value keeps
+// AppendAny and encoding/json. Errors name the member's key, so no value
+// label is left in the output.
 func TestGenerate_embedValueRoutes(t *testing.T) {
 	genGlobalsMu.Lock()
 	defer genGlobalsMu.Unlock()
 	reset := func() {
-		generatedTypes, generatedFields, namedKinds, multiErrTypes, cyclicTypes = nil, nil, nil, nil, nil
+		generatedTypes, generatedFields, namedKinds, cyclicTypes, aliasingDecode = nil, nil, nil, nil, nil
 	}
 	defer reset()
 	inner := model.StructInfo{Name: "Inner", Fields: []model.FieldInfo{{GoName: "N", JSONName: "n", GoType: "int", Kind: model.KindInt}}}
@@ -586,7 +588,11 @@ func TestGenerate_embedValueRoutes(t *testing.T) {
 		{"url.URL", true, true},
 		{"sql.NullString", true, true},
 		{"time.Time", true, true},
-		{"Level", true, true},
+		{"Level", true, false},
+		{"int64", true, false},
+		{"float32", true, false},
+		{"bool", true, false},
+		{"*int64", true, true},
 		{"[][4]byte", true, true},
 	} {
 		reset()
@@ -610,6 +616,102 @@ func TestGenerate_embedValueRoutes(t *testing.T) {
 		}
 		if strings.Contains(s, `\x00`) {
 			t.Errorf("%s: a value label leaked into the output:\n%s", c.elemType, s)
+		}
+	}
+}
+
+// The avx tier must stay plain AVX: a 16-lane Broadcast compiles to the AVX2
+// VPBROADCASTB, so its inline scan loads the runtime's splat tables.
+func TestInlineScanAVXTierLoadsConstants(t *testing.T) {
+	defer func(fn, sfx string) { scanStringFn, simdSuffix = fn, sfx }(scanStringFn, simdSuffix)
+	for _, tc := range []struct{ fn, vec, guard string }{
+		{"ggen.StringAVX", "Uint8x16", "ke <= len(data)-16"},
+		{"ggen.StringAVX2", "Uint8x32", "ke <= len(data)-32"},
+		{"ggen.StringAVX512", "Uint8x32", "ke <= len(data)-32"},
+	} {
+		scanStringFn = tc.fn
+		for _, validate := range []bool{true, false} {
+			var b bytes.Buffer
+			inlineScanStringVar(&b, "i", "v", "i", `"f"`, "ke", false, validate)
+			out := b.String()
+			if strings.Contains(out, "archsimd.Broadcast") {
+				t.Errorf("%s validate=%v: Broadcast emitted\n%s", tc.fn, validate, out)
+			}
+			if !strings.Contains(out, "archsimd.Load"+tc.vec+"(ggen.VecQuote[:])") {
+				t.Errorf("%s validate=%v: no table load\n%s", tc.fn, validate, out)
+			}
+			if !strings.Contains(out, "if "+tc.guard+" {") {
+				t.Errorf("%s validate=%v: guard is not %q\n%s", tc.fn, validate, tc.guard, out)
+			}
+		}
+	}
+}
+
+func TestGenerate_simdSliceElemCount(t *testing.T) {
+	defer func(fn, sfx string) { scanStringFn, simdSuffix = fn, sfx }(scanStringFn, simdSuffix)
+	structs := []model.StructInfo{{
+		Name: "R",
+		Fields: []model.FieldInfo{{
+			GoName: "Rows", JSONName: "rows", GoType: "[][]int",
+			Kind: model.KindSlice, ElemKind: model.KindSlice, ElemType: "[]int",
+		}},
+	}}
+	for _, sfx := range []string{"", "AVX", "AVX2", "AVX512"} {
+		scanStringFn, simdSuffix = "ggen.String"+sfx, sfx
+		code, err := generate("p", structs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := string(code)
+		// The stream path keeps IndexByte+Count at every tier: its window may
+		// end before the ']', where ElemCount's fallback of 1 would undersize.
+		count := strings.Contains(s, "bytes.Count(data[")
+		if !strings.Contains(s, "bytes.Count(s.Bytes()[") {
+			t.Errorf("%s: want the stream window pre-count\n%s", sfx, s)
+		}
+		call := strings.Contains(s, "ggen.ElemCount"+sfx+"(data[")
+		if sfx == "" && (!count || strings.Contains(s, "ggen.ElemCount")) {
+			t.Errorf("scalar: want the IndexByte+Count pre-count\n%s", s)
+		}
+		if sfx != "" && (count || !call) {
+			t.Errorf("%s: want one ggen.ElemCount%s call, no bytes.Count\n%s", sfx, sfx, s)
+		}
+	}
+}
+
+// JSON names and oneof values that spell a scan call must reach the output
+// as written under -simd, while the calls themselves take the tier.
+func TestSIMDTierLeavesLiteralsAlone(t *testing.T) {
+	defer func(fn, sfx string) { scanStringFn, simdSuffix = fn, sfx }(scanStringFn, simdSuffix)
+	scanStringFn, simdSuffix = "ggen.StringAVX512", "AVX512"
+	structs := []model.StructInfo{{
+		Name: "Odd", IgnoreUnknown: true,
+		Fields: []model.FieldInfo{
+			{GoName: "A", JSONName: "ggen.SkipValue(", GoType: "string", Kind: model.KindString},
+			{GoName: "B", JSONName: "x = s.String(", GoType: "string", Kind: model.KindString},
+			{GoName: "C", JSONName: "y = s.KeyView(", GoType: "string", Kind: model.KindString},
+			{
+				GoName: "D", JSONName: "d", GoType: "string", Kind: model.KindString,
+				Validation: []model.ValidationRule{{Name: "oneof", Value: "= s.SkipSpace()|= s.CaptureValue()"}},
+			},
+		},
+	}}
+	code, err := generate("p", structs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(code)
+	for _, want := range []string{
+		`"ggen.SkipValue("`, `"x = s.String("`, `"y = s.KeyView("`, `"= s.SkipSpace()"`, `"= s.CaptureValue()"`,
+		"ggen.SkipValueAVX512(data", "= s.SkipSpaceAVX512()", "= s.KeyViewAVX512(",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("missing %s", want)
+		}
+	}
+	for _, bad := range []string{`"ggen.SkipValueAVX512("`, `s.StringAVX512("`, `s.KeyViewAVX512("`, `SkipSpaceAVX512()"`, `CaptureValueAVX512()"`} {
+		if strings.Contains(s, bad) {
+			t.Errorf("tier rewrite reached a literal: %s", bad)
 		}
 	}
 }

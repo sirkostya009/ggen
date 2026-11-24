@@ -1,6 +1,6 @@
 # validation — typed rule errors + format predicates
 
-Runtime package, top-level sibling of `decode` (validation is not a sub-concern
+Validation half of the single runtime package `ggen` (validation is not a sub-concern
 of parsing — hard parse failures wrap in `ggen.ParseError`; only rule-level
 failures land here). One concrete error struct per validation rule (plus
 `ValidationError` interface + `Errors` slice). Codegen emits typed literals at the
@@ -58,8 +58,8 @@ unknown-key literals):
   buffer-relative `s.Pos`: the stream buffer compacts as it slides, so only
   `Offset()` stays relative to the whole payload. Already global at every
   depth — stream call sites keep plain `NewParseErr`, with one exception: the
-  cross-package `UnmarshalJSON` rung runs its callee on a CAPTURED span, so it
-  wraps with `NewParseErrShift(field, s.Offset(), len(span), err)` to rebase
+  cross-package `UnmarshalJSON` rung and the struct alias's `UnmarshalJSON`
+  rung run their callee on a CAPTURED span, so they wrap with `NewParseErrShift(field, s.Offset(), len(span), err)` to rebase
   the callee's span-relative positions (the span starts at
   `Offset()-len(span)`).
 
@@ -80,20 +80,35 @@ chunk size (.claude/scan.md, "Aggressive compaction"). Pinned by
 Only a multierr decoder returns `Errors`, and only at its closing brace.
 `NewParseErr` cuts a nested `Errors` down to its first entry, because a
 decoder that calls it stops in the middle of its own value: a fail-fast
-parent of a multierr child hands up one error. `Stream.Array` and
+parent of a multierr child hands up one error. The same holds in the other
+direction: a multierr decoder that stops early (a fail-fast child failed)
+returns a single error, and `Errors.Collect` takes only a bare `Errors`, so
+its multierr parent stops as well instead of reading on from inside the
+child (`TestMultierr_NoCursorDesyncOnStoppedMultierrCallee`). `Stream.Array` and
 `Stream.Seq` rely on that to yield an element with its `Errors` and go on
-to the next one instead of ending. `UnmarshalSlice` keeps the whole `Errors` of
-the element it stopped on (index-prefixed), as it is the top level. Pinned by
-the `TestMultierr_*` tests around `DrainFailFast` in `mods_test.go`.
+to the next one instead of ending. `UnmarshalSlice` and `Stream.Slice` read
+on past such an element, collect every element's `Errors` (index-prefixed on
+the bytes path) and return them with the whole slice after `]`, so a decoder
+built on `Slice` keeps the rule too. Pinned by the `TestMultierr_*` tests
+around `DrainFailFast` in `mods_test.go`.
 
 ## Concrete error structs (one per rule)
 
 Pointer-receiver structs, all implement `ggen.ValidationError`. Each carries
 a `Pos int` and a root-relative `Keys []string` (both first). The interface
-is sealed by the unexported `at() (*int, *[]string)`, which hands the
-runtime pointers to both: `relocate` shifts `Pos` and prepends a key through
-it, so `NewParseErr`, `NewParseErrShift`, `Errors.Collect` and
-`UnmarshalSlice` need no type assertions. Shapes below list the remaining
+is sealed by the unexported `at() (*int, *[]string, **pathBuf)`, which hands
+the runtime pointers to both and to the path buffer: `relocate` shifts `Pos`
+and prepends a key through it, so `NewParseErr`, `NewParseErrShift`,
+`Errors.Collect` and `UnmarshalSlice` need no type assertions. `Keys` is the
+tail of a `pathBuf` that has free slots in front and doubles when full
+(`prepend`), so a path of d segments costs O(d) to build, and under multierr
+each collected failure pays O(d) on its way out. A recursive type lets the
+input pick d up to the depth cap, so a per-level copy would make one failure
+quadratic and a multierr report cubic. Keys that are not
+the buffer's current tail (a literal, a caller's slice, the view of an error
+copied by value) are copied first and never written to. `ParseError` keeps
+its `Keys` the same way. Pinned by `TestRelocate_PathGrowsInFront` +
+`TestRelocate_PathAllocs`. Shapes below list the remaining
 fields:
 
 - **presence**: `RequiredError`, `NotEmptyError`
@@ -106,16 +121,17 @@ fields:
 - **numeric range**: `GTError`/`GTEError`/`LTError`/`LTEError{Limit any, Value any}`
 - **equality**: `EqError`/`NeqError{Want any, Value any}` (string + numeric)
 - **oneof**: `OneOfError{Allowed []string, Value any}` — `Allowed` points to a
-  frozen package-level slice (see "Frozen OneOf slices")
+  frozen package-level slice (see "Frozen OneOf and Keys slices")
 - **patterns**: `URLError`/`AlphanumError`/`NumericError`/`LowerError`/
-  `UpperError`/`HexadecimalError{Value string}` (`URLError` also has
-  `Cause error` + `Unwrap()`)
+  `UpperError`/`HexadecimalError{Value string}`. `alphanum`, `numeric` and
+  `hexadecimal` reject `""` (`IsAlphanum`/`IsNumeric`/`IsHex` need at least
+  one byte), `islower`/`isupper` accept it
 - **prefix/suffix/contains**: `StartsError`/`EndsError`/`ContainsError{Want, Value string}`
 - **other**: `MultipleError{Of any, Value any}`, `DuplicateKeyError`,
   `UnknownKeyError`, `CustomError{Name string, Value any, Cause error}` (exposes
   `Unwrap()`; `Name` is the bare func identifier). Custom bool-form validators
   fail with `PredicateError{Name, Msg, Value}`; fallible bool-form mods fail with
-  `ggen.ModError` (a parse error — lives in the `decode` package, not here)
+  `ggen.ModError` (a parse error, documented in `.claude/decode.md`, not here)
 
 Every numeric BOUND — `Limit` (gt/gte/lt/lte), `Of` (multiple), `Want`
 (eq/neq) — is `any`, and codegen spells the literal with the FIELD's own kind
@@ -142,9 +158,12 @@ Use the typed pointer struct, or `errors.AsType[ggen.ValidationError](err)` for
 the rule, path and message.
 `Errors` (from `multierr`) and `CustomError` implement `Unwrap()`.
 
-## Frozen OneOf slices
+## Frozen OneOf and Keys slices
 
 `OneOfError.Allowed` points to a deduped package-level frozen `[]string`
-(`var _oneof_N = []string{...}`) emitted once per unique allowed-set, so error
-construction never allocates the allowed slice (see cmd/ggen/CLAUDE.md optimization
+(`var ggenOneof_<scope>_N = []string{...}`) emitted once per unique allowed-set,
+and every constant one-key `Keys` path (validation rules, `required`,
+duplicate keys) to a `var ggenKeys_<scope>_N = []string{"key"}`, so error
+construction allocates neither slice. `prepend` never writes to a `Keys` it
+does not own as a `pathBuf` tail, so sharing is safe (see cmd/ggen/CLAUDE.md optimization
 #13).

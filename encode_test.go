@@ -512,3 +512,19 @@ func TestAppendAny_NilMapFuncNotNull(t *testing.T) {
 		}
 	}
 }
+
+// AppendNumber accepts and refuses what encoding/json does for a json.Number.
+func TestAppendNumber_EncodingJSONParity(t *testing.T) {
+	t.Parallel()
+	for _, n := range []json.Number{"", "0", "-0", "12", "-1.5e+10", "1E-3", "abc", "01", "1.", "+1", "-", "1 ", " 1", "1e", "0x1"} {
+		got, err := AppendNumber([]byte("x"), n)
+		want, werr := json.Marshal(n)
+		if (err == nil) != (werr == nil) {
+			t.Errorf("%q: AppendNumber err %v, encoding/json err %v", n, err, werr)
+			continue
+		}
+		if err == nil && string(got) != "x"+string(want) {
+			t.Errorf("%q: AppendNumber %s, encoding/json %s", n, got, want)
+		}
+	}
+}

@@ -33,7 +33,7 @@ The numbers below are for science only.
   bytes path (`CopyNode`/`CopyAddr` for Mega, `CopyAccount` family for
   NoAlloc, `CopyValidated` for Small, `CopyClaim` for Tiny — every decode
   bench family carries a `ggen_copy` row).
-- `bench/{mega,small,simple,skip,escape}_ggen.go` — generated ggen methods,
+- `bench/{mega,small,simple,skip,escape,catchall}_ggen.go` — generated ggen methods,
   one per annotated source (each carries `//go:generate ../ggen $GOFILE`,
   same as integrationtests). Regen: `(cd bench && go
   generate .)`.
@@ -45,10 +45,25 @@ The numbers below are for science only.
 - `bench/slowstream_test.go` — slow-reader benchmarks.
 - `bench/simple_test.go` — `BenchmarkNoAlloc_Unmarshal` + `_Reader`.
 - `bench/skip_test.go` — `BenchmarkSkipHeavy_Unmarshal` (compact/pretty
-  envelope, ~100% skipped content via ignoreunknown).
+  envelope, ~100% skipped content via ignoreunknown) and
+  `BenchmarkSkipKeys_Unmarshal` (64 flat objects, 48 skipped short members
+  each).
 - `bench/escape_test.go` — `BenchmarkEscapeHeavy_Unmarshal` +
   `BenchmarkEscapeSparse_Unmarshal` (escape-dense strings;
   exercises the unescape path).
+- `bench/numrows_test.go` — `BenchmarkNumRows_Marshal` over `NumRows`
+  (declared in `simple.go`).
+- `bench/catchall.go` + `catchall_test.go` — `BenchmarkCatchAll_Marshal`
+  (a `json:",embed"` catch-all of 32 numbers).
+- `bench/stamps_test.go` — `BenchmarkStamps_Unmarshal` (256 `Stamped`
+  values from `bench/skip.go`, three RFC 3339 times each).
+- `bench/anyreflect_test.go` — `BenchmarkAnyReflect_Marshal` (types with no
+  generated methods, written by `ggen.AppendAny`'s reflect walk).
+- `bench/anyencode_test.go` — `BenchmarkAnyEncode_Marshal` (stdlib values
+  inside an `any`, sized with `AnySize` and written with `AppendAny`).
+- `bench/jsonnumber.go` + `jsonnumber_test.go` — `BenchmarkJSONNumber_Unmarshal`
+  / `_Marshal` over `QuoteBook` (256 `Quote` values, four `json.Number`
+  fields each).
 
 ## What each bench family measures
 
@@ -74,7 +89,9 @@ The numbers below are for science only.
   cheapest io.Reader pattern). Inner loop under `b.RunParallel` (`-cpu=1`
   serial, `-cpu=N` N-way, same path); stateful codecs get per-goroutine state
   via the `setup` closure in `runBench`. Reports `gc` (NumGC delta) alongside
-  ns/op·B/op·allocs/op.
+  ns/op·B/op·allocs/op. `Mega_Unmarshal/ggen_reuse` and
+  `Mega_Reader/ggen_stream_reuse` decode into the previous result, so they
+  measure receiver reuse (the `[]*Addr` slab, element and container reuse).
 - **Small** (~2.9 KiB) — per-call buffer/streaming overhead is visible. Two
   ggen-stream Reader rows: `_512` allocates a FRESH 512 B buffer per iteration
   (< payload) so the grow/refill/compaction chain runs every call; `_full` reuses
@@ -110,6 +127,47 @@ The numbers below are for science only.
   byte-length gates that skip the O(len) `utf8.RuneCountInString` walk —
   `LongRunes` (2048 4-byte runes) clears `minrunes`/`maxrunes` via `len` gates,
   `AsciiRunes` via tier-c (alphanum-precedes → count is `len`).
+- **SkipKeys** (`SkipKeysDoc`, 64 objects of 50 members, two matched and 48
+  skipped through `ignoreunknown`, every skipped member a ~12-byte key with a
+  short number) — the cost of one skipped MEMBER (key scan, colon, skip
+  call), where SkipHeavy measures the cost of one skipped byte. The
+  `ggen_stream` row reads through `Stream.Slice` with a fresh 4 KiB buffer.
+- **NumRows** (`_Marshal`, `NumRows`: 512-element slices of `int64`, `int`,
+  `int32`, `uint16` and `float32`) — `ggen.Marshal` allocates the buffer
+  `JSONSize` reserves, so the ggen row's B/op shows how tight the per-kind
+  number budgets are (49152 B/op for ~17 KB written). `jsonv2` is the control.
+- **CatchAll** (`_Marshal`, `CatchAllInts` / `CatchAllFloats`: two declared
+  fields plus a catch-all of 32 `int64` or `float64` values) — the per-entry
+  cost of the catch-all loop on marshal. Numbers are written without boxing
+  them for `AppendAny`, so `ggen_ints` / `ggen_floats` stay at 1 alloc/op
+  (the output buffer); `jsonv2_*` rows are the control.
+- **Stamps** (`Stamped`, 256 values, 3 of 5 fields `time.Time`) — time text
+  scan + `ParseRFC3339`. `utc` rows carry 30-byte times, `offset` rows 35-byte
+  ones (nine fraction digits + numeric zone, what `time.Now()` marshals to off
+  UTC), the longest RFC 3339 text. The offset row is the one the scalar tier's
+  36-byte time scan window (`timeTextWindow`) serves: with the default 32 it
+  scanned the text inline and again in `ggen.String`. jsonv2 is the control
+  for each payload. B/op and allocs are identical on both payloads (~64992 B,
+  7 allocs).
+- **AnyReflect** (`_Marshal`, 32 entries per shape of types with no generated
+  methods: `rows` / `row_ptrs` / `row_map` hold a struct of scalars with a
+  nested struct, a pointer and a map, `statuses` a named string, `events` a
+  struct with a slice and a `time.Time`) — the reflect walk an `any` field
+  takes for such a value. `ggen_presized` appends into a kept buffer, so its
+  B/op is the walk alone: 0 for `rows`, `row_ptrs` and `statuses`, 112 B / 2
+  allocs for `row_map` (its key and value holders), 2048 B / 32 allocs for
+  `events`, whose elements are still boxed once each. `jsonv2` is the control.
+- **AnyEncode** (`_Marshal/netip`, a `[]any` of 64 `netip.Addr` /
+  `netip.AddrPort` values) — `AnySize` then `AppendAny` into that capacity, the
+  way a generated `any` field is marshaled. `ggen` is 1 alloc/op (the output
+  buffer): the netip types are budgeted without running their text
+  marshalers. `jsonv2` is the control.
+- **JSONNumber** (`QuoteBook`, 256 quotes, 4 of 6 fields `json.Number`,
+  ~24.7 KB) — `json.Number` read with `ggen.Number` and written with
+  `ggen.AppendNumber`. Allocations: Unmarshal `ggen` 7 (the slice growth),
+  `ggen_stream` 1289 (one copy per number plus the symbol strings), Marshal
+  `ggen` 1 (the output buffer). `stdjson` is the control: `json.Number` has
+  no jsonv2 arshaler of its own worth comparing.
 - **SlowStream** (`slowReader`, geometric-decay delays). Tables `_Valid`
   (stdjson, easyjson, ggen_stream, ggen_readall) and `_Invalid` (ggen_stream,
   ggen_readall, jsonv2-baseline on a payload failing ggen validation early),
@@ -437,6 +495,19 @@ gone. Light values come out flat on time with the allocation COUNT collapsed
 `clear()` used to recycle buckets — the size of the values decides which of
 those two matters, and the generator cannot know it, so both are accepted.
 Fresh decode is flat, which it was NOT before the `_reuse` hoist (+6.5…+9.6%).
+
+## `[]*T` pointee reuse (opt #74, 2026-11)
+
+Decoding into a reused receiver, a `[]*T` of a generated struct decodes into
+the carried pointees and makes its slab only for nil or new slots. Measured
+on the `_reuse` rows (one pass per side, controls within ±0.7%):
+
+| row | before | after |
+| --- | --- | --- |
+| Mega_Unmarshal/ggen_reuse | 10.59 ms · 1391 KB · 5428 allocs | **9.93 ms · 149 KB · 3002 allocs** |
+| Mega_Reader/ggen_stream_reuse | 2481 KB · 80929 allocs | 1242 KB · 78508 allocs (−3.1%) |
+
+Fresh-decode rows are flat with identical B/op and allocs.
 
 ## Stream `skipNumber` cursor off the stack (2026-09)
 

@@ -196,14 +196,24 @@ type RawOnly struct {
 	Raw json.RawMessage `json:"raw"`
 }
 
-// A reused receiver's raw backing is refilled, not reallocated. So a steady
-// stream of values with the same shape reaches zero allocations per decode.
+// RawOnlyCopy is RawOnly under copy, where the receiver owns its raw backing
+// on both paths.
+//
+//ggen:generate copy
+type RawOnlyCopy struct {
+	Raw json.RawMessage `json:"raw"`
+}
+
+// A copy-mode receiver's raw backing is refilled, not reallocated. So a
+// steady stream of values with the same shape reaches zero allocations per
+// decode. Without copy the carried span may alias an earlier DecodeFrom input,
+// so each decode allocates a fresh one.
 func TestRawJSON_StreamReusesReceiverBacking(t *testing.T) { //nolint:paralleltest // measures allocations
 	payload := []byte(`{"raw":{"nested":[1,2,3],"s":"abcdefghij"}}` + "\n")
 	var s ggen.Stream
 	buf := make([]byte, 0, 256)
 	rd := bytes.NewReader(payload)
-	prev := RawOnly{}
+	prev := RawOnlyCopy{}
 	n := testing.AllocsPerRun(200, func() {
 		rd.Reset(payload)
 		s.Reset(rd, buf)
@@ -214,6 +224,54 @@ func TestRawJSON_StreamReusesReceiverBacking(t *testing.T) { //nolint:parallelte
 		prev = v
 	})
 	if n != 0 {
-		t.Errorf("steady-state stream decode: %v allocs/op, want 0", n)
+		t.Errorf("copy: steady-state stream decode: %v allocs/op, want 0", n)
+	}
+	plain := RawOnly{}
+	n = testing.AllocsPerRun(200, func() {
+		rd.Reset(payload)
+		s.Reset(rd, buf)
+		v, err := plain.DecodeFromStream(&s)
+		if err != nil {
+			t.Fatal(err)
+		}
+		plain = v
+	})
+	if n != 1 {
+		t.Errorf("plain: steady-state stream decode: %v allocs/op, want 1", n)
+	}
+}
+
+// BigFloatStruct isolates a big.Float field.
+//
+//ggen:generate
+type BigFloatStruct struct {
+	F big.Float `json:"f"`
+}
+
+// big.Float decodes what its UnmarshalText (used by encoding/json) accepts:
+// base prefixes, a hex mantissa with a p exponent and _ separators.
+func TestRich_BigFloatTextForms(t *testing.T) {
+	t.Parallel()
+	for _, in := range []string{
+		"1.5", "-2e3", "Inf", "0x1p-3", "0X.8P1", "1_000", "0b101", "0o17", "0x_1f", "1_0.2_5e1_0",
+		"1__0", "_1", "1_", "0x", "0b2", "0x1.p", "1._5", "08", "0o8",
+	} {
+		t.Run(in, func(t *testing.T) {
+			t.Parallel()
+			var want big.Float
+			wantErr := want.UnmarshalText([]byte(in))
+			payload := `{"f":"` + in + `"}`
+			got, _, err := BigFloatStruct{}.DecodeFrom([]byte(payload))
+			gotS, errS := ggen.NewStream(strings.NewReader(payload), nil).Value[BigFloatStruct]()
+			if (wantErr == nil) != (err == nil) || (wantErr == nil) != (errS == nil) {
+				t.Fatalf("UnmarshalText err %v, bytes err %v, stream err %v", wantErr, err, errS)
+			}
+			if wantErr != nil {
+				return
+			}
+			if got.F.Cmp(&want) != 0 || gotS.F.Cmp(&want) != 0 {
+				t.Errorf("bytes %s, stream %s, want %s", got.F.String(), gotS.F.String(), want.String())
+			}
+		})
 	}
 }

@@ -5,7 +5,9 @@
 package ggen
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"reflect"
@@ -96,17 +98,19 @@ func AppendUnixSeconds(dst []byte, t time.Time) []byte {
 		ns = 1e9 - ns
 	}
 	dst = strconv.AppendInt(dst, sec, 10)
-	dst = append(dst, '.')
-	var frac [9]byte
-	for i := 8; i >= 0; i-- {
-		frac[i] = byte('0' + ns%10)
-		ns /= 10
+	return appendFrac9(append(dst, '.'), int64(ns))
+}
+
+// AppendNumber appends n as a JSON number. The zero value writes 0, as in
+// encoding/json. Text that is not a JSON number is an error.
+func AppendNumber(dst []byte, n json.Number) ([]byte, error) {
+	if len(n) == 0 {
+		return append(dst, '0'), nil
 	}
-	n := 9
-	for n > 1 && frac[n-1] == '0' {
-		n--
+	if end, err := skipNumber(unsafe.Slice(unsafe.StringData(string(n)), len(n)), 0); err != nil || end != len(n) {
+		return dst, fmt.Errorf("ggen: invalid number literal %q", string(n))
 	}
-	return append(dst, frac[:n]...)
+	return append(dst, n...), nil
 }
 
 // MarshalString returns the JSON encoding of v as a string. The string

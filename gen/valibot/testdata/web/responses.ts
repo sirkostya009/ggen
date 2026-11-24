@@ -9,6 +9,7 @@ function ggenObject<T extends v.GenericSchema<object>>(schema: T) {
   return v.pipe(v.custom<v.InferInput<T>>(isObject, "Invalid type: Expected Object"), schema);
 }
 
+/** Role is an enum. */
 export const Role = v.picklist(["admin", "member"]);
 export type Role = v.InferOutput<typeof Role>;
 
@@ -99,3 +100,11 @@ export type AddressView = v.InferOutput<typeof AddressView>;
 /** Token delegates to the text methods of Secret. */
 export const Token = v.string();
 export type Token = v.InferOutput<typeof Token>;
+
+/** Section collects nested sections under every other key. */
+export type Section = {
+  title: string;
+} & { [key: string]: Section | string };
+export const Section: v.GenericSchema<Section> = ggenObject(v.objectWithRest({
+  title: v.string(),
+}, v.lazy(() => Section)));

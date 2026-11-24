@@ -39,9 +39,18 @@ type Unmarshaler[T any] interface {
 }
 
 // UnmarshalSlice decodes a JSON array of T. Each element is decoded by
-// T.DecodeFrom. Errors are wrapped with [NewParseErr].
+// T.DecodeFrom. Errors are wrapped with [NewParseErr]. The [Errors] of
+// multierr elements are collected under their "[N]" segment and returned
+// with the whole slice once the array is read. `null` decodes to a nil
+// slice, the output of [MarshalSlice] for one.
 func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {
 	i := SkipSpace(data, 0)
+	if i < len(data) && data[i] == 'n' {
+		if j, ok := Null(data, i); ok {
+			return nil, trailingCheck(data, j)
+		}
+		return nil, NewParseErr("[]", litEnd(data, i, "null"), ErrBadLiteral)
+	}
 	if i >= len(data) || data[i] != '[' {
 		return nil, NewParseErr("[]", i, ErrBadArray)
 	}
@@ -52,22 +61,23 @@ func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {
 		// jsonv2.
 		return []T{}, trailingCheck(data, i+1)
 	}
+	if i >= len(data) {
+		return nil, NewParseErr("[]", i, ErrBadArray)
+	}
 	// Pick the initial capacity from the element size, like generated slice
 	// fields do.
 	result := make([]T, 0, prealloc.Cap(unsafe.Sizeof(*new(T))))
+	var errs Errors
 	for {
 		var zero T
 		v, n, err := zero.DecodeFrom(data[i:])
 		if err != nil {
-			// a multierr element read itself whole, so all of its failures are kept
-			if es, ok := err.(Errors); ok {
-				seg := arrField(len(result))
-				for _, e := range es {
-					relocate(e, seg, i)
-				}
-				return nil, es
+			// a multierr element read itself whole, so the array goes on
+			es, ok := err.(Errors)
+			if !ok {
+				return nil, NewParseErrShift(arrField(len(result)), i+n, n, err)
 			}
-			return nil, NewParseErrShift(arrField(len(result)), i+n, n, err)
+			errs.Collect(arrField(len(result)), i, es)
 		}
 		result = append(result, v)
 		i = SkipSpace(data, i+n)
@@ -79,7 +89,13 @@ func UnmarshalSlice[T Decoder[T]](data []byte) ([]T, error) {
 			continue
 		}
 		if data[i] == ']' {
-			return result, trailingCheck(data, i+1)
+			if err := trailingCheck(data, i+1); err != nil {
+				return nil, err
+			}
+			if len(errs) > 0 {
+				return result, errs
+			}
+			return result, nil
 		}
 		return nil, NewParseErr(arrField(len(result)-1), i, ErrBadArray)
 	}

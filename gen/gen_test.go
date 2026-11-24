@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	apiPath   = "github.com/sirkostya009/ggen/gen/testdata/api"
-	otherPath = "github.com/sirkostya009/ggen/gen/testdata/other"
+	apiPath    = "github.com/sirkostya009/ggen/gen/testdata/api"
+	otherPath  = "github.com/sirkostya009/ggen/gen/testdata/other"
+	shapesPath = "github.com/sirkostya009/ggen/gen/testdata/shapes"
 )
 
 func load(t *testing.T) *Set {
@@ -59,8 +60,27 @@ func TestLoad(t *testing.T) {
 		names = append(names, d.Name)
 	}
 	if want := []string{
-		"CreateUser", "User", "Edges", "Tags", "Kind", "Tree", "Awkward", "Collides", "Omits", "Nulls", "Keyed", "AddressView", "Token",
-		"TokenView", "Address", "Leaf",
+		"CreateUser",
+		"User",
+		"Edges",
+		"Tags",
+		"Kind",
+		"Tree",
+		"Node",
+		"Section",
+		"Awkward",
+		"Collides",
+		"Omits",
+		"Nulls",
+		"Quoted",
+		"Chained",
+		"Narrow",
+		"Keyed",
+		"AddressView",
+		"Token",
+		"TokenView",
+		"Address",
+		"Leaf",
 	}; !slices.Equal(names, want) {
 		t.Errorf("api types = %v, want %v", names, want)
 	}
@@ -243,7 +263,7 @@ func TestNullZero(t *testing.T) {
 	for name, nullable := range map[string]bool{
 		"name": true, "code": false, "kind": false, "count": true, "pos": false, "level": true,
 		"eq": true, "neq": false, "alnum": false,
-		"pair": false, "fixed": false, "list": false, "peer": true, "ints": false, "conv": false,
+		"pair": false, "fixed": true, "list": false, "peer": true, "ints": false, "conv": false,
 	} {
 		if got := field(t, in, name).Type.Nullable; got != nullable {
 			t.Errorf("%s: nullable=%v, want %v", name, got, nullable)
@@ -557,6 +577,14 @@ func TestOutputRejects(t *testing.T) {
 			}
 		})
 	}
+	t.Run("output directory itself", func(t *testing.T) {
+		t.Parallel()
+		out := NewOutput(dir)
+		out.File(".", refs{}).Place(s.Type(apiPath, "Address").Out(), "Address")
+		if err := out.Write(); err == nil || !strings.Contains(err.Error(), "names the output directory") {
+			t.Errorf(".: %v", err)
+		}
+	})
 	t.Run("nil emitter", func(t *testing.T) {
 		t.Parallel()
 		out := NewOutput(dir)
@@ -580,4 +608,149 @@ func TestOutputRejects(t *testing.T) {
 	if entries, _ := os.ReadDir(dir); len(entries) != 0 {
 		t.Errorf("a rejected Write wrote %d files", len(entries))
 	}
+}
+
+// TestRecursiveContainers pins that a container reaching itself lowers to a
+// reference: through its decl when annotated, and to any value below the
+// first level when it has none.
+func TestRecursiveContainers(t *testing.T) {
+	t.Parallel()
+	s, err := Load("./testdata/shapes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []Mode{In, Out} {
+		for _, c := range []struct {
+			name, elem string
+			wire       Wire
+		}{
+			{"Tree", "Tree", WireArray},
+			{"Obj", "Obj", WireObject},
+			{"Ping", "Pong", WireArray},
+			{"Pong", "Ping", WireArray},
+		} {
+			sh := s.Type(shapesPath, c.name).shape(m)
+			a := sh.Alias
+			if !sh.Recursive || a == nil || a.Wire != c.wire || a.Elem == nil || a.Elem.Ref != s.Type(shapesPath, c.elem) ||
+				a.Elem.Wire != s.Type(shapesPath, c.elem).shape(m).Alias.Wire {
+				t.Errorf("%s %s: recursive=%v alias=%+v", m, c.name, sh.Recursive, a)
+			}
+		}
+		n := field(t, s.Type(shapesPath, "Holder").shape(m), "n").Type
+		if n.Wire != WireArray || n.Elem == nil || n.Elem.Wire != WireAny {
+			t.Errorf("%s Holder.n: %+v", m, n)
+		}
+	}
+}
+
+// TestByteArrayElements pins that inner: steps reach the bytes of a
+// [N]byte under format:array.
+func TestByteArrayElements(t *testing.T) {
+	t.Parallel()
+	s, err := Load("./testdata/shapes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := s.Type(shapesPath, "ByteArray")
+	if e := field(
+		t,
+		d.In(),
+		"fixed",
+	).Type.Elem; !slices.Equal(ops(e.Rules), []string{"gte1"}) || e.Enum == nil ||
+		!slices.Equal(enumValues(e.Enum), []string{"1", "2"}) {
+		t.Errorf("input elem: rules=%v enum=%+v", ops(e.Rules), e.Enum)
+	}
+	if e := field(t, d.Out(), "fixed").Type.Elem; len(e.Rules) != 0 || e.Enum == nil || !e.Enum.Zero {
+		t.Errorf("output elem: rules=%v enum=%+v", ops(e.Rules), e.Enum)
+	}
+}
+
+// TestCrossPackageFile pins the source file of types declared in another
+// loaded package, an enum first reached from a referencing package included,
+// and the enum's doc comment.
+func TestCrossPackageFile(t *testing.T) {
+	t.Parallel()
+	const crossPath = "github.com/sirkostya009/ggen/gen/testdata/cross"
+	s, err := Load("./testdata/cross", "./testdata/cross/dep")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := filepath.Abs("testdata/cross/dep/dep.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range []Mode{In, Out} {
+		sh := s.Type(crossPath, "Order").shape(m)
+		tier, price := field(t, sh, "tier").Type, field(t, sh, "price").Type
+		if tier.File != want || tier.Ref == nil || tier.Ref.File != want {
+			t.Errorf("%s tier: file %q, ref %v", m, tier.File, tier.Ref != nil && tier.Ref.File == want)
+		}
+		if d := tier.Ref; d != nil && (d.Doc != "Tier is an enum no type of this package references." || !d.Has("schema:out")) {
+			t.Errorf("%s tier: doc %q directives %v", m, d.Doc, d.Directives)
+		}
+		if price.File != want || price.Ref == nil || price.Ref.File != want {
+			t.Errorf("%s price: file %q, ref %v", m, price.File, price.Ref != nil && price.Ref.File == want)
+		}
+	}
+}
+
+// TestOutputPathConflicts pins that Write refuses a file it cannot write as a
+// regular file and then leaves the directory as it was.
+func TestOutputPathConflicts(t *testing.T) {
+	t.Parallel()
+	s := load(t)
+	for _, c := range []struct {
+		name  string
+		paths []string
+		dirs  []string // made before Write
+		files []string // made before Write
+		want  string
+	}{
+		{"file and a file below it", []string{"a/b.ts", "a"}, nil, nil, "a: path is also the directory of a/b.ts"},
+		{"destination is a directory", []string{"ok.ts", "d"}, []string{"d"}, nil, "d: is a directory"},
+		{"parent is a file", []string{"ok.ts", "f/x.ts"}, nil, []string{"f"}, "is not a directory"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			for _, d := range c.dirs {
+				if err := os.Mkdir(filepath.Join(dir, d), 0o755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			for _, f := range c.files {
+				if err := os.WriteFile(filepath.Join(dir, f), nil, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			before := listDir(t, dir)
+			out := NewOutput(dir)
+			addr := s.Type(apiPath, "Address")
+			out.File(c.paths[0], refs{}).Place(addr.Out(), "Address")
+			out.File(c.paths[1], refs{}).Place(addr.In(), "Address")
+			if err := out.Write(); err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Errorf("Write: %v, want %q", err, c.want)
+			}
+			if after := listDir(t, dir); !slices.Equal(before, after) {
+				t.Errorf("directory changed: %v, was %v", after, before)
+			}
+		})
+	}
+}
+
+func listDir(t *testing.T, dir string) []string {
+	t.Helper()
+	var out []string
+	err := filepath.WalkDir(dir, func(p string, _ os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel(dir, p)
+		out = append(out, rel)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }

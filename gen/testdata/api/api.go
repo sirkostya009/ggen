@@ -134,6 +134,22 @@ type Leaf struct {
 	Tree *Tree `json:"tree"`
 }
 
+// Node is a tree that references only itself.
+//
+//ggen:generate
+type Node struct {
+	Name     string  `json:"name"`
+	Children []*Node `json:"children"`
+}
+
+// Section collects nested sections under every other key.
+//
+//ggen:generate
+type Section struct {
+	Title string             `json:"title"`
+	Sub   map[string]Section `json:",embed"`
+}
+
 // Awkward carries names a target has to escape.
 //
 //ggen:generate
@@ -191,6 +207,40 @@ type Nulls struct {
 	Peer  net.TCPAddr `json:"peer"`
 	Ints  []int       `json:"ints"  pipe:"@Ints ~"`
 	Conv  []int       `json:"conv"  pipe:"nullzero / @Ints ~ minlen=1"`
+}
+
+// Quoted carries rules on `,string` numbers, which Go checks on the parsed
+// number.
+//
+//ggen:generate
+type Quoted struct {
+	Clamp int     `json:"clamp,string" pipe:"clamp=1|5"`
+	Floor int64   `json:"floor,string" pipe:"clamp=1|"`
+	Ratio float64 `json:"ratio,string" pipe:"clamp=|0.5"`
+	Pick  float64 `json:"pick,string"  pipe:"oneof=1|2"`
+	Sign  int     `json:"sign,string"  pipe:"oneof=0|1"`
+	Max   int64   `json:"max,string"   pipe:"lte=9223372036854775806"`
+	Neq   uint64  `json:"neq,string"   pipe:"neq=9007199254740993"`
+	Mul   int64   `json:"mul,string"   pipe:"multiple=3"`
+}
+
+// Chained has rules after a oneof that a transform precedes.
+//
+//ggen:generate
+type Chained struct {
+	Word  string `json:"word"  pipe:"trim oneof=a|bb toupper minlen=1"`
+	Digit int    `json:"digit" pipe:"clamp=0|9 oneof=1|2 gt=0"`
+}
+
+// Narrow has rules on float32 fields, which Go checks after rounding.
+//
+//ggen:generate
+type Narrow struct {
+	GT   float32 `json:"gt"          pipe:"gt=0.1"`
+	LTE  float32 `json:"lte"         pipe:"lte=0.1"`
+	Eq   float32 `json:"eq"          pipe:"eq=0.1"`
+	Pick float32 `json:"pick"        pipe:"oneof=0.1|0.2"`
+	Text float32 `json:"text,string" pipe:"gte=0.1"`
 }
 
 // Keyed restricts the keys of its maps. A keys: step applies to the field's

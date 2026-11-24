@@ -2,6 +2,7 @@
 
 import type { User as money_User } from "../shared/money";
 
+/** Role is an enum. */
 export type Role = "admin" | "member";
 
 /** Address is reached from both. */
@@ -60,3 +61,8 @@ export type AddressView = Address;
 
 /** Token delegates to the text methods of Secret. */
 export type Token = string;
+
+/** Section collects nested sections under every other key. */
+export type Section = {
+  title: string;
+} & { [key: string]: Section | string };

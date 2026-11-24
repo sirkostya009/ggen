@@ -53,7 +53,7 @@ func ExternalFor(fn func(f *gen.File, p gen.Placed, t *gen.Type) (schema string,
 }
 
 // ExternalType sets the TypeScript type of an external Go type, which a
-// mutually recursive shape needs for its z.ZodType annotation. Without it the
+// recursive shape needs for its z.ZodType annotation. Without it the
 // annotation follows the type's wire shape.
 func ExternalType(goPath, tsType string) Option {
 	return func(e *Emitter) { e.types.External[goPath] = tsType }
@@ -133,7 +133,9 @@ func (e *Emitter) Begin(ctx *gen.Context) error {
 
 func (e *Emitter) Decl(ctx *gen.Context, p gen.Placed) error {
 	e.placed = p
-	e.cyclic = ctx.Cyclic(p.Shape.Decl, p.Shape.Mode)
+	// Neither an alias nor a catch-all has a getter to defer a reference to
+	// itself through.
+	e.cyclic = ctx.Cyclic(p.Shape.Decl, p.Shape.Mode) || p.Shape.Recursive && (p.Shape.Alias != nil || p.Shape.Rest != nil)
 	constName := e.schemaName(ctx.File, p)
 	for _, n := range []string{p.Name, constName} {
 		if !js.IsIdent(n) {
@@ -151,10 +153,10 @@ func (e *Emitter) Decl(ctx *gen.Context, p gen.Placed) error {
 		e.body.WriteByte('\n')
 	}
 	e.body.WriteString(js.Doc(s.Decl.Doc, ""))
-	if e.cyclic {
-		// TypeScript infers a self-recursive schema through its getters, but
-		// not two schemas that reference each other: those need the type
-		// written out and the const annotated with it.
+	if s.Recursive || e.cyclic {
+		// TypeScript cannot infer a schema that references itself once the
+		// reference is wrapped more than once (z.array(X.nullable())), nor two
+		// schemas that reference each other, so the type is written out.
 		var tsType string
 		if s.Alias != nil {
 			tsType = e.types.Type(ctx, s, s.Alias)
@@ -188,7 +190,10 @@ func (e *Emitter) object(ctx *gen.Context, s *gen.Shape) string {
 	}
 	for _, f := range s.Fields {
 		where := ts.DeclName(s) + "." + f.JSONName
-		if js.PrototypeMember(f.JSONName) {
+		switch {
+		case f.JSONName == "__proto__":
+			ctx.Report.Add(where, "zod never checks a field named __proto__ and drops it from the parsed value")
+		case js.PrototypeMember(f.JSONName):
 			ctx.Report.Add(where, "Object.prototype defines "+f.JSONName+", and zod tests key presence with `in`, so the field can never be absent")
 		}
 		field := e.typ(ctx, s, f.Type, where)
@@ -329,6 +334,15 @@ func (e *Emitter) base(ctx *gen.Context, s *gen.Shape, t *gen.Type, where string
 			// overflows, which is exactly what Math.fround reports.
 			return "z.number()" + refine("Number.isFinite(Math.fround(x))", "out of range for a 32-bit float"), num
 		}
+		switch t.Format {
+		case gen.FormatUnix:
+			// Go reads the seconds into an int64.
+			return "z.number().gte(-9223372036854775808).lt(9223372036854775808)", num
+		case gen.FormatDurationSec:
+			// The int64 nanosecond range ends at ±9223372036.854775807,
+			// which rounds to a double Go rejects.
+			return "z.number().gt(-9223372036.854776).lt(9223372036.854776)", num
+		}
 		return "z.number()", num
 	case gen.WireBool:
 		return "z.boolean()", other
@@ -381,11 +395,15 @@ func integer(t *gen.Type) string {
 	case !ok:
 		return "z.int()"
 	case bits == 64:
-		// -0 passes gte(0) but is not a Go uint.
-		return "z.int().gte(0)" + refine("!Object.is(x, -0)", "must not be negative zero")
+		return "z.int().gte(0)" + negZero
+	case unsigned:
+		return "z.int().gte(0).lte(" + hi + ")" + negZero
 	}
 	return "z.int().gte(" + lo + ").lte(" + hi + ")"
 }
+
+// negZero rejects -0, which passes gte(0) but is not a Go uint.
+var negZero = refine("!Object.is(x, -0)", "must not be negative zero")
 
 func (e *Emitter) str(t *gen.Type) (string, kind) {
 	predicate := func(fn, msg string) (string, kind) {
@@ -432,7 +450,13 @@ func (e *Emitter) str(t *gen.Type) (string, kind) {
 	case t.Format == gen.FormatRational:
 		return "z.string().refine(" + e.helpers.Use("ggenIsRational") + `, "must be a rational number")`, str
 	}
-	check, ok := e.helpers.FormatCheck(t.Format)
+	var check js.Check
+	ok := true
+	if t.Format == gen.FormatNumberString {
+		check = e.helpers.NumberCheck(numberBits(t.Go))
+	} else {
+		check, ok = e.helpers.FormatCheck(t.Format)
+	}
 	if !ok {
 		return "z.string()", str
 	}
@@ -452,6 +476,19 @@ func (e *Emitter) str(t *gen.Type) (string, kind) {
 		out += refine(fmt.Sprintf("%s(x, %sn, %sn)", e.helpers.Use("ggenFits"), lo, hi), "out of range")
 	}
 	return out, str
+}
+
+// numberBits is the width Go parses a quoted number of kind k at, 0 for
+// json.Number, which encoding/json checks for its grammar only.
+func numberBits(k gen.GoKind) int {
+	//exhaustive:ignore only the number-string kinds apply here
+	switch k {
+	case gen.Float32:
+		return 32
+	case gen.Number:
+		return 0
+	}
+	return 64
 }
 
 // formatWord names a format in a message.
@@ -522,7 +559,8 @@ func (e *Emitter) rules(ctx *gen.Context, t *gen.Type, out string, k kind, where
 		return out
 	}
 	numericString := t.Format == gen.FormatIntString || t.Format == gen.FormatUintString || t.Format == gen.FormatNumberString || t.Format == gen.FormatBigFloat
-	for _, r := range t.Rules {
+	f32 := t.Go == gen.Float32
+	for ri, r := range t.Rules {
 		arg := func(i int) string { return r.Args[i] }
 		switch r.Op {
 		case gen.NotEmpty:
@@ -555,12 +593,18 @@ func (e *Emitter) rules(ctx *gen.Context, t *gen.Type, out string, k kind, where
 			op, word := lenOp(map[gen.Op]gen.Op{gen.Runes: gen.Len, gen.MinRunes: gen.MinLen, gen.MaxRunes: gen.MaxLen}[r.Op])
 			out += refine(e.helpers.Use("ggenRunes")+"(x) "+op+" "+arg(0), word+" "+js.Count(arg(0), "character"))
 		case gen.GT, gen.GTE, gen.LT, gen.LTE:
-			if k == num {
+			op := map[gen.Op]string{gen.GT: ">", gen.GTE: ">=", gen.LT: "<", gen.LTE: "<="}[r.Op]
+			switch {
+			case k == num && !f32:
 				e.checkSafe(ctx, arg(0), where)
 				out += "." + map[gen.Op]string{gen.GT: "gt", gen.GTE: "gte", gen.LT: "lt", gen.LTE: "lte"}[r.Op] + "(" + arg(0) + ")"
-			} else {
-				op := map[gen.Op]string{gen.GT: ">", gen.GTE: ">=", gen.LT: "<", gen.LTE: "<="}[r.Op]
-				out += refine("Number(x) "+op+" "+arg(0), "must be "+op+" "+arg(0))
+			case k == num:
+				out += refine("Math.fround(x) "+op+" Math.fround("+arg(0)+")", "must be "+op+" "+arg(0))
+			case numericString:
+				n := e.helpers.NumberText(t.Format)
+				out += refine(js.Fround(n.Val, f32)+" "+op+" "+js.Fround(n.Lit(arg(0)), f32), "must be "+op+" "+arg(0))
+			default:
+				out += refine(js.Fround("Number(x)", f32)+" "+op+" "+js.Fround(arg(0), f32), "must be "+op+" "+arg(0))
 			}
 		case gen.Eq, gen.Neq:
 			op, word := "===", "must be "
@@ -571,27 +615,48 @@ func (e *Emitter) rules(ctx *gen.Context, t *gen.Type, out string, k kind, where
 			case t.Wire == gen.WireString && !numericString:
 				out += refine("x "+op+" "+js.Quote(arg(0)), word+arg(0))
 			case numericString:
-				out += refine("Number(x) "+op+" "+arg(0), word+arg(0))
+				n := e.helpers.NumberText(t.Format)
+				out += refine(js.Fround(n.Val, f32)+" "+op+" "+js.Fround(n.Lit(arg(0)), f32), word+arg(0))
 			default:
-				out += refine("x "+op+" "+arg(0), word+arg(0))
+				out += refine(js.Fround("x", f32)+" "+op+" "+js.Fround(arg(0), f32), word+arg(0))
 			}
 		case gen.Multiple:
-			if k == num {
+			switch {
+			case k == num:
 				out += ".multipleOf(" + arg(0) + ")"
-			} else {
+			case numericString:
+				n := e.helpers.NumberText(t.Format)
+				out += refine(n.Val+" % "+n.Lit(arg(0))+" === "+n.Zero(), "must be a multiple of "+arg(0))
+			default:
 				out += refine("Number(x) % "+arg(0)+" === 0", "must be a multiple of "+arg(0))
 			}
 		case gen.OneOf:
 			vals := make([]string, len(r.Args))
+			if numericString {
+				// Go matches the parsed number, whatever its spelling.
+				n := e.helpers.NumberText(t.Format)
+				for i, a := range r.Args {
+					vals[i] = js.Fround(n.Lit(a), f32)
+				}
+				out += refine("["+strings.Join(vals, ", ")+"].includes("+js.Fround(n.Val, f32)+")", "must be one of "+strings.Join(r.Args, ", "))
+				break
+			}
 			for i, a := range r.Args {
-				vals[i] = a
+				vals[i] = js.Fround(a, f32)
 				if t.Wire == gen.WireString {
 					vals[i] = js.Quote(a)
 				}
 			}
-			if t.Wire == gen.WireString {
+			switch {
+			case f32:
+				out += refine("["+strings.Join(vals, ", ")+"].includes(Math.fround(x))", "must be one of "+strings.Join(r.Args, ", "))
+			case ri < len(t.Rules)-1:
+				// A pipe would hide the base schema's methods from the rules
+				// after it.
+				out += refine("["+strings.Join(vals, ", ")+"].includes(x)", "must be one of "+strings.Join(r.Args, ", "))
+			case t.Wire == gen.WireString:
 				out += ".pipe(z.enum([" + strings.Join(vals, ", ") + "]))"
-			} else {
+			default:
 				out += ".pipe(z.literal([" + strings.Join(vals, ", ") + "]))"
 			}
 		case gen.URLRule:
@@ -623,7 +688,13 @@ func (e *Emitter) rules(ctx *gen.Context, t *gen.Type, out string, k kind, where
 		case gen.Replace:
 			out += overwrite("x.replaceAll(" + js.Quote(arg(0)) + ", " + js.Quote(escapeDollar(arg(1))) + ")")
 		case gen.Clamp:
-			out += overwrite("Math.min(Math.max(x, " + arg(0) + "), " + arg(1) + ")")
+			if numericString {
+				// Go clamps the parsed number and writes it back quoted.
+				n := e.helpers.NumberText(t.Format)
+				out += overwrite("String(" + js.Clamp(n.Val, n.Lit(arg(0)), n.Lit(arg(1)), n.Int) + ")")
+			} else {
+				out += overwrite(js.Clamp("x", arg(0), arg(1), false))
+			}
 		case gen.Func:
 			if action, ok := e.funcAction(ctx, r); ok {
 				out += action

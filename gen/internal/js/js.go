@@ -5,10 +5,10 @@ package js
 
 import (
 	"encoding/json"
+	"math/big"
 	"slices"
 	"strconv"
 	"strings"
-	"unicode"
 	"unicode/utf16"
 )
 
@@ -40,20 +40,28 @@ var reserved = map[string]struct{}{
 	"arguments": {}, "eval": {},
 	// contextual in TypeScript, and confusing as a type name
 	"type": {}, "namespace": {}, "declare": {}, "module": {},
+	// globals and library bindings the emitted code reads, which a module
+	// declaration would shadow
+	"Array": {}, "BigInt": {}, "Math": {}, "Number": {}, "Object": {}, "Record": {},
+	"String": {}, "TextEncoder": {}, "Uint8Array": {}, "parseInt": {}, "z": {}, "v": {},
 }
 
-// IsIdent reports whether s can name a declaration.
+// IsIdent reports whether s can name a declaration. Names starting with
+// "ggen" are kept for the runtime helpers.
 func IsIdent(s string) bool {
 	_, r := reserved[s]
-	return !r && identChars(s)
+	return !r && !strings.HasPrefix(s, "ggen") && identChars(s)
 }
 
 func identChars(s string) bool {
 	if s == "" {
 		return false
 	}
-	for i, r := range s {
-		if r == '_' || r == '$' || unicode.IsLetter(r) || (i > 0 && unicode.IsDigit(r)) {
+	// ASCII only: Go's letter tables are neither JavaScript's ID_Start nor
+	// the Unicode version the TypeScript scanner knows.
+	for i := range len(s) {
+		c := s[i]
+		if c == '_' || c == '$' || 'a' <= c && c <= 'z' || 'A' <= c && c <= 'Z' || i > 0 && '0' <= c && c <= '9' {
 			continue
 		}
 		return false
@@ -95,6 +103,35 @@ var prototypeMembers = map[string]struct{}{
 	"constructor": {}, "hasOwnProperty": {}, "isPrototypeOf": {},
 	"propertyIsEnumerable": {}, "toLocaleString": {}, "toString": {}, "valueOf": {},
 	"__defineGetter__": {}, "__defineSetter__": {}, "__lookupGetter__": {}, "__lookupSetter__": {},
+	"__proto__": {},
+}
+
+// arrayMembers are the names Array.prototype defines.
+var arrayMembers = map[string]struct{}{
+	"length": {}, "at": {}, "concat": {}, "copyWithin": {}, "entries": {}, "every": {}, "fill": {},
+	"filter": {}, "find": {}, "findIndex": {}, "findLast": {}, "findLastIndex": {}, "flat": {},
+	"flatMap": {}, "forEach": {}, "includes": {}, "indexOf": {}, "join": {}, "keys": {},
+	"lastIndexOf": {}, "map": {}, "pop": {}, "push": {}, "reduce": {}, "reduceRight": {},
+	"reverse": {}, "shift": {}, "slice": {}, "some": {}, "sort": {}, "splice": {},
+	"toReversed": {}, "toSorted": {}, "toSpliced": {}, "unshift": {}, "values": {}, "with": {},
+}
+
+// ArrayMember reports whether `name in a` can hold for an array a: an
+// Array.prototype or Object.prototype member, or a canonical array index.
+func ArrayMember(name string) bool {
+	if _, ok := arrayMembers[name]; ok || PrototypeMember(name) {
+		return true
+	}
+	if name == "" || len(name) > 10 || len(name) > 1 && name[0] == '0' {
+		return false
+	}
+	for i := range len(name) {
+		if name[i] < '0' || name[i] > '9' {
+			return false
+		}
+	}
+	n, _ := strconv.ParseUint(name, 10, 64)
+	return n < 1<<32-1
 }
 
 // PrototypeMember reports whether a JSON name collides with Object.prototype.
@@ -252,6 +289,8 @@ var helperDeps = map[string][]string{
 	"ggenTrim":            {"ggenSpace"},
 	"ggenToLower":         {"ggenMapCase"},
 	"ggenToUpper":         {"ggenMapCase"},
+	"ggenIsNumber":        {"ggenNumber"},
+	"ggenIsFloat32":       {"ggenNumber"},
 	"ggenParsesURL":       {"ggenIsAddr"},
 	"ggenIsDateTime":      {"ggenDaysIn"},
 }
@@ -370,8 +409,12 @@ var helperSource = map[string]string{
   return true;
 }`,
 	"ggenIsNumber": `function ggenIsNumber(s: string): boolean {
-  return /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/.test(s) && Number.isFinite(Number(s));
+  return ggenNumber.test(s) && Number.isFinite(Number(s));
 }`,
+	"ggenIsFloat32": `function ggenIsFloat32(s: string): boolean {
+  return ggenNumber.test(s) && Number.isFinite(Math.fround(Number(s)));
+}`,
+	"ggenNumber": `const ggenNumber = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/;`,
 	"ggenFits": `function ggenFits(s: string, min: bigint, max: bigint): boolean {
   // A failed check does not stop the ones after it, so this runs on text the
   // format check already rejected.
@@ -380,6 +423,15 @@ var helperSource = map[string]string{
     return n >= min && n <= max;
   } catch {
     return false;
+  }
+}`,
+	"ggenBigInt": `function ggenBigInt(s: string): bigint {
+  // A failed check does not stop the ones after it, so this runs on text the
+  // format check already rejected.
+  try {
+    return BigInt(s);
+  } catch {
+    return 0n;
   }
 }`,
 	"ggenTrim": `function ggenTrim(s: string): string {
@@ -399,13 +451,24 @@ var helperSource = map[string]string{
 }`,
 	"ggenMapCase": `function ggenMapCase(s: string, upper: boolean): string {
   // Go maps every rune on its own and never expands one into several, so a
-  // final sigma stays sigma and ß stays ß. U+0130 is the one simple mapping
-  // JavaScript spells with two code points.
+  // final sigma stays sigma and ß stays ß. U+0130 and the Greek letters with
+  // ypogegrammeni have simple mappings JavaScript spells with two code points.
   let out = "";
   for (const r of s) {
     if (!upper && r === "\u0130") {
       out += "i";
       continue;
+    }
+    if (upper) {
+      const c = r.codePointAt(0)!;
+      if (c >= 0x1f80 && c <= 0x1fa7 && (c & 0xf) < 8) {
+        out += String.fromCodePoint(c + 8);
+        continue;
+      }
+      if (c === 0x1fb3 || c === 0x1fc3 || c === 0x1ff3) {
+        out += String.fromCodePoint(c + 9);
+        continue;
+      }
     }
     const m = upper ? r.toUpperCase() : r.toLowerCase();
     out += [...m].length === 1 ? m : r;
@@ -451,8 +514,6 @@ func (h *Helpers) FormatCheck(format string) (Check, bool) {
 	switch format {
 	case "duration":
 		c.Name, c.Func = "ggenIsDuration", true
-	case "number-string":
-		c.Name, c.Func = "ggenIsNumber", true
 	case "int-string":
 		c.Name = "ggenInteger"
 	case "uint-string":
@@ -472,6 +533,91 @@ func (h *Helpers) FormatCheck(format string) (Check, bool) {
 	}
 	h.Use(c.Name)
 	return c, true
+}
+
+// NumberCheck returns the check for a quoted number Go parses at bits (32 or
+// 64), or for the number grammar alone when bits is 0, and marks its helper
+// used.
+func (h *Helpers) NumberCheck(bits int) Check {
+	c := Check{Name: "ggenIsNumber", Func: true}
+	switch bits {
+	case 32:
+		c.Name = "ggenIsFloat32"
+	case 0:
+		c = Check{Name: "ggenNumber"}
+	}
+	h.Use(c.Name)
+	return c
+}
+
+// NumberText is how a rule reads the `,string` number x: as a BigInt for an
+// integer format, so a 64-bit value compares exactly as Go compares it, and as
+// a Number otherwise.
+type NumberText struct {
+	Val string // the expression reading x
+	Int bool   // Val is a bigint
+}
+
+// NumberText returns how rules read a `,string` number of format and marks
+// its helper used.
+func (h *Helpers) NumberText(format string) NumberText {
+	if format == "int-string" || format == "uint-string" {
+		return NumberText{Val: h.Use("ggenBigInt") + "(x)", Int: true}
+	}
+	return NumberText{Val: "Number(x)"}
+}
+
+// Lit spells the rule argument a as a literal comparable with Val. An empty
+// argument, such as an open clamp bound, stays empty.
+func (n NumberText) Lit(a string) string {
+	a = strings.TrimSpace(a)
+	if !n.Int || a == "" {
+		return a
+	}
+	if r, ok := new(big.Rat).SetString(a); ok && r.IsInt() {
+		return r.Num().String() + "n"
+	}
+	return a + "n"
+}
+
+// Fround wraps v in Math.fround when f32 is set. Go compares a float32 value
+// with the bound converted to float32, so both sides of a comparison round.
+func Fround(v string, f32 bool) string {
+	if !f32 {
+		return v
+	}
+	return "Math.fround(" + v + ")"
+}
+
+// Zero is the zero literal of Val's type.
+func (n NumberText) Zero() string {
+	if n.Int {
+		return "0n"
+	}
+	return "0"
+}
+
+// Clamp returns the expression clamping v, a number or, when bigint is set, a
+// bigint, into the literals lo and hi. An empty bound leaves that side open.
+func Clamp(v, lo, hi string, bigint bool) string {
+	lo, hi = strings.TrimSpace(lo), strings.TrimSpace(hi)
+	if !bigint {
+		if lo != "" {
+			v = "Math.max(" + v + ", " + lo + ")"
+		}
+		if hi != "" {
+			v = "Math.min(" + v + ", " + hi + ")"
+		}
+		return v
+	}
+	body := "n"
+	if hi != "" {
+		body = "n > " + hi + " ? " + hi + " : " + body
+	}
+	if lo != "" {
+		body = "n < " + lo + " ? " + lo + " : " + body
+	}
+	return "((n: bigint) => " + body + ")(" + v + ")"
 }
 
 // TimeCheck returns the check for a Go time layout. The common layouts get a

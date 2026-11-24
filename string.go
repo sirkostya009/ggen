@@ -44,6 +44,23 @@ func CloseJSONStringHTML(dst []byte, from int) []byte {
 	return append(dst, '"')
 }
 
+// AppendRawHTML appends the raw JSON value b with <, > and & written as
+// \uXXXX escapes. In valid JSON they occur only inside strings, so the
+// result is the same value.
+func AppendRawHTML(dst, b []byte) []byte {
+	const hex = "0123456789abcdef"
+	start := 0
+	for i, c := range b {
+		if c != '<' && c != '>' && c != '&' {
+			continue
+		}
+		dst = append(dst, b[start:i]...)
+		dst = append(dst, '\\', 'u', '0', '0', hex[c>>4], hex[c&0xf])
+		start = i + 1
+	}
+	return append(dst, b[start:]...)
+}
+
 // AppendString appends s escaped as a JSON string body, then the closing
 // '"'. The caller writes the opening '"'. The output is HTML-safe: <, > and &
 // are written as \uXXXX escapes. Use AppendStringNoHTML to keep them as is.

@@ -48,3 +48,8 @@ export type AddressViewInput = AddressInput;
 
 /** Token delegates to the text methods of Secret. */
 export type TokenInput = string;
+
+/** Section collects nested sections under every other key. */
+export type SectionInput = {
+  title?: string;
+} & { [key: string]: SectionInput | string };

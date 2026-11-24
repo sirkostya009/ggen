@@ -78,6 +78,9 @@ func (o *Output) File(p string, e Emitter) *File {
 	if path.IsAbs(p) || p == ".." || strings.HasPrefix(p, "../") || filepath.IsAbs(filepath.FromSlash(p)) {
 		o.errs = append(o.errs, fmt.Errorf("%s: path leaves the output directory", p))
 	}
+	if p == "." {
+		o.errs = append(o.errs, fmt.Errorf("%q: path names the output directory, not a file", p))
+	}
 	if f, ok := o.byPath[p]; ok {
 		if e == nil || f.emitter == nil {
 			return f
@@ -154,14 +157,18 @@ func (r *Report) Unsupported(f *Field, rule Rule, msg string) {
 
 func declName(d *TypeDecl) string { return d.Pkg.Name + "." + d.Name }
 
-// Write validates every placement, renders every file, and writes them all.
-// Any error leaves the directory untouched.
+// Write validates every placement and path, renders every file, and writes
+// them all. A validation or render error leaves the directory untouched, and
+// every file is staged before any is replaced.
 func (o *Output) Write() error {
 	errs := slices.Clone(o.errs)
 	for _, f := range o.files {
 		errs = append(errs, f.checkRefs()...)
 	}
 	errs = append(errs, o.checkCycles()...)
+	if len(errs) == 0 {
+		errs = o.checkPaths()
+	}
 	if len(errs) > 0 {
 		return errors.Join(errs...)
 	}
@@ -222,6 +229,36 @@ func (o *Output) Write() error {
 		}
 	}
 	return nil
+}
+
+// checkPaths reports every file that cannot be written as a regular file: one
+// whose path is a directory of another file, one whose destination is a
+// directory, and one with a parent that exists as something else.
+func (o *Output) checkPaths() []error {
+	var errs []error
+	root := filepath.Clean(o.dir)
+	for _, f := range o.files {
+		for dir := path.Dir(f.Path); dir != "."; dir = path.Dir(dir) {
+			if _, ok := o.byPath[dir]; ok {
+				errs = append(errs, fmt.Errorf("%s: path is also the directory of %s", dir, f.Path))
+				break
+			}
+		}
+		dst := filepath.Join(o.dir, filepath.FromSlash(f.Path))
+		if fi, err := os.Lstat(dst); err == nil && fi.IsDir() {
+			errs = append(errs, fmt.Errorf("%s: is a directory", f.Path))
+			continue
+		}
+		for dir := filepath.Dir(dst); dir != root && dir != filepath.Dir(dir); dir = filepath.Dir(dir) {
+			if fi, err := os.Stat(dir); err == nil {
+				if !fi.IsDir() {
+					errs = append(errs, fmt.Errorf("%s: %s is not a directory", f.Path, dir))
+				}
+				break
+			}
+		}
+	}
+	return errs
 }
 
 // checkRefs reports every reference from this file's shapes to a generated

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 	"testing/iotest"
+	"time"
 
 	"github.com/sirkostya009/ggen"
 )
@@ -375,5 +376,71 @@ func TestVariants_multierrConverterInput(t *testing.T) {
 		if want := []string{"a", "price.amount", "z"}; !slices.Equal(got, want) {
 			t.Errorf("%s: paths %q, want %q", path, got, want)
 		}
+	}
+}
+
+func VarIntFromBool(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func VarTimeFromBool(bool) time.Time    { return time.Unix(1, 0) }
+func VarDurFromBool(bool) time.Duration { return time.Second }
+func VarTextFromBool(bool) NPText       { return 1 }
+func VarIntFromText(n NPText) int       { return int(n) * 10 }
+func VarIntFromTextPtr(n *NPText) int {
+	if n == nil {
+		return -1
+	}
+	return int(*n)
+}
+
+// VarWireShapes holds native variants whose wire shape is not their kind's
+// default one, and converters whose input has a text codec. Each native
+// variant must claim the shape AppendJSON writes.
+//
+//ggen:generate
+type VarWireShapes struct {
+	Q int           `json:"q,string"      pipe:". / @VarIntFromBool"`
+	T time.Time     `json:"t,format:unix" pipe:". / @VarTimeFromBool"`
+	D time.Duration `json:"d,format:sec"  pipe:". / @VarDurFromBool"`
+	N NPText        `json:"n"             pipe:". / @VarTextFromBool"`
+	C int           `json:"c"             pipe:". / @VarIntFromText"`
+	P int           `json:"p"             pipe:". / @VarIntFromTextPtr"`
+}
+
+func TestVariants_nativeWireShape(t *testing.T) {
+	t.Parallel()
+	want := VarWireShapes{Q: 5, T: time.Unix(7, 0), D: 3 * time.Second, N: 4, C: 2, P: 9}
+	out, err := want.AppendJSON(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	check := func(t *testing.T, in string, want VarWireShapes) {
+		t.Helper()
+		got, _, err := VarWireShapes{}.DecodeFrom([]byte(in))
+		if err != nil {
+			t.Fatalf("bytes %s: %v", in, err)
+		}
+		gotS, err := VarWireShapes{}.DecodeFromStream(ggen.NewStream(iotest.OneByteReader(strings.NewReader(in)), make([]byte, 0, 16)))
+		if err != nil {
+			t.Fatalf("stream %s: %v", in, err)
+		}
+		for _, g := range []VarWireShapes{got, gotS} {
+			if g.Q != want.Q || !g.T.Equal(want.T) || g.D != want.D || g.N != want.N || g.C != want.C || g.P != want.P {
+				t.Errorf("%s: got %+v, want %+v", in, g, want)
+			}
+		}
+	}
+	check(t, string(out), want)
+	check(t, `{"q":true,"t":true,"d":true,"n":true,"c":"t3","p":"t1"}`,
+		VarWireShapes{Q: 1, T: time.Unix(1, 0), D: time.Second, N: 1, C: 30, P: 1})
+	if got, _, err := (VarWireShapes{}).DecodeFrom([]byte(`{"p":null}`)); err != nil || got.P != -1 {
+		t.Errorf(`{"p":null}: got %d, %v, want -1 from the converter`, got.P, err)
+	}
+	if _, _, err := (VarWireShapes{}).DecodeFrom([]byte(`{"q":5}`)); !errors.Is(err, ggen.ErrBadValue) {
+		t.Errorf(`{"q":5} on a ,string field: got %v, want ErrBadValue`, err)
 	}
 }

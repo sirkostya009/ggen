@@ -570,6 +570,24 @@ func TestCaretIndent_PicksSpanOverPosCol(t *testing.T) {
 	}
 }
 
+// Carets pad one column per rune, so a multibyte character before the span
+// does not push them right.
+func TestCaretIndent_MultibytePadsPerRune(t *testing.T) {
+	t.Parallel()
+	line := "\tNév  string `pipe:\"gte=1\"`"
+	if got, want := caretIndent(line, "é: ", 1, "gte", ""), "   \t"+strings.Repeat(" ", 19); got != want {
+		t.Errorf("caretIndent = %q, want %q", got, want)
+	}
+	pl := &prettyLogger{}
+	errs := []*model.RichError{
+		{Pos: token.Position{Column: 1}, CodeSpan: "Név"},
+		{Pos: token.Position{Column: 1}, CodeSpan: "gte"},
+	}
+	if got, want := pl.multiCaretLine(line, errs), "\t^"+strings.Repeat(" ", 18)+"^"; got != want {
+		t.Errorf("multiCaretLine = %q, want %q", got, want)
+	}
+}
+
 // ----- highlightSpan -----
 
 func TestHighlightSpan(t *testing.T) {

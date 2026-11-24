@@ -1701,6 +1701,9 @@ type Lookup map[string]int
 
 //ggen:generate
 type Tuple [3]int
+
+//ggen:generate
+type Digest [3]byte
 `)
 		if out, err := runCLI(t, bin, dir, "msg.go"); err != nil {
 			t.Fatalf("ggen msg.go: %v\n%s", err, out)
@@ -1713,6 +1716,8 @@ type Tuple [3]int
 			"s Lookup) AppendJSON",
 			") DecodeFrom(data []byte) (result Tuple",
 			"s Tuple) AppendJSON",
+			// [N]byte is base64, as with type information.
+			"base64.StdEncoding.AppendEncode(dst, s[:])",
 		} {
 			if !strings.Contains(body, want) {
 				t.Errorf("expected %q in generated body:\n%s", want, body)
@@ -2049,6 +2054,121 @@ type Msg struct {
 				}
 			}
 		})
+		// A func declared in a _test.go file is visible to the generated test
+		// file only, so a non-test struct cannot reference it.
+		t.Run("func_from_test_file", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeMod(t, dir)
+			writeFixture(t, filepath.Join(dir, "helpers_test.go"), `package fixture
+
+import "strings"
+
+func TestOnlyLower(s string) string { return strings.ToLower(s) }
+func TestOnlyConv(b bool) string    { return "" }
+
+//ggen:generate
+type TestMsg struct {
+	A string `+"`"+`json:"a" pipe:"@TestOnlyLower"`+"`"+`
+}
+`)
+			writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+//ggen:generate
+type Msg struct {
+	A string `+"`"+`json:"a" pipe:"@TestOnlyLower"`+"`"+`
+	B string `+"`"+`json:"b" pipe:". / @TestOnlyConv"`+"`"+`
+}
+`)
+			out, err := runCLI(t, bin, dir, "./...")
+			if err == nil {
+				t.Fatalf("expected rejection, got success:\n%s", out)
+			}
+			for _, want := range []string{
+				"func TestOnlyLower is declared in a _test.go file",
+				"func TestOnlyConv is declared in a _test.go file",
+			} {
+				if !strings.Contains(out, want) {
+					t.Errorf("diagnostic %q missing:\n%s", want, out)
+				}
+			}
+			if strings.Contains(out, "TestMsg") {
+				t.Errorf("test-file struct rejected:\n%s", out)
+			}
+			if out, err := runCLI(t, bin, dir, "helpers_test.go"); err != nil {
+				t.Errorf("test-file struct rejected: %v\n%s", err, out)
+			}
+		})
+		// inner: and keys: steps run inside the native element decoders, which a
+		// converter's output never passes through.
+		t.Run("converter_with_inner_or_keys", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeMod(t, dir)
+			writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+import "strings"
+
+func Split(s string) []string        { return strings.Split(s, ",") }
+func OneKey(s string) map[string]int { return map[string]int{s: 1} }
+
+//ggen:generate
+type Msg struct {
+	Tags []string       `+"`"+`json:"tags" pipe:". / @Split inner:(trim notempty)"`+"`"+`
+	M    map[string]int `+"`"+`json:"m" pipe:". / @OneKey keys:(minlen=2)"`+"`"+`
+	Ok   []string       `+"`"+`json:"ok" pipe:". / @Split minlen=1"`+"`"+`
+}
+`)
+			out, err := runCLI(t, bin, dir, "msg.go")
+			if err == nil {
+				t.Fatalf("expected rejection, got success:\n%s", out)
+			}
+			const want = "steps do not run on a converter variant's output"
+			if n := strings.Count(out, want); n != 2 {
+				t.Errorf("want 2 %q diagnostics, got %d:\n%s", want, n, out)
+			}
+			if strings.Contains(out, "Msg.Ok") {
+				t.Errorf("outer steps on a converter field rejected:\n%s", out)
+			}
+		})
+		// The native variant claims the shape the field is written in, so a
+		// `,string` number and a numeric `format:` clash with converters of
+		// that shape.
+		t.Run("converter_native_wire_shape_clash", func(t *testing.T) {
+			t.Parallel()
+			dir := t.TempDir()
+			writeMod(t, dir)
+			writeFixture(t, filepath.Join(dir, "msg.go"), `package fixture
+
+import "time"
+
+func FromS(s string) int            { return len(s) }
+func FromN(n int) time.Duration     { return time.Duration(n) }
+func FromB(b bool) int              { return 0 }
+
+//ggen:generate
+type Msg struct {
+	Q  int           `+"`"+`json:"q,string" pipe:". / @FromS"`+"`"+`
+	D  time.Duration `+"`"+`json:"d,format:milli" pipe:". / @FromN"`+"`"+`
+	Ok int           `+"`"+`json:"ok,string" pipe:". / @FromB"`+"`"+`
+}
+`)
+			out, err := runCLI(t, bin, dir, "msg.go")
+			if err == nil {
+				t.Fatalf("expected rejection, got success:\n%s", out)
+			}
+			for _, want := range []string{
+				"decode variants native (int) and @FromS both claim the same JSON shape",
+				"decode variants native (time.Duration) and @FromN both claim the same JSON shape",
+			} {
+				if !strings.Contains(out, want) {
+					t.Errorf("diagnostic %q missing:\n%s", want, out)
+				}
+			}
+			if strings.Contains(out, "@FromB") {
+				t.Errorf("non-clashing variant rejected:\n%s", out)
+			}
+		})
 		// A pointer converter input claims null as well as the shape of the type it
 		// points to, so it cannot share a decode stage with nullzero.
 		t.Run("converter_pointer_input_null_clash", func(t *testing.T) {
@@ -2136,6 +2256,10 @@ type Msg struct {
 			// ----- tags that cannot be parsed -----
 			{"pipe_tag_bad_escape", "S string", `json:"s" pipe:"trim replace='don\'t'|x notempty"`, "tag is present but unreadable"},
 			{"json_tag_bad_escape", "S string", `json:"s\'x"`, "tag is present but unreadable"},
+			{"pipe_tag_space_after_colon", "N int", `json:"n" pipe: "gte=1"`, "`pipe` tag is present but unreadable"},
+			{"json_after_malformed_pair", "N int", `db:x json:"n"`, "`json` tag is present but unreadable"},
+			{"pipe_tag_repeated", "N int", `json:"n" pipe:"gte=1" pipe:"lte=5"`, "`pipe` tag appears twice"},
+			{"hint_tag_repeated", "S []int", `json:"s" hint:"2" hint:"4"`, "`hint` tag appears twice"},
 
 			// ----- json tag grammar, same as jsonv2 -----
 			{"dash_with_options", "F string", `json:"-,"`, `use json:"-" to ignore the field`},
@@ -2385,8 +2509,17 @@ func TestOmitEmptyOnStructField(t *testing.T) {
 	writeGoMod(t, base, "omitempties")
 	writeFixture(t, filepath.Join(base, "ext", "ext.go"), `package ext
 
+import (
+	"database/sql"
+	"time"
+)
+
 type Plain struct {
 	A int `+"`"+`json:"a,omitempty"`+"`"+`
+}
+
+type NullRow struct {
+	D sql.Null[time.Duration] `+"`"+`json:"d,omitempty"`+"`"+`
 }
 `)
 
@@ -2445,8 +2578,16 @@ type Nested struct {
 	A string `+"`"+`json:"a,omitempty"`+"`"+`
 }
 
+type Level string
+
+//ggen:generate
+type Row ext.NullRow
+
 //ggen:generate
 type Msg struct {
+	ND  sql.Null[time.Duration] `+"`"+`json:"nd,omitempty"`+"`"+`
+	NL  sql.Null[Level]         `+"`"+`json:"nl,omitempty"`+"`"+`
+	NB  sql.Null[[]byte]        `+"`"+`json:"nb,omitempty"`+"`"+`
 	P   *Nested         `+"`"+`json:"p,omitempty"`+"`"+`
 	PP  **Nested        `+"`"+`json:"pp,omitempty"`+"`"+`
 	Cp  *ext.Plain      `+"`"+`json:"cp,omitempty"`+"`"+`
@@ -2477,10 +2618,14 @@ type Msg struct {
 			t.Fatalf("ggen ./accept: %v\n%s", err, out)
 		}
 		body := mustReadOutput(t, filepath.Join(base, "accept", "accept_ggen.go"))
-		// A pointer to a struct omits on nil and nothing else.
+		// A pointer to a struct omits on a nil at any level and nothing else.
 		for _, want := range []string{
-			"if s.P != nil {", "if s.PP != nil {", "if s.Cp != nil {",
+			"if s.P != nil {", "if s.PP != nil && (*s.PP) != nil {", "if s.Cp != nil {",
 			"if s.Z != (Nested{}) {",
+			// A generic sql.Null omits an invalid value, or a valid one whose
+			// inner value is empty, whatever T is.
+			"if s.ND.Valid {", `if s.NL.Valid && s.NL.V != "" {`, "if s.NB.Valid && len(s.NB.V) > 0 {",
+			"if s.D.Valid {",
 		} {
 			if !strings.Contains(body, want) {
 				t.Errorf("guard missing %q:\n%s", want, body)
@@ -2832,6 +2977,57 @@ type Keys struct {
 	Extra map[string]*[16]byte `+"`json:\",embed\"`"+`
 }
 `)
+	// Shapes whose stdlib imports only the body scan sees: a bytes leaf behind
+	// two pointers or inside a pointer to sql.Null, and json, time and sql
+	// that a pointer element with text methods, a [0]time.Time and a
+	// sql.NullTime catch-all never spell. One shape per package, so no other
+	// field supplies or uses the import.
+	writeFixture(t, filepath.Join(base, "bodyimports", "txt", "txt.go"), `package txt
+
+type ID [2]byte
+
+func (id ID) MarshalText() ([]byte, error) { return id[:], nil }
+
+func (id *ID) UnmarshalText(b []byte) error { copy(id[:], b); return nil }
+`)
+	for pkg, c := range map[string]struct{ imp, field string }{
+		"ptrptrbytes":   {"", "Data **[]byte `json:\"data\"`"},
+		"ptrsqlbytes":   {`"database/sql"`, "Payload *sql.Null[[]byte] `json:\"payload\"`"},
+		"ptrtextelem":   {`"fixture/bodyimports/txt"`, "IDs []*[]txt.ID `json:\"ids\"`"},
+		"zerotimearr":   {`"time"`, "At [0]time.Time `json:\"at\"`"},
+		"embednulltime": {`"database/sql"`, "Extra map[string]sql.NullTime `json:\",embed\"`"},
+	} {
+		imp := ""
+		if c.imp != "" {
+			imp = "import " + c.imp + "\n\n"
+		}
+		writeFixture(t, filepath.Join(base, "bodyimports", pkg, pkg+".go"), "package "+pkg+"\n\n"+imp+"//ggen:generate\ntype Doc struct {\n\t"+c.field+"\n}\n")
+	}
+	// A maxlen cap over a 64 MB element: maxlen*sizeof would overflow int on
+	// 386, so the cap constant must not form that product.
+	writeFixture(t, filepath.Join(base, "wideelem", "wideelem.go"), `package wideelem
+
+type Frame struct {
+	B [1 << 24]int32
+}
+
+//ggen:generate
+type Frames struct {
+	A []Frame `+"`json:\"a\" pipe:\"maxlen=64\"`"+`
+}
+`)
+	// Two custom time layouts on fields whose names differ only in non-ASCII
+	// letters each get their own AppendJSON temp.
+	writeFixture(t, filepath.Join(base, "nonascii", "nonascii.go"), `package nonascii
+
+import "time"
+
+//ggen:generate
+type Event struct {
+	Старт time.Time `+"`json:\"start,format:'2006-01-02'\"`"+`
+	Финиш time.Time `+"`json:\"finish,format:'2006-01-02'\"`"+`
+}
+`)
 	// An element that is not a struct has no `T{}` zero: a named primitive
 	// with its own text codec, standard named types the inline path leaves
 	// alone, an interface, and a plain named primitive that only container
@@ -3037,6 +3233,14 @@ type Levels struct {
 	writeFixture(t, filepath.Join(base, "astonly", "z.go"), astOnly)
 	writeFixture(t, filepath.Join(base, "astonly", "z_ggen.go"), astBody)
 	goBuild(t, base)
+	// The 386 build needs output without amd64 kernels, which the run above
+	// emits when GOEXPERIMENT=simd is set in the environment.
+	if out, err := runCLI(t, bin, base, "-simd=off", "./wideelem"); err != nil {
+		t.Fatalf("ggen -simd=off ./wideelem: %v\n%s", err, out)
+	}
+	if out, err := runGo(t, base, []string{"GOARCH=386"}, "build", "./wideelem"); err != nil {
+		t.Errorf("GOARCH=386 go build ./wideelem: %v\n%s", err, out)
+	}
 }
 
 // A named func or chan type has no JSON shape unless it brings its own
@@ -3056,14 +3260,36 @@ type Hook func()
 func (Hook) MarshalJSON() ([]byte, error) { return []byte("1"), nil }
 
 func (*Hook) UnmarshalJSON([]byte) error { return nil }
+
+type Cx complex64
+
+type Cxc complex64
+
+func (Cxc) MarshalText() ([]byte, error) { return []byte("1"), nil }
+
+func (*Cxc) UnmarshalText([]byte) error { return nil }
+
+type Handlers []Handler
+
+type Callbacks map[string]func()
+
+type Tree map[string]Tree
 `
 	for name, c := range map[string]struct{ field, want string }{
-		"fn":      {"H Handler", "func field types are not supported"},
-		"ch":      {"P []Pipe", "chan field types are not supported"},
-		"sqlnull": {"N sql.Null[Handler]", "func field types are not supported"},
-		"codec":   {"K Hook", ""},
+		"fn":       {"H Handler", "func field types are not supported"},
+		"ch":       {"P []Pipe", "chan field types are not supported"},
+		"sqlnull":  {"N sql.Null[Handler]", "func field types are not supported"},
+		"codec":    {"K Hook", ""},
+		"cplx":     {"C complex128", "complex128 field types are not supported"},
+		"cplxs":    {"C map[string][]*complex64", "complex64 field types are not supported"},
+		"cxnamed":  {"C Cx", "complex64 field types are not supported"},
+		"cxcodec":  {"C Cxc", ""},
+		"uptr":     {"U unsafe.Pointer", "unsafe.Pointer field types are not supported"},
+		"named":    {"H Handlers", "func field types are not supported"},
+		"namedlit": {"C *Callbacks", "func field types are not supported"},
+		"cyclic":   {"T Tree", ""},
 	} {
-		src := "package " + name + "\n\nimport \"database/sql\"\n\nvar _ sql.NullString\n" + decls +
+		src := "package " + name + "\n\nimport (\n\t\"database/sql\"\n\t\"unsafe\"\n)\n\nvar (\n\t_ sql.NullString\n\t_ unsafe.Pointer\n)\n" + decls +
 			"\n//ggen:generate\ntype Doc struct {\n\t" + c.field + " `json:\"x\"`\n}\n"
 		writeFixture(t, filepath.Join(base, name, name+".go"), src)
 		out, err := runCLI(t, bin, filepath.Join(base, name), ".")
@@ -3083,6 +3309,10 @@ func (*Hook) UnmarshalJSON([]byte) error { return nil }
 	writeFixture(t, filepath.Join(base, "dep", "dep.go"), "package dep\n\ntype Handler func()\n\ntype Rec struct {\n\tA int\n\tH Handler\n}\n")
 	for name, c := range map[string]struct{ src, want string }{
 		"elems":   {"type Handler func()\n\n//ggen:generate\ntype Hs []Handler\n", "func element types are not supported"},
+		"litfn":   {"//ggen:generate\ntype FL []func()\n", "func element types are not supported"},
+		"litch":   {"//ggen:generate\ntype CM map[string]chan int\n", "chan element types are not supported"},
+		"anon":    {"//ggen:generate\ntype AS [2]struct{ A int }\n", "anonymous struct element types are not supported"},
+		"cxelems": {"//ggen:generate\ntype CS []complex128\n", "complex128 element types are not supported"},
 		"aliased": {"import \"fixture/dep\"\n\n//ggen:generate\ntype R dep.Rec\n", "field H: func field types are not supported"},
 	} {
 		writeFixture(t, filepath.Join(base, name, name+".go"), "package "+name+"\n\n"+c.src)
@@ -3090,6 +3320,68 @@ func (*Hook) UnmarshalJSON([]byte) error { return nil }
 		if err == nil || !strings.Contains(out, c.want) {
 			t.Errorf("%s: want %q, got %v\n%s", name, c.want, err, out)
 		}
+	}
+}
+
+// TestEmbeddedFieldDiagnostics pins positioned, accurate errors for the
+// embeddings ggen refuses, and that an unexported non-struct embedding is
+// ignored as encoding/json ignores it.
+func TestEmbeddedFieldDiagnostics(t *testing.T) {
+	t.Parallel()
+	bin := buildCLI(t)
+	base := t.TempDir()
+	fixtureGoMod(t, base, "fixture")
+	const bad = `package bad
+
+import "time"
+
+type B struct{ X int }
+
+type Name string
+
+type T2 B
+
+//ggen:generate
+type P struct {
+	*B
+	Name
+	T2
+	time.Time
+}
+`
+	writeFixture(t, filepath.Join(base, "bad", "bad.go"), bad)
+	out, err := runCLI(t, bin, filepath.Join(base, "bad"), ".")
+	if err == nil {
+		t.Fatalf("want an error\n%s", out)
+	}
+	for _, want := range []string{
+		"bad.go:13:2: pointer-embedded fields in P are not supported",
+		"bad.go:14:2: embedded non-struct type Name in P is not supported",
+		"bad.go:15:2: embedded type T2 in P is not supported",
+		"bad.go:16:2: cross-package embedded fields (time.Time) in P are not supported",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("want %q in\n%s", want, out)
+		}
+	}
+	const ok = "package ok\n\ntype hidden []int\n\ntype ptr int\n\n//ggen:generate\ntype P struct {\n\thidden\n\t*ptr\n\tint\n\tA int `json:\"a\"`\n}\n"
+	writeFixture(t, filepath.Join(base, "ok", "ok.go"), ok)
+	if out, err := runCLI(t, bin, filepath.Join(base, "ok"), "."); err != nil {
+		t.Fatalf("%v\n%s", err, out)
+	}
+	writeFixture(t, filepath.Join(base, "ok", "ok_test.go"), `package ok
+
+import "testing"
+
+func TestIgnored(t *testing.T) {
+	out, err := P{hidden: hidden{1}, A: 2}.AppendJSON(nil)
+	if err != nil || string(out) != `+"`"+`{"a":2}`+"`"+` {
+		t.Fatalf("%s %v", out, err)
+	}
+}
+`)
+	if out, err := runGo(t, base, nil, "test", "./ok"); err != nil {
+		t.Fatalf("go test: %v\n%s", err, out)
 	}
 }
 
@@ -3143,7 +3435,7 @@ func TestWriteGenerated_KeepsPreviousOnFailure(t *testing.T) {
 	genGlobalsMu.Lock()
 	defer genGlobalsMu.Unlock()
 	reset := func() {
-		generatedTypes, generatedFields, namedKinds, multiErrTypes, cyclicTypes = nil, nil, nil, nil, nil
+		generatedTypes, generatedFields, namedKinds, cyclicTypes, aliasingDecode = nil, nil, nil, nil, nil
 	}
 	reset()
 	defer reset()
@@ -3217,7 +3509,7 @@ func TestNumericBoundLiteralsCarryFieldKind(t *testing.T) {
 	gen := func(goType string, kind model.TypeKind, rules ...model.ValidationRule) string {
 		t.Helper()
 		// generate() seeds the globals only when they are nil, so reset them.
-		generatedTypes, namedKinds, cyclicTypes = nil, nil, nil
+		generatedTypes, namedKinds, cyclicTypes, aliasingDecode = nil, nil, nil, nil
 		var steps []model.Step
 		for _, r := range rules {
 			steps = append(steps, model.Step{V: r})
@@ -3255,4 +3547,293 @@ func TestNumericBoundLiteralsCarryFieldKind(t *testing.T) {
 	if !strings.Contains(f, "Limit: float64(1.5)") {
 		t.Errorf("float bound lost its kind:\n%s", f)
 	}
+}
+
+// The UnmarshalJSON hook clones its input exactly when DecodeFrom can return
+// a value that points into it.
+func TestUnmarshalHookClone(t *testing.T) {
+	t.Parallel()
+	bin := buildCLI(t)
+	base := t.TempDir()
+	fixtureGoMod(t, base, "fixture")
+	writeFixture(t, filepath.Join(base, "other", "other.go"), `package other
+
+//ggen:generate copy
+type Owned struct {
+	S string `+"`json:\"s\"`"+`
+}
+
+//ggen:generate
+type Loose struct {
+	S string `+"`json:\"s\"`"+`
+}
+
+type Texty struct{ v string }
+
+func (t Texty) MarshalText() ([]byte, error)  { return []byte(t.v), nil }
+func (t *Texty) UnmarshalText(b []byte) error { t.v = string(b); return nil }
+`)
+	writeFixture(t, filepath.Join(base, "hook", "hook.go"), `package hook
+
+import (
+	"database/sql"
+	"encoding/json"
+	"net/url"
+
+	"fixture/other"
+)
+
+//ggen:generate unmarshal copy
+type Flat struct {
+	S   string            `+"`json:\"s\"`"+`
+	Raw json.RawMessage   `+"`json:\"raw\"`"+`
+	A   any               `+"`json:\"a\"`"+`
+	N   json.Number       `+"`json:\"n\"`"+`
+	U   url.URL           `+"`json:\"u\"`"+`
+	M   map[string]string `+"`json:\"m\"`"+`
+	NS  sql.NullString    `+"`json:\"ns\"`"+`
+}
+
+//ggen:generate unmarshal copy
+type Nested struct {
+	LL [][]string                   `+"`json:\"ll\"`"+`
+	ML map[string][]string          `+"`json:\"ml\"`"+`
+	MM map[string]map[string]string `+"`json:\"mm\"`"+`
+	G  []sql.Null[string]           `+"`json:\"g\"`"+`
+	X  []other.Texty                `+"`json:\"x\"`"+`
+}
+
+//ggen:generate copy
+type OwnedChild struct {
+	S string `+"`json:\"s\"`"+`
+}
+
+//ggen:generate unmarshal copy
+type WithOwnedChild struct {
+	C  OwnedChild            `+"`json:\"c\"`"+`
+	CP *OwnedChild           `+"`json:\"cp\"`"+`
+	CM map[string]OwnedChild `+"`json:\"cm\"`"+`
+	CD [][]*OwnedChild       `+"`json:\"cd\"`"+`
+	G  sql.Null[OwnedChild]  `+"`json:\"g\"`"+`
+}
+
+//ggen:generate unmarshal copy
+type Cyclic struct {
+	S    string   `+"`json:\"s\"`"+`
+	Next *Cyclic  `+"`json:\"next\"`"+`
+	Kids []Cyclic `+"`json:\"kids\"`"+`
+}
+
+//ggen:generate copy
+type OwnedName string
+
+//ggen:generate
+type Count int
+
+//ggen:generate unmarshal copy
+type WithAliases struct {
+	N OwnedName   `+"`json:\"n\"`"+`
+	C Count       `+"`json:\"c\"`"+`
+	L []OwnedName `+"`json:\"l\"`"+`
+}
+
+//ggen:generate unmarshal copy
+type OwnedTags []string
+
+//ggen:generate unmarshal copy
+type OwnedText string
+
+//ggen:generate unmarshal
+type PlainCount int
+
+//ggen:generate unmarshal
+type PlainFlag bool
+
+//ggen:generate unmarshal copy
+type OwnedChildren []OwnedChild
+
+// A struct alias decodes the fields itself, under its own flags.
+//
+//ggen:generate unmarshal copy
+type Introspected LooseChild
+
+//ggen:generate unmarshal copy
+type CatchChild struct {
+	Extra map[string]OwnedChild `+"`json:\",embed\"`"+`
+}
+
+func FromOwned(c OwnedChild) string { return c.S }
+
+//ggen:generate unmarshal copy
+type ConvOwned struct {
+	S string `+"`json:\"s\" pipe:\"@FromOwned/.\"`"+`
+}
+
+//ggen:generate unmarshal
+type Plain struct {
+	S string `+"`json:\"s\"`"+`
+}
+
+//ggen:generate
+type LooseChild struct {
+	S string `+"`json:\"s\"`"+`
+}
+
+//ggen:generate unmarshal copy
+type WithLooseChild struct {
+	C LooseChild `+"`json:\"c\"`"+`
+}
+
+//ggen:generate unmarshal copy
+type WithLooseDeep struct {
+	C map[string][]*LooseChild `+"`json:\"c\"`"+`
+}
+
+//ggen:generate copy
+type Middle struct {
+	C LooseChild `+"`json:\"c\"`"+`
+}
+
+//ggen:generate unmarshal copy
+type WithLooseTransitive struct {
+	M Middle `+"`json:\"m\"`"+`
+}
+
+type Unannotated struct {
+	S string `+"`json:\"s\"`"+`
+}
+
+//ggen:generate unmarshal copy
+type WithUnannotated struct {
+	U Unannotated `+"`json:\"u\"`"+`
+}
+
+//ggen:generate
+type LooseName string
+
+//ggen:generate unmarshal copy
+type WithLooseAlias struct {
+	N LooseName `+"`json:\"n\"`"+`
+}
+
+//ggen:generate unmarshal copy
+type WithForeign struct {
+	O other.Owned `+"`json:\"o\"`"+`
+}
+
+//ggen:generate unmarshal copy
+type WithForeignDeep struct {
+	O map[string][]other.Loose `+"`json:\"o\"`"+`
+}
+
+//ggen:generate unmarshal copy
+type WithForeignNull struct {
+	O sql.Null[other.Owned] `+"`json:\"o\"`"+`
+}
+
+//ggen:generate unmarshal
+type PlainText string
+
+//ggen:generate unmarshal
+type PlainTags []string
+
+//ggen:generate unmarshal copy
+type LooseChildren []LooseChild
+
+//ggen:generate unmarshal copy
+type CatchLoose struct {
+	Extra map[string]LooseChild `+"`json:\",embed\"`"+`
+}
+
+func FromLoose(c LooseChild) string { return c.S }
+
+//ggen:generate unmarshal copy
+type ConvLoose struct {
+	S string `+"`json:\"s\" pipe:\"@FromLoose/.\"`"+`
+}
+`)
+	writeFixture(t, filepath.Join(base, "split", "p.go"), `package split
+
+//ggen:generate unmarshal copy
+type ParentOwned struct {
+	C ChildOwned `+"`json:\"c\"`"+`
+}
+
+//ggen:generate unmarshal copy
+type ParentLoose struct {
+	C ChildLoose `+"`json:\"c\"`"+`
+}
+
+//ggen:generate unmarshal
+type ParentFlag struct {
+	C ChildLoose `+"`json:\"c\"`"+`
+}
+`)
+	writeFixture(t, filepath.Join(base, "split", "c.go"), `package split
+
+//ggen:generate copy
+type ChildOwned struct {
+	S string `+"`json:\"s\"`"+`
+}
+
+//ggen:generate
+type ChildLoose struct {
+	S string `+"`json:\"s\"`"+`
+}
+`)
+	// check reads every hook of the generated file and compares which of
+	// them clone.
+	hookRe := regexp.MustCompile(`func \(s \*(\w+)\) UnmarshalJSON\(data \[\]byte\) error \{\n\tvar zero \w+\n\tv, n, err := zero\.DecodeFrom\((\S+)\)\n`)
+	check := func(t *testing.T, file string, direct, clone []string) {
+		t.Helper()
+		got := map[string]string{}
+		for _, m := range hookRe.FindAllStringSubmatch(mustReadOutput(t, file), -1) {
+			got[m[1]] = m[2]
+		}
+		if len(got) != len(direct)+len(clone) {
+			t.Errorf("%s: %d hooks, want %d: %v", filepath.Base(file), len(got), len(direct)+len(clone), got)
+		}
+		for _, name := range direct {
+			if got[name] != "data" {
+				t.Errorf("%s decodes from %q, want data", name, got[name])
+			}
+		}
+		for _, name := range clone {
+			if got[name] != "bytes.Clone(data)" {
+				t.Errorf("%s decodes from %q, want bytes.Clone(data)", name, got[name])
+			}
+		}
+	}
+
+	if out, err := runCLI(t, bin, base, "./other", "./hook"); err != nil {
+		t.Fatalf("ggen: %v\n%s", err, out)
+	}
+	check(t, filepath.Join(base, "hook", "hook_ggen.go"),
+		[]string{
+			"Flat", "Nested", "WithOwnedChild", "Cyclic", "WithAliases", "OwnedTags", "OwnedText",
+			"PlainCount", "PlainFlag", "OwnedChildren", "Introspected", "CatchChild", "ConvOwned",
+		},
+		[]string{
+			"Plain", "WithLooseChild", "WithLooseDeep", "WithLooseTransitive", "WithUnannotated",
+			"WithLooseAlias", "WithForeign", "WithForeignDeep", "WithForeignNull", "PlainText",
+			"PlainTags", "LooseChildren", "CatchLoose", "ConvLoose",
+		})
+
+	// One file at a time, another file's type is known by its annotations
+	// only: the flags of the run that generates it are not visible.
+	split := filepath.Join(base, "split")
+	for _, args := range [][]string{{"p.go"}, {"-copy", "p.go"}} {
+		if out, err := runCLI(t, bin, split, args...); err != nil {
+			t.Fatalf("ggen %v: %v\n%s", args, err, out)
+		}
+		check(t, filepath.Join(split, "p_ggen.go"), []string{"ParentOwned"}, []string{"ParentLoose", "ParentFlag"})
+	}
+	if err := os.Remove(filepath.Join(split, "p_ggen.go")); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := runCLI(t, bin, split, "-copy", "."); err != nil {
+		t.Fatalf("ggen -copy .: %v\n%s", err, out)
+	}
+	check(t, filepath.Join(split, "split_ggen.go"), []string{"ParentOwned", "ParentLoose", "ParentFlag"}, nil)
+	goBuild(t, base)
 }

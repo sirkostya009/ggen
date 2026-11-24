@@ -26,8 +26,10 @@ import (
 //	var s Stream
 //	s.Reset(r, buf)
 //
-// Strings returned by Stream methods are owned copies. The buffer is only
-// working space for parsing, and it can be reused right after decode.
+// [Stream.String], [Stream.Number] and decoded values hold owned copies, so
+// the buffer is only working space for parsing and can be reused right after
+// decode. [Stream.KeyView], [Stream.StringView] and [Stream.CaptureValue]
+// return aliases into the buffer, valid only until the next Stream call.
 type Stream struct {
 	buf []byte
 	r   io.Reader
@@ -89,8 +91,13 @@ func (s *Stream) Bytes() []byte { return s.buf }
 // move, so any string that aliases s.buf, meaning it points into the buffer
 // with no copy, is no longer valid.
 //
-// ReadMore never loops on Read. It reads once and returns what the reader
-// gave.
+// ReadMore reads once and returns what the reader gave. It calls Read again
+// only after a (0, nil) return, which io.Reader defines as "nothing
+// happened", and after maxEmptyReads of those in a row it returns
+// io.ErrNoProgress. A drained reader is reported as io.ErrUnexpectedEOF. A reader that
+// itself fails with io.ErrUnexpectedEOF, such as a truncated gzip stream or
+// HTTP body, gets an error that wraps it, so errors.Is still matches but the
+// truncation is not taken for a clean end of input.
 func (s *Stream) ReadMore(keep int) error {
 	// Drop bytes first, even if the Read then fails. Callers always adjust
 	// their offsets after a keep > 0 call.
@@ -110,23 +117,40 @@ func (s *Stream) ReadMore(keep int) error {
 		s.buf = bigger
 	}
 	n, err := s.r.Read(s.buf[len(s.buf):cap(s.buf)])
+	for empty := 1; n == 0 && err == nil; empty++ {
+		if empty == maxEmptyReads {
+			return io.ErrNoProgress
+		}
+		n, err = s.r.Read(s.buf[len(s.buf):cap(s.buf)])
+	}
 	s.buf = s.buf[:len(s.buf)+n]
 	if n == 0 {
-		// No bytes ends this call. The reader is drained (io.EOF), failed,
-		// or returned (0, nil). Do not loop.
-		if err == nil || err == io.EOF {
+		// No bytes ends this call. The reader is drained (io.EOF) or failed.
+		if err == io.EOF {
 			return io.ErrUnexpectedEOF
+		}
+		if err == io.ErrUnexpectedEOF {
+			return errReaderTruncated
 		}
 		return err
 	}
 	// Bytes arrived, so deliver them and return nil. The io.Reader contract
 	// says to process n > 0 bytes before looking at err. A non-EOF error
-	// returned with them comes back on the next Read. Returning it now would
-	// break the number scanners, which ignore a refill error. They would
-	// return a cut-short number while the new digits sit unread in the
-	// buffer.
+	// returned with them comes back on the next Read.
 	return nil
 }
+
+// maxEmptyReads matches bufio's limit on (0, nil) Reads in a row.
+const maxEmptyReads = 100
+
+// errReaderTruncated is a reader's own io.ErrUnexpectedEOF. It must not
+// compare equal to io.ErrUnexpectedEOF, which ReadMore uses for "drained".
+var errReaderTruncated error = readerTruncatedError{}
+
+type readerTruncatedError struct{}
+
+func (readerTruncatedError) Error() string { return "ggen: read: unexpected EOF" }
+func (readerTruncatedError) Unwrap() error { return io.ErrUnexpectedEOF }
 
 // SkipSpace moves Pos past whitespace, reading more bytes as needed. It
 // drops the skipped whitespace from the buffer with ReadMore(Pos), so the
@@ -656,11 +680,11 @@ func (s *Stream) stringSlow(start, j int, validate bool) (string, error) {
 					// That escape may cross a refill boundary. Without the refill
 					// the pair would split into two lone surrogates and decode
 					// as two U+FFFD. Refill only while the buffered tail can
-					// still become \uXXXX, so a live reader is never asked for
-					// bytes past the closing quote. If the reader is drained, r
+					// still become the low half, so a live reader is never
+					// asked for bytes past the closing quote. If the reader is drained, r
 					// stays a lone surrogate, the same as on the bytes path.
 					var err error
-					for j+6 > len(s.buf) && uEscapePrefix(s.buf[j:]) {
+					for j+6 > len(s.buf) && lowSurrogatePrefix(r, s.buf[j:]) {
 						err = s.ReadMore(j)
 						j = 0
 						if err != nil {
@@ -1292,12 +1316,17 @@ func (s *Stream) Bool() (bool, error) {
 	// On failure Pos is where the scan gave up, like the bytes BoolEnd. That
 	// is the wrong byte, or the end of the window when the reader drained in
 	// the middle of the literal. A reader error other than EOF leaves Pos at
-	// the start of the literal, so a retry scans it again. The refill only
-	// grows the buffer, so the literal is still there.
+	// the start of the literal, so a retry scans it again. A refill drops
+	// only the bytes before the literal, so the literal is still there, and a
+	// literal at the window edge does not double the buffer.
 	for k := range len(want) {
 		pos := i + 1 + k
 		if pos >= len(s.buf) {
-			if err := s.ReadMore(0); err != nil {
+			err := s.ReadMore(i)
+			pos -= i
+			i = 0
+			s.Pos = 0
+			if err != nil {
 				if err = NotEOF(err, ErrBadBool); err == ErrBadBool {
 					s.Pos = pos
 				}
@@ -1423,9 +1452,9 @@ func (s *Stream) CaptureValue() ([]byte, error) {
 		// socket would block in Read forever, waiting for bytes that cannot
 		// help. Only a failure at the end (end == len) could be cut-short
 		// input, so only that keeps reading. SkipValue returns where it gave
-		// up, so there is no need to scan again. ErrMaxDepth is final wherever
-		// it happens, because no new byte can bring the depth back down.
-		if err != nil && (end < len(s.buf) || err == ErrMaxDepth) {
+		// up, so there is no need to scan again. ErrMaxDepth points at the
+		// bracket that exceeds the cap, a byte inside the window.
+		if err != nil && end < len(s.buf) {
 			s.Pos = end
 			return nil, err
 		}
@@ -1453,6 +1482,7 @@ func (s *Stream) CaptureValue() ([]byte, error) {
 
 func (s *Stream) skipArray(depth int) error {
 	if depth > maxDepth {
+		s.Pos--
 		return ErrMaxDepth
 	}
 	if err := s.SkipSpace(); err != nil {
@@ -1497,6 +1527,7 @@ func (s *Stream) skipArray(depth int) error {
 
 func (s *Stream) skipObject(depth int) error {
 	if depth > maxDepth {
+		s.Pos--
 		return ErrMaxDepth
 	}
 	if err := s.SkipSpace(); err != nil {
@@ -1593,7 +1624,7 @@ func (s *Stream) anyValueDepth(depth int, validate bool) (any, error) {
 	case c == '{':
 		return s.anyObject(depth+1, validate)
 	}
-	return nil, ErrBadLiteral
+	return nil, ErrBadValue
 }
 
 func (s *Stream) anyArray(depth int, validate bool) ([]any, error) {
@@ -1809,7 +1840,7 @@ func (s *Stream) anyNumberValueDepth(depth int, validate bool) (any, error) {
 	case c == '{':
 		return s.anyNumberObject(depth+1, validate)
 	}
-	return nil, ErrBadLiteral
+	return nil, ErrBadValue
 }
 
 func (s *Stream) anyNumberArray(depth int, validate bool) ([]any, error) {
@@ -1979,20 +2010,23 @@ func (s *Stream) Value[T StreamDecoder[T]](rcv ...T) (T, error) {
 // An optional rcv is reused, not just appended to. The slice is cut to
 // length 0 and keeps its capacity, and element i is decoded into rcv[0][i].
 // So each element's own maps and slices are reused too. Decoding the same
-// shape again then allocates nothing, instead of only saving the outer
-// array.
+// shape again then allocates no containers, instead of only saving the outer
+// array. What is left is one owned copy per string and map key.
 //
 //	users, err = s.Slice(users) // reuses the slice and each element's containers
 //
 // Elements past the new length keep their allocations but are not returned.
 // A `[]` decodes to a non-nil empty slice, matching the bytes path and
-// jsonv2. Errors carry no element index in their path.
+// jsonv2, and `null` to a nil slice. Errors carry no element index in their
+// path. The [Errors] of multierr elements are collected and returned with
+// the whole slice once the closing bracket is read, so a bare Errors still
+// means the array was read whole.
 func (s *Stream) Slice[T StreamDecoder[T]](rcv ...[]T) ([]T, error) {
 	var prev []T
 	if len(rcv) > 0 {
 		prev = rcv[0]
 	}
-	if err := s.ArrayOpen(); err != nil {
+	if null, err := s.arrayOpenOrNull(); null || err != nil {
 		return nil, err
 	}
 	if err := s.SkipSpace(); err != nil {
@@ -2012,6 +2046,7 @@ func (s *Stream) Slice[T StreamDecoder[T]](rcv ...[]T) ([]T, error) {
 		s.Pos++
 		return result, nil
 	}
+	var errs Errors
 	for {
 		// Drop consumed elements once the window is full, so the next refill
 		// reuses that space instead of doubling the buffer. See [Stream.Array].
@@ -2030,7 +2065,11 @@ func (s *Stream) Slice[T StreamDecoder[T]](rcv ...[]T) ([]T, error) {
 		}
 		v, err := into.DecodeFromStream(s)
 		if err != nil {
-			return nil, err
+			es, ok := err.(Errors)
+			if !ok {
+				return nil, err
+			}
+			errs = append(errs, es...)
 		}
 		result = append(result, v)
 		if err := s.SkipSpace(); err != nil {
@@ -2053,6 +2092,9 @@ func (s *Stream) Slice[T StreamDecoder[T]](rcv ...[]T) ([]T, error) {
 			}
 		case ']':
 			s.Pos++
+			if len(errs) > 0 {
+				return result, errs
+			}
 			return result, nil
 		default:
 			return nil, ErrBadArray
@@ -2071,8 +2113,9 @@ func (s *Stream) Slice[T StreamDecoder[T]](rcv ...[]T) ([]T, error) {
 //	}
 //
 // The range ends when the closing bracket is read, and leaves the cursor just
-// after it so the Stream can be read again. A malformed array yields one
-// error and stops. An element that only broke validation rules under
+// after it so the Stream can be read again. A `null` is an empty range. A
+// malformed array yields one error and stops. An element that only broke
+// validation rules under
 // multierr is yielded with its [Errors], and the range goes on to the next
 // one, since such an element was read whole. Breaking out early leaves the
 // cursor inside the array.
@@ -2080,18 +2123,21 @@ func (s *Stream) Slice[T StreamDecoder[T]](rcv ...[]T) ([]T, error) {
 // So a Stream left in the middle of a range is only good for closing.
 //
 // Like [Stream.Seq], it reuses one value for the whole loop, starting from an
-// optional rcv. A long array then reaches zero allocations per element. Also
-// like Seq, a yielded value is valid only until the next step. Copy anything
-// kept after the loop body. Strings are owned, but maps and slices are
-// reused.
+// optional rcv. A long array then allocates no containers per element, only
+// the owned copies of its strings and map keys. Also like Seq, a yielded
+// value is valid only until the next step. Deep-copy anything kept after the
+// loop body. Strings are owned, but every other allocation the value holds
+// is reused: maps, slices, pointer pointees and big.Int words.
 func (s *Stream) Array[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 	return func(yield func(T, error) bool) {
 		var into, zero T
 		if len(rcv) > 0 {
 			into = rcv[0]
 		}
-		if err := s.ArrayOpen(); err != nil {
-			yield(zero, err)
+		if null, err := s.arrayOpenOrNull(); null || err != nil {
+			if err != nil {
+				yield(zero, err)
+			}
 			return
 		}
 		if err := s.SkipSpace(); err != nil {
@@ -2164,6 +2210,18 @@ func (s *Stream) Array[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 	}
 }
 
+// arrayOpenOrNull reads the `[` of an array, or a whole `null` literal, which
+// it reports with true.
+func (s *Stream) arrayOpenOrNull() (bool, error) {
+	if err := s.SkipSpace(); err != nil {
+		return false, err
+	}
+	if s.Pos < len(s.buf) && s.buf[s.Pos] == 'n' {
+		return true, s.skipLiteral("null", ErrBadLiteral)
+	}
+	return false, s.ArrayOpen()
+}
+
 // Seq yields top-level values from the Stream one after another, as in
 // concatenated JSON or NDJSON. It keeps going as long as the reader keeps
 // producing:
@@ -2187,10 +2245,11 @@ func (s *Stream) Array[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 // next value happens on the next step, not right after yielding this one.
 //
 // Seq reuses one value for the whole loop. Each decode goes into the previous
-// value and reuses its maps and slices, so a long stream reaches zero
-// allocations per element. An optional rcv gives that value containers the
-// caller already has. Without it, the sequence starts from a zero T and
-// allocates its containers on the first element.
+// value and reuses its maps and slices, so a long stream allocates no
+// containers per element, only the owned copies of its strings and map keys.
+// An optional rcv gives that value containers the caller already has.
+// Without it, the sequence starts from a zero T and allocates its containers
+// on the first element.
 //
 // The window stays bounded. Consumed values are dropped when the window is
 // full, see [Stream.Array] for why. Generated container decoders refill
@@ -2198,8 +2257,9 @@ func (s *Stream) Array[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 // buffer over a long stream.
 //
 // As a result, a yielded value is only valid until the next step, because
-// the next step decodes over its containers. Copy anything you keep after
-// the loop body. Strings are owned, so only maps and slices are shared.
+// the next step decodes over its containers. Deep-copy anything you keep
+// after the loop body. Strings are owned, but maps, slices, pointer pointees
+// and big.Int words are shared with later steps.
 // Ranging twice over the same Seq is fine. Each run starts its own value.
 func (s *Stream) Seq[T StreamDecoder[T]](rcv ...T) iter.Seq2[T, error] {
 	return func(yield func(T, error) bool) {

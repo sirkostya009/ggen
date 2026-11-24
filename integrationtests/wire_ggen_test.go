@@ -13,6 +13,44 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
+// Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
+const ggenCap_TimeZoneNameLayouts_RFC1123_time_Time = (min((80/max(int(unsafe.Sizeof(*new(time.Time))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(time.Time))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(time.Time))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(time.Time))), 1)), 1)
+
+var ggenKeys_wire_test_0 = []string{"b"}
+var ggenKeys_wire_test_1 = []string{"layout"}
+var ggenKeys_wire_test_2 = []string{"stamp"}
+var ggenKeys_wire_test_3 = []string{"stampMilli"}
+var ggenKeys_wire_test_4 = []string{"stampMicro"}
+var ggenKeys_wire_test_5 = []string{"stampNano"}
+var ggenKeys_wire_test_6 = []string{"customTiny"}
+var ggenKeys_wire_test_7 = []string{"quote"}
+var ggenKeys_wire_test_8 = []string{"slash"}
+var ggenKeys_wire_test_9 = []string{"ansic"}
+var ggenKeys_wire_test_10 = []string{"customComma"}
+var ggenKeys_wire_test_11 = []string{"customLong"}
+var ggenKeys_wire_test_12 = []string{"dateOnly"}
+var ggenKeys_wire_test_13 = []string{"dateTime"}
+var ggenKeys_wire_test_14 = []string{"default"}
+var ggenKeys_wire_test_15 = []string{"kitchen"}
+var ggenKeys_wire_test_16 = []string{"rfc1123"}
+var ggenKeys_wire_test_17 = []string{"rfc1123Z"}
+var ggenKeys_wire_test_18 = []string{"rfc3339"}
+var ggenKeys_wire_test_19 = []string{"rfc3339Nano"}
+var ggenKeys_wire_test_20 = []string{"rfc822"}
+var ggenKeys_wire_test_21 = []string{"rfc822Z"}
+var ggenKeys_wire_test_22 = []string{"rfc850"}
+var ggenKeys_wire_test_23 = []string{"rubyDate"}
+var ggenKeys_wire_test_24 = []string{"timeOnly"}
+var ggenKeys_wire_test_25 = []string{"unix"}
+var ggenKeys_wire_test_26 = []string{"unixDate"}
+var ggenKeys_wire_test_27 = []string{"unixMicro"}
+var ggenKeys_wire_test_28 = []string{"unixMilli"}
+var ggenKeys_wire_test_29 = []string{"unixNano"}
+var ggenKeys_wire_test_30 = []string{"f"}
+var ggenKeys_wire_test_31 = []string{"i"}
+var ggenKeys_wire_test_32 = []string{"str"}
+var ggenKeys_wire_test_33 = []string{"at"}
+
 func (recv base32Wrap) DecodeFrom(data []byte) (result base32Wrap, i int, err error) {
 	result = recv
 	if result.B != nil {
@@ -64,11 +102,12 @@ func (recv base32Wrap) DecodeFrom(data []byte) (result base32Wrap, i int, err er
 		switch key {
 		case "b":
 			if seenB {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_0}
 			}
 			seenB = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("b", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -167,7 +206,7 @@ func (recv base32Wrap) DecodeFromStream(s *ggen.Stream) (result base32Wrap, err 
 				return result, ggen.NewParseErr("b", s.Offset(), err)
 			}
 			if seenB {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_0}
 			}
 			seenB = true
 			if s.Pos >= len(s.Bytes()) {
@@ -179,11 +218,11 @@ func (recv base32Wrap) DecodeFromStream(s *ggen.Stream) (result base32Wrap, err 
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("b", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("b", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("b", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("b", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -312,7 +351,7 @@ func (recv TimeLayout) DecodeFrom(data []byte) (result TimeLayout, i int, err er
 		switch key {
 		case "layout":
 			if seenLayout {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"layout"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_1}
 			}
 			seenLayout = true
 			var s string
@@ -320,7 +359,7 @@ func (recv TimeLayout) DecodeFrom(data []byte) (result TimeLayout, i int, err er
 				return result, i, ggen.NewParseErr("layout", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -404,7 +443,7 @@ func (recv TimeLayout) DecodeFromStream(s *ggen.Stream) (result TimeLayout, err 
 				return result, ggen.NewParseErr("layout", s.Offset(), err)
 			}
 			if seenLayout {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"layout"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_1}
 			}
 			seenLayout = true
 			var sv string
@@ -456,7 +495,7 @@ func (recv TimeLayout) DecodeFromStream(s *ggen.Stream) (result TimeLayout, err 
 }
 
 func (s TimeLayout) JSONSize() int {
-	size := 103
+	size := 53
 	return size
 }
 
@@ -519,7 +558,7 @@ func (recv TimeStamp) DecodeFrom(data []byte) (result TimeStamp, i int, err erro
 		switch key {
 		case "stamp":
 			if seenStamp {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"stamp"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_2}
 			}
 			seenStamp = true
 			var s string
@@ -527,7 +566,7 @@ func (recv TimeStamp) DecodeFrom(data []byte) (result TimeStamp, i int, err erro
 				return result, i, ggen.NewParseErr("stamp", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -611,7 +650,7 @@ func (recv TimeStamp) DecodeFromStream(s *ggen.Stream) (result TimeStamp, err er
 				return result, ggen.NewParseErr("stamp", s.Offset(), err)
 			}
 			if seenStamp {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"stamp"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_2}
 			}
 			seenStamp = true
 			var sv string
@@ -663,7 +702,7 @@ func (recv TimeStamp) DecodeFromStream(s *ggen.Stream) (result TimeStamp, err er
 }
 
 func (s TimeStamp) JSONSize() int {
-	size := 91
+	size := 27
 	return size
 }
 
@@ -726,7 +765,7 @@ func (recv TimeStampMilli) DecodeFrom(data []byte) (result TimeStampMilli, i int
 		switch key {
 		case "stampMilli":
 			if seenStampMilli {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"stampMilli"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_3}
 			}
 			seenStampMilli = true
 			var s string
@@ -734,7 +773,7 @@ func (recv TimeStampMilli) DecodeFrom(data []byte) (result TimeStampMilli, i int
 				return result, i, ggen.NewParseErr("stampMilli", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -818,7 +857,7 @@ func (recv TimeStampMilli) DecodeFromStream(s *ggen.Stream) (result TimeStampMil
 				return result, ggen.NewParseErr("stampMilli", s.Offset(), err)
 			}
 			if seenStampMilli {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"stampMilli"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_3}
 			}
 			seenStampMilli = true
 			var sv string
@@ -870,7 +909,7 @@ func (recv TimeStampMilli) DecodeFromStream(s *ggen.Stream) (result TimeStampMil
 }
 
 func (s TimeStampMilli) JSONSize() int {
-	size := 100
+	size := 42
 	return size
 }
 
@@ -933,7 +972,7 @@ func (recv TimeStampMicro) DecodeFrom(data []byte) (result TimeStampMicro, i int
 		switch key {
 		case "stampMicro":
 			if seenStampMicro {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"stampMicro"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_4}
 			}
 			seenStampMicro = true
 			var s string
@@ -941,7 +980,7 @@ func (recv TimeStampMicro) DecodeFrom(data []byte) (result TimeStampMicro, i int
 				return result, i, ggen.NewParseErr("stampMicro", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -1025,7 +1064,7 @@ func (recv TimeStampMicro) DecodeFromStream(s *ggen.Stream) (result TimeStampMic
 				return result, ggen.NewParseErr("stampMicro", s.Offset(), err)
 			}
 			if seenStampMicro {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"stampMicro"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_4}
 			}
 			seenStampMicro = true
 			var sv string
@@ -1077,7 +1116,7 @@ func (recv TimeStampMicro) DecodeFromStream(s *ggen.Stream) (result TimeStampMic
 }
 
 func (s TimeStampMicro) JSONSize() int {
-	size := 103
+	size := 42
 	return size
 }
 
@@ -1140,7 +1179,7 @@ func (recv TimeStampNano) DecodeFrom(data []byte) (result TimeStampNano, i int, 
 		switch key {
 		case "stampNano":
 			if seenStampNano {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"stampNano"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_5}
 			}
 			seenStampNano = true
 			var s string
@@ -1148,7 +1187,7 @@ func (recv TimeStampNano) DecodeFrom(data []byte) (result TimeStampNano, i int, 
 				return result, i, ggen.NewParseErr("stampNano", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -1232,7 +1271,7 @@ func (recv TimeStampNano) DecodeFromStream(s *ggen.Stream) (result TimeStampNano
 				return result, ggen.NewParseErr("stampNano", s.Offset(), err)
 			}
 			if seenStampNano {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"stampNano"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_5}
 			}
 			seenStampNano = true
 			var sv string
@@ -1284,7 +1323,7 @@ func (recv TimeStampNano) DecodeFromStream(s *ggen.Stream) (result TimeStampNano
 }
 
 func (s TimeStampNano) JSONSize() int {
-	size := 105
+	size := 41
 	return size
 }
 
@@ -1347,7 +1386,7 @@ func (recv TimeCustomTiny) DecodeFrom(data []byte) (result TimeCustomTiny, i int
 		switch key {
 		case "customTiny":
 			if seenCustomTiny {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"customTiny"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_6}
 			}
 			seenCustomTiny = true
 			var s string
@@ -1355,7 +1394,7 @@ func (recv TimeCustomTiny) DecodeFrom(data []byte) (result TimeCustomTiny, i int
 				return result, i, ggen.NewParseErr("customTiny", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -1439,7 +1478,7 @@ func (recv TimeCustomTiny) DecodeFromStream(s *ggen.Stream) (result TimeCustomTi
 				return result, ggen.NewParseErr("customTiny", s.Offset(), err)
 			}
 			if seenCustomTiny {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"customTiny"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_6}
 			}
 			seenCustomTiny = true
 			var sv string
@@ -1491,7 +1530,7 @@ func (recv TimeCustomTiny) DecodeFromStream(s *ggen.Stream) (result TimeCustomTi
 }
 
 func (s TimeCustomTiny) JSONSize() int {
-	size := 86
+	size := 19
 	return size
 }
 
@@ -1560,7 +1599,7 @@ func (recv TimeEscapingLayout) DecodeFrom(data []byte) (result TimeEscapingLayou
 		switch key {
 		case "quote":
 			if seenQuote {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"quote"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_7}
 			}
 			seenQuote = true
 			var s string
@@ -1568,7 +1607,7 @@ func (recv TimeEscapingLayout) DecodeFrom(data []byte) (result TimeEscapingLayou
 				return result, i, ggen.NewParseErr("quote", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -1590,7 +1629,7 @@ func (recv TimeEscapingLayout) DecodeFrom(data []byte) (result TimeEscapingLayou
 			}
 		case "slash":
 			if seenSlash {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"slash"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_8}
 			}
 			seenSlash = true
 			var s string
@@ -1598,7 +1637,7 @@ func (recv TimeEscapingLayout) DecodeFrom(data []byte) (result TimeEscapingLayou
 				return result, i, ggen.NewParseErr("slash", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -1689,7 +1728,7 @@ func (recv TimeEscapingLayout) DecodeFromStream(s *ggen.Stream) (result TimeEsca
 				return result, ggen.NewParseErr("quote", s.Offset(), err)
 			}
 			if seenQuote {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"quote"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_7}
 			}
 			seenQuote = true
 			var sv string
@@ -1707,7 +1746,7 @@ func (recv TimeEscapingLayout) DecodeFromStream(s *ggen.Stream) (result TimeEsca
 				return result, ggen.NewParseErr("slash", s.Offset(), err)
 			}
 			if seenSlash {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"slash"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_8}
 			}
 			seenSlash = true
 			var sv string
@@ -1762,7 +1801,7 @@ func (recv TimeEscapingLayout) DecodeFromStream(s *ggen.Stream) (result TimeEsca
 }
 
 func (s TimeEscapingLayout) JSONSize() int {
-	size := 121
+	size := 67
 	return size
 }
 
@@ -1935,7 +1974,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 		switch key {
 		case "ansic":
 			if seenANSIC {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"ansic"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_9}
 			}
 			seenANSIC = true
 			var s string
@@ -1943,7 +1982,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("ansic", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -1965,7 +2004,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "customComma":
 			if seenCustomComma {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"customComma"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_10}
 			}
 			seenCustomComma = true
 			var s string
@@ -1973,7 +2012,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("customComma", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -1995,7 +2034,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "customLong":
 			if seenCustomLong {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"customLong"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_11}
 			}
 			seenCustomLong = true
 			var s string
@@ -2003,7 +2042,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("customLong", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2025,7 +2064,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "customTiny":
 			if seenCustomTiny {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"customTiny"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_6}
 			}
 			seenCustomTiny = true
 			var s string
@@ -2033,7 +2072,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("customTiny", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2055,7 +2094,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "dateOnly":
 			if seenDateOnly {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"dateOnly"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_12}
 			}
 			seenDateOnly = true
 			var s string
@@ -2063,7 +2102,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("dateOnly", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2085,7 +2124,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "dateTime":
 			if seenDateTime {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"dateTime"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_13}
 			}
 			seenDateTime = true
 			var s string
@@ -2093,7 +2132,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("dateTime", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2115,7 +2154,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "default":
 			if seenDefault {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"default"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_14}
 			}
 			seenDefault = true
 			var s string
@@ -2123,7 +2162,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("default", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2145,7 +2184,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "kitchen":
 			if seenKitchen {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"kitchen"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_15}
 			}
 			seenKitchen = true
 			var s string
@@ -2153,7 +2192,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("kitchen", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2175,7 +2214,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "layout":
 			if seenLayout {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"layout"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_1}
 			}
 			seenLayout = true
 			var s string
@@ -2183,7 +2222,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("layout", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2205,7 +2244,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rfc1123":
 			if seenRFC1123 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc1123"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_16}
 			}
 			seenRFC1123 = true
 			var s string
@@ -2213,7 +2252,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("rfc1123", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2235,7 +2274,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rfc1123Z":
 			if seenRFC1123Z {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc1123Z"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_17}
 			}
 			seenRFC1123Z = true
 			var s string
@@ -2243,7 +2282,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("rfc1123Z", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2265,7 +2304,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rfc3339":
 			if seenRFC3339 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc3339"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_18}
 			}
 			seenRFC3339 = true
 			var s string
@@ -2273,7 +2312,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("rfc3339", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2295,7 +2334,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rfc3339Nano":
 			if seenRFC3339Nano {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc3339Nano"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_19}
 			}
 			seenRFC3339Nano = true
 			var s string
@@ -2303,7 +2342,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("rfc3339Nano", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2325,7 +2364,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rfc822":
 			if seenRFC822 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc822"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_20}
 			}
 			seenRFC822 = true
 			var s string
@@ -2333,7 +2372,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("rfc822", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2355,7 +2394,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rfc822Z":
 			if seenRFC822Z {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc822Z"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_21}
 			}
 			seenRFC822Z = true
 			var s string
@@ -2363,7 +2402,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("rfc822Z", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2385,7 +2424,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rfc850":
 			if seenRFC850 {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rfc850"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_22}
 			}
 			seenRFC850 = true
 			var s string
@@ -2393,7 +2432,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("rfc850", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2415,7 +2454,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "rubyDate":
 			if seenRubyDate {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"rubyDate"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_23}
 			}
 			seenRubyDate = true
 			var s string
@@ -2423,7 +2462,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("rubyDate", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2445,7 +2484,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "stamp":
 			if seenStamp {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"stamp"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_2}
 			}
 			seenStamp = true
 			var s string
@@ -2453,7 +2492,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("stamp", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2475,7 +2514,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "stampMicro":
 			if seenStampMicro {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"stampMicro"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_4}
 			}
 			seenStampMicro = true
 			var s string
@@ -2483,7 +2522,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("stampMicro", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2505,7 +2544,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "stampMilli":
 			if seenStampMilli {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"stampMilli"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_3}
 			}
 			seenStampMilli = true
 			var s string
@@ -2513,7 +2552,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("stampMilli", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2535,7 +2574,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "stampNano":
 			if seenStampNano {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"stampNano"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_5}
 			}
 			seenStampNano = true
 			var s string
@@ -2543,7 +2582,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("stampNano", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2565,7 +2604,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "timeOnly":
 			if seenTimeOnly {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"timeOnly"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_24}
 			}
 			seenTimeOnly = true
 			var s string
@@ -2573,7 +2612,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("timeOnly", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2595,20 +2634,18 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "unix":
 			if seenUnix {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unix"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_25}
 			}
 			seenUnix = true
-			var f float64
-			f, i, err = ggen.Float64(data, i)
+			var ut time.Time
+			ut, i, err = ggen.UnixSeconds(data, i)
 			if err != nil {
 				return result, i, ggen.NewParseErr("unix", i, err)
 			}
-			sec := int64(f)
-			nsec := int64((f - float64(sec)) * 1e9)
-			result.Unix = time.Unix(sec, nsec)
+			result.Unix = ut
 		case "unixDate":
 			if seenUnixDate {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unixDate"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_26}
 			}
 			seenUnixDate = true
 			var s string
@@ -2616,7 +2653,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 				return result, i, ggen.NewParseErr("unixDate", i, ggen.ErrExpectString)
 			}
 			ke := i + 1
-			kew := ke + 32
+			kew := ke + 36
 			if kew > len(data) {
 				kew = len(data)
 			}
@@ -2638,7 +2675,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			}
 		case "unixMicro":
 			if seenUnixMicro {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unixMicro"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_27}
 			}
 			seenUnixMicro = true
 			var n int64
@@ -2649,7 +2686,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			result.UnixMicro = time.UnixMicro(n)
 		case "unixMilli":
 			if seenUnixMilli {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unixMilli"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_28}
 			}
 			seenUnixMilli = true
 			var n int64
@@ -2660,7 +2697,7 @@ func (recv TimeFormatsStruct) DecodeFrom(data []byte) (result TimeFormatsStruct,
 			result.UnixMilli = time.UnixMilli(n)
 		case "unixNano":
 			if seenUnixNano {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"unixNano"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_29}
 			}
 			seenUnixNano = true
 			var n int64
@@ -2915,7 +2952,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("ansic", s.Offset(), err)
 			}
 			if seenANSIC {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"ansic"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_9}
 			}
 			seenANSIC = true
 			var sv string
@@ -2933,7 +2970,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("customComma", s.Offset(), err)
 			}
 			if seenCustomComma {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"customComma"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_10}
 			}
 			seenCustomComma = true
 			var sv string
@@ -2951,7 +2988,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("customLong", s.Offset(), err)
 			}
 			if seenCustomLong {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"customLong"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_11}
 			}
 			seenCustomLong = true
 			var sv string
@@ -2969,7 +3006,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("customTiny", s.Offset(), err)
 			}
 			if seenCustomTiny {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"customTiny"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_6}
 			}
 			seenCustomTiny = true
 			var sv string
@@ -2987,7 +3024,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("dateOnly", s.Offset(), err)
 			}
 			if seenDateOnly {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"dateOnly"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_12}
 			}
 			seenDateOnly = true
 			var sv string
@@ -3005,7 +3042,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("dateTime", s.Offset(), err)
 			}
 			if seenDateTime {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"dateTime"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_13}
 			}
 			seenDateTime = true
 			var sv string
@@ -3023,7 +3060,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("default", s.Offset(), err)
 			}
 			if seenDefault {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"default"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_14}
 			}
 			seenDefault = true
 			var sv string
@@ -3041,7 +3078,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("kitchen", s.Offset(), err)
 			}
 			if seenKitchen {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"kitchen"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_15}
 			}
 			seenKitchen = true
 			var sv string
@@ -3059,7 +3096,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("layout", s.Offset(), err)
 			}
 			if seenLayout {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"layout"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_1}
 			}
 			seenLayout = true
 			var sv string
@@ -3077,7 +3114,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("rfc1123", s.Offset(), err)
 			}
 			if seenRFC1123 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc1123"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_16}
 			}
 			seenRFC1123 = true
 			var sv string
@@ -3095,7 +3132,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("rfc1123Z", s.Offset(), err)
 			}
 			if seenRFC1123Z {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc1123Z"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_17}
 			}
 			seenRFC1123Z = true
 			var sv string
@@ -3113,7 +3150,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("rfc3339", s.Offset(), err)
 			}
 			if seenRFC3339 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc3339"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_18}
 			}
 			seenRFC3339 = true
 			var sv string
@@ -3131,7 +3168,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("rfc3339Nano", s.Offset(), err)
 			}
 			if seenRFC3339Nano {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc3339Nano"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_19}
 			}
 			seenRFC3339Nano = true
 			var sv string
@@ -3149,7 +3186,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("rfc822", s.Offset(), err)
 			}
 			if seenRFC822 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc822"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_20}
 			}
 			seenRFC822 = true
 			var sv string
@@ -3167,7 +3204,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("rfc822Z", s.Offset(), err)
 			}
 			if seenRFC822Z {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc822Z"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_21}
 			}
 			seenRFC822Z = true
 			var sv string
@@ -3185,7 +3222,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("rfc850", s.Offset(), err)
 			}
 			if seenRFC850 {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rfc850"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_22}
 			}
 			seenRFC850 = true
 			var sv string
@@ -3203,7 +3240,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("rubyDate", s.Offset(), err)
 			}
 			if seenRubyDate {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"rubyDate"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_23}
 			}
 			seenRubyDate = true
 			var sv string
@@ -3221,7 +3258,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("stamp", s.Offset(), err)
 			}
 			if seenStamp {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"stamp"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_2}
 			}
 			seenStamp = true
 			var sv string
@@ -3239,7 +3276,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("stampMicro", s.Offset(), err)
 			}
 			if seenStampMicro {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"stampMicro"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_4}
 			}
 			seenStampMicro = true
 			var sv string
@@ -3257,7 +3294,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("stampMilli", s.Offset(), err)
 			}
 			if seenStampMilli {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"stampMilli"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_3}
 			}
 			seenStampMilli = true
 			var sv string
@@ -3275,7 +3312,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("stampNano", s.Offset(), err)
 			}
 			if seenStampNano {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"stampNano"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_5}
 			}
 			seenStampNano = true
 			var sv string
@@ -3293,7 +3330,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("timeOnly", s.Offset(), err)
 			}
 			if seenTimeOnly {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"timeOnly"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_24}
 			}
 			seenTimeOnly = true
 			var sv string
@@ -3311,25 +3348,22 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("unix", s.Offset(), err)
 			}
 			if seenUnix {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unix"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_25}
 			}
 			seenUnix = true
-			var f float64
-			f, err = s.Float64()
+			var ut time.Time
+			ut, err = s.UnixSeconds()
 			if err != nil {
 				return result, ggen.NewParseErr("unix", s.Offset(), err)
 			}
-
-			sec := int64(f)
-			nsec := int64((f - float64(sec)) * 1e9)
-			result.Unix = time.Unix(sec, nsec)
+			result.Unix = ut
 		case "unixDate":
 			err = s.ConsumeColon()
 			if err != nil {
 				return result, ggen.NewParseErr("unixDate", s.Offset(), err)
 			}
 			if seenUnixDate {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unixDate"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_26}
 			}
 			seenUnixDate = true
 			var sv string
@@ -3347,7 +3381,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("unixMicro", s.Offset(), err)
 			}
 			if seenUnixMicro {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unixMicro"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_27}
 			}
 			seenUnixMicro = true
 			var n int64
@@ -3362,7 +3396,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("unixMilli", s.Offset(), err)
 			}
 			if seenUnixMilli {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unixMilli"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_28}
 			}
 			seenUnixMilli = true
 			var n int64
@@ -3377,7 +3411,7 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 				return result, ggen.NewParseErr("unixNano", s.Offset(), err)
 			}
 			if seenUnixNano {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"unixNano"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_29}
 			}
 			seenUnixNano = true
 			var n int64
@@ -3504,7 +3538,19 @@ func (recv TimeFormatsStruct) DecodeFromStream(s *ggen.Stream) (result TimeForma
 }
 
 func (s TimeFormatsStruct) JSONSize() int {
-	size := 1053
+	size := 1198
+	if zn, _ := s.RFC1123.Zone(); zn != "" {
+		size += len(zn) * 6
+	}
+	if zn, _ := s.RFC822.Zone(); zn != "" {
+		size += len(zn) * 6
+	}
+	if zn, _ := s.RFC850.Zone(); zn != "" {
+		size += len(zn) * 6
+	}
+	if zn, _ := s.UnixDate.Zone(); zn != "" {
+		size += len(zn) * 6
+	}
 	return size
 }
 
@@ -3538,8 +3584,10 @@ func (s TimeFormatsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "\",\"layout\":\""...)
 	dst = s.Layout.AppendFormat(dst, time.Layout)
 	dst = append(dst, "\",\"rfc1123\":\""...)
+	tfRFC1123 := len(dst)
 	dst = s.RFC1123.AppendFormat(dst, time.RFC1123)
-	dst = append(dst, "\",\"rfc1123Z\":\""...)
+	dst = ggen.CloseJSONString(dst, tfRFC1123)
+	dst = append(dst, ",\"rfc1123Z\":\""...)
 	dst = s.RFC1123Z.AppendFormat(dst, time.RFC1123Z)
 	dst = append(dst, "\",\"rfc3339\":\""...)
 	if dst, err = ggen.AppendRFC3339(dst, s.RFC3339, time.RFC3339); err != nil {
@@ -3550,12 +3598,16 @@ func (s TimeFormatsStruct) AppendJSON(dst []byte) ([]byte, error) {
 		return dst, err
 	}
 	dst = append(dst, "\",\"rfc822\":\""...)
+	tfRFC822 := len(dst)
 	dst = s.RFC822.AppendFormat(dst, time.RFC822)
-	dst = append(dst, "\",\"rfc822Z\":\""...)
+	dst = ggen.CloseJSONString(dst, tfRFC822)
+	dst = append(dst, ",\"rfc822Z\":\""...)
 	dst = s.RFC822Z.AppendFormat(dst, time.RFC822Z)
 	dst = append(dst, "\",\"rfc850\":\""...)
+	tfRFC850 := len(dst)
 	dst = s.RFC850.AppendFormat(dst, time.RFC850)
-	dst = append(dst, "\",\"rubyDate\":\""...)
+	dst = ggen.CloseJSONString(dst, tfRFC850)
+	dst = append(dst, ",\"rubyDate\":\""...)
 	dst = s.RubyDate.AppendFormat(dst, time.RubyDate)
 	dst = append(dst, "\",\"stamp\":\""...)
 	dst = s.Stamp.AppendFormat(dst, time.Stamp)
@@ -3570,8 +3622,10 @@ func (s TimeFormatsStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = append(dst, "\",\"unix\":"...)
 	dst = ggen.AppendUnixSeconds(dst, s.Unix)
 	dst = append(dst, ",\"unixDate\":\""...)
+	tfUnixDate := len(dst)
 	dst = s.UnixDate.AppendFormat(dst, time.UnixDate)
-	dst = append(dst, "\",\"unixMicro\":"...)
+	dst = ggen.CloseJSONString(dst, tfUnixDate)
+	dst = append(dst, ",\"unixMicro\":"...)
 	dst = strconv.AppendInt(dst, s.UnixMicro.UnixMicro(), 10)
 	dst = append(dst, ",\"unixMilli\":"...)
 	dst = strconv.AppendInt(dst, s.UnixMilli.UnixMilli(), 10)
@@ -3639,7 +3693,7 @@ func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, i int
 		switch key {
 		case "f":
 			if seenF {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"f"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_30}
 			}
 			seenF = true
 			result.F, i, err = ggen.Float64(data, i)
@@ -3648,7 +3702,7 @@ func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, i int
 			}
 		case "i":
 			if seenI {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"i"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_31}
 			}
 			seenI = true
 			neg := false
@@ -3702,7 +3756,7 @@ func (recv BoundaryStruct) DecodeFrom(data []byte) (result BoundaryStruct, i int
 			result.I = n
 		case "str":
 			if seenStr {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"str"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_32}
 			}
 			seenStr = true
 			if i >= len(data) || data[i] != '"' {
@@ -3803,7 +3857,7 @@ func (recv BoundaryStruct) DecodeFromStream(s *ggen.Stream) (result BoundaryStru
 				return result, ggen.NewParseErr("f", s.Offset(), err)
 			}
 			if seenF {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"f"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_30}
 			}
 			seenF = true
 			result.F, err = s.Float64()
@@ -3816,7 +3870,7 @@ func (recv BoundaryStruct) DecodeFromStream(s *ggen.Stream) (result BoundaryStru
 				return result, ggen.NewParseErr("i", s.Offset(), err)
 			}
 			if seenI {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"i"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_31}
 			}
 			seenI = true
 			result.I, err = s.Int64()
@@ -3829,7 +3883,7 @@ func (recv BoundaryStruct) DecodeFromStream(s *ggen.Stream) (result BoundaryStru
 				return result, ggen.NewParseErr("str", s.Offset(), err)
 			}
 			if seenStr {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"str"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_32}
 			}
 			seenStr = true
 			result.Str, err = s.String(true)
@@ -3898,5 +3952,773 @@ func (s BoundaryStruct) AppendJSON(dst []byte) ([]byte, error) {
 	dst = strconv.AppendInt(dst, s.I, 10)
 	dst = append(dst, ",\"str\":\""...)
 	dst = ggen.AppendStringNoHTML(dst, s.Str)
+	return append(dst, '}'), nil
+}
+
+func (recv TimeZoneNameLayouts) DecodeFrom(data []byte) (result TimeZoneNameLayouts, i int, err error) {
+	result = recv
+	if result.RFC1123 != nil {
+		result.RFC1123 = result.RFC1123[:0]
+	}
+	seenRFC1123 := false
+	seenRFC822 := false
+	seenRFC850 := false
+	seenUnixDate := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenRFC822 {
+			result.RFC822 = (TimeZoneNameLayouts{}).RFC822
+		}
+		if !seenRFC850 {
+			result.RFC850 = (TimeZoneNameLayouts{}).RFC850
+		}
+		if !seenUnixDate {
+			result.UnixDate = (TimeZoneNameLayouts{}).UnixDate
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "rfc1123":
+			if seenRFC1123 {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_16}
+			}
+			seenRFC1123 = true
+			if i < len(data) && data[i] == 'n' {
+				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
+					return result, i, ggen.NewParseErr("rfc1123", i, ggen.ErrBadLiteral)
+				}
+				i += 4
+				result.RFC1123 = nil
+				break
+			}
+			if i >= len(data) || data[i] != '[' {
+				return result, i, ggen.NewParseErr("rfc1123", i, ggen.ErrBadArray)
+			}
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			if i < len(data) && data[i] == ']' {
+				if result.RFC1123 == nil {
+					result.RFC1123 = []time.Time{}
+				}
+			} else {
+				if result.RFC1123 == nil {
+					result.RFC1123 = make([]time.Time, 0, ggenCap_TimeZoneNameLayouts_RFC1123_time_Time)
+				}
+			}
+			if i < len(data) && data[i] != ']' {
+				for {
+					result.RFC1123 = append(result.RFC1123, time.Time{})
+					var s string
+					if i >= len(data) || data[i] != '"' {
+						return result, i, ggen.NewParseErr("rfc1123[]", i, ggen.ErrExpectString)
+					}
+					ke := i + 1
+					kew := ke + 36
+					if kew > len(data) {
+						kew = len(data)
+					}
+					for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+						ke++
+					}
+					if ke < len(data) && data[ke] == '"' {
+						s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+						i = ke + 1
+					} else {
+						s, i, err = ggen.String(data, i, true)
+						if err != nil {
+							return result, i, ggen.NewParseErr("rfc1123[]", i, err)
+						}
+					}
+					result.RFC1123[len(result.RFC1123)-1], err = time.Parse(time.RFC1123, s)
+					if err != nil {
+						return result, i, ggen.NewParseErr("rfc1123[]", i, err)
+					}
+					for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+						i++
+					}
+					if i < len(data) && data[i] == ',' {
+						i++
+						for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+							i++
+						}
+						if i >= len(data) || data[i] == ']' {
+							return result, i, ggen.NewParseErr("rfc1123", i, ggen.ErrBadArray)
+						}
+						continue
+					}
+					break
+				}
+			}
+			if i >= len(data) || data[i] != ']' {
+				return result, i, ggen.NewParseErr("rfc1123", i, ggen.ErrBadArray)
+			}
+			i++
+		case "rfc822":
+			if seenRFC822 {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_20}
+			}
+			seenRFC822 = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("rfc822", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 36
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("rfc822", i, err)
+				}
+			}
+			result.RFC822, err = time.Parse(time.RFC822, s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("rfc822", i, err)
+			}
+		case "rfc850":
+			if seenRFC850 {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_22}
+			}
+			seenRFC850 = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("rfc850", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 36
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("rfc850", i, err)
+				}
+			}
+			result.RFC850, err = time.Parse(time.RFC850, s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("rfc850", i, err)
+			}
+		case "unixDate":
+			if seenUnixDate {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_26}
+			}
+			seenUnixDate = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("unixDate", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 36
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("unixDate", i, err)
+				}
+			}
+			result.UnixDate, err = time.Parse(time.UnixDate, s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("unixDate", i, err)
+			}
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenRFC822 {
+				result.RFC822 = (TimeZoneNameLayouts{}).RFC822
+			}
+			if !seenRFC850 {
+				result.RFC850 = (TimeZoneNameLayouts{}).RFC850
+			}
+			if !seenUnixDate {
+				result.UnixDate = (TimeZoneNameLayouts{}).UnixDate
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv TimeZoneNameLayouts) DecodeFromStream(s *ggen.Stream) (result TimeZoneNameLayouts, err error) {
+	result = recv
+	if result.RFC1123 != nil {
+		result.RFC1123 = result.RFC1123[:0]
+	}
+	seenRFC1123 := false
+	seenRFC822 := false
+	seenRFC850 := false
+	seenUnixDate := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenRFC822 {
+			result.RFC822 = (TimeZoneNameLayouts{}).RFC822
+		}
+		if !seenRFC850 {
+			result.RFC850 = (TimeZoneNameLayouts{}).RFC850
+		}
+		if !seenUnixDate {
+			result.UnixDate = (TimeZoneNameLayouts{}).UnixDate
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "rfc1123":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("rfc1123", s.Offset(), err)
+			}
+			if seenRFC1123 {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_16}
+			}
+			seenRFC1123 = true
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("rfc1123", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("rfc1123", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == 'n' {
+				for ki := 1; ki < 4; ki++ {
+					if s.Pos+ki >= len(s.Bytes()) {
+						if err = s.ReadMore(0); err != nil {
+							return result, ggen.NewParseErr("rfc1123", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
+						}
+					}
+					if s.Bytes()[s.Pos+ki] != "null"[ki] {
+						return result, ggen.NewParseErr("rfc1123", s.Offset()+ki, ggen.ErrBadLiteral)
+					}
+				}
+				s.Pos += 4
+				result.RFC1123 = nil
+				break
+			}
+			err = s.ArrayOpen()
+			if err != nil {
+				return result, ggen.NewParseErr("rfc1123", s.Offset(), err)
+			}
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("rfc1123", s.Offset(), err)
+			}
+			if s.Pos >= len(s.Bytes()) {
+				if err = s.ReadMore(0); err != nil {
+					return result, ggen.NewParseErr("rfc1123", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+				}
+			}
+			if s.Bytes()[s.Pos] == ']' {
+				if result.RFC1123 == nil {
+					result.RFC1123 = []time.Time{}
+				}
+			} else {
+				if result.RFC1123 == nil {
+					result.RFC1123 = make([]time.Time, 0, ggenCap_TimeZoneNameLayouts_RFC1123_time_Time)
+				}
+			}
+			for s.Bytes()[s.Pos] != ']' {
+				result.RFC1123 = append(result.RFC1123, time.Time{})
+				var sv string
+				sv, err = s.StringView(true)
+				if err != nil {
+					return result, ggen.NewParseErr("rfc1123[]", s.Offset(), err)
+				}
+				result.RFC1123[len(result.RFC1123)-1], err = time.Parse(time.RFC1123, sv)
+				if err != nil {
+					return result, ggen.NewParseErr("rfc1123[]", s.Offset(), err)
+				}
+				err = s.SkipSpace()
+				if err != nil {
+					return result, ggen.NewParseErr("rfc1123", s.Offset(), err)
+				}
+				if s.Pos >= len(s.Bytes()) {
+					if err = s.ReadMore(0); err != nil {
+						return result, ggen.NewParseErr("rfc1123", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
+					}
+				}
+				if s.Bytes()[s.Pos] == ',' {
+					s.Pos++
+					err = s.SkipSpace()
+					if err != nil {
+						return result, ggen.NewParseErr("rfc1123", s.Offset(), err)
+					}
+					if s.Pos >= len(s.Bytes()) || s.Bytes()[s.Pos] == ']' {
+						return result, ggen.NewParseErr("rfc1123", s.Offset(), ggen.ErrBadArray)
+					}
+					continue
+				}
+				break
+			}
+			if s.Bytes()[s.Pos] != ']' {
+				return result, ggen.NewParseErr("rfc1123", s.Offset(), ggen.ErrBadArray)
+			}
+			s.Pos++
+		case "rfc822":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("rfc822", s.Offset(), err)
+			}
+			if seenRFC822 {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_20}
+			}
+			seenRFC822 = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("rfc822", s.Offset(), err)
+			}
+			result.RFC822, err = time.Parse(time.RFC822, sv)
+			if err != nil {
+				return result, ggen.NewParseErr("rfc822", s.Offset(), err)
+			}
+		case "rfc850":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("rfc850", s.Offset(), err)
+			}
+			if seenRFC850 {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_22}
+			}
+			seenRFC850 = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("rfc850", s.Offset(), err)
+			}
+			result.RFC850, err = time.Parse(time.RFC850, sv)
+			if err != nil {
+				return result, ggen.NewParseErr("rfc850", s.Offset(), err)
+			}
+		case "unixDate":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("unixDate", s.Offset(), err)
+			}
+			if seenUnixDate {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_26}
+			}
+			seenUnixDate = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("unixDate", s.Offset(), err)
+			}
+			result.UnixDate, err = time.Parse(time.UnixDate, sv)
+			if err != nil {
+				return result, ggen.NewParseErr("unixDate", s.Offset(), err)
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenRFC822 {
+				result.RFC822 = (TimeZoneNameLayouts{}).RFC822
+			}
+			if !seenRFC850 {
+				result.RFC850 = (TimeZoneNameLayouts{}).RFC850
+			}
+			if !seenUnixDate {
+				result.UnixDate = (TimeZoneNameLayouts{}).UnixDate
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s TimeZoneNameLayouts) JSONSize() int {
+	size := 191
+	if n := len(s.RFC1123); n > 0 {
+		size += n - 1
+	}
+	for i0 := range s.RFC1123 {
+		size += 56
+		if zn, _ := s.RFC1123[i0].Zone(); zn != "" {
+			size += len(zn) * 6
+		}
+	}
+	if zn, _ := s.RFC822.Zone(); zn != "" {
+		size += len(zn) * 6
+	}
+	if zn, _ := s.RFC850.Zone(); zn != "" {
+		size += len(zn) * 6
+	}
+	if zn, _ := s.UnixDate.Zone(); zn != "" {
+		size += len(zn) * 6
+	}
+	return size
+}
+
+func (s TimeZoneNameLayouts) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"rfc1123\":"...)
+	if s.RFC1123 == nil {
+		dst = append(dst, "null"...)
+	} else {
+		dst = append(dst, '[')
+		if len(s.RFC1123) > 0 {
+			dst = append(dst, '"')
+			tfRFC1123 := len(dst)
+			dst = s.RFC1123[0].AppendFormat(dst, time.RFC1123)
+			dst = ggen.CloseJSONString(dst, tfRFC1123)
+			for _, v0 := range s.RFC1123[1:] {
+				dst = append(dst, ",\""...)
+				tfRFC1123 := len(dst)
+				dst = v0.AppendFormat(dst, time.RFC1123)
+				dst = ggen.CloseJSONString(dst, tfRFC1123)
+			}
+		}
+		dst = append(dst, ']')
+	}
+	dst = append(dst, ",\"rfc822\":\""...)
+	tfRFC822 := len(dst)
+	dst = s.RFC822.AppendFormat(dst, time.RFC822)
+	dst = ggen.CloseJSONString(dst, tfRFC822)
+	dst = append(dst, ",\"rfc850\":\""...)
+	tfRFC850 := len(dst)
+	dst = s.RFC850.AppendFormat(dst, time.RFC850)
+	dst = ggen.CloseJSONString(dst, tfRFC850)
+	dst = append(dst, ",\"unixDate\":\""...)
+	tfUnixDate := len(dst)
+	dst = s.UnixDate.AppendFormat(dst, time.UnixDate)
+	dst = ggen.CloseJSONString(dst, tfUnixDate)
+	return append(dst, '}'), nil
+}
+
+func (recv TimeZoneNameHTML) DecodeFrom(data []byte) (result TimeZoneNameHTML, i int, err error) {
+	result = recv
+	seenAt := false
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i >= len(data) || data[i] != '{' {
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+	i++
+	for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+		i++
+	}
+	if i < len(data) && data[i] == '}' {
+		i++
+		if !seenAt {
+			result.At = (TimeZoneNameHTML{}).At
+		}
+		return result, i, nil
+	}
+	for {
+		var key string
+		if i >= len(data) || data[i] != '"' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrExpectString)
+		}
+		ke := i + 1
+		for ke < len(data) && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+			ke++
+		}
+		if ke < len(data) && data[ke] == '"' {
+			key = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+			i = ke + 1
+		} else {
+			key, i, err = ggen.String(data, i, true)
+			if err != nil {
+				return result, i, ggen.NewParseErr("", i, err)
+			}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) || data[i] != ':' {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		i++
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		switch key {
+		case "at":
+			if seenAt {
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_wire_test_33}
+			}
+			seenAt = true
+			var s string
+			if i >= len(data) || data[i] != '"' {
+				return result, i, ggen.NewParseErr("at", i, ggen.ErrExpectString)
+			}
+			ke := i + 1
+			kew := ke + 36
+			if kew > len(data) {
+				kew = len(data)
+			}
+			for ke < kew && data[ke] != '"' && data[ke] != '\\' && data[ke] >= 0x20 && data[ke] < 0x80 {
+				ke++
+			}
+			if ke < len(data) && data[ke] == '"' {
+				s = unsafe.String(unsafe.SliceData(data[i+1:]), ke-i-1)
+				i = ke + 1
+			} else {
+				s, i, err = ggen.String(data, i, true)
+				if err != nil {
+					return result, i, ggen.NewParseErr("at", i, err)
+				}
+			}
+			result.At, err = time.Parse(time.RFC1123, s)
+			if err != nil {
+				return result, i, ggen.NewParseErr("at", i, err)
+			}
+		default:
+			return result, i, &ggen.UnknownKeyError{Pos: i, Keys: []string{key}}
+		}
+		for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+			i++
+		}
+		if i >= len(data) {
+			return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+		}
+		if data[i] == ',' {
+			i++
+			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
+				i++
+			}
+			continue
+		}
+		if data[i] == '}' {
+			i++
+			if !seenAt {
+				result.At = (TimeZoneNameHTML{}).At
+			}
+			return result, i, nil
+		}
+		return result, i, ggen.NewParseErr("", i, ggen.ErrBadObject)
+	}
+}
+
+func (recv TimeZoneNameHTML) DecodeFromStream(s *ggen.Stream) (result TimeZoneNameHTML, err error) {
+	result = recv
+	seenAt := false
+	err = s.ObjectOpen()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	err = s.SkipSpace()
+	if err != nil {
+		return result, ggen.NewParseErr("", s.Offset(), err)
+	}
+	if s.Pos >= len(s.Bytes()) {
+		if err = s.ReadMore(s.Pos); err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrExpectString))
+		}
+		s.Pos = 0
+	}
+	if s.Bytes()[s.Pos] == '}' {
+		s.Pos++
+		if !seenAt {
+			result.At = (TimeZoneNameHTML{}).At
+		}
+		return result, nil
+	}
+	for {
+		var key string
+		key, err = s.KeyView(true)
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		switch key {
+		case "at":
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr("at", s.Offset(), err)
+			}
+			if seenAt {
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_wire_test_33}
+			}
+			seenAt = true
+			var sv string
+			sv, err = s.StringView(true)
+			if err != nil {
+				return result, ggen.NewParseErr("at", s.Offset(), err)
+			}
+			result.At, err = time.Parse(time.RFC1123, sv)
+			if err != nil {
+				return result, ggen.NewParseErr("at", s.Offset(), err)
+			}
+		default:
+			ownKey := strings.Clone(key)
+			err = s.ConsumeColon()
+			if err != nil {
+				return result, ggen.NewParseErr(ownKey, s.Offset(), err)
+			}
+			return result, &ggen.UnknownKeyError{Pos: s.Offset(), Keys: []string{ownKey}}
+		}
+
+		err = s.SkipSpace()
+		if err != nil {
+			return result, ggen.NewParseErr("", s.Offset(), err)
+		}
+		if s.Pos >= len(s.Bytes()) {
+			if err = s.ReadMore(s.Pos); err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), ggen.NotEOF(err, ggen.ErrBadObject))
+			}
+			s.Pos = 0
+		}
+		c := s.Bytes()[s.Pos]
+		if c == ',' {
+			s.Pos++
+			err = s.SkipSpace()
+			if err != nil {
+				return result, ggen.NewParseErr("", s.Offset(), err)
+			}
+			continue
+		}
+		if c == '}' {
+			s.Pos++
+			if !seenAt {
+				result.At = (TimeZoneNameHTML{}).At
+			}
+			return result, nil
+		}
+		return result, ggen.NewParseErr("", s.Offset(), ggen.ErrBadObject)
+	}
+}
+
+func (s TimeZoneNameHTML) JSONSize() int {
+	size := 63
+	if zn, _ := s.At.Zone(); zn != "" {
+		size += len(zn) * 6
+	}
+	return size
+}
+
+func (s TimeZoneNameHTML) AppendJSON(dst []byte) ([]byte, error) {
+	var err error
+	_ = err
+	dst = append(dst, "{\"at\":\""...)
+	tfAt := len(dst)
+	dst = s.At.AppendFormat(dst, time.RFC1123)
+	dst = ggen.CloseJSONStringHTML(dst, tfAt)
 	return append(dst, '}'), nil
 }

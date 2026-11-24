@@ -1,4 +1,5 @@
-ggen
+/ggen
+/cmd/ggen/ggen
 *.test
 cli/cli
 node_modules/

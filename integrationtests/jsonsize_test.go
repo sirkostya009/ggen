@@ -313,6 +313,61 @@ func TestJSONSize_URLStruct(t *testing.T) {
 	}
 }
 
+// URLHTMLStruct is URLStruct under htmlescape, where &, < and > grow 6×.
+//
+//ggen:generate htmlescape
+type URLHTMLStruct struct {
+	Site url.URL `json:"site"`
+}
+
+// A dense run of bytes that survive URL escaping and grow under JSON or HTML
+// escaping, in every component, and a Go-built scheme holding quotes.
+func TestJSONSize_URLEscapedParts_NoRealloc(t *testing.T) {
+	t.Parallel()
+	dense := strings.Repeat("&<>", 13)
+	parsed := []string{
+		"mailto:a&b&c&d&e&f&g",
+		"http://x/?q=<script>&r=<b>",
+		"http://x/?a&b&c&d&e&f&g&h",
+		"http://x/a&b&c&d&e&f&g&h&i&j&k&l&m",
+		"http://x/#a&b&c&d&e&f&g&h&i&j&k&l&m",
+		"http://a&b&c&d&e&f&g&h&i&j@x/",
+	}
+	var urls []url.URL
+	for _, raw := range parsed {
+		u, err := url.Parse(raw)
+		if err != nil {
+			t.Fatalf("parse %q: %v", raw, err)
+		}
+		urls = append(urls, *u)
+	}
+	urls = append(urls,
+		url.URL{Scheme: strings.Repeat(`"`, 40), Host: "h"},
+		url.URL{Scheme: strings.Repeat(`\`, 40), Host: "h"},
+		url.URL{Scheme: "h", Host: dense, Path: "/" + dense, RawQuery: dense, Fragment: dense},
+		url.URL{Scheme: dense, Opaque: dense},
+	)
+	check := func(t *testing.T, size int, appendJSON func([]byte) ([]byte, error)) {
+		t.Helper()
+		got, err := appendJSON(make([]byte, 0, size))
+		if err != nil {
+			t.Fatalf("AppendJSON: %v", err)
+		}
+		if len(got) > size || cap(got) != size {
+			t.Errorf("realloc: JSONSize=%d cap=%d len=%d out=%s", size, cap(got), len(got), got)
+		}
+	}
+	for _, u := range urls {
+		t.Run(u.String(), func(t *testing.T) {
+			t.Parallel()
+			plain := URLStruct{Site: u}
+			check(t, plain.JSONSize(), plain.AppendJSON)
+			html := URLHTMLStruct{Site: u}
+			check(t, html.JSONSize(), html.AppendJSON)
+		})
+	}
+}
+
 // The budget of every time format in isolation, with input that gives the
 // longest output: numeric zone fallback and max nanoseconds.
 func TestJSONSize_TimeFormats(t *testing.T) {
@@ -519,6 +574,28 @@ func TestJSONSize_HTMLEscapeStruct_NoRealloc(t *testing.T) {
 func TestJSONSize_HTMLEscapeNested_NoRealloc(t *testing.T) {
 	t.Parallel()
 	in := htmlEscapeNested(strings.Repeat("<>&", 50))
+	size := in.JSONSize()
+	got, err := in.AppendJSON(make([]byte, 0, size))
+	if err != nil {
+		t.Fatalf("AppendJSON: %v", err)
+	}
+	if len(got) > size || cap(got) != size {
+		t.Errorf("htmlescape realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+	}
+}
+
+// A raw value grows 6× under htmlescape when it is all <, > and &.
+func TestJSONSize_HTMLEscapeRaw_NoRealloc(t *testing.T) {
+	t.Parallel()
+	s := json.RawMessage(`"` + strings.Repeat("<>&", 50) + `"`)
+	in := HTMLEscapeRaw{
+		Meta:  s,
+		Val:   s,
+		Metas: []json.RawMessage{s},
+		ByKey: map[string]json.RawMessage{"k": s},
+		Any:   []any{s, htmlLabel{strings.Repeat("<>&", 50)}},
+		Rest:  map[string]json.RawMessage{"extra": s},
+	}
 	size := in.JSONSize()
 	got, err := in.AppendJSON(make([]byte, 0, size))
 	if err != nil {
@@ -994,6 +1071,51 @@ func TestJSONSize_NPtrPerDepth_NoRealloc(t *testing.T) {
 	}
 }
 
+// OmitPPStruct holds multi-level pointers under an omit guard, whose sizer
+// sees the pointee with one level removed.
+//
+//ggen:generate
+type OmitPPStruct struct {
+	PPSl **[]string          `json:"ppsl,omitempty"`
+	PPM  **map[string]string `json:"ppm,omitzero"`
+	PPS  **string            `json:"pps,omitempty"`
+	PPZ  **string            `json:"ppz,omitzero"`
+	PPA  **Address           `json:"ppa,omitzero"`
+}
+
+func TestJSONSize_OmitMultiLevelPointer_NoRealloc(t *testing.T) {
+	t.Parallel()
+	worst := strings.Repeat(`"\`+"\n\t", 16)
+	cases := []struct {
+		name string
+		v    OmitPPStruct
+	}{
+		{"nil", OmitPPStruct{}},
+		{"inner_nil", OmitPPStruct{
+			PPSl: new((*[]string)(nil)), PPM: new((*map[string]string)(nil)),
+			PPS: new((*string)(nil)), PPZ: new((*string)(nil)), PPA: new((*Address)(nil)),
+		}},
+		{"full", OmitPPStruct{
+			PPSl: new(&[]string{worst, worst}), PPM: new(&map[string]string{worst: worst}),
+			PPS: new(new(worst)), PPZ: new(new(worst)),
+			PPA: new(&Address{Street: worst, City: worst, ZipCode: worst}),
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			size := c.v.JSONSize()
+			got, err := c.v.AppendJSON(make([]byte, 0, size))
+			if err != nil {
+				t.Fatalf("AppendJSON: %v", err)
+			}
+			if cap(got) != size {
+				t.Errorf("realloc: JSONSize=%d cap=%d len=%d\nout=%s", size, cap(got), len(got), got)
+			}
+		})
+	}
+}
+
 // Cap-guard for an any field over a mix of nested maps, arrays and strings.
 func TestJSONSize_AnyStruct_NoRealloc(t *testing.T) {
 	t.Parallel()
@@ -1155,5 +1277,76 @@ func TestJSONSize_NetipZone_NoRealloc(t *testing.T) {
 	}
 	if len(got) > size {
 		t.Errorf("undersized: len=%d > size=%d", len(got), size)
+	}
+}
+
+// TimeWideLayouts has layouts whose elements print wider than they are
+// spelled: day and month names, a year past 9999, a zone offset of many hours
+// and a zone name. Slice and map elements share no slack, so each element's
+// budget covers its own widest output.
+//
+//ggen:generate
+type TimeWideLayouts struct {
+	RFC850   []time.Time `json:"rfc850,format:RFC850"`
+	Names    []time.Time `json:"names,format:'Monday January 2 MST'"` //nolint:govet // layout carries spaces
+	DateOnly []time.Time `json:"dateOnly,format:DateOnly"`
+	RFC1123Z []time.Time `json:"rfc1123z,format:RFC1123Z"`
+	Frac     []time.Time `json:"frac,format:'15:04:05.000000000000 Z07:00:00'"` //nolint:govet // layout carries spaces
+}
+
+// TimeHTMLLayout writes a custom layout with <, > and & under htmlescape,
+// which escapes each of them to six bytes.
+//
+//ggen:generate htmlescape
+type TimeHTMLLayout struct {
+	At  time.Time   `json:"at,format:'<<<<<<<<<<<<<<<< &&&&&&&&&&&&&&&& 2006 >>>>>>>>>>>>>>>>'"` //nolint:govet // layout carries spaces
+	All []time.Time `json:"all,format:'<&> 2006'"`                                               //nolint:govet // layout carries spaces
+}
+
+func TestJSONSize_TimeWideLayouts_NoRealloc(t *testing.T) {
+	t.Parallel()
+	whens := []time.Time{
+		time.Date(2021, time.September, 22, 12, 45, 59, 0, time.FixedZone("", 5*3600+1800)),
+		time.Date(-292277022000, time.January, 1, 0, 0, 0, 0, time.UTC),
+		time.Date(2026, 1, 1, 0, 0, 0, 0, time.FixedZone("", -2000000000)),
+		time.Date(2026, 1, 1, 0, 0, 0, 0, time.FixedZone("", math.MinInt)),
+		time.Date(2026, 1, 1, 0, 0, 0, 0, time.FixedZone(strings.Repeat("Zone", 50), 3600)),
+	}
+	for _, when := range whens {
+		ts := []time.Time{when, when, when}
+		cases := []interface {
+			AppendJSON(dst []byte) ([]byte, error)
+			JSONSize() int
+		}{
+			TimeWideLayouts{
+				RFC850: ts, Names: ts, DateOnly: ts, RFC1123Z: ts, Frac: ts,
+			},
+			TimeHTMLLayout{At: when, All: ts},
+		}
+		for _, v := range cases {
+			size := v.JSONSize()
+			got, err := v.AppendJSON(make([]byte, 0, size))
+			if err != nil {
+				t.Fatalf("AppendJSON: %v", err)
+			}
+			if cap(got) != size {
+				t.Errorf("%T at %v: realloc, JSONSize=%d len=%d", v, when, size, len(got))
+			}
+		}
+	}
+}
+
+// A time layout's budget is its widest output and no more: AppendFormat
+// grows the buffer only by what it writes.
+func TestJSONSize_TimeExact(t *testing.T) {
+	t.Parallel()
+	when := time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.FixedZone("", -7*3600))
+	v := TimeDefault{Default: when}
+	out, err := v.AppendJSON(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := v.JSONSize(); n != len(out) {
+		t.Errorf("JSONSize %d, output %d: %s", n, len(out), out)
 	}
 }

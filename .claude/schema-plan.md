@@ -369,7 +369,7 @@ with known Go verdicts.
 Helpers (`gen/internal/js`): where a library built-in differs from Go, the
 schema calls a helper instead. String values Go parses with a stdlib parser
 get a port of that parser: `time.Parse` for custom layouts, strict RFC 3339
-with day-of-month checks, `big.Float.Parse(s, 10)`, `big.Rat.SetString` and
+with day-of-month checks, `big.Float.Parse(s, 0)`, `big.Rat.SetString` and
 `url.Parse`, next to the IP, CIDR, duration, number and binary-encoding
 helpers. Each is run in Node against its Go counterpart on generated inputs
 (every short string over a grammar alphabet, or random formatted times with

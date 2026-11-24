@@ -25,6 +25,12 @@ func ValidateUpper(s string) error {
 	return nil
 }
 
+// IsShort is a cross-package predicate validator.
+func IsShort(s string) bool { return len(s) <= 3 }
+
+// NoBang is a cross-package mod of the (T, bool) form: a '!' fails it.
+func NoBang(s string) (string, bool) { return s, !strings.Contains(s, "!") }
+
 // PrefixHash is a cross-package mod that cannot fail. It maps T to T.
 func PrefixHash(s string) string { return "#" + s }
 

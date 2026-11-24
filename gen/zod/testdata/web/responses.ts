@@ -4,6 +4,7 @@ import { z } from "zod";
 import { User as money_User } from "../shared/money.ts";
 import { ggenDecoded, ggenFits, ggenHex, ggenInteger, ggenIsAddr, ggenIsAddrPort, ggenIsDateOnly, ggenIsDuration, ggenIsPrefix } from "../shared/ggen.ts";
 
+/** Role is an enum. */
 export const Role = z.enum(["admin", "member"]);
 export type Role = z.output<typeof Role>;
 
@@ -15,7 +16,22 @@ export const Address = z.strictObject({
 export type Address = z.output<typeof Address>;
 
 /** User is a response. */
-export const User = z.strictObject({
+export type User = {
+  id: number;
+  role: Role;
+  status: "active" | "banned" | "";
+  plan?: 1 | 2;
+  tags?: string[];
+  created: string;
+  level: unknown;
+  point: Record<string, unknown>;
+  money: money_User;
+  address: Address;
+  manager?: User;
+  friends: (User | null)[] | null;
+  state: number;
+};
+export const User: z.ZodType<User> = z.strictObject({
   id: z.int(),
   role: Role,
   status: z.enum(["active", "banned", ""]),
@@ -34,7 +50,6 @@ export const User = z.strictObject({
   },
   state: z.int(),
 });
-export type User = z.output<typeof User>;
 
 /** Tags is an annotated container alias. */
 export const Tags = z.array(z.string()).nullable();

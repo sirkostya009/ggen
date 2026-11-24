@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	jsonv2 "encoding/json/v2"
 	"errors"
+	"math"
 	"net"
 	"net/netip"
 	"reflect"
@@ -422,6 +423,34 @@ func TestByteArray_Pointer(t *testing.T) {
 	// omitempty drops a nil pointer.
 	if out, err := ggen.Marshal(R10BPtrByteArray{}); err != nil || strings.Contains(string(out), `"o"`) {
 		t.Errorf("omitempty: %s, %v", out, err)
+	}
+}
+
+// PtrPtrBytes checks that a byte slice behind two pointers takes the bytes
+// formats, as one behind a single pointer does.
+//
+//ggen:generate
+type PtrPtrBytes struct {
+	B **[]byte `json:"b"`
+	H **[]byte `json:"h,format:hex"`
+}
+
+func TestBytes_PointerPointerFormat(t *testing.T) {
+	t.Parallel()
+	in := `{"b":"AQI=","h":"0a0b"}`
+	got, _, err := PtrPtrBytes{}.DecodeFrom([]byte(in))
+	if err != nil || got.B == nil || *got.B == nil || !bytes.Equal(**got.B, []byte{1, 2}) ||
+		got.H == nil || *got.H == nil || !bytes.Equal(**got.H, []byte{10, 11}) {
+		t.Fatalf("bytes decode: %+v, %v", got, err)
+	}
+	var s ggen.Stream
+	s.Reset(&chunkReader{data: []byte(in), max: 3}, make([]byte, 0, 16))
+	sgot, err := PtrPtrBytes{}.DecodeFromStream(&s)
+	if err != nil || sgot.H == nil || *sgot.H == nil || !bytes.Equal(**sgot.H, []byte{10, 11}) {
+		t.Fatalf("stream decode: %+v, %v", sgot, err)
+	}
+	if out, err := ggen.Marshal(got); err != nil || string(out) != in {
+		t.Fatalf("marshal: %s, %v", out, err)
 	}
 }
 
@@ -929,6 +958,102 @@ func TestNetAddrs_errorDetachedFromBuffer(t *testing.T) {
 		s.Value[NetAddrs]()
 		if after := err.Error(); after != before {
 			t.Errorf("error text changed after buffer reuse:\n before %q\n after  %q", before, after)
+		}
+	}
+}
+
+// DurUnits reads time.Duration as integer counts of a unit.
+//
+//ggen:generate
+type DurUnits struct {
+	Timeout    time.Duration  `json:"ms,format:milli"`
+	Delay      time.Duration  `json:"us,format:micro"`
+	Span       time.Duration  `json:"ns,format:nano"`
+	PtrTimeout *time.Duration `json:"pms,format:milli"`
+}
+
+// A millisecond or microsecond count whose Duration does not fit int64
+// nanoseconds is ErrNumberOverflow on both paths, never a wrapped Duration.
+func TestDuration_UnitCountOverflow(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		doc    string
+		reject bool
+	}{
+		{`{"ms":9223372036854}`, false},
+		{`{"ms":-9223372036854}`, false},
+		{`{"ms":9223372036855}`, true},
+		{`{"ms":-9223372036855}`, true},
+		{`{"ms":18446744073710}`, true},
+		{`{"ms":9223372036854775807}`, true},
+		{`{"us":9223372036854775}`, false},
+		{`{"us":9223372036854776}`, true},
+		{`{"us":-9223372036854775808}`, true},
+		{`{"ns":9223372036854775807}`, false},
+		{`{"pms":9223372036855}`, true},
+	} {
+		for _, chunk := range []int{1, 7} {
+			bErr, sErr := decodeBothChunked[DurUnits](c.doc, chunk)
+			for path, err := range map[string]error{"bytes": bErr, "stream": sErr} {
+				if c.reject && !errors.Is(err, ggen.ErrNumberOverflow) {
+					t.Errorf("%s %s chunk=%d: err=%v, want ErrNumberOverflow", c.doc, path, chunk, err)
+				}
+				if !c.reject && err != nil {
+					t.Errorf("%s %s chunk=%d: unexpected err=%v", c.doc, path, chunk, err)
+				}
+			}
+		}
+		if !c.reject {
+			continue
+		}
+		bErr, sErr := decodeBothChunked[DurUnits](c.doc, 3)
+		var bp, sp *ggen.ParseError
+		if !errors.As(bErr, &bp) || !errors.As(sErr, &sp) || bp.Pos != sp.Pos {
+			t.Errorf("%s: bytes %v and stream %v, want *ggen.ParseError at the same Pos", c.doc, bErr, sErr)
+		}
+	}
+}
+
+// format:unix and format:sec read the decimal text exactly, so every value
+// ggen writes comes back unchanged on both paths, and a number past the
+// type's range is ErrNumberOverflow instead of an arbitrary value.
+func TestNative_DecimalSecondsRoundTrip(t *testing.T) {
+	t.Parallel()
+	decode := func(t *testing.T, in []byte) (NativeTypes, NativeTypes, error, error) {
+		t.Helper()
+		got, _, err := NativeTypes{}.DecodeFrom(in)
+		var s ggen.Stream
+		s.Reset(&chunkReader{data: in, max: 3}, make([]byte, 0, 8))
+		sgot, serr := NativeTypes{}.DecodeFromStream(&s)
+		return got, sgot, err, serr
+	}
+	for _, v := range []NativeTypes{
+		{UnixAt: time.Unix(1700000000, 123000000), SecDur: 1001 * time.Millisecond},
+		{UnixAt: time.Unix(1700000000, 1), SecDur: 264199216134},
+		{UnixAt: time.Unix(1700000000, 999999999), SecDur: math.MaxInt64},
+		{UnixAt: time.Unix(-2, 250000000), SecDur: math.MinInt64},
+	} {
+		out, err := ggen.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(out) > v.JSONSize() {
+			t.Errorf("%s: %d bytes over the JSONSize budget %d", out, len(out), v.JSONSize())
+		}
+		got, sgot, err, serr := decode(t, out)
+		if err != nil || serr != nil {
+			t.Fatalf("%s: bytes=%v stream=%v", out, err, serr)
+		}
+		for _, g := range []NativeTypes{got, sgot} {
+			if !g.UnixAt.Equal(v.UnixAt) || g.SecDur != v.SecDur {
+				t.Errorf("%s: read unix=%v sec=%d, want unix=%v sec=%d", out, g.UnixAt, g.SecDur, v.UnixAt, v.SecDur)
+			}
+		}
+	}
+	for _, in := range []string{`{"unixAt":1e30}`, `{"unixAt":9223372036854775808}`, `{"secDur":9223372037}`, `{"secDur":-1e300}`} {
+		_, _, err, serr := decode(t, []byte(in))
+		if err == nil || serr == nil || errors.Is(err, ggen.ErrNumberOverflow) != errors.Is(serr, ggen.ErrNumberOverflow) {
+			t.Errorf("%s: bytes=%v stream=%v, want an error from both", in, err, serr)
 		}
 	}
 }

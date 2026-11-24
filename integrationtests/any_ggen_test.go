@@ -16,6 +16,12 @@ const ggenCap_AnyNumberGrid_Grid___any = (min((80/max(int(unsafe.Sizeof(*new([]a
 // Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
 const ggenCap_AnyNumberGrid_Grid_any = (min((80/max(int(unsafe.Sizeof(*new(any))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(any))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(any))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(any))), 1)), 1)
 
+var ggenKeys_any_test_0 = []string{"body"}
+var ggenKeys_any_test_1 = []string{"name"}
+var ggenKeys_any_test_2 = []string{"grid"}
+var ggenKeys_any_test_3 = []string{"d"}
+var ggenKeys_any_test_4 = []string{"v"}
+
 func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, i int, err error) {
 	result = recv
 	seenBody := false
@@ -71,7 +77,7 @@ func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, i int, err erro
 		switch key {
 		case "body":
 			if seenBody {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"body"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_any_test_0}
 			}
 			seenBody = true
 			result.Body, i, err = ggen.Any(data, i, true)
@@ -80,7 +86,7 @@ func (recv AnyStruct) DecodeFrom(data []byte) (result AnyStruct, i int, err erro
 			}
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_any_test_1}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -174,7 +180,7 @@ func (recv AnyStruct) DecodeFromStream(s *ggen.Stream) (result AnyStruct, err er
 				return result, ggen.NewParseErr("body", s.Offset(), err)
 			}
 			if seenBody {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"body"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_any_test_0}
 			}
 			seenBody = true
 			result.Body, err = s.Any(true)
@@ -187,7 +193,7 @@ func (recv AnyStruct) DecodeFromStream(s *ggen.Stream) (result AnyStruct, err er
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_any_test_1}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -310,7 +316,7 @@ func (recv AnyNumberStruct) DecodeFrom(data []byte) (result AnyNumberStruct, i i
 		switch key {
 		case "body":
 			if seenBody {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"body"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_any_test_0}
 			}
 			seenBody = true
 			result.Body, i, err = ggen.AnyNumber(data, i, true)
@@ -319,7 +325,7 @@ func (recv AnyNumberStruct) DecodeFrom(data []byte) (result AnyNumberStruct, i i
 			}
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_any_test_1}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -413,7 +419,7 @@ func (recv AnyNumberStruct) DecodeFromStream(s *ggen.Stream) (result AnyNumberSt
 				return result, ggen.NewParseErr("body", s.Offset(), err)
 			}
 			if seenBody {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"body"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_any_test_0}
 			}
 			seenBody = true
 			result.Body, err = s.AnyNumber(true)
@@ -426,7 +432,7 @@ func (recv AnyNumberStruct) DecodeFromStream(s *ggen.Stream) (result AnyNumberSt
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_any_test_1}
 			}
 			seenName = true
 			result.Name, err = s.String(true)
@@ -496,6 +502,7 @@ func (s AnyNumberStruct) AppendJSON(dst []byte) ([]byte, error) {
 
 func (recv AnyNumberGrid) DecodeFrom(data []byte) (result AnyNumberGrid, i int, err error) {
 	result = recv
+	held0 := len(result.Grid)
 	if result.Grid != nil {
 		result.Grid = result.Grid[:0]
 	}
@@ -545,11 +552,12 @@ func (recv AnyNumberGrid) DecodeFrom(data []byte) (result AnyNumberGrid, i int, 
 		switch key {
 		case "grid":
 			if seenGrid {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"grid"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_any_test_2}
 			}
 			seenGrid = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("grid", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -563,6 +571,7 @@ func (recv AnyNumberGrid) DecodeFrom(data []byte) (result AnyNumberGrid, i int, 
 			for i < len(data) && data[i] <= ' ' && (data[i] == ' ' || data[i] == '\t' || data[i] == '\n' || data[i] == '\r') {
 				i++
 			}
+			live0 := held0
 			if i < len(data) && data[i] == ']' {
 				if result.Grid == nil {
 					result.Grid = [][]any{}
@@ -570,17 +579,22 @@ func (recv AnyNumberGrid) DecodeFrom(data []byte) (result AnyNumberGrid, i int, 
 			} else {
 				if result.Grid == nil {
 					result.Grid = make([][]any, 0, ggenCap_AnyNumberGrid_Grid___any)
+					live0 = cap(result.Grid)
 				}
 			}
 			if i < len(data) && data[i] != ']' {
 				for {
-					if len(result.Grid) < cap(result.Grid) {
+					if len(result.Grid) < live0 {
 						result.Grid = result.Grid[:len(result.Grid)+1]
+					} else if len(result.Grid) < cap(result.Grid) {
+						result.Grid = append(result.Grid, nil)
 					} else {
 						result.Grid = append(result.Grid, nil)
+						live0 = cap(result.Grid)
 					}
 					if i < len(data) && data[i] == 'n' {
 						if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+							i = ggen.NullEnd(data, i)
 							return result, i, ggen.NewParseErr("grid", i, ggen.ErrBadLiteral)
 						}
 						i += 4
@@ -694,6 +708,7 @@ func (recv AnyNumberGrid) DecodeFrom(data []byte) (result AnyNumberGrid, i int, 
 
 func (recv AnyNumberGrid) DecodeFromStream(s *ggen.Stream) (result AnyNumberGrid, err error) {
 	result = recv
+	held0 := len(result.Grid)
 	if result.Grid != nil {
 		result.Grid = result.Grid[:0]
 	}
@@ -729,7 +744,7 @@ func (recv AnyNumberGrid) DecodeFromStream(s *ggen.Stream) (result AnyNumberGrid
 				return result, ggen.NewParseErr("grid", s.Offset(), err)
 			}
 			if seenGrid {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"grid"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_any_test_2}
 			}
 			seenGrid = true
 			err = s.SkipSpace()
@@ -745,11 +760,11 @@ func (recv AnyNumberGrid) DecodeFromStream(s *ggen.Stream) (result AnyNumberGrid
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("grid", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("grid", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("grid", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("grid", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -769,6 +784,7 @@ func (recv AnyNumberGrid) DecodeFromStream(s *ggen.Stream) (result AnyNumberGrid
 					return result, ggen.NewParseErr("grid", s.Offset(), ggen.NotEOF(err, ggen.ErrBadArray))
 				}
 			}
+			live0 := held0
 			if s.Bytes()[s.Pos] == ']' {
 				if result.Grid == nil {
 					result.Grid = [][]any{}
@@ -776,13 +792,17 @@ func (recv AnyNumberGrid) DecodeFromStream(s *ggen.Stream) (result AnyNumberGrid
 			} else {
 				if result.Grid == nil {
 					result.Grid = make([][]any, 0, ggenCap_AnyNumberGrid_Grid___any)
+					live0 = cap(result.Grid)
 				}
 			}
 			for s.Bytes()[s.Pos] != ']' {
-				if len(result.Grid) < cap(result.Grid) {
+				if len(result.Grid) < live0 {
 					result.Grid = result.Grid[:len(result.Grid)+1]
+				} else if len(result.Grid) < cap(result.Grid) {
+					result.Grid = append(result.Grid, nil)
 				} else {
 					result.Grid = append(result.Grid, nil)
+					live0 = cap(result.Grid)
 				}
 				if s.Pos >= len(s.Bytes()) {
 					if err = s.ReadMore(0); err != nil {
@@ -793,11 +813,11 @@ func (recv AnyNumberGrid) DecodeFromStream(s *ggen.Stream) (result AnyNumberGrid
 					for ki := 1; ki < 4; ki++ {
 						if s.Pos+ki >= len(s.Bytes()) {
 							if err = s.ReadMore(0); err != nil {
-								return result, ggen.NewParseErr("grid", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+								return result, ggen.NewParseErr("grid", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 							}
 						}
 						if s.Bytes()[s.Pos+ki] != "null"[ki] {
-							return result, ggen.NewParseErr("grid", s.Offset(), ggen.ErrBadLiteral)
+							return result, ggen.NewParseErr("grid", s.Offset()+ki, ggen.ErrBadLiteral)
 						}
 					}
 					s.Pos += 4
@@ -1069,7 +1089,7 @@ func (recv R10DurationAny) DecodeFrom(data []byte) (result R10DurationAny, i int
 		switch key {
 		case "d":
 			if seenD {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"d"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_any_test_3}
 			}
 			seenD = true
 			var s string
@@ -1099,7 +1119,7 @@ func (recv R10DurationAny) DecodeFrom(data []byte) (result R10DurationAny, i int
 			}
 		case "v":
 			if seenV {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"v"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_any_test_4}
 			}
 			seenV = true
 			result.V, i, err = ggen.Any(data, i, true)
@@ -1177,7 +1197,7 @@ func (recv R10DurationAny) DecodeFromStream(s *ggen.Stream) (result R10DurationA
 				return result, ggen.NewParseErr("d", s.Offset(), err)
 			}
 			if seenD {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"d"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_any_test_3}
 			}
 			seenD = true
 			var sv string
@@ -1196,7 +1216,7 @@ func (recv R10DurationAny) DecodeFromStream(s *ggen.Stream) (result R10DurationA
 				return result, ggen.NewParseErr("v", s.Offset(), err)
 			}
 			if seenV {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"v"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_any_test_4}
 			}
 			seenV = true
 			result.V, err = s.Any(true)

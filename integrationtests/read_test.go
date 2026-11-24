@@ -189,6 +189,51 @@ func TestIgnoreUnknown_streamErrorKeepsKeyName(t *testing.T) {
 	}
 }
 
+// A skipped member costs the stream path no allocation, like the bytes path,
+// and a key longer than the stack copy still labels a failed skip.
+func TestIgnoreUnknown_streamSkipNoAlloc(t *testing.T) { //nolint:paralleltest // measures allocations
+	doc := func(n int) []byte {
+		var b strings.Builder
+		b.WriteString(`{"name":"x"`)
+		for i := range n {
+			b.WriteString(`,"attribute_`)
+			b.WriteByte(byte('a' + i%26))
+			b.WriteString(`":12`)
+		}
+		b.WriteString("}")
+		return []byte(b.String())
+	}
+	allocs := func(in []byte) float64 {
+		var r strings.Reader
+		buf := make([]byte, 0, 4096)
+		return testing.AllocsPerRun(20, func() {
+			r.Reset(string(in))
+			var s ggen.Stream
+			s.Reset(&r, buf)
+			if _, err := (IgnoreUnknownStruct{}).DecodeFromStream(&s); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+	if base, many := allocs(doc(0)), allocs(doc(50)); many != base {
+		t.Errorf("50 skipped members: %v allocs, 0 skipped: %v", many, base)
+	}
+
+	key := strings.Repeat("k", 200)
+	payload := `{"` + key + `":[` + strings.Repeat("1,", 400) + `@]}`
+	_, _, bytesErr := IgnoreUnknownStruct{}.DecodeFrom([]byte(payload))
+	var s ggen.Stream
+	s.Reset(&chunkReader{data: []byte(payload), max: 1}, make([]byte, 0, 32))
+	_, streamErr := IgnoreUnknownStruct{}.DecodeFromStream(&s)
+	var bpe, spe *ggen.ParseError
+	if !errors.As(bytesErr, &bpe) || !errors.As(streamErr, &spe) {
+		t.Fatalf("bytes=%v stream=%v", bytesErr, streamErr)
+	}
+	if len(spe.Keys) != 1 || spe.Keys[0] != key || spe.Error() != bpe.Error() {
+		t.Errorf("stream %v, bytes %v", streamErr, bytesErr)
+	}
+}
+
 // UnknownKeyError.Pos is the offset of the value start on both the bytes and
 // the stream path. A key with no colon after it is a grammar error, not an
 // unknown key, on both paths. The multierr aggregate carries the same Pos.

@@ -12,6 +12,14 @@ import (
 // Tries to fit >2 elements in 80 bytes, then 512 bytes - never goes above that.
 const ggenCap_PermissiveDoc_Tags_string = (min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2)*(80/max(int(unsafe.Sizeof(*new(string))), 1)) + (1-(min((80/max(int(unsafe.Sizeof(*new(string))), 1)), 2)/2))*max(((8*int(unsafe.Sizeof(uintptr(0)))*int(unsafe.Sizeof(uintptr(0))))/max(int(unsafe.Sizeof(*new(string))), 1)), 1)
 
+var ggenKeys_allowinvalidutf8_test_0 = []string{"long"}
+var ggenKeys_allowinvalidutf8_test_1 = []string{"name"}
+var ggenKeys_allowinvalidutf8_test_2 = []string{"props"}
+var ggenKeys_allowinvalidutf8_test_3 = []string{"raw"}
+var ggenKeys_allowinvalidutf8_test_4 = []string{"tags"}
+var ggenKeys_allowinvalidutf8_test_5 = []string{"body"}
+var ggenKeys_allowinvalidutf8_test_6 = []string{"m"}
+
 func (recv PermissiveDoc) DecodeFrom(data []byte) (result PermissiveDoc, i int, err error) {
 	result = recv
 	if result.Props != nil {
@@ -79,7 +87,7 @@ func (recv PermissiveDoc) DecodeFrom(data []byte) (result PermissiveDoc, i int, 
 		switch key {
 		case "long":
 			if seenLong {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"long"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_allowinvalidutf8_test_0}
 			}
 			seenLong = true
 			if i >= len(data) || data[i] != '"' {
@@ -104,7 +112,7 @@ func (recv PermissiveDoc) DecodeFrom(data []byte) (result PermissiveDoc, i int, 
 			}
 		case "name":
 			if seenName {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"name"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_allowinvalidutf8_test_1}
 			}
 			seenName = true
 			if i >= len(data) || data[i] != '"' {
@@ -129,11 +137,12 @@ func (recv PermissiveDoc) DecodeFrom(data []byte) (result PermissiveDoc, i int, 
 			}
 		case "props":
 			if seenProps {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"props"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_allowinvalidutf8_test_2}
 			}
 			seenProps = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("props", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -231,7 +240,7 @@ func (recv PermissiveDoc) DecodeFrom(data []byte) (result PermissiveDoc, i int, 
 			i++
 		case "raw":
 			if seenRaw {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"raw"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_allowinvalidutf8_test_3}
 			}
 			seenRaw = true
 			start := i
@@ -242,11 +251,12 @@ func (recv PermissiveDoc) DecodeFrom(data []byte) (result PermissiveDoc, i int, 
 			result.Raw = data[start:i]
 		case "tags":
 			if seenTags {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"tags"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_allowinvalidutf8_test_4}
 			}
 			seenTags = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("tags", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -398,7 +408,7 @@ func (recv PermissiveDoc) DecodeFromStream(s *ggen.Stream) (result PermissiveDoc
 				return result, ggen.NewParseErr("long", s.Offset(), err)
 			}
 			if seenLong {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"long"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_allowinvalidutf8_test_0}
 			}
 			seenLong = true
 			result.Long, err = s.String(false)
@@ -411,7 +421,7 @@ func (recv PermissiveDoc) DecodeFromStream(s *ggen.Stream) (result PermissiveDoc
 				return result, ggen.NewParseErr("name", s.Offset(), err)
 			}
 			if seenName {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"name"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_allowinvalidutf8_test_1}
 			}
 			seenName = true
 			result.Name, err = s.String(false)
@@ -424,7 +434,7 @@ func (recv PermissiveDoc) DecodeFromStream(s *ggen.Stream) (result PermissiveDoc
 				return result, ggen.NewParseErr("props", s.Offset(), err)
 			}
 			if seenProps {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"props"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_allowinvalidutf8_test_2}
 			}
 			seenProps = true
 			err = s.SkipSpace()
@@ -440,11 +450,11 @@ func (recv PermissiveDoc) DecodeFromStream(s *ggen.Stream) (result PermissiveDoc
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("props", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("props", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("props", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("props", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -532,21 +542,21 @@ func (recv PermissiveDoc) DecodeFromStream(s *ggen.Stream) (result PermissiveDoc
 				return result, ggen.NewParseErr("raw", s.Offset(), err)
 			}
 			if seenRaw {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"raw"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_allowinvalidutf8_test_3}
 			}
 			seenRaw = true
 			span, err := s.CaptureValue()
 			if err != nil {
 				return result, ggen.NewParseErr("raw", s.Offset(), err)
 			}
-			result.Raw = append(result.Raw[:0], span...)
+			result.Raw = append(result.Raw[:0:0], span...)
 		case "tags":
 			err = s.ConsumeColon()
 			if err != nil {
 				return result, ggen.NewParseErr("tags", s.Offset(), err)
 			}
 			if seenTags {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"tags"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_allowinvalidutf8_test_4}
 			}
 			seenTags = true
 			err = s.SkipSpace()
@@ -562,11 +572,11 @@ func (recv PermissiveDoc) DecodeFromStream(s *ggen.Stream) (result PermissiveDoc
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("tags", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("tags", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("tags", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("tags", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -804,7 +814,7 @@ func (recv R10PermissiveAny) DecodeFrom(data []byte) (result R10PermissiveAny, i
 		switch key {
 		case "body":
 			if seenBody {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"body"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_allowinvalidutf8_test_5}
 			}
 			seenBody = true
 			result.Body, i, err = ggen.Any(data, i, false)
@@ -813,11 +823,12 @@ func (recv R10PermissiveAny) DecodeFrom(data []byte) (result R10PermissiveAny, i
 			}
 		case "m":
 			if seenM {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"m"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_allowinvalidutf8_test_6}
 			}
 			seenM = true
 			if i < len(data) && data[i] == 'n' {
 				if i+4 > len(data) || data[i+1] != 'u' || data[i+2] != 'l' || data[i+3] != 'l' {
+					i = ggen.NullEnd(data, i)
 					return result, i, ggen.NewParseErr("m", i, ggen.ErrBadLiteral)
 				}
 				i += 4
@@ -978,7 +989,7 @@ func (recv R10PermissiveAny) DecodeFromStream(s *ggen.Stream) (result R10Permiss
 				return result, ggen.NewParseErr("body", s.Offset(), err)
 			}
 			if seenBody {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"body"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_allowinvalidutf8_test_5}
 			}
 			seenBody = true
 			result.Body, err = s.Any(false)
@@ -991,7 +1002,7 @@ func (recv R10PermissiveAny) DecodeFromStream(s *ggen.Stream) (result R10Permiss
 				return result, ggen.NewParseErr("m", s.Offset(), err)
 			}
 			if seenM {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"m"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_allowinvalidutf8_test_6}
 			}
 			seenM = true
 			err = s.SkipSpace()
@@ -1007,11 +1018,11 @@ func (recv R10PermissiveAny) DecodeFromStream(s *ggen.Stream) (result R10Permiss
 				for ki := 1; ki < 4; ki++ {
 					if s.Pos+ki >= len(s.Bytes()) {
 						if err = s.ReadMore(0); err != nil {
-							return result, ggen.NewParseErr("m", s.Offset(), ggen.NotEOF(err, ggen.ErrBadLiteral))
+							return result, ggen.NewParseErr("m", s.Offset()+ki, ggen.NotEOF(err, ggen.ErrBadLiteral))
 						}
 					}
 					if s.Bytes()[s.Pos+ki] != "null"[ki] {
-						return result, ggen.NewParseErr("m", s.Offset(), ggen.ErrBadLiteral)
+						return result, ggen.NewParseErr("m", s.Offset()+ki, ggen.ErrBadLiteral)
 					}
 				}
 				s.Pos += 4
@@ -1259,7 +1270,7 @@ func (recv R10PermissiveAnyNumber) DecodeFrom(data []byte) (result R10Permissive
 		switch key {
 		case "body":
 			if seenBody {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"body"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_allowinvalidutf8_test_5}
 			}
 			seenBody = true
 			result.Body, i, err = ggen.AnyNumber(data, i, false)
@@ -1330,7 +1341,7 @@ func (recv R10PermissiveAnyNumber) DecodeFromStream(s *ggen.Stream) (result R10P
 				return result, ggen.NewParseErr("body", s.Offset(), err)
 			}
 			if seenBody {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"body"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_allowinvalidutf8_test_5}
 			}
 			seenBody = true
 			result.Body, err = s.AnyNumber(false)

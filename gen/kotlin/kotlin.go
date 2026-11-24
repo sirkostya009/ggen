@@ -99,6 +99,9 @@ func (e *Emitter) Decl(ctx *gen.Context, p gen.Placed) error {
 	}
 	e.placed = p
 	s := p.Shape
+	if s.Alias != nil && s.Recursive {
+		return fmt.Errorf("%s reaches itself, which a Kotlin typealias cannot", p.Name)
+	}
 	if e.body.Len() > 0 {
 		e.body.WriteByte('\n')
 	}

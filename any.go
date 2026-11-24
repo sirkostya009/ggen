@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"math/big"
+	"net/netip"
 	"reflect"
 	"strconv"
 	"strings"
@@ -27,18 +28,32 @@ import (
 // Nesting deeper than maxDepth returns ErrMaxDepth. A cyclic value ends the
 // same way.
 func AppendAny(dst []byte, v any) ([]byte, error) {
-	return appendAny(dst, v, AppendStringNoHTML, 0)
+	return appendAny(dst, v, false, 0)
 }
 
-// AppendAnyHTML is AppendAny with HTML-safe string escaping. It writes <, >
-// and & as \uXXXX escapes.
+// AppendAnyHTML is AppendAny with HTML-safe escaping. It writes <, > and & as
+// \uXXXX escapes, also inside json.RawMessage values and MarshalJSON output.
 func AppendAnyHTML(dst []byte, v any) ([]byte, error) {
-	return appendAny(dst, v, AppendString, 0)
+	return appendAny(dst, v, true, 0)
 }
 
-// escapeFn is AppendString or AppendStringNoHTML. It is passed down the whole
-// walk, so every nested string and map key uses the same escaping.
-type escapeFn = func([]byte, string) []byte
+// escMode is true for HTML-safe escaping. It is passed down the whole walk, so
+// every nested string, map key and raw value uses the same escaping.
+type escMode bool
+
+func (html escMode) str(dst []byte, s string) []byte {
+	if html {
+		return AppendString(dst, s)
+	}
+	return AppendStringNoHTML(dst, s)
+}
+
+func (html escMode) raw(dst, b []byte) []byte {
+	if html {
+		return AppendRawHTML(dst, b)
+	}
+	return append(dst, b...)
+}
 
 // netKind tells apart the package net structs that encode as strings, the
 // way generated fields of those types do. The package does not import net,
@@ -75,7 +90,7 @@ func netElemKind(rv reflect.Value) netKind {
 
 // appendNetValue writes the net value in rv as AppendIPNet or AppendNetAddr
 // does, escaping a zone with esc.
-func appendNetValue(dst []byte, rv reflect.Value, k netKind, esc escapeFn) ([]byte, error) {
+func appendNetValue(dst []byte, rv reflect.Value, k netKind, esc escMode) ([]byte, error) {
 	dst = append(dst, '"')
 	if k == netIPNet {
 		return AppendIPNet(dst, rv.Field(0).Bytes(), rv.Field(1).Bytes())
@@ -89,7 +104,7 @@ func appendNetValue(dst []byte, rv reflect.Value, k netKind, esc escapeFn) ([]by
 	return closeText(dst[:len(dst)-1], from, esc), nil
 }
 
-func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
+func appendAny(dst []byte, v any, esc escMode, depth int) ([]byte, error) {
 	if depth > maxDepth {
 		return dst, ErrMaxDepth
 	}
@@ -100,7 +115,7 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 		return strconv.AppendBool(dst, x), nil
 	case string:
 		dst = append(dst, '"')
-		return esc(dst, x), nil
+		return esc.str(dst, x), nil
 	case float64:
 		return AppendFloat(dst, x, 64)
 	case float32:
@@ -153,7 +168,7 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 				dst = append(dst, ',')
 			}
 			dst = append(dst, '"')
-			dst = esc(dst, s)
+			dst = esc.str(dst, s)
 		}
 		return append(dst, ']'), nil
 	case []int:
@@ -203,7 +218,7 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 			if len(r) == 0 {
 				dst = append(dst, 'n', 'u', 'l', 'l')
 			} else {
-				dst = append(dst, r...)
+				dst = esc.raw(dst, r)
 			}
 		}
 		return append(dst, ']'), nil
@@ -216,7 +231,7 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 			}
 			first = false
 			dst = append(dst, '"')
-			dst = esc(dst, k)
+			dst = esc.str(dst, k)
 			dst = append(dst, ':')
 			var err error
 			dst, err = appendAny(dst, val, esc, depth+1)
@@ -234,9 +249,9 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 			}
 			first = false
 			dst = append(dst, '"')
-			dst = esc(dst, k)
+			dst = esc.str(dst, k)
 			dst = append(dst, ':', '"')
-			dst = esc(dst, val)
+			dst = esc.str(dst, val)
 		}
 		return append(dst, '}'), nil
 	case map[string]int:
@@ -269,11 +284,11 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 	// case.
 	case json.RawMessage:
 		// Nil or empty writes null. Anything else is assumed to be valid JSON
-		// and copied as is.
+		// and copied as is, HTML-escaped in HTML mode.
 		if len(x) == 0 {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
 		}
-		return append(dst, x...), nil
+		return esc.raw(dst, x), nil
 	// big.Int has an AppendText method, so the TextAppender case below would
 	// write its digits as a quoted string. But encoding/json, jsonv2 and
 	// generated big.Int fields all write a bare number. This is the case
@@ -300,14 +315,14 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 	// form, so one document never holds two forms of the same Go type.
 	case time.Duration:
 		dst = append(dst, '"')
-		return esc(dst, x.String()), nil
+		return esc.str(dst, x.String()), nil
 	// Pointers to primitives. A nil pointer writes null.
 	case *string:
 		if x == nil {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
 		}
 		dst = append(dst, '"')
-		return esc(dst, *x), nil
+		return esc.str(dst, *x), nil
 	case *bool:
 		if x == nil {
 			return append(dst, 'n', 'u', 'l', 'l'), nil
@@ -372,7 +387,7 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 			return dst, err
 		}
 		dst = append(dst, '"')
-		dst = esc(dst, BytesToString(t))
+		dst = esc.str(dst, BytesToString(t))
 		return dst, nil
 	case json.Marshaler:
 		if isNilPtr(v) {
@@ -389,7 +404,7 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 			// it does so in its own MarshalJSON.
 			return dst, ErrEmptyMarshalJSON
 		}
-		return append(dst, b...), nil
+		return esc.raw(dst, b), nil
 	}
 	// Types the type switch above does not match go through reflect.
 	rv := reflect.ValueOf(v)
@@ -415,6 +430,16 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 		if k := netElemKind(rv); k != netNone {
 			return appendNetValue(dst, rv.Elem(), k, esc)
 		}
+		// A struct with no codec of its own is walked through the pointer,
+		// with no boxed copy.
+		if e := rv.Elem(); e.Kind() == reflect.Struct {
+			if info := cachedStructInfo(e.Type()); info.inPlace {
+				if depth >= maxDepth {
+					return dst, ErrMaxDepth
+				}
+				return appendStructInfo(dst, e, info, esc, depth+1)
+			}
+		}
 		return appendAny(dst, rv.Elem().Interface(), esc, depth+1)
 	// Named primitive types such as `type MyEnum int` end up here. The type
 	// switch matches only the exact predeclared types.
@@ -422,7 +447,7 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 		return strconv.AppendBool(dst, rv.Bool()), nil
 	case reflect.String:
 		dst = append(dst, '"')
-		return esc(dst, rv.String()), nil
+		return esc.str(dst, rv.String()), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return strconv.AppendInt(dst, rv.Int(), 10), nil
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
@@ -432,11 +457,12 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 	case reflect.Float64:
 		return AppendFloat(dst, rv.Float(), 64)
 	case reflect.Struct:
-		return appendStruct(dst, rv, esc, depth)
+		return appendStructInfo(dst, rv, cachedStructInfo(rv.Type()), esc, depth)
 	case reflect.Slice, reflect.Array:
-		// Slices and arrays of uint8 encode as base64, for example
-		// `type Bytes []byte`.
-		if rv.Type().Elem().Kind() == reflect.Uint8 {
+		// Slices and arrays of byte encode as base64, for example
+		// `type Bytes []byte`. A named element type such as `type Octet
+		// uint8` is an ordinary list, as in jsonv2.
+		if et := rv.Type().Elem(); et.Kind() == reflect.Uint8 && et.PkgPath() == "" {
 			dst = append(dst, '"')
 			if rv.Kind() == reflect.Array {
 				// The array came from reflect.ValueOf, so it is not
@@ -450,14 +476,13 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 			return append(dst, '"'), nil
 		}
 		dst = append(dst, '[')
-		et := rv.Type().Elem()
-		elemKind, elemAddr := et.Kind(), needsAddr(et)
+		elem := elemInfoOf(rv.Type().Elem())
 		for i := range rv.Len() {
 			if i > 0 {
 				dst = append(dst, ',')
 			}
 			var err error
-			dst, err = appendReflectValue(dst, rv.Index(i), elemKind, elemAddr, esc, depth+1)
+			dst, err = appendReflectValue(dst, rv.Index(i), &elem, esc, depth+1)
 			if err != nil {
 				return dst, err
 			}
@@ -474,7 +499,7 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 		// key, so its address works.
 		var keyApp encoding.TextAppender
 		var keyMar encoding.TextMarshaler
-		if kt.PkgPath() != "" {
+		if mayHaveMethods(kt) {
 			switch kp := kv.Addr().Interface().(type) {
 			case encoding.TextAppender:
 				keyApp = kp
@@ -486,7 +511,7 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 			return dst, &json.UnsupportedTypeError{Type: rv.Type()}
 		}
 		dst = append(dst, '{')
-		elemKind, elemAddr := et.Kind(), needsAddr(et)
+		elem := elemInfoOf(et)
 		iter := rv.MapRange()
 		first := true
 		for iter.Next() {
@@ -510,12 +535,12 @@ func appendAny(dst []byte, v any, esc escapeFn, depth int) ([]byte, error) {
 				if t, err = keyMar.MarshalText(); err != nil {
 					return dst, err
 				}
-				dst = esc(dst, BytesToString(t))
+				dst = esc.str(dst, BytesToString(t))
 			default:
-				dst = esc(dst, kv.String())
+				dst = esc.str(dst, kv.String())
 			}
 			dst = append(dst, ':')
-			dst, err = appendReflectValue(dst, vv, elemKind, elemAddr, esc, depth+1)
+			dst, err = appendReflectValue(dst, vv, &elem, esc, depth+1)
 			if err != nil {
 				return dst, err
 			}
@@ -576,7 +601,7 @@ func appendSliceBool(dst []byte, s []bool) []byte {
 	return append(dst, ']')
 }
 
-func appendMapInt[V int | int8 | int16 | int32 | int64](dst []byte, m map[string]V, esc escapeFn) []byte {
+func appendMapInt[V int | int8 | int16 | int32 | int64](dst []byte, m map[string]V, esc escMode) []byte {
 	dst = append(dst, '{')
 	first := true
 	for k, v := range m {
@@ -585,14 +610,14 @@ func appendMapInt[V int | int8 | int16 | int32 | int64](dst []byte, m map[string
 		}
 		first = false
 		dst = append(dst, '"')
-		dst = esc(dst, k)
+		dst = esc.str(dst, k)
 		dst = append(dst, ':')
 		dst = strconv.AppendInt(dst, int64(v), 10)
 	}
 	return append(dst, '}')
 }
 
-func appendMapUint[V uint | uint8 | uint16 | uint32 | uint64](dst []byte, m map[string]V, esc escapeFn) []byte {
+func appendMapUint[V uint | uint8 | uint16 | uint32 | uint64](dst []byte, m map[string]V, esc escMode) []byte {
 	dst = append(dst, '{')
 	first := true
 	for k, v := range m {
@@ -601,14 +626,14 @@ func appendMapUint[V uint | uint8 | uint16 | uint32 | uint64](dst []byte, m map[
 		}
 		first = false
 		dst = append(dst, '"')
-		dst = esc(dst, k)
+		dst = esc.str(dst, k)
 		dst = append(dst, ':')
 		dst = strconv.AppendUint(dst, uint64(v), 10)
 	}
 	return append(dst, '}')
 }
 
-func appendMapFloat[V float32 | float64](dst []byte, m map[string]V, bitSize int, esc escapeFn) ([]byte, error) {
+func appendMapFloat[V float32 | float64](dst []byte, m map[string]V, bitSize int, esc escMode) ([]byte, error) {
 	dst = append(dst, '{')
 	first := true
 	for k, v := range m {
@@ -617,7 +642,7 @@ func appendMapFloat[V float32 | float64](dst []byte, m map[string]V, bitSize int
 		}
 		first = false
 		dst = append(dst, '"')
-		dst = esc(dst, k)
+		dst = esc.str(dst, k)
 		dst = append(dst, ':')
 		var err error
 		dst, err = AppendFloat(dst, float64(v), bitSize)
@@ -628,7 +653,7 @@ func appendMapFloat[V float32 | float64](dst []byte, m map[string]V, bitSize int
 	return append(dst, '}'), nil
 }
 
-func appendMapBool(dst []byte, m map[string]bool, esc escapeFn) []byte {
+func appendMapBool(dst []byte, m map[string]bool, esc escMode) []byte {
 	dst = append(dst, '{')
 	first := true
 	for k, v := range m {
@@ -637,7 +662,7 @@ func appendMapBool(dst []byte, m map[string]bool, esc escapeFn) []byte {
 		}
 		first = false
 		dst = append(dst, '"')
-		dst = esc(dst, k)
+		dst = esc.str(dst, k)
 		dst = append(dst, ':')
 		dst = strconv.AppendBool(dst, v)
 	}
@@ -667,42 +692,98 @@ func appendPtrUint[V uint | uint8 | uint16 | uint32 | uint64](dst []byte, p *V) 
 	return strconv.AppendUint(dst, uint64(*p), 10)
 }
 
-// appendReflectValue appends rv to dst. The caller passes the kind of rv and
-// addr, which is needsAddr of the element type, both computed once per
-// container. Unnamed primitive kinds are read straight from the
-// reflect.Value. Every other value goes back through appendAny via
-// Interface(). Named primitive types take that route too, because their
-// marshalers live in appendAny's type switch. Examples are json.Number, which
-// is written unquoted, and a MarshalJSON or AppendText method on
-// `type Level int`.
-func appendReflectValue(dst []byte, rv reflect.Value, kind reflect.Kind, addr bool, esc escapeFn, depth int) ([]byte, error) {
-	if addr {
-		return appendAny(dst, addrOf(rv), esc, depth)
+// elemInfo is what a container knows about its element type. It is computed
+// once per container, so the element loop does no type inspection.
+type elemInfo struct {
+	kind   reflect.Kind
+	addr   bool        // needsAddr of the element type
+	named  bool        // the element type has a package path
+	direct bool        // directKind: written from its kind alone
+	net    netKind     // a net struct, written in place
+	st     *structInfo // a struct that is walked in place, else nil
+}
+
+func elemInfoOf(et reflect.Type) elemInfo {
+	e := elemInfo{kind: et.Kind(), addr: needsAddr(et), named: et.PkgPath() != ""}
+	if e.addr {
+		return e
 	}
-	if t := rv.Type(); t.PkgPath() != "" {
-		// A net element is written in place, without boxing a copy.
-		if k := netKindOf(t); k != netNone {
-			return appendNetValue(dst, rv, k, esc)
+	e.direct = directKind(et)
+	e.net = netKindOf(et)
+	if e.kind == reflect.Struct {
+		if info := cachedStructInfo(et); info.inPlace {
+			e.st = info
 		}
-		return appendAny(dst, rv.Interface(), esc, depth)
 	}
+	return e
+}
+
+// appendReflectValue appends the container element rv to dst. A value with a
+// marshaler only on its pointer type is passed by address. A bool, string or
+// number with no codec of its own is read straight from the reflect.Value, a
+// net struct and a struct with no codec are written in place. Every other
+// value goes back through appendAny via Interface(), because its marshalers
+// and concrete cases live in appendAny's type switch. Examples are
+// json.Number, which is written unquoted, and a MarshalJSON or AppendText
+// method on `type Level int`.
+func appendReflectValue(dst []byte, rv reflect.Value, e *elemInfo, esc escMode, depth int) ([]byte, error) {
+	switch {
+	case e.addr:
+		return appendAny(dst, addrOf(rv), esc, depth)
+	case e.direct:
+		if e.named && depth > maxDepth {
+			return dst, ErrMaxDepth
+		}
+		return appendKind(dst, rv, e.kind, esc)
+	case e.net != netNone:
+		return appendNetValue(dst, rv, e.net, esc)
+	case e.st != nil:
+		if depth > maxDepth {
+			return dst, ErrMaxDepth
+		}
+		return appendStructInfo(dst, rv, e.st, esc, depth)
+	}
+	return appendAny(dst, rv.Interface(), esc, depth)
+}
+
+// directKind reports whether a value of type t is written from its reflect
+// kind alone: a bool, string or number with no marshal method on t or *t.
+// json.Number and time.Duration are named primitives appendAny writes in a
+// form of their own.
+func directKind(t reflect.Type) bool {
 	//exhaustive:ignore not every kind applies here
+	switch t.Kind() {
+	case reflect.Bool, reflect.String,
+		reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64,
+		reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr,
+		reflect.Float32, reflect.Float64:
+	default:
+		return false
+	}
+	if t.PkgPath() == "" {
+		return true
+	}
+	return t != numberType && t != durationType && !hasMarshaler(t) && !needsAddr(t)
+}
+
+// appendKind appends the bool, string or number in rv, read by kind.
+func appendKind(dst []byte, rv reflect.Value, kind reflect.Kind, esc escMode) ([]byte, error) {
+	//exhaustive:ignore directKind admits only these
 	switch kind {
 	case reflect.String:
 		dst = append(dst, '"')
-		return esc(dst, rv.String()), nil
+		return esc.str(dst, rv.String()), nil
 	case reflect.Bool:
 		return strconv.AppendBool(dst, rv.Bool()), nil
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		return strconv.AppendInt(dst, rv.Int(), 10), nil
-	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64, reflect.Uintptr:
-		return strconv.AppendUint(dst, rv.Uint(), 10), nil
 	case reflect.Float32:
 		return AppendFloat(dst, rv.Float(), 32)
 	case reflect.Float64:
 		return AppendFloat(dst, rv.Float(), 64)
+	default: // the unsigned kinds
+		return strconv.AppendUint(dst, rv.Uint(), 10), nil
 	}
-	return appendAny(dst, rv.Interface(), esc, depth)
 }
 
 // fieldInfo describes one JSON-visible field of a struct type.
@@ -714,8 +795,11 @@ type fieldInfo struct {
 	omitZero  bool
 	zero      zeroMode
 	quoted    bool // ,string: wrap the number in a JSON string
-	embed     bool // ,embed: write map[string]V entries as parent members
+	hidden    bool // a named embedding of an unexported struct type, read through its address
 	addr      bool // the marshaler is only on *T, so pass a field pointer
+	direct    bool // directKind: written from its kind alone
+	kind      reflect.Kind
+	plain     *structInfo // a struct with no codec of its own, walked without boxing
 }
 
 // zeroMode says how omitzero decides whether a field is zero. As in jsonv2,
@@ -761,8 +845,21 @@ func (f *fieldInfo) isZero(fv reflect.Value) bool {
 // structInfo is the cached field list of a struct type. Fields of anonymous
 // embedded structs are included directly when the list is built.
 type structInfo struct {
-	fields   []fieldInfo
-	hasEmbed bool // a field has ,embed, so run the second pass for it
+	fields []fieldInfo
+	// embed is the catch-all whose entries are written as members, if any.
+	// embedConflict is set when the struct declares two of its own, which
+	// AppendAny refuses as jsonv2 and the generator do.
+	embed         *fieldInfo
+	embedConflict bool
+	// hasHidden is set when a field is hidden. Such a struct is walked from
+	// an addressable value, copied first when it is not one.
+	hasHidden bool
+	// inPlace is set when the struct has no codec of its own and none of its
+	// fields needs Interface() on a value that is not pointer-shaped. Such a
+	// struct is walked where it lies, as a slice element, a map value or
+	// behind a pointer. Interface() on an addressable value allocates a
+	// copy, so any other struct is boxed once and walked from the copy.
+	inPlace bool
 }
 
 var structInfoCache sync.Map // map[reflect.Type]*structInfo
@@ -772,10 +869,26 @@ func cachedStructInfo(t reflect.Type) *structInfo {
 		return v.(*structInfo)
 	}
 	info := &structInfo{}
-	collectFields(info, t, nil, map[reflect.Type]struct{}{t: {}})
+	var embeds []fieldInfo
+	collectFields(info, &embeds, t, nil, map[reflect.Type]struct{}{t: {}})
 	info.fields = resolveFieldConflicts(info.fields)
+	info.embed, info.embedConflict = dominantEmbed(embeds)
+	info.inPlace = netKindOf(t) == netNone && !hasMarshaler(t) && !needsAddr(t)
 	for i := range info.fields {
-		info.hasEmbed = info.hasEmbed || info.fields[i].embed
+		f := &info.fields[i]
+		info.hasHidden = info.hasHidden || f.hidden
+		switch {
+		case f.direct, f.addr:
+		case f.plain != nil:
+			info.inPlace = info.inPlace && f.plain.inPlace
+		default:
+			//exhaustive:ignore the kinds listed box without a copy
+			switch f.kind {
+			case reflect.Pointer, reflect.Map, reflect.Chan, reflect.Func, reflect.UnsafePointer, reflect.Interface:
+			default:
+				info.inPlace = false
+			}
+		}
 	}
 	structInfoCache.Store(t, info)
 	return info
@@ -838,13 +951,37 @@ func resolveFieldConflicts(fields []fieldInfo) []fieldInfo {
 	return out
 }
 
-// collectFields appends the JSON-visible fields of t to info. seen holds the
+// dominantEmbed picks the catch-all a struct uses, by jsonv2's rule: the
+// shallowest one, none on a tie between promoted ones, and a conflict on a
+// tie between the struct's own.
+func dominantEmbed(embeds []fieldInfo) (*fieldInfo, bool) {
+	if len(embeds) == 0 {
+		return nil, false
+	}
+	win, tie := 0, false
+	for i := 1; i < len(embeds); i++ {
+		switch d, w := len(embeds[i].index), len(embeds[win].index); {
+		case d < w:
+			win, tie = i, false
+		case d == w:
+			tie = true
+		}
+	}
+	if tie {
+		return nil, len(embeds[win].index) == 1
+	}
+	return &embeds[win], false
+}
+
+// collectFields appends the JSON-visible fields of t to info, and its
+// string-keyed ,embed catch-alls to embeds. Catch-alls take no part in the
+// name conflict resolution. seen holds the
 // chain of embedded types from the root down to t. Recursing into a type
 // already on the chain would never end, and encoding/json breaks the cycle
 // the same way. seen works as a stack: a type is removed after its recursion
 // returns. So a type embedded twice through different paths still shows up
 // twice, and resolveFieldConflicts decides between the copies.
-func collectFields(info *structInfo, t reflect.Type, parentIndex []int, seen map[reflect.Type]struct{}) {
+func collectFields(info *structInfo, embeds *[]fieldInfo, t reflect.Type, parentIndex []int, seen map[reflect.Type]struct{}) {
 	for i := range t.NumField() {
 		sf := t.Field(i)
 		idx := append(append([]int(nil), parentIndex...), i)
@@ -863,14 +1000,24 @@ func collectFields(info *structInfo, t reflect.Type, parentIndex []int, seen map
 			if ft.Kind() == reflect.Struct {
 				if _, cyclic := seen[ft]; !cyclic {
 					seen[ft] = struct{}{}
-					collectFields(info, ft, idx, seen)
+					collectFields(info, embeds, ft, idx, seen)
 					delete(seen, ft)
 				}
 				continue
 			}
 		}
+		// An embedded struct is kept under its tag name even when its type
+		// is unexported, as in encoding/json and jsonv2.
+		hidden := false
 		if !sf.IsExported() {
-			continue
+			ft := sf.Type
+			if ft.Kind() == reflect.Pointer {
+				ft = ft.Elem()
+			}
+			if !sf.Anonymous || ft.Kind() != reflect.Struct {
+				continue
+			}
+			hidden = true
 		}
 		tagged := name != ""
 		if !tagged {
@@ -883,8 +1030,13 @@ func collectFields(info *structInfo, t reflect.Type, parentIndex []int, seen map
 			omitEmpty: hasTagOpt(opts, "omitempty"),
 			omitZero:  hasTagOpt(opts, "omitzero"),
 			quoted:    hasTagOpt(opts, "string") && quotableKind(sf.Type),
-			embed:     hasTagOpt(opts, "embed"),
+			hidden:    hidden,
 			addr:      needsAddr(sf.Type),
+			direct:    directKind(sf.Type),
+			kind:      sf.Type.Kind(),
+		}
+		if f.kind == reflect.Struct && !f.addr && netKindOf(sf.Type) == netNone && !hasMarshaler(sf.Type) {
+			f.plain = cachedStructInfo(sf.Type)
 		}
 		if f.omitZero {
 			switch {
@@ -893,6 +1045,11 @@ func collectFields(info *structInfo, t reflect.Type, parentIndex []int, seen map
 			case reflect.PointerTo(sf.Type).Implements(isZeroerType):
 				f.zero = zeroAddrMethod
 			}
+		}
+		// A ,embed on any other type is an ordinary member.
+		if hasTagOpt(opts, "embed") && f.kind == reflect.Map && sf.Type.Key().Kind() == reflect.String {
+			*embeds = append(*embeds, f)
+			continue
 		}
 		info.fields = append(info.fields, f)
 	}
@@ -918,10 +1075,10 @@ var needsAddrCache sync.Map // map[reflect.Type]bool
 // needsAddr reports whether *t has a marshaler that t lacks. A t value must
 // then be marshaled through a pointer to reach it. jsonv2 calls
 // pointer-receiver methods whether or not the value is addressable, and
-// encoding/json skips them on non-addressable values. Unnamed types have no
-// methods, so they skip the cache.
+// encoding/json skips them on non-addressable values. Types without methods
+// skip the cache.
 func needsAddr(t reflect.Type) bool {
-	if t.PkgPath() == "" {
+	if !mayHaveMethods(t) {
 		return false
 	}
 	if v, ok := needsAddrCache.Load(t); ok {
@@ -930,6 +1087,12 @@ func needsAddr(t reflect.Type) bool {
 	need := !hasMarshaler(t) && hasMarshaler(reflect.PointerTo(t))
 	needsAddrCache.Store(t, need)
 	return need
+}
+
+// mayHaveMethods reports whether t can carry methods: a named type, or an
+// unnamed struct, which has the methods of its embedded fields.
+func mayHaveMethods(t reflect.Type) bool {
+	return t.PkgPath() != "" || t.Kind() == reflect.Struct
 }
 
 // addrOf returns a pointer to rv as an any. If rv is not addressable, it
@@ -959,6 +1122,11 @@ func quotableKind(t reflect.Type) bool {
 	case numberType:
 		return true
 	case durationType:
+		return false
+	}
+	// A type with its own codec writes what it writes. jsonv2 ignores
+	// `,string` there, and quoting a marshaler's string would be invalid JSON.
+	if t.PkgPath() != "" && (hasMarshaler(t) || hasMarshaler(reflect.PointerTo(t))) {
 		return false
 	}
 	//exhaustive:ignore not every kind applies here
@@ -1000,11 +1168,10 @@ func emptyWire(b []byte) bool {
 	return false
 }
 
-// structWire reports whether v encodes as a struct's own members. omitempty
-// never drops a struct field, and the generator rejects the option on one. So
-// a struct whose members are all omitted is still written as {}. Pointers and
-// interfaces are followed. A nil one is not a struct, so omitempty can still
-// drop it. The net structs appendAny writes as strings are not either.
+// structWire reports whether v, which was written as {}, is a struct.
+// omitempty never drops a struct field that comes out {}, and the generator
+// rejects the option on one. Pointers and interfaces are followed. A struct
+// that writes "", such as a zero netip.Addr, is dropped like any "".
 func structWire(v reflect.Value) bool {
 	for v.Kind() == reflect.Pointer || v.Kind() == reflect.Interface {
 		if v.IsNil() {
@@ -1012,7 +1179,7 @@ func structWire(v reflect.Value) bool {
 		}
 		v = v.Elem()
 	}
-	return v.Kind() == reflect.Struct && netKindOf(v.Type()) == netNone
+	return v.Kind() == reflect.Struct
 }
 
 // fieldValue returns the value of f in rv. ok is false when omitzero drops
@@ -1028,21 +1195,34 @@ func fieldValue(rv reflect.Value, f *fieldInfo) (reflect.Value, bool) {
 			return fv, false
 		}
 	}
+	if f.hidden {
+		// Interface() refuses a value read through an unexported field. The
+		// same memory viewed through its address carries no such flag.
+		fv = reflect.NewAt(fv.Type(), unsafe.Pointer(fv.UnsafeAddr())).Elem()
+	}
 	if f.omitZero && f.isZero(fv) {
 		return fv, false
 	}
 	return fv, true
 }
 
-// embedSplices reports whether f's ,embed option applies to fv. Only a map
-// with string keys has its entries written as parent members. Any other type
-// is written as an ordinary member.
-func embedSplices(f *fieldInfo, fv reflect.Value) bool {
-	return f.embed && fv.Kind() == reflect.Map && fv.Type().Key().Kind() == reflect.String
+// addressable returns rv, or an addressable copy of it.
+func addressable(rv reflect.Value) reflect.Value {
+	if rv.CanAddr() {
+		return rv
+	}
+	c := reflect.New(rv.Type()).Elem()
+	c.Set(rv)
+	return c
 }
 
-func appendStruct(dst []byte, rv reflect.Value, esc escapeFn, depth int) ([]byte, error) {
-	info := cachedStructInfo(rv.Type())
+func appendStructInfo(dst []byte, rv reflect.Value, info *structInfo, esc escMode, depth int) ([]byte, error) {
+	if info.embedConflict {
+		return dst, &json.UnsupportedTypeError{Type: rv.Type()}
+	}
+	if info.hasHidden {
+		rv = addressable(rv)
+	}
 	dst = append(dst, '{')
 	first := true
 	for i := range info.fields {
@@ -1051,9 +1231,6 @@ func appendStruct(dst []byte, rv reflect.Value, esc escapeFn, depth int) ([]byte
 		if !ok {
 			continue
 		}
-		if embedSplices(f, fv) {
-			continue // written after the named members
-		}
 		// omitempty is decided on the encoded bytes. The member is written,
 		// then removed again if its value turned out empty.
 		mark := len(dst)
@@ -1061,7 +1238,7 @@ func appendStruct(dst []byte, rv reflect.Value, esc escapeFn, depth int) ([]byte
 			dst = append(dst, ',')
 		}
 		dst = append(dst, '"')
-		dst = esc(dst, f.name)
+		dst = esc.str(dst, f.name)
 		dst = append(dst, ':')
 		// A nil pointer to a number writes a bare null, even with ,string.
 		quoted := f.quoted && (fv.Kind() != reflect.Pointer || !fv.IsNil())
@@ -1069,35 +1246,35 @@ func appendStruct(dst []byte, rv reflect.Value, esc escapeFn, depth int) ([]byte
 			dst = append(dst, '"')
 		}
 		val := len(dst)
-		var v any
-		if f.addr {
-			v = addrOf(fv)
-		} else {
-			v = fv.Interface()
-		}
 		var err error
-		dst, err = appendAny(dst, v, esc, depth+1)
+		switch {
+		case depth >= maxDepth:
+			err = ErrMaxDepth
+		case f.direct:
+			dst, err = appendKind(dst, fv, f.kind, esc)
+		case f.plain != nil && (f.plain.inPlace || !fv.CanAddr()):
+			dst, err = appendStructInfo(dst, fv, f.plain, esc, depth+1)
+		case f.addr:
+			dst, err = appendAny(dst, addrOf(fv), esc, depth+1)
+		default:
+			dst, err = appendAny(dst, fv.Interface(), esc, depth+1)
+		}
 		if err != nil {
 			return dst, err
 		}
 		if quoted {
 			dst = append(dst, '"')
 		}
-		if f.omitEmpty && emptyWire(dst[val:]) && !structWire(fv) {
+		if f.omitEmpty && emptyWire(dst[val:]) && (dst[val] != '{' || !structWire(fv)) {
 			dst = dst[:mark]
 			continue
 		}
 		first = false
 	}
-	if info.hasEmbed {
-		// The ,embed map entries come after all named members, wherever the
-		// field is declared. jsonv2 and generated code use the same order.
-		for i := range info.fields {
-			f := &info.fields[i]
-			fv, ok := fieldValue(rv, f)
-			if !ok || !embedSplices(f, fv) {
-				continue
-			}
+	// The catch-all entries come after all named members, wherever the field
+	// is declared. jsonv2 and generated code use the same order.
+	if info.embed != nil {
+		if fv, ok := fieldValue(rv, info.embed); ok {
 			iter := fv.MapRange()
 			for iter.Next() {
 				if !first {
@@ -1105,7 +1282,7 @@ func appendStruct(dst []byte, rv reflect.Value, esc escapeFn, depth int) ([]byte
 				}
 				first = false
 				dst = append(dst, '"')
-				dst = esc(dst, iter.Key().String())
+				dst = esc.str(dst, iter.Key().String())
 				dst = append(dst, ':')
 				var err error
 				dst, err = appendAny(dst, iter.Value().Interface(), esc, depth+1)
@@ -1122,10 +1299,10 @@ func appendStruct(dst []byte, rv reflect.Value, esc escapeFn, depth int) ([]byte
 // output, with '"'. If the text holds a byte that either escape table would
 // escape, it rewrites the text through esc first. The check uses the HTML
 // table because it covers both. Text that needs no escaping is left as is.
-func closeText(dst []byte, from int, esc escapeFn) []byte {
+func closeText(dst []byte, from int, esc escMode) []byte {
 	for _, c := range dst[from:] {
 		if needEscapeHTML[c] {
-			return esc(dst[:from], string(dst[from:]))
+			return esc.str(dst[:from], string(dst[from:]))
 		}
 	}
 	return append(dst, '"')
@@ -1170,6 +1347,19 @@ const (
 	anySizeAddr6    = 49 // quoted "[IPv6 address]:65535"
 )
 
+// netipAddrSize is the budget of a quoted netip.Addr. A zone adds its '%'
+// separator and its escaped bytes. The zero Addr writes "".
+func netipAddrSize(a netip.Addr, mult int) int {
+	n := len(`"255.255.255.255"`)
+	if !a.Is4() {
+		n = len(`"ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"`)
+	}
+	if z := len(a.Zone()); z > 0 {
+		n += 1 + z*mult
+	}
+	return n
+}
+
 // netSize is the budget of the net value in rv. A zone adds its '%'
 // separator and its escaped bytes.
 func netSize(rv reflect.Value, k netKind, mult int) int {
@@ -1194,15 +1384,47 @@ func netSize(rv reflect.Value, k netKind, mult int) int {
 // escape growth for strings as JSONSize. Scalars use the generator's fixed
 // budgets. Slices, maps and structs are walked. A generated value reports its
 // own JSONSize. A text or JSON marshaler is run to learn its output length.
-func AnySize(v any) int { return anySize(v, 2, 0) }
+// A value nested deeper than maxDepth, which AppendAny refuses with
+// ErrMaxDepth, sizes as 0.
+func AnySize(v any) (n int) {
+	defer recoverOverDepth(&n)
+	return anySize(v, 2, 0)
+}
 
 // AnySizeHTML is [AnySize] for [AppendAnyHTML], where one escaped byte can
 // take up to 6 bytes.
-func AnySizeHTML(v any) int { return anySize(v, 6, 0) }
+func AnySizeHTML(v any) (n int) {
+	defer recoverOverDepth(&n)
+	return anySize(v, 6, 0)
+}
+
+// sizeOverDepth is panicked by anySize past maxDepth so the whole walk ends
+// there, as appendAny's does. Summing on past one pruned node would cost
+// fan-out^maxDepth steps on a cyclic value.
+type sizeOverDepth struct{}
+
+// rawMult is the growth of a raw JSON value under the string multiplier mult.
+// Raw bytes are escaped only by AnySizeHTML's AppendAnyHTML, up to 6 bytes
+// each.
+func rawMult(mult int) int {
+	if mult == 6 {
+		return 6
+	}
+	return 1
+}
+
+func recoverOverDepth(n *int) {
+	if r := recover(); r != nil {
+		if _, ok := r.(sizeOverDepth); !ok {
+			panic(r)
+		}
+		*n = 0
+	}
+}
 
 func anySize(v any, mult, depth int) int {
 	if depth > maxDepth {
-		return 0
+		panic(sizeOverDepth{})
 	}
 	switch x := v.(type) {
 	case nil:
@@ -1240,7 +1462,7 @@ func anySize(v any, mult, depth int) int {
 	case []json.RawMessage:
 		n := listSize(len(x), 0)
 		for _, r := range x {
-			n += max(len(r), 4)
+			n += max(len(r)*rawMult(mult), 4)
 		}
 		return n
 	case map[string]any:
@@ -1282,18 +1504,26 @@ func anySize(v any, mult, depth int) int {
 	case map[string]bool:
 		return mapSize(x, mult, anySizeBool)
 	case json.RawMessage:
-		return max(len(x), 4)
+		return max(len(x)*rawMult(mult), 4)
 	case big.Int:
-		return x.BitLen()*1233>>12 + 3
+		return x.BitLen()/3 + 4
 	case *big.Int:
 		if x == nil {
 			return 4
 		}
-		return x.BitLen()*1233>>12 + 3
+		return x.BitLen()/3 + 4
 	case time.Time, *time.Time:
 		return anySizeTime
 	case time.Duration:
 		return anySizeDuration
+	// The netip types are TextAppenders. Budgeting them like generated
+	// fields avoids running AppendText into a fresh buffer to measure it.
+	case netip.Addr:
+		return netipAddrSize(x, mult)
+	case netip.AddrPort:
+		return netipAddrSize(x.Addr(), mult) + len(":65535") + 2
+	case netip.Prefix:
+		return netipAddrSize(x.Addr(), mult) + len("/128")
 	case *string:
 		if x == nil {
 			return 4
@@ -1336,7 +1566,7 @@ func anySize(v any, mult, depth int) int {
 		if err != nil {
 			return 0
 		}
-		return len(b)
+		return len(b) * rawMult(mult)
 	}
 	rv := reflect.ValueOf(v)
 	if k := netKindOf(rv.Type()); k != netNone {
@@ -1368,7 +1598,7 @@ func anySize(v any, mult, depth int) int {
 		return structSize(rv, mult, depth)
 	case reflect.Slice, reflect.Array:
 		et := rv.Type().Elem()
-		if et.Kind() == reflect.Uint8 {
+		if et.Kind() == reflect.Uint8 && et.PkgPath() == "" {
 			return (rv.Len()+2)/3*4 + 2
 		}
 		n := listSize(rv.Len(), 0)
@@ -1433,7 +1663,7 @@ func reflectMapSize(rv reflect.Value, mult, depth int) int {
 	vv := reflect.New(et).Elem()
 	var keyApp encoding.TextAppender
 	var keyMar encoding.TextMarshaler
-	if kt.PkgPath() != "" {
+	if mayHaveMethods(kt) {
 		switch kp := kv.Addr().Interface().(type) {
 		case encoding.TextAppender:
 			keyApp = kp
@@ -1471,24 +1701,18 @@ func reflectMapSize(rv reflect.Value, mult, depth int) int {
 	return n
 }
 
-// structSize is the size counterpart of appendStruct. It counts every member
+// structSize is the size counterpart of appendStructInfo. It counts every member
 // that omitempty might drop, because that decision needs the encoded bytes.
 func structSize(rv reflect.Value, mult, depth int) int {
 	info := cachedStructInfo(rv.Type())
+	if info.hasHidden {
+		rv = addressable(rv)
+	}
 	n := 2
 	for i := range info.fields {
 		f := &info.fields[i]
 		fv, ok := fieldValue(rv, f)
 		if !ok {
-			continue
-		}
-		if embedSplices(f, fv) {
-			kv := reflect.New(fv.Type().Key()).Elem()
-			iter := fv.MapRange()
-			for iter.Next() {
-				kv.SetIterKey(iter)
-				n += kv.Len()*mult + 4 + anySize(iter.Value().Interface(), mult, depth+1)
-			}
 			continue
 		}
 		n += len(f.name)*mult + 4
@@ -1502,6 +1726,16 @@ func structSize(rv reflect.Value, mult, depth int) int {
 			v = fv.Interface()
 		}
 		n += anySize(v, mult, depth+1)
+	}
+	if info.embed != nil {
+		if fv, ok := fieldValue(rv, info.embed); ok {
+			kv := reflect.New(fv.Type().Key()).Elem()
+			iter := fv.MapRange()
+			for iter.Next() {
+				kv.SetIterKey(iter)
+				n += kv.Len()*mult + 4 + anySize(iter.Value().Interface(), mult, depth+1)
+			}
+		}
 	}
 	return n
 }

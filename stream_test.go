@@ -261,21 +261,96 @@ func TestStream_EOFAfterContent(t *testing.T) {
 	}
 }
 
-// TestStream_PathologicalZeroRead checks a reader that returns (0, nil).
-// Stream must not loop forever. It returns io.ErrUnexpectedEOF.
+// TestStreamReaderUnexpectedEOF checks a reader that itself fails with
+// io.ErrUnexpectedEOF, as gzip and net/http bodies do on truncation. It must
+// reach the caller, not be taken for a drained reader.
+func TestStreamReaderUnexpectedEOF(t *testing.T) {
+	t.Parallel()
+	cut := func(s string) io.Reader {
+		return io.MultiReader(strings.NewReader(s), iotest.ErrReader(io.ErrUnexpectedEOF))
+	}
+	if v, err := NewStream(cut("123"), nil).Int64(); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("Int64 = %d, %v, want an io.ErrUnexpectedEOF reader error", v, err)
+	}
+	if v, err := NewStream(cut("1.5"), nil).Float64(); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("Float64 = %v, %v, want an io.ErrUnexpectedEOF reader error", v, err)
+	}
+	if err := NewStream(cut("123"), nil).SkipValue(); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("SkipValue err = %v, want an io.ErrUnexpectedEOF reader error", err)
+	}
+	if _, err := NewStream(cut(`{"a":`), nil).Any(true); !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Errorf("Any err = %v, want an io.ErrUnexpectedEOF reader error", err)
+	}
+	var got []intT
+	var last error
+	for v, err := range NewStream(cut("1\n2\n"), nil).Seq[intT]() {
+		if err != nil {
+			last = err
+			break
+		}
+		got = append(got, v)
+	}
+	if len(got) != 2 || !errors.Is(last, io.ErrUnexpectedEOF) {
+		t.Errorf("Seq = %v, %v, want 2 values then an io.ErrUnexpectedEOF reader error", got, last)
+	}
+}
+
+// TestStream_PathologicalZeroRead checks a reader that always returns
+// (0, nil). Stream must not loop forever. It returns io.ErrNoProgress.
 func TestStream_PathologicalZeroRead(t *testing.T) {
 	t.Parallel()
 	var s Stream
 	s.Reset(zeroReader{}, make([]byte, 0, 8))
 	err := s.ReadMore(0)
-	if err != io.ErrUnexpectedEOF {
-		t.Errorf("zero-Read err = %v, want io.ErrUnexpectedEOF", err)
+	if err != io.ErrNoProgress {
+		t.Errorf("zero-Read err = %v, want io.ErrNoProgress", err)
 	}
 }
 
 type zeroReader struct{}
 
 func (zeroReader) Read(p []byte) (int, error) { return 0, nil }
+
+// emptyReadsReader returns (0, nil) before every chunk, as io.Pipe does for
+// an empty Write.
+type emptyReadsReader struct {
+	chunks []string
+	empty  bool
+}
+
+func (r *emptyReadsReader) Read(p []byte) (int, error) {
+	if len(r.chunks) == 0 {
+		return 0, io.EOF
+	}
+	if r.empty = !r.empty; r.empty {
+		return 0, nil
+	}
+	n := copy(p, r.chunks[0])
+	r.chunks = r.chunks[1:]
+	return n, nil
+}
+
+// TestStreamTransientZeroRead checks that a single (0, nil) Read is not
+// taken for end of input: a number keeps its digits and Seq keeps going.
+func TestStreamTransientZeroRead(t *testing.T) {
+	t.Parallel()
+	if v, err := NewStream(&emptyReadsReader{chunks: []string{"12", "345"}}, nil).Int64(); v != 12345 || err != nil {
+		t.Errorf("Int64 = %d, %v, want 12345, nil", v, err)
+	}
+	if v, err := NewStream(&emptyReadsReader{chunks: []string{`"ab`, `c"`}}, nil).String(true); v != "abc" || err != nil {
+		t.Errorf("String = %q, %v, want \"abc\", nil", v, err)
+	}
+	var got []intT
+	for v, err := range NewStream(&emptyReadsReader{chunks: []string{"1\n", "2\n", "3"}}, nil).Seq[intT]() {
+		if err != nil {
+			t.Fatalf("Seq err = %v", err)
+		}
+		got = append(got, v)
+	}
+	if len(got) != 3 {
+		t.Errorf("Seq = %v, want [1 2 3]", got)
+	}
+}
 
 // TestFloatNumberBufBounded checks the refill in the middle of a number. When
 // a float crosses the end of the buffered data, the refill must keep only
@@ -1583,11 +1658,9 @@ func (r *errThenBlockReader) Read(p []byte) (int, error) {
 }
 
 // TestStreamCaptureValue_MaxDepthDoesNotHang checks a run of '[' deeper than
-// maxDepth on a live reader. skipArray and skipObject return ErrMaxDepth with
-// the position on the last bracket read. If that bracket is the last
-// buffered byte, CaptureValue must not judge by position alone and treat it
-// as cut short. That would block in Read, so the depth limit meant to stop
-// abuse would hang the goroutine. No later byte can undo too much depth.
+// maxDepth on a live reader. When the bracket that exceeds the cap is the
+// last buffered byte, CaptureValue must still return ErrMaxDepth, not treat
+// the value as cut short and block in Read.
 func TestStreamCaptureValue_MaxDepthDoesNotHang(t *testing.T) {
 	t.Parallel()
 	block := make(chan struct{})
@@ -1904,5 +1977,108 @@ func TestStreamErrorPos_MatchesBytes(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// A bool cut by the window edge refills by dropping the bytes before it, so
+// reading many bools through a small buffer never grows it.
+func TestBoolBufferStaysBounded(t *testing.T) {
+	t.Parallel()
+	var b bytes.Buffer
+	for k := range 20000 {
+		b.WriteString([2]string{"true ", "false "}[k%2])
+	}
+	var s Stream
+	s.Reset(bytes.NewReader(b.Bytes()), make([]byte, 0, 61))
+	for k := range 20000 {
+		if err := s.SkipSpace(); err != nil {
+			t.Fatal(err)
+		}
+		v, err := s.Bool()
+		if err != nil || v != (k%2 == 0) {
+			t.Fatalf("value %d: got %v, %v", k, v, err)
+		}
+	}
+	if got := cap(s.Bytes()); got != 61 {
+		t.Fatalf("buffer grew from 61 to %d bytes reading %d bytes of bools", got, b.Len())
+	}
+}
+
+// After a surrogate escape at the end of the input, only a tail that can
+// still become the low half (`\uDC00`-`\uDFFF`) after a high surrogate is
+// cut short. Any other tail is final: ErrInvalidUTF8 at the byte after the
+// unpaired escape on both paths, and Stream.String must not wait for more
+// bytes from a live reader.
+func TestStringUnpairableSurrogateTail(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		doc  string
+		want int
+	}{
+		{`"\ud83d\u0`, 7},
+		{`"\ud83d\u00`, 7},
+		{`"\ud83d\ud8`, 7},
+		{`"\ud83d\ud83`, 7},
+		{`"\ud83d\ua`, 7},
+		{`"\udc00\`, 7},
+		{`"\udc00\udc`, 7},
+		{`"x\ud83d\u0`, 8},
+		// still pairable: cut short
+		{`"\ud83d\`, 8},
+		{`"\ud83d\u`, 9},
+		{`"\ud83d\uD`, 10},
+		{`"\ud83d\udC`, 11},
+		{`"\ud83d\udfF`, 12},
+	} {
+		_, j, err := String([]byte(tc.doc), 0, true)
+		if err != ErrInvalidUTF8 || j != tc.want {
+			t.Errorf("String(%q) = (%d, %v), want (%d, ErrInvalidUTF8)", tc.doc, j, err, tc.want)
+		}
+		if tc.want == len(tc.doc) {
+			continue
+		}
+		block := make(chan struct{})
+		done := make(chan error, 1)
+		var s Stream
+		go func() {
+			s.Reset(&liveReader{data: []byte(tc.doc), block: block}, make([]byte, 0, 64))
+			_, err := s.String(true)
+			done <- err
+		}()
+		select {
+		case err := <-done:
+			if err != ErrInvalidUTF8 || s.Offset() != tc.want {
+				t.Errorf("Stream.String(%q) = (%d, %v), want (%d, ErrInvalidUTF8)", tc.doc, s.Offset(), err, tc.want)
+			}
+		case <-time.After(2 * time.Second):
+			t.Errorf("Stream.String(%q) hung on a live reader after an unpairable tail", tc.doc)
+		}
+		close(block)
+	}
+}
+
+// ErrInvalidUTF8 for invalid raw bytes is reported at the span start, or at
+// the closing quote when the string holds an escape. Stream agrees with
+// []byte input at every buffer size.
+func TestStringInvalidUTF8Position(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		doc  string
+		want int
+	}{
+		{"\"caf\xe9 au lait\"", 1},
+		{"\"caf\xe9 au\\nlait\"", 14},
+		{"\"a\\tcaf\xe9 au lait\"", 16},
+	} {
+		if _, j, err := String([]byte(tc.doc), 0, true); err != ErrInvalidUTF8 || j != tc.want {
+			t.Errorf("String(%q) = (%d, %v), want (%d, ErrInvalidUTF8)", tc.doc, j, err, tc.want)
+		}
+		for _, size := range []int{1, 4, 64} {
+			var s Stream
+			s.Reset(iotest.OneByteReader(strings.NewReader(tc.doc)), make([]byte, 0, size))
+			if _, err := s.String(true); err != ErrInvalidUTF8 || s.Offset() != tc.want {
+				t.Errorf("Stream.String(%q) buf %d = (%d, %v), want (%d, ErrInvalidUTF8)", tc.doc, size, s.Offset(), err, tc.want)
+			}
+		}
 	}
 }

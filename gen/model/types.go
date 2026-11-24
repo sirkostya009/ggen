@@ -2,7 +2,6 @@ package model
 
 import (
 	"go/types"
-	"strconv"
 	"strings"
 )
 
@@ -43,6 +42,7 @@ const (
 	KindIPNet       // net.IPNet, a JSON string in CIDR form
 	KindTCPAddr     // net.TCPAddr, a JSON string "ip:port"
 	KindUDPAddr     // net.UDPAddr, a JSON string "ip:port"
+	KindNumber      // encoding/json.Number, a JSON number kept as its text
 )
 
 type ValidationRule struct {
@@ -96,6 +96,7 @@ type FieldInfo struct {
 	StructName string // Go name of the owning struct, used in error messages
 	EmbedDepth int    // embedding levels between the declaring struct and the parent, 0 for the parent's own field. When names clash the shallowest field wins
 	JSONName   string
+	NameTagged bool   // JSONName comes from the json tag, not the Go name. Breaks same-depth name ties
 	GoType     string // full Go type as text, for example "string", "[]int", "*Address"
 	Kind       TypeKind
 	ElemType   string // element type of a slice or array, for example "string" for []string
@@ -384,7 +385,7 @@ func StripOneContainer(typ string) (inner string, kind TypeKind, length int) {
 	}
 	if len(typ) > 2 && typ[0] == '[' {
 		if end := strings.IndexByte(typ, ']'); end > 1 {
-			if n, err := strconv.Atoi(typ[1:end]); err == nil {
+			if n, err := parseArrayLen(typ[1:end]); err == nil {
 				inner = typ[end+1:]
 				return inner, ResolveKind(inner), n
 			}

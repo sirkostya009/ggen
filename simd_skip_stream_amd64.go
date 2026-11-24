@@ -36,10 +36,10 @@ func (s *Stream) SkipSpaceAVX() error {
 }
 
 func (s *Stream) skipSpaceSlowAVX() error {
-	sp := archsimd.BroadcastUint8x16(' ')
-	tb := archsimd.BroadcastUint8x16('\t')
-	nl := archsimd.BroadcastUint8x16('\n')
-	cr := archsimd.BroadcastUint8x16('\r')
+	sp := archsimd.LoadUint8x16(VecSpace[:])
+	tb := archsimd.LoadUint8x16(vecTab[:])
+	nl := archsimd.LoadUint8x16(vecNL[:])
+	cr := archsimd.LoadUint8x16(vecCR[:])
 	i := s.Pos
 	buf := s.buf
 	for {
@@ -224,7 +224,7 @@ func (s *Stream) skipStringAVX() error {
 	start := i + 1
 	j := start
 	for {
-		k := structuralIndexAVX(s.buf[j:])
+		k := structuralIndexAVX(s.buf, j)
 		if k < 0 {
 			// Skipped bytes are not needed again, so drop the whole window
 			// on refill. See the scalar version.
@@ -275,7 +275,7 @@ func (s *Stream) skipStringAVX2() error {
 	start := i + 1
 	j := start
 	for {
-		k := structuralIndexAVX2(s.buf[j:])
+		k := structuralIndexAVX2(s.buf, j)
 		if k < 0 {
 			// Skipped bytes are not needed again, so drop the whole window
 			// on refill. See the scalar version.
@@ -326,7 +326,7 @@ func (s *Stream) skipStringAVX512() error {
 	start := i + 1
 	j := start
 	for {
-		k := structuralIndexAVX512(s.buf[j:])
+		k := structuralIndexAVX512(s.buf, j)
 		if k < 0 {
 			// Skipped bytes are not needed again, so drop the whole window
 			// on refill. See the scalar version.
@@ -397,6 +397,7 @@ func (s *Stream) skipValueAVX(depth int) error {
 
 func (s *Stream) skipArrayAVX(depth int) error {
 	if depth > maxDepth {
+		s.Pos--
 		return ErrMaxDepth
 	}
 	if err := s.SkipSpaceAVX(); err != nil {
@@ -441,6 +442,7 @@ func (s *Stream) skipArrayAVX(depth int) error {
 
 func (s *Stream) skipObjectAVX(depth int) error {
 	if depth > maxDepth {
+		s.Pos--
 		return ErrMaxDepth
 	}
 	if err := s.SkipSpaceAVX(); err != nil {
@@ -544,6 +546,7 @@ func (s *Stream) skipValueAVX2(depth int) error {
 
 func (s *Stream) skipArrayAVX2(depth int) error {
 	if depth > maxDepth {
+		s.Pos--
 		return ErrMaxDepth
 	}
 	if err := s.SkipSpaceAVX2(); err != nil {
@@ -588,6 +591,7 @@ func (s *Stream) skipArrayAVX2(depth int) error {
 
 func (s *Stream) skipObjectAVX2(depth int) error {
 	if depth > maxDepth {
+		s.Pos--
 		return ErrMaxDepth
 	}
 	if err := s.SkipSpaceAVX2(); err != nil {
@@ -716,9 +720,8 @@ func (s *Stream) CaptureValueAVX() ([]byte, error) {
 		// See Stream.CaptureValue. Without this, a live reader that sent a
 		// complete but malformed value would block in Read forever. The
 		// tier skip reports the same failure position as the scalar skip,
-		// which a parity test checks. ErrMaxDepth is final wherever it
-		// happens.
-		if err != nil && (end < len(s.buf) || err == ErrMaxDepth) {
+		// which a parity test checks.
+		if err != nil && end < len(s.buf) {
 			s.Pos = end
 			return nil, err
 		}
@@ -756,9 +759,8 @@ func (s *Stream) CaptureValueAVX2() ([]byte, error) {
 		// See Stream.CaptureValue. Without this, a live reader that sent a
 		// complete but malformed value would block in Read forever. The
 		// tier skip reports the same failure position as the scalar skip,
-		// which a parity test checks. ErrMaxDepth is final wherever it
-		// happens.
-		if err != nil && (end < len(s.buf) || err == ErrMaxDepth) {
+		// which a parity test checks.
+		if err != nil && end < len(s.buf) {
 			s.Pos = end
 			return nil, err
 		}
@@ -796,9 +798,8 @@ func (s *Stream) CaptureValueAVX512() ([]byte, error) {
 		// See Stream.CaptureValue. Without this, a live reader that sent a
 		// complete but malformed value would block in Read forever. The
 		// tier skip reports the same failure position as the scalar skip,
-		// which a parity test checks. ErrMaxDepth is final wherever it
-		// happens.
-		if err != nil && (end < len(s.buf) || err == ErrMaxDepth) {
+		// which a parity test checks.
+		if err != nil && end < len(s.buf) {
 			s.Pos = end
 			return nil, err
 		}
@@ -815,6 +816,7 @@ func (s *Stream) CaptureValueAVX512() ([]byte, error) {
 
 func (s *Stream) skipArrayAVX512(depth int) error {
 	if depth > maxDepth {
+		s.Pos--
 		return ErrMaxDepth
 	}
 	if err := s.SkipSpaceAVX512(); err != nil {
@@ -859,6 +861,7 @@ func (s *Stream) skipArrayAVX512(depth int) error {
 
 func (s *Stream) skipObjectAVX512(depth int) error {
 	if depth > maxDepth {
+		s.Pos--
 		return ErrMaxDepth
 	}
 	if err := s.SkipSpaceAVX512(); err != nil {

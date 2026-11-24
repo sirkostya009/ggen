@@ -11,6 +11,10 @@ import (
 	"github.com/sirkostya009/ggen"
 )
 
+var ggenKeys_keyescape_test_0 = []string{"q\"x"}
+var ggenKeys_keyescape_test_1 = []string{"a\\b"}
+var ggenKeys_keyescape_test_2 = []string{"a&b"}
+
 func (recv KeyEscQuote) DecodeFrom(data []byte) (result KeyEscQuote, i int, err error) {
 	result = recv
 	seenA := false
@@ -62,7 +66,7 @@ func (recv KeyEscQuote) DecodeFrom(data []byte) (result KeyEscQuote, i int, err 
 		switch key {
 		case "q\"x":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"q\"x"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_keyescape_test_0}
 			}
 			seenA = true
 			neg := false
@@ -112,6 +116,9 @@ func (recv KeyEscQuote) DecodeFrom(data []byte) (result KeyEscQuote, i int, err 
 				}
 			} else {
 				n = int64(u)
+			}
+			if int64(int(n)) != n {
+				return result, i, ggen.NewParseErr("q\"x", i, ggen.ErrNumberOverflow)
 			}
 			result.A = int(n)
 		default:
@@ -178,13 +185,16 @@ func (recv KeyEscQuote) DecodeFromStream(s *ggen.Stream) (result KeyEscQuote, er
 				return result, ggen.NewParseErr("q\"x", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"q\"x"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_keyescape_test_0}
 			}
 			seenA = true
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
 				return result, ggen.NewParseErr("q\"x", s.Offset(), err)
+			}
+			if int64(int(iv)) != iv {
+				return result, ggen.NewParseErr("q\"x", s.Offset(), ggen.ErrNumberOverflow)
 			}
 			result.A = int(iv)
 		default:
@@ -290,7 +300,7 @@ func (recv KeyEscBackslash) DecodeFrom(data []byte) (result KeyEscBackslash, i i
 		switch key {
 		case "a\\b":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a\\b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_keyescape_test_1}
 			}
 			seenA = true
 			neg := false
@@ -340,6 +350,9 @@ func (recv KeyEscBackslash) DecodeFrom(data []byte) (result KeyEscBackslash, i i
 				}
 			} else {
 				n = int64(u)
+			}
+			if int64(int(n)) != n {
+				return result, i, ggen.NewParseErr("a\\b", i, ggen.ErrNumberOverflow)
 			}
 			result.A = int(n)
 		default:
@@ -406,13 +419,16 @@ func (recv KeyEscBackslash) DecodeFromStream(s *ggen.Stream) (result KeyEscBacks
 				return result, ggen.NewParseErr("a\\b", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a\\b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_keyescape_test_1}
 			}
 			seenA = true
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
 				return result, ggen.NewParseErr("a\\b", s.Offset(), err)
+			}
+			if int64(int(iv)) != iv {
+				return result, ggen.NewParseErr("a\\b", s.Offset(), ggen.ErrNumberOverflow)
 			}
 			result.A = int(iv)
 		default:
@@ -518,7 +534,7 @@ func (recv KeyEscHTML) DecodeFrom(data []byte) (result KeyEscHTML, i int, err er
 		switch key {
 		case "a&b":
 			if seenA {
-				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: []string{"a&b"}}
+				return result, i, &ggen.DuplicateKeyError{Pos: i, Keys: ggenKeys_keyescape_test_2}
 			}
 			seenA = true
 			neg := false
@@ -568,6 +584,9 @@ func (recv KeyEscHTML) DecodeFrom(data []byte) (result KeyEscHTML, i int, err er
 				}
 			} else {
 				n = int64(u)
+			}
+			if int64(int(n)) != n {
+				return result, i, ggen.NewParseErr("a&b", i, ggen.ErrNumberOverflow)
 			}
 			result.A = int(n)
 		default:
@@ -634,13 +653,16 @@ func (recv KeyEscHTML) DecodeFromStream(s *ggen.Stream) (result KeyEscHTML, err 
 				return result, ggen.NewParseErr("a&b", s.Offset(), err)
 			}
 			if seenA {
-				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: []string{"a&b"}}
+				return result, &ggen.DuplicateKeyError{Pos: s.Offset(), Keys: ggenKeys_keyescape_test_2}
 			}
 			seenA = true
 			var iv int64
 			iv, err = s.Int64()
 			if err != nil {
 				return result, ggen.NewParseErr("a&b", s.Offset(), err)
+			}
+			if int64(int(iv)) != iv {
+				return result, ggen.NewParseErr("a&b", s.Offset(), ggen.ErrNumberOverflow)
 			}
 			result.A = int(iv)
 		default:

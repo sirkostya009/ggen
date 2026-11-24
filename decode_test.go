@@ -167,6 +167,24 @@ func TestNewParseErr_ChainEmptyInnerField(t *testing.T) {
 	}
 }
 
+func TestNewParseErrOpaque_NeverExtendsCause(t *testing.T) {
+	t.Parallel()
+	inner := &ParseError{Keys: []string{"zip"}, Pos: 7, Err: ErrBadNumber}
+	ve := &MinLenError{Keys: []string{"x"}, Pos: 3}
+	for _, cause := range []error{inner, ve, ErrBadString} {
+		pe, ok := NewParseErrOpaque("addr", 99, cause).(*ParseError)
+		if !ok || pe.Err != cause || pe.Pos != 99 || strings.Join(pe.Keys, ".") != "addr" {
+			t.Errorf("NewParseErrOpaque(%v) = %#v", cause, pe)
+		}
+	}
+	if strings.Join(inner.Keys, ".") != "zip" || inner.Pos != 7 || strings.Join(ve.Keys, ".") != "x" {
+		t.Errorf("cause mutated: %v / %v", inner.Keys, ve.Keys)
+	}
+	if pe := NewParseErrOpaque("", 1, ErrBadString).(*ParseError); pe.Keys != nil {
+		t.Errorf("empty segment: Keys = %q", pe.Keys)
+	}
+}
+
 // stubElem is a tiny Decoder that accepts only "{...}". It drives
 // UnmarshalSlice without needing generated code.
 type stubElem struct{}
@@ -184,7 +202,7 @@ func (stubElem) DecodeFrom(data []byte) (stubElem, int, error) {
 
 func TestUnmarshalSlice_WrapsBracketError(t *testing.T) {
 	t.Parallel()
-	_, err := UnmarshalSlice[stubElem]([]byte(`not-an-array`))
+	_, err := UnmarshalSlice[stubElem]([]byte(`{"not":"an array"}`))
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -328,6 +346,115 @@ func TestBoolEnd_GiveUpPosition(t *testing.T) {
 		sp, _ := SkipValue([]byte(in), 0)
 		if _, ap, _ := Any([]byte(in), 0, true); ap != sp {
 			t.Errorf("Any(%q) pos=%d, SkipValue pos=%d", in, ap, sp)
+		}
+	}
+}
+
+// The slice helpers read `null`, the output of MarshalSlice for a nil slice,
+// as a nil slice, and reject a broken literal with ErrBadLiteral on both
+// paths.
+func TestSliceHelpersNull(t *testing.T) {
+	t.Parallel()
+	nilOut, err := MarshalSlice[mtItem](nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, in := range []string{string(nilOut), " null ", "null"} {
+		if got, err := UnmarshalSlice[intT]([]byte(in)); err != nil || got != nil {
+			t.Errorf("UnmarshalSlice(%q) = %#v, %v; want nil, nil", in, got, err)
+		}
+		s := NewStream(strings.NewReader(in+" 7"), make([]byte, 0, 2))
+		if got, err := s.Slice[intT]([]intT{1, 2}); err != nil || got != nil {
+			t.Errorf("Slice(%q) = %#v, %v; want nil, nil", in, got, err)
+		}
+		if err := s.SkipSpace(); err != nil {
+			t.Fatal(err)
+		}
+		if tail, err := s.Value[intT](); err != nil || tail != 7 {
+			t.Errorf("Value after Slice(%q) = %v, %v; want 7", in, tail, err)
+		}
+		n := 0
+		for _, err := range NewStream(strings.NewReader(in), make([]byte, 0, 2)).Array[intT]() {
+			n++
+			if err != nil {
+				t.Errorf("Array(%q): %v", in, err)
+			}
+		}
+		if n != 0 {
+			t.Errorf("Array(%q) yielded %d times, want 0", in, n)
+		}
+	}
+	if _, err := UnmarshalSlice[intT]([]byte("null x")); !errors.Is(err, ErrTrailingData) {
+		t.Errorf("UnmarshalSlice(null x) = %v, want ErrTrailingData", err)
+	}
+	for _, in := range []string{"nul", "nulx", "n]"} {
+		_, err := UnmarshalSlice[intT]([]byte(in))
+		var pe *ParseError
+		if !errors.As(err, &pe) || !errors.Is(err, ErrBadLiteral) {
+			t.Errorf("UnmarshalSlice(%q) = %v, want ErrBadLiteral", in, err)
+			continue
+		}
+		s := NewStream(strings.NewReader(in), nil)
+		if _, err := s.Slice[intT](); err != ErrBadLiteral || s.Offset() != pe.Pos {
+			t.Errorf("Slice(%q) = %v at %d, want ErrBadLiteral at %d", in, err, s.Offset(), pe.Pos)
+		}
+		for _, err := range NewStream(strings.NewReader(in), nil).Array[intT]() {
+			if err != ErrBadLiteral {
+				t.Errorf("Array(%q) = %v, want ErrBadLiteral", in, err)
+			}
+		}
+	}
+}
+
+// Input that ends right after '[' is a truncated array on both paths, not an
+// error of element 0.
+func TestSliceHelpersTruncatedAfterOpen(t *testing.T) {
+	t.Parallel()
+	for _, in := range []string{"[", "[ ", " [\n"} {
+		_, err := UnmarshalSlice[intT]([]byte(in))
+		var pe *ParseError
+		if !errors.As(err, &pe) || !errors.Is(err, ErrBadArray) || strings.Join(pe.Keys, ".") != "[]" || pe.Pos != len(in) {
+			t.Errorf("UnmarshalSlice(%q) = %v, want ErrBadArray at [] pos %d", in, err, len(in))
+		}
+		s := NewStream(strings.NewReader(in), nil)
+		if _, err := s.Slice[intT](); err != ErrBadArray || s.Offset() != len(in) {
+			t.Errorf("Slice(%q) = %v at %d, want ErrBadArray at %d", in, err, s.Offset(), len(in))
+		}
+	}
+}
+
+// ErrMaxDepth points at the bracket that exceeds the cap, as jsontext does,
+// for SkipValue and Any alike, on []byte input and on a Stream.
+func TestMaxDepthPosition(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name string
+		doc  string
+		want int
+	}{
+		{"open arrays", strings.Repeat("[", maxDepth+1), maxDepth},
+		{"closed arrays", strings.Repeat("[", maxDepth+1) + strings.Repeat("]", maxDepth+1), maxDepth},
+		{"objects", strings.Repeat(`{"k":`, maxDepth+1) + "1" + strings.Repeat("}", maxDepth+1), 5 * maxDepth},
+	} {
+		data := []byte(tc.doc)
+		if j, err := SkipValue(data, 0); err != ErrMaxDepth || j != tc.want {
+			t.Errorf("%s: SkipValue = (%d, %v), want (%d, ErrMaxDepth)", tc.name, j, err, tc.want)
+		}
+		if _, j, err := Any(data, 0, true); err != ErrMaxDepth || j != tc.want {
+			t.Errorf("%s: Any = (%d, %v), want (%d, ErrMaxDepth)", tc.name, j, err, tc.want)
+		}
+		var s Stream
+		s.Reset(bytes.NewReader(data), make([]byte, 0, 256))
+		if err := s.SkipValue(); err != ErrMaxDepth || s.Offset() != tc.want {
+			t.Errorf("%s: Stream.SkipValue = (%d, %v), want (%d, ErrMaxDepth)", tc.name, s.Offset(), err, tc.want)
+		}
+		s.Reset(bytes.NewReader(data), make([]byte, 0, 256))
+		if _, err := s.Any(true); err != ErrMaxDepth || s.Offset() != tc.want {
+			t.Errorf("%s: Stream.Any = (%d, %v), want (%d, ErrMaxDepth)", tc.name, s.Offset(), err, tc.want)
+		}
+		s.Reset(bytes.NewReader(data), make([]byte, 0, 256))
+		if _, err := s.CaptureValue(); err != ErrMaxDepth || s.Offset() != tc.want {
+			t.Errorf("%s: Stream.CaptureValue = (%d, %v), want (%d, ErrMaxDepth)", tc.name, s.Offset(), err, tc.want)
 		}
 	}
 }

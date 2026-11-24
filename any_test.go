@@ -1279,6 +1279,47 @@ func TestAppendAny_ReflectHeavy(t *testing.T) {
 	checkAny(t, map[string][]int{"ns": {1, 2, 3}})
 }
 
+// The reflect walk reads a struct with no codec of its own where it lies. A
+// slice element, a map value or a pointee is not boxed, and neither are its
+// scalar fields or a named primitive element.
+func TestAppendAny_ReflectNoAlloc(t *testing.T) { //nolint:paralleltest // measures allocations
+	type inner struct{ Lat, Lon float64 }
+	type row struct {
+		ID    int64             `json:"id"`
+		Name  namedStr          `json:"name"`
+		Pos   inner             `json:"pos"`
+		Next  *row              `json:"next,omitempty"`
+		Attrs map[string]string `json:"attrs,omitempty"`
+		Any   any               `json:"any"`
+	}
+	rows := []row{{ID: 1, Name: "a", Pos: inner{1.5, 2}}, {ID: 2, Name: "b", Any: 3}}
+	rows[1].Next = &rows[0]
+	dst := make([]byte, 0, 1024)
+	for _, c := range []struct {
+		name string
+		v    any
+	}{
+		{"[]row", rows},
+		{"[]*row", []*row{&rows[0], &rows[1]}},
+		{"*row", &rows[1]},
+		{"[]namedStr", []namedStr{"a", "b"}},
+		{"[]ptStruct", []ptStruct{{X: 1, S: "a"}, {Y: 2, B: true}}},
+	} {
+		if got := testing.AllocsPerRun(100, func() { _, _ = AppendAny(dst[:0], c.v) }); got != 0 {
+			t.Errorf("%s: %v allocs, want 0", c.name, got)
+		}
+	}
+	// A map allocates its key and value holders once, whatever its size.
+	eight := map[string]row{}
+	for i := range 8 {
+		eight[strconv.Itoa(i)] = rows[0]
+	}
+	one := testing.AllocsPerRun(100, func() { _, _ = AppendAny(dst[:0], map[string]row{"a": rows[0]}) })
+	if got := testing.AllocsPerRun(100, func() { _, _ = AppendAny(dst[:0], eight) }); got > one {
+		t.Errorf("map[string]row: %v allocs for eight entries, %v for one", got, one)
+	}
+}
+
 // TestAppendAny_NoHTMLEscapeDefault checks that AppendAny does not escape <, >
 // and & by default, like jsonv2 and generated string fields. The test
 // compares raw bytes. checkAny compares decoded values, which would hide a
@@ -1482,6 +1523,83 @@ func TestAppendAny_CyclicValue(t *testing.T) {
 	}
 }
 
+// sizeCounter is a Marshaler that counts how often it is sized.
+type sizeCounter struct{ n *int }
+
+func (c sizeCounter) AppendJSON(dst []byte) ([]byte, error) { return append(dst, '1'), nil }
+func (c sizeCounter) JSONSize() int                         { *c.n++; return 1 }
+
+// A cycle with fan-out 2 entered k levels above the depth cap: AnySize must
+// stop at the first node past the cap, as AppendAny does, instead of summing
+// 2^k leaves. Each container arm of the size walk is covered.
+func TestAnySize_CycleEndsAtDepthCap(t *testing.T) {
+	t.Parallel()
+	const k = 16
+	type pair struct {
+		L sizeCounter
+		A any
+		B any
+	}
+	shapes := map[string]func(leaf sizeCounter) any{
+		"slice": func(leaf sizeCounter) any {
+			s := make([]any, 3)
+			s[0], s[1], s[2] = leaf, s, s
+			return s
+		},
+		"map": func(leaf sizeCounter) any {
+			m := map[string]any{"l": leaf}
+			m["a"], m["b"] = m, m
+			return m
+		},
+		"reflect slice": func(leaf sizeCounter) any {
+			type self []any
+			s := make(self, 3)
+			s[0], s[1], s[2] = leaf, s, s
+			return s
+		},
+		"struct": func(leaf sizeCounter) any {
+			p := &pair{L: leaf}
+			p.A, p.B = p, p
+			return p
+		},
+	}
+	for name, build := range shapes {
+		var sized int
+		v := build(sizeCounter{&sized})
+		for range maxDepth - k {
+			v = []any{v}
+		}
+		if _, err := AppendAny(nil, v); !errors.Is(err, ErrMaxDepth) {
+			t.Fatalf("%s: AppendAny err = %v, want ErrMaxDepth", name, err)
+		}
+		if n := AnySize(v); n != 0 {
+			t.Errorf("%s: AnySize = %d, want 0", name, n)
+		}
+		if n := AnySizeHTML(v); n != 0 {
+			t.Errorf("%s: AnySizeHTML = %d, want 0", name, n)
+		}
+		if sized > 4*(k+1) {
+			t.Errorf("%s: leaf sized %d times, want at most %d", name, sized, 4*(k+1))
+		}
+	}
+}
+
+// A panic that is not the depth abort passes through AnySize.
+func TestAnySize_PanicPassesThrough(t *testing.T) {
+	t.Parallel()
+	defer func() {
+		if r := recover(); r != "boom" {
+			t.Errorf("recovered %v, want boom", r)
+		}
+	}()
+	AnySize(panicSizer{})
+}
+
+type panicSizer struct{}
+
+func (panicSizer) AppendJSON(dst []byte) ([]byte, error) { return dst, nil }
+func (panicSizer) JSONSize() int                         { panic("boom") }
+
 func TestAppendAny_DepthCap(t *testing.T) {
 	t.Parallel()
 	var under any = 1
@@ -1634,6 +1752,89 @@ func TestAppendAny_OmitEmptyJSONv2Semantics(t *testing.T) {
 	}
 }
 
+type hiddenBase struct {
+	ID   int    `json:"id"`
+	Note string `json:"note"`
+}
+
+type hiddenOuter struct {
+	hiddenBase `json:"base"`
+
+	Name string `json:"name"`
+}
+
+type hiddenOuterPtr struct {
+	*hiddenBase `json:"base"`
+
+	Name string `json:"name"`
+}
+
+// A named embedding of an unexported struct type is written as the member
+// its tag names, as in jsonv2, wherever the struct sits.
+func TestAppendAny_NamedUnexportedEmbed(t *testing.T) {
+	t.Parallel()
+	o := hiddenOuter{hiddenBase{1, "n"}, "x"}
+	for _, v := range []any{
+		o, &o,
+		hiddenOuterPtr{&hiddenBase{2, "m"}, "y"},
+		hiddenOuterPtr{nil, "z"},
+		[]hiddenOuter{o},
+		map[string]hiddenOuter{"k": o},
+		map[string]any{"k": hiddenOuterPtr{Name: "w"}},
+	} {
+		got, err := AppendAny(nil, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := jsonv2.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("%T:\n ggen   %s\n jsonv2 %s", v, got, want)
+		}
+		if n := AnySize(v); n < len(got) {
+			t.Errorf("%T: AnySize %d < %d written", v, n, len(got))
+		}
+	}
+}
+
+type emptyTextStruct struct{ N int }
+
+func (emptyTextStruct) MarshalText() ([]byte, error) { return nil, nil }
+
+// A struct value that writes "" is dropped by omitempty like any "", as in
+// jsonv2 and in generated code for the netip types.
+func TestAppendAny_OmitEmptyStructText(t *testing.T) {
+	t.Parallel()
+	type s struct {
+		Name string          `json:"name"`
+		Addr netip.Addr      `json:"addr"`
+		Pfx  netip.Prefix    `json:"pfx"`
+		AP   netip.AddrPort  `json:"ap"`
+		PA   *netip.Addr     `json:"pa,omitempty"`
+		T    emptyTextStruct `json:"t"`
+		I    any             `json:"i,omitempty"`
+	}
+	a := netip.MustParseAddr("::1")
+	for _, v := range []any{
+		s{Name: "x", PA: &netip.Addr{}, I: netip.Prefix{}},
+		s{Name: "x", Addr: a, Pfx: netip.PrefixFrom(a, 64), AP: netip.AddrPortFrom(a, 1), PA: &a, I: a},
+	} {
+		got, err := AppendAny(nil, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := jsonv2.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("%+v:\n ggen   %s\n jsonv2 %s", v, got, want)
+		}
+	}
+}
+
 // omitempty never drops a struct. It has no meaning there, which is why the
 // generator rejects the option on a struct field. A nil pointer or a nil
 // interface is still dropped, because the pointer is missing, not the struct
@@ -1761,6 +1962,105 @@ func TestAppendAny_EmbedSplices(t *testing.T) {
 		if !bytes.Equal(got, want) {
 			t.Errorf("%T:\n ggen   %s\n jsonv2 %s", v, got, want)
 		}
+	}
+}
+
+type ptrJSONEmbed struct{ V int }
+
+func (*ptrJSONEmbed) MarshalJSON() ([]byte, error) { return []byte(`"ptr-json"`), nil }
+
+// An unnamed struct has the methods of its embedded fields, so a marshaler
+// promoted onto its pointer type is reached, as in jsonv2.
+func TestAppendAny_UnnamedStructPromotedPointerMethod(t *testing.T) {
+	t.Parallel()
+	type withN = struct {
+		ptrJSONEmbed
+
+		N int
+	}
+	r := big.NewRat(1, 2)
+	for _, v := range []any{
+		struct{ big.Float }{*big.NewFloat(1.5)},
+		[1]struct{ big.Rat }{{*r}},
+		withN{ptrJSONEmbed{1}, 2},
+		map[string]withN{"k": {ptrJSONEmbed{1}, 2}},
+		[]withN{{}},
+	} {
+		got, err := AppendAny(nil, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := jsonv2.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("%T:\n ggen   %s\n jsonv2 %s", v, got, want)
+		}
+		if n := AnySize(v); n < len(got) {
+			t.Errorf("%T: AnySize %d < %d written", v, n, len(got))
+		}
+	}
+}
+
+type promotedEmbedA struct {
+	A     int            `json:"a"`
+	Extra map[string]any `json:",embed"`
+}
+
+type promotedEmbedB struct {
+	More map[string]any `json:",embed"`
+}
+
+// A struct uses one catch-all, by jsonv2's rule, which generated code
+// follows: its own beats a promoted one, a tie between promoted ones uses
+// none, and catch-alls do not compete with members for a name.
+func TestAppendAny_EmbedDominance(t *testing.T) {
+	t.Parallel()
+	type own struct {
+		promotedEmbedA
+
+		B    int            `json:"b"`
+		More map[string]any `json:",embed"`
+	}
+	type tie struct {
+		promotedEmbedA
+		promotedEmbedB
+
+		B int `json:"b"`
+	}
+	type nameClash struct {
+		Extra map[string]any `json:",embed"`
+		X     int            `json:"Extra"`
+	}
+	a := promotedEmbedA{A: 1, Extra: map[string]any{"x": 1.5}}
+	for _, v := range []any{
+		own{B: 2, promotedEmbedA: a, More: map[string]any{"y": 2.5}},
+		tie{B: 2, promotedEmbedA: a, More: map[string]any{"y": 2.5}},
+		nameClash{Extra: map[string]any{"x": 1.5}, X: 5},
+	} {
+		got, err := AppendAny(nil, v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, err := jsonv2.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("%T:\n ggen   %s\n jsonv2 %s", v, got, want)
+		}
+		if n := AnySize(v); n < len(got) {
+			t.Errorf("%T: AnySize %d < %d written", v, n, len(got))
+		}
+	}
+	type two struct {
+		Extra map[string]any `json:",embed"`
+		More  map[string]any `json:",embed"`
+	}
+	var ute *json.UnsupportedTypeError
+	if _, err := AppendAny(nil, two{}); !errors.As(err, &ute) {
+		t.Errorf("two own catch-alls: err %v, want *json.UnsupportedTypeError", err)
 	}
 }
 
@@ -1893,6 +2193,8 @@ func TestAnySize_BoundsAppendAny(t *testing.T) {
 	bigHuge := new(big.Int).Exp(big.NewInt(10), big.NewInt(300), nil)
 	bigNeg := new(big.Int).Neg(bigHuge)
 	bigF := *big.NewFloat(-1.2345678901234567e300)
+	// From 217769 bits a digit estimate below log10(2) per bit runs short.
+	bigWide := new(big.Int).Neg(new(big.Int).Sub(new(big.Int).Lsh(big.NewInt(1), 217769), big.NewInt(1)))
 	when := time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.FixedZone("", -7*3600))
 	type myInt int
 	type myStr string
@@ -1916,7 +2218,7 @@ func TestAnySize_BoundsAppendAny(t *testing.T) {
 		map[string]bool{str: false},
 		map[string]uint8{"x": 255},
 		json.RawMessage(nil), json.RawMessage(`[1,2,3]`),
-		*bigHuge, bigNeg, (*big.Int)(nil), bigF,
+		*bigHuge, bigNeg, (*big.Int)(nil), bigF, bigWide, *bigWide,
 		when, &when, (*time.Time)(nil), time.Duration(math.MinInt64),
 		&ptrStr, (*string)(nil), &ptrInt, (*int)(nil), &ptrF,
 		netip.MustParseAddr("fe80::1:2:3:4%eth0"), netip.MustParsePrefix("2001:db8::/32"),
@@ -1963,6 +2265,157 @@ func TestAnySize_BoundsAppendAny(t *testing.T) {
 		}
 		if got := AnySizeHTML(v); len(h) > got {
 			t.Errorf("case %d %T: AppendAnyHTML wrote %d bytes, AnySizeHTML reserved %d", i, v, len(h), got)
+		}
+	}
+}
+
+type octet uint8
+
+type octetColor uint8
+
+func (c octetColor) MarshalText() ([]byte, error) {
+	return []byte([]string{"red", "green", "blue"}[c]), nil
+}
+
+// Only an unnamed byte element takes the base64 path. A named uint8 element
+// is an ordinary list whose element marshalers run, as in jsonv2.
+func TestAppendAny_NamedByteElements(t *testing.T) {
+	t.Parallel()
+	cases := []any{
+		[2]octet{1, 2},
+		[0]octet{},
+		&[2]octet{1, 2},
+		[]any{[2]octet{1, 2}},
+		map[string][2]octet{"k": {1, 2}},
+		struct {
+			Mac [6]octet `json:"mac"`
+		}{},
+		[]octet{1, 2},
+		[]octetColor{0, 1, 2},
+		[3]octetColor{0, 1, 2},
+		[]byte{1, 2},
+		[2]byte{1, 2},
+		[]uint8{1, 2},
+	}
+	for _, v := range cases {
+		want, err := jsonv2.Marshal(v)
+		if err != nil {
+			t.Fatalf("%T: jsonv2: %v", v, err)
+		}
+		got, err := AppendAny(nil, v)
+		if err != nil {
+			t.Errorf("%T: %v", v, err)
+			continue
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("%T: got %s, want %s", v, got, want)
+		}
+		if n := AnySize(v); n < len(got) {
+			t.Errorf("%T: AnySize = %d, below %d written", v, n, len(got))
+		}
+	}
+}
+
+type quotedLevel int
+
+func (l quotedLevel) MarshalText() ([]byte, error) { return []byte([]string{"low", "high"}[l]), nil }
+
+type quotedRatio float64
+
+func (r *quotedRatio) MarshalJSON() ([]byte, error) { return []byte(`"1:2"`), nil }
+
+type quotedCents int
+
+func (c quotedCents) MarshalJSON() ([]byte, error) {
+	return strconv.AppendFloat(nil, float64(c)/100, 'f', -1, 64), nil
+}
+
+type codecByte uint8
+
+func (q codecByte) AppendText(b []byte) ([]byte, error) { return append(b, "q"...), nil }
+
+// `,string` does not apply to a type with its own codec: its output is
+// written as is, as in jsonv2, never wrapped in a second pair of quotes.
+func TestAppendAny_StringOptSkipsMarshalers(t *testing.T) {
+	t.Parallel()
+	lv := quotedLevel(1)
+	cases := []any{
+		struct {
+			L quotedLevel `json:"l,string"`
+		}{1},
+		struct {
+			L *quotedLevel `json:"l,string"`
+		}{&lv},
+		struct {
+			L quotedLevel `json:"l,string,omitempty"`
+			N int         `json:"n,string"`
+		}{1, 7},
+		&struct {
+			R quotedRatio `json:"r,string"`
+		}{0.5},
+		struct {
+			C quotedCents `json:"c,string"`
+		}{5},
+		struct {
+			Q codecByte `json:"q,string"`
+		}{1},
+	}
+	for _, v := range cases {
+		want, err := jsonv2.Marshal(v)
+		if err != nil {
+			t.Fatalf("%T: jsonv2: %v", v, err)
+		}
+		got, err := AppendAny(nil, v)
+		if err != nil {
+			t.Errorf("%T: %v", v, err)
+			continue
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("%T: got %s, want %s", v, got, want)
+		}
+		if n := AnySize(v); n < len(got) {
+			t.Errorf("%T: AnySize = %d, below %d written", v, n, len(got))
+		}
+	}
+}
+
+// A byte that starts no JSON value is ErrBadValue in every Any family, on
+// []byte input and on a Stream, at the same position as SkipValue.
+func TestAny_BadValueSentinel(t *testing.T) {
+	t.Parallel()
+	fns := []struct {
+		name string
+		fn   func([]byte, int, bool) (any, int, error)
+	}{
+		{"Any", Any},
+		{"AnyNumber", AnyNumber},
+		{"AnyCopy", AnyCopy},
+		{"AnyNumberCopy", AnyNumberCopy},
+	}
+	streams := []struct {
+		name string
+		fn   func(*Stream, bool) (any, error)
+	}{
+		{"Stream.Any", (*Stream).Any},
+		{"Stream.AnyNumber", (*Stream).AnyNumber},
+	}
+	for _, in := range []string{"]", ",", "x", "+1", ".5", "[1,]", `{"a":}`} {
+		data := []byte(in)
+		sp, serr := SkipValue(data, 0)
+		if serr != ErrBadValue {
+			t.Fatalf("SkipValue(%q) = %v, want ErrBadValue", in, serr)
+		}
+		for _, f := range fns {
+			if _, j, err := f.fn(data, 0, true); err != ErrBadValue || j != sp {
+				t.Errorf("%s(%q) = (%d, %v), want (%d, ErrBadValue)", f.name, in, j, err, sp)
+			}
+		}
+		for _, f := range streams {
+			var s Stream
+			s.Reset(bytes.NewReader(data), make([]byte, 0, 64))
+			if _, err := f.fn(&s, true); err != ErrBadValue || s.Offset() != sp {
+				t.Errorf("%s(%q) = (%d, %v), want (%d, ErrBadValue)", f.name, in, s.Offset(), err, sp)
+			}
 		}
 	}
 }

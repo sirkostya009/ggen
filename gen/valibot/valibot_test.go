@@ -47,6 +47,10 @@ func render(t *testing.T) (string, *gen.Output) {
 	requests.Place(set.Type(api, "Keyed").In(), "KeyedInput")
 	requests.Place(set.Type(api, "AddressView").In(), "AddressViewInput")
 	requests.Place(set.Type(api, "Token").In(), "TokenInput")
+	requests.Place(set.Type(api, "Section").In(), "SectionInput")
+	requests.Place(set.Type(api, "Quoted").In(), "QuotedInput")
+	requests.Place(set.Type(api, "Chained").In(), "ChainedInput")
+	requests.Place(set.Type(api, "Narrow").In(), "NarrowInput")
 
 	responses := out.File("web/responses.ts", e)
 	responses.Place(set.Type(api, "User").Out().StrictFields("role"), "User")
@@ -57,6 +61,7 @@ func render(t *testing.T) (string, *gen.Output) {
 	responses.Place(set.Type(api, "Keyed").Out(), "Keyed")
 	responses.Place(set.Type(api, "AddressView").Out(), "AddressView")
 	responses.Place(set.Type(api, "Token").Out(), "Token")
+	responses.Place(set.Type(api, "Section").Out(), "Section")
 
 	out.File("shared/money.ts", e).Place(set.Type(other, "Money").Out(), "User")
 
@@ -183,11 +188,42 @@ func TestRuntime(t *testing.T) {
 		{"web/responses.ts", "User", strings.Replace(user(``), `"status":"active"`, `"status":""`, 1), true},
 		{"web/responses.ts", "User", user(`,"plan":0`), false},
 		{"shared/money.ts", "User", `{"amount":1,"currency":""}`, true},
+		{"web/requests.ts", "QuotedInput", `{"pick":"1.0","sign":"-0"}`, true},
+		{"web/requests.ts", "QuotedInput", `{"pick":"1e0","sign":"1"}`, true},
+		{"web/requests.ts", "QuotedInput", `{"pick":"10e-1"}`, true},
+		{"web/requests.ts", "QuotedInput", `{"pick":"3"}`, false},
+		{"web/requests.ts", "QuotedInput", `{"sign":"2"}`, false},
+		{"web/requests.ts", "QuotedInput", `{"sign":"1.0"}`, false},
+		{"web/requests.ts", "QuotedInput", `{"max":"9223372036854775806","neq":"9007199254740992","mul":"9007199254740993"}`, true},
+		{"web/requests.ts", "QuotedInput", `{"max":"9223372036854775807"}`, false},
+		{"web/requests.ts", "QuotedInput", `{"neq":"9007199254740993"}`, false},
+		{"web/requests.ts", "QuotedInput", `{"mul":"9007199254740995"}`, false},
+		{"web/requests.ts", "ChainedInput", `{"word":"c"}`, false},
+		{"web/requests.ts", "ChainedInput", `{"digit":12}`, false},
+		{"web/requests.ts", "NarrowInput", `{"gt":0.1000000001}`, false},
+		{"web/requests.ts", "NarrowInput", `{"gt":0.1000001}`, true},
+		{"web/requests.ts", "NarrowInput", `{"lte":0.1000000001,"eq":0.1000000001}`, true},
+		{"web/requests.ts", "NarrowInput", `{"lte":0.1000001}`, false},
+		{"web/requests.ts", "NarrowInput", `{"eq":0.1000001}`, false},
+		{"web/requests.ts", "NarrowInput", `{"pick":0.2000000001}`, true},
+		{"web/requests.ts", "NarrowInput", `{"pick":0.3}`, false},
+		{"web/requests.ts", "NarrowInput", `{"text":"0.0999999999"}`, true},
+		{"web/requests.ts", "NarrowInput", `{"text":"0.09"}`, false},
+	}
+	// parsed pins the value a schema parses an input to, which is what Go
+	// writes back after its transforms.
+	parsed := []struct{ schema, input, want string }{
+		{"QuotedInput", `{"clamp":"9","floor":"-9223372036854775808","ratio":"1e0"}`, `{"clamp":"5","floor":"1","ratio":"0.5"}`},
+		{"QuotedInput", `{"clamp":"-0","floor":"9223372036854775807","ratio":"-2"}`, `{"clamp":"1","floor":"9223372036854775807","ratio":"-2"}`},
+		{"ChainedInput", `{"word":" bb ","digit":2}`, `{"word":"BB","digit":2}`},
 	}
 	type jsCase struct{ File, Schema, Input string }
 	var in []jsCase
 	for _, c := range cases {
 		in = append(in, jsCase{filepath.Join(dir, c.file), c.schema, c.input})
+	}
+	for _, c := range parsed {
+		in = append(in, jsCase{filepath.Join(dir, "web/requests.ts"), c.schema, c.input})
 	}
 	payload, _ := json.Marshal(in)
 	script := `
@@ -197,7 +233,7 @@ const out = [];
 for (const c of cases) {
   const mod = await import("file://" + c.File);
   const r = v.safeParse(mod[c.Schema], JSON.parse(c.Input));
-  out.push(r.success ? "" : r.issues.map((i) => i.message).join("; "));
+  out.push(r.success ? "" : r.issues.map((i) => i.message).join("; "), r.success ? JSON.stringify(r.output) : "");
 }
 console.log(JSON.stringify(out));
 `
@@ -213,8 +249,13 @@ console.log(JSON.stringify(out));
 		t.Fatalf("%v: %s", err, raw)
 	}
 	for i, c := range cases {
-		if ok := got[i] == ""; ok != c.ok {
-			t.Errorf("%s %s: ok=%v, want %v (%s)", c.schema, c.input, ok, c.ok, strings.Join(strings.Fields(got[i]), " "))
+		if ok := got[2*i] == ""; ok != c.ok {
+			t.Errorf("%s %s: ok=%v, want %v (%s)", c.schema, c.input, ok, c.ok, strings.Join(strings.Fields(got[2*i]), " "))
+		}
+	}
+	for i, c := range parsed {
+		if j := 2 * (len(cases) + i); got[j] != "" || got[j+1] != c.want {
+			t.Errorf("%s %s: parsed %s, want %s (%s)", c.schema, c.input, got[j+1], c.want, strings.Join(strings.Fields(got[j]), " "))
 		}
 	}
 }
@@ -306,5 +347,58 @@ func TestFor(t *testing.T) {
 				t.Errorf("%s: missing %q in:\n%s", file, want, b)
 			}
 		}
+	}
+}
+
+// TestPrototypeFields pins the report for fields Object.prototype shadows.
+func TestPrototypeFields(t *testing.T) {
+	t.Parallel()
+	set, err := gen.Load("../testdata/shapes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := gen.NewOutput(t.TempDir())
+	out.File("proto.ts", valibot.New()).Place(set.Type("github.com/sirkostya009/ggen/gen/testdata/shapes", "Proto").In(), "Proto")
+	if err := out.Write(); err != nil {
+		t.Fatal(err)
+	}
+	var issues []string
+	for _, i := range out.Report().Issues {
+		issues = append(issues, i.String())
+	}
+	if want := []string{
+		"shapes.Proto.__proto__: Object.prototype defines __proto__, and valibot tests key presence with `in`, so the field can never be absent",
+		"shapes.Proto.constructor: Object.prototype defines constructor, and valibot tests key presence with `in`, so the field can never be absent",
+	}; !slices.Equal(issues, want) {
+		t.Errorf("report = %q, want %q", issues, want)
+	}
+}
+
+func TestArrayKeyGuard(t *testing.T) {
+	t.Parallel()
+	set, err := gen.Load("../testdata/shapes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	out := gen.NewOutput(dir)
+	f := out.File("keys.ts", valibot.New())
+	for _, n := range []string{"Length", "Index", "Method", "Named"} {
+		f.Place(set.Type("github.com/sirkostya009/ggen/gen/testdata/shapes", n).In(), n)
+	}
+	if err := out.Write(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "keys.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, n := range []string{"Length", "Index", "Method"} {
+		if !strings.Contains(string(b), "export const "+n+" = ggenObject(") {
+			t.Errorf("%s is not guarded against arrays:\n%s", n, b)
+		}
+	}
+	if !strings.Contains(string(b), "export const Named = v.strictObject(") && !strings.Contains(string(b), "export const Named = v.object(") {
+		t.Errorf("Named is guarded, but no array has its name field:\n%s", b)
 	}
 }

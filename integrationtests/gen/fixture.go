@@ -267,3 +267,11 @@ type Zeros struct {
 	Role Role        `json:"role"`
 	List []string    `json:"list" pipe:"minlen=1"`
 }
+
+// Delegates holds struct aliases of package other.
+//
+//ggen:generate
+type Delegates struct {
+	Instant other.Instant `json:"instant"`
+	Tint    other.Tint    `json:"tint"`
+}

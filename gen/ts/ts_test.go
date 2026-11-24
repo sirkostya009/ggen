@@ -38,6 +38,7 @@ func TestTypes(t *testing.T) {
 	requests.Place(set.Type(api, "Tags").In(), "TagsInput")
 	requests.Place(set.Type(api, "AddressView").In(), "AddressViewInput")
 	requests.Place(set.Type(api, "Token").In(), "TokenInput")
+	requests.Place(set.Type(api, "Section").In(), "SectionInput")
 
 	responses := out.File("web/responses.ts", e)
 	responses.Place(set.Type(api, "User").Out().StrictFields("role"), "User")
@@ -47,6 +48,7 @@ func TestTypes(t *testing.T) {
 	responses.Place(set.Type(api, "Tags").Out(), "Tags")
 	responses.Place(set.Type(api, "AddressView").Out(), "AddressView")
 	responses.Place(set.Type(api, "Token").Out(), "Token")
+	responses.Place(set.Type(api, "Section").Out(), "Section")
 
 	// Placed under a name that collides with User in responses.ts.
 	out.File("shared/money.ts", e).Place(set.Type(other, "Money").Out(), "User")
@@ -101,10 +103,13 @@ func TestInvalidName(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	out := gen.NewOutput(t.TempDir())
-	out.File("a.ts", ts.New()).Place(set.Type(api, "Address").Out(), "default")
-	if err := out.Write(); err == nil || !strings.Contains(err.Error(), `"default" is not a valid TypeScript type name`) {
-		t.Errorf("err = %v", err)
+	// A keyword, and a global the emitted code refers to.
+	for _, name := range []string{"default", "Record"} {
+		out := gen.NewOutput(t.TempDir())
+		out.File("a.ts", ts.New()).Place(set.Type(api, "Address").Out(), name)
+		if err := out.Write(); err == nil || !strings.Contains(err.Error(), `"`+name+`" is not a valid TypeScript type name`) {
+			t.Errorf("%s: err = %v", name, err)
+		}
 	}
 }
 
@@ -197,4 +202,37 @@ func tscPath(t *testing.T) string {
 func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// TestRecursiveAlias pins that a recursive shape spells a string-keyed object
+// as an index signature, since a type alias cannot reach itself through Record.
+func TestRecursiveAlias(t *testing.T) {
+	t.Parallel()
+	const rec = "github.com/sirkostya009/ggen/gen/testdata/shapes"
+	set, err := gen.Load("../testdata/shapes")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	out := gen.NewOutput(dir)
+	f := out.File("rec.ts", ts.New())
+	for _, n := range []string{"Tree", "Obj", "Bag"} {
+		f.Place(set.Type(rec, n).Out(), n)
+	}
+	if err := out.Write(); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, "rec.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"export type Tree = Tree[] | null;",
+		"export type Obj = { [key: string]: Obj } | null;",
+		"} & { [key: string]: Bag | number };",
+	} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("missing %q in\n%s", want, b)
+		}
+	}
 }

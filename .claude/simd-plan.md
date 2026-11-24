@@ -13,9 +13,10 @@ Headline scalar→avx512: NoAlloc −42%, Small −86%, Mega −8.4%, Tiny flat.
 Canonical numbers in bench/CLAUDE.md; design docs in cmd/ggen/CLAUDE.md #46,
 .claude/scan.md, .claude/encode.md. Deviations from the plan as written:
 P1 needed a bounded scalar tail for strings within one lane of payload end
-(near-end tier calls cost Tiny +26%), and the hoisted `_ggenQ/_ggenBS/_ggenSP`
-broadcasts were dropped in favor of per-site broadcasts (gc CSE confirmed
-sufficient, avoids unused-var plumbing); P4's ungated form regressed
+(near-end tier calls cost Tiny +26%), and the compare constants are loads
+from the runtime's `ggen.Vec*` splat tables, folded into the compares as
+memory operands (per-site broadcasts are not merged across the dispatch
+loop's switch arms, see cmd/ggen/CLAUDE.md #46); P4's ungated form regressed
 everything (Mega_Marshal +6.5%, Tiny_Marshal +14%) — the sub-lane scalar
 delegate gate is load-bearing.
 
@@ -81,23 +82,24 @@ before P4's marshal win.
 - **Design** (`cmd/ggen/generate.go`, simd tiers only; scalar tier + stream
   unchanged, ~70-100 LOC):
   1. `inlineScanStringVar`: replace the 24-byte scalar prelude with an inline
-     vector site (~16 emitted lines): guard `KE+W <= len(data)`; full
-     `LoadUint8x{16,32}Slice` (**never `Load*SlicePart` inline — it is a real
-     CALL, not an intrinsic**); fused Equal/Equal/Less classify → ToBits →
+     vector site (~16 emitted lines): guard `KE <= len(data)-W`; full
+     `archsimd.LoadUint8x{16,32}` (**never `Load*Part` inline — it is a real
+     CALL, not an intrinsic**); fused Equal/Equal/Sub-Max-Equal classify (Min-Equal
+     under `allowinvalidutf8`) → ToBits →
      TrailingZeros; quote hit → alias (or `string(...)` under -copy);
      otherwise fall back to the existing `ggen.StringAVX*` call (guard-fail,
      escape, ctrl, span > lane−1, near payload end). Error identity
      byte-identical — fallback rescans from posIn like today.
-  2. `renderDecode`: hoist `_ggenQ/_ggenBS/_ggenSP` broadcasts once after the
-     `result = recv` prologue (gc CSEs per-site broadcasts anyway —
-     belt-and-braces; skip for alias renderers to avoid unused vars).
+  2. Compare constants: load the `ggen.Vec*` splat tables at the site
+     (memory operands of the compares, no per-site broadcast).
   3. Lane by tier: avx → Uint8x16 (spans ≤15B inline), avx2/avx512 → Uint8x32
      (≤31B; measured same speed as 16B, halves fallbacks; covers all Account
      keys). Do NOT use 64B inline.
   4. Generated imports gain `simd/archsimd` + `math/bits` when tier on.
-- **Asm evidence:** 5.4KB probe function, 13 sites: 13 VMOVDQU + 13
-  VPMOVMSKB, only 4 VPBROADCASTB total (CSE'd), constants register-resident on
-  the hot path, zero CALLs; per-site ≈ 13-15 instrs.
+- **Asm evidence:** in the generated decoders a per-site broadcast costs
+  4 VPBROADCASTB (+ MOVL/VMOVQ each) at EVERY site (Account.DecodeFrom: 12
+  sites, 48 broadcasts), since no site dominates another; table loads fold
+  into the compares, ~27 instructions saved per site, zero CALLs.
 - **Risks:** confirm regalloc on the real ~1000-line Account.DecodeFrom asm;
   A/B Mega for icache regression; avx (16B) tier may regress 16-24B strings
   that today's 24B prelude handled inline (option: two unrolled 16B checks);

@@ -3,6 +3,10 @@ package integrationtests
 //go:generate ../ggen $GOFILE
 
 import (
+	"bytes"
+	"database/sql"
+	"encoding/json"
+	"encoding/json/jsontext"
 	jsonv2 "encoding/json/v2"
 	"errors"
 	"math/big"
@@ -337,6 +341,79 @@ func TestOmitEmpty_JSONEmptyKinds(t *testing.T) {
 	}
 }
 
+// OmitBothPtr carries omitempty and omitzero on pointers whose pointee has an
+// emptiness test, so the guard must hold a single nil check (go vet rejects
+// a repeated one).
+//
+//ggen:generate
+type OmitBothPtr struct {
+	S *string `json:"s,omitempty,omitzero"`
+	L *[]int  `json:"l,omitempty,omitzero"`
+}
+
+func TestOmitEmptyOmitZero_Pointer(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		v    OmitBothPtr
+		want string
+	}{
+		{OmitBothPtr{}, "{}"},
+		{OmitBothPtr{S: new(""), L: &[]int{}}, "{}"},
+		{OmitBothPtr{S: new("x"), L: &[]int{1}}, `{"l":[1],"s":"x"}`},
+	}
+	for _, c := range cases {
+		out, err := ggen.MarshalString(c.v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out != c.want {
+			t.Errorf("got %s, want %s", out, c.want)
+		}
+		if n := c.v.JSONSize(); n < len(out) {
+			t.Errorf("JSONSize %d < len %d", n, len(out))
+		}
+	}
+}
+
+// OmitPtrChain holds multi-level pointers under omitempty whose leaf has no
+// emptiness test. A nil at any level encodes as null, so it is omitted.
+//
+//ggen:generate
+type OmitPtrChain struct {
+	PPI  **int          `json:"ppi,omitempty"`
+	PPB  **bool         `json:"ppb,omitempty"`
+	PPN  **R10OmitInner `json:"ppn,omitempty"`
+	PPPF ***float64     `json:"pppf,omitempty"`
+}
+
+func TestOmitEmpty_PointerToNilPointer(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		v    OmitPtrChain
+		want string
+	}{
+		{OmitPtrChain{}, "{}"},
+		{OmitPtrChain{PPI: new(*int), PPB: new(*bool), PPN: new(*R10OmitInner), PPPF: new(new(*float64))}, "{}"},
+		{OmitPtrChain{PPPF: new((**float64)(nil))}, "{}"},
+		{
+			OmitPtrChain{PPI: new(new(0)), PPB: new(new(false)), PPN: new(&R10OmitInner{}), PPPF: new(new(new(1.5)))},
+			`{"ppb":false,"ppi":0,"ppn":{},"pppf":1.5}`,
+		},
+	}
+	for _, c := range cases {
+		got, err := ggen.MarshalString(c.v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != c.want {
+			t.Errorf("got %s, want %s", got, c.want)
+		}
+		if n := c.v.JSONSize(); n < len(got) {
+			t.Errorf("JSONSize %d < len %d", n, len(got))
+		}
+	}
+}
+
 type omitNames []string
 
 type omitIndex map[string]int
@@ -354,6 +431,40 @@ type OmitNamed struct {
 	N     int        `json:"n"`
 }
 
+type omitNamesPtr *[]string
+
+// OmitNamedPtr holds a named pointer type, which encodes as null when nil and
+// as its pointee otherwise.
+//
+//ggen:generate
+type OmitNamedPtr struct {
+	A  omitNamesPtr  `json:"a,omitempty"`
+	PA *omitNamesPtr `json:"pa,omitempty"`
+	N  int           `json:"n"`
+}
+
+func TestOmitEmpty_NamedPointer(t *testing.T) {
+	t.Parallel()
+	empty, full := []string{}, []string{"x"}
+	for _, c := range []struct {
+		v    OmitNamedPtr
+		want string
+	}{
+		{OmitNamedPtr{}, `{"n":0}`},
+		{OmitNamedPtr{A: &empty, PA: new(omitNamesPtr(nil))}, `{"n":0}`},
+		{OmitNamedPtr{PA: new(omitNamesPtr(&empty))}, `{"n":0}`},
+		{OmitNamedPtr{A: &full, PA: new(omitNamesPtr(&full))}, `{"a":["x"],"n":0,"pa":["x"]}`},
+	} {
+		got, err := ggen.Marshal(c.v)
+		if err != nil || string(got) != c.want {
+			t.Errorf("%+v: got %s %v, want %s", c.v, got, err, c.want)
+		}
+		if n := c.v.JSONSize(); n < len(got) {
+			t.Errorf("JSONSize %d < len %d", n, len(got))
+		}
+	}
+}
+
 func TestOmitEmpty_NamedContainers(t *testing.T) {
 	t.Parallel()
 	for _, c := range []struct {
@@ -367,6 +478,88 @@ func TestOmitEmpty_NamedContainers(t *testing.T) {
 		got, err := ggen.Marshal(c.v)
 		if err != nil || string(got) != c.want {
 			t.Errorf("%+v: got %s %v, want %s", c.v, got, err, c.want)
+		}
+	}
+}
+
+// OmitSQLNull holds sql.Null values under omitempty. A valid value encodes as
+// its inner value, so it is omitted when that encodes as empty. The pointers
+// keep go fix from rewriting omitempty to omitzero, and their leaves take the
+// same test as a plain field.
+//
+//ggen:generate
+type OmitSQLNull struct {
+	S *sql.NullString   `json:"s,omitempty"`
+	G *sql.Null[string] `json:"g,omitempty"`
+	I *sql.NullInt64    `json:"i,omitempty"`
+	N int               `json:"n"`
+}
+
+func TestOmitEmpty_SQLNullInnerEmpty(t *testing.T) {
+	t.Parallel()
+	for _, c := range []struct {
+		v    OmitSQLNull
+		want string
+	}{
+		{OmitSQLNull{}, `{"n":0}`},
+		{OmitSQLNull{S: &sql.NullString{}, G: &sql.Null[string]{}, I: &sql.NullInt64{}}, `{"n":0}`},
+		{OmitSQLNull{S: &sql.NullString{Valid: true}, G: &sql.Null[string]{Valid: true}}, `{"n":0}`},
+		{OmitSQLNull{I: &sql.NullInt64{Valid: true}}, `{"i":0,"n":0}`},
+		{OmitSQLNull{S: &sql.NullString{String: "a", Valid: true}, G: &sql.Null[string]{V: "b", Valid: true}}, `{"g":"b","n":0,"s":"a"}`},
+	} {
+		got, err := ggen.Marshal(c.v)
+		if err != nil || string(got) != c.want {
+			t.Errorf("%+v: got %s %v, want %s", c.v, got, err, c.want)
+		}
+	}
+}
+
+// OmitRaw holds raw JSON under omitempty. Raw text that is null, "", [] or
+// {} is omitted, as AppendAny and jsonv2 do.
+//
+//ggen:generate
+type OmitRaw struct {
+	A any              `json:"a,omitempty"`
+	J jsontext.Value   `json:"j,omitempty"`
+	N int              `json:"n"`
+	P *json.RawMessage `json:"p,omitempty"`
+	R json.RawMessage  `json:"r,omitempty"`
+}
+
+// omitRawMirror has OmitRaw's fields and no generated methods, so AppendAny
+// walks it with reflect. Fields are in key order, the order generated code
+// writes them in.
+type omitRawMirror struct {
+	A any              `json:"a,omitempty"`
+	J jsontext.Value   `json:"j,omitempty"`
+	N int              `json:"n"`
+	P *json.RawMessage `json:"p,omitempty"`
+	R json.RawMessage  `json:"r,omitempty"`
+}
+
+func TestOmitEmpty_RawJSONEmptyText(t *testing.T) {
+	t.Parallel()
+	for _, raw := range []string{"", "null", `""`, "[]", "{}", "1", "[1]", `{"k":2}`, `"x"`, "true"} {
+		r := json.RawMessage(raw)
+		v := OmitRaw{R: r, J: jsontext.Value(raw), A: r, P: &r}
+		if raw == "" {
+			// AppendAny reaches a pointer to raw text through MarshalJSON,
+			// which rejects empty output.
+			v.P = nil
+		}
+		got, err := ggen.Marshal(v)
+		if err != nil {
+			t.Fatalf("%q: %v", raw, err)
+		}
+		want, err := ggen.AppendAny(nil, omitRawMirror(v))
+		if err != nil {
+			t.Fatalf("%q: %v", raw, err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("%q: generated %s, AppendAny %s", raw, got, want)
+		}
+		if empty := ggen.RawIsEmpty(r); empty != (string(got) == `{"n":0}`) {
+			t.Errorf("%q: RawIsEmpty %v, wrote %s", raw, empty, got)
 		}
 	}
 }

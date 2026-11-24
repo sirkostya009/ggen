@@ -1,11 +1,120 @@
 package integrationtests
 
+//go:generate ../ggen $GOFILE
+
 import (
 	"bytes"
+	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/sirkostya009/ggen"
 )
+
+//ggen:generate
+type SeqShareLeaf struct {
+	A int `json:"a"`
+}
+
+//ggen:generate
+type SeqShareHost struct {
+	Name string        `json:"name"`
+	User *SeqShareLeaf `json:"user"`
+	Sum  big.Int       `json:"sum"`
+}
+
+//ggen:generate
+type SeqAllocRow struct {
+	Name string   `json:"name"`
+	Tags []string `json:"tags"`
+}
+
+// With the value reused, Seq and Array allocate no containers per element.
+// What is left is one owned copy per string: here the name and two tags.
+func TestSeqArray_steadyStateAllocsAreStringCopies(t *testing.T) { //nolint:paralleltest // measures allocations
+	const row = `{"name":"row","tags":["a","b"]}`
+	const perElem = 3
+	payload := func(n int, array bool) []byte {
+		var b bytes.Buffer
+		if array {
+			b.WriteByte('[')
+		}
+		for i := range n {
+			if i > 0 && array {
+				b.WriteByte(',')
+			}
+			b.WriteString(row)
+		}
+		if array {
+			b.WriteByte(']')
+		}
+		return b.Bytes()
+	}
+	buf := make([]byte, 0, 1<<16)
+	var r bytes.Reader
+	var s ggen.Stream
+	for _, array := range []bool{false, true} {
+		allocs := func(n int) float64 {
+			data := payload(n, array)
+			return testing.AllocsPerRun(20, func() {
+				r.Reset(data)
+				s.Reset(&r, buf)
+				seq := s.Seq[SeqAllocRow]()
+				if array {
+					seq = s.Array[SeqAllocRow]()
+				}
+				for _, err := range seq {
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+			})
+		}
+		if got := allocs(200) - allocs(100); got != 100*perElem {
+			t.Errorf("array=%v: %v allocs per 100 extra elements, want %d", array, got, 100*perElem)
+		}
+	}
+}
+
+// Seq and Array decode each step into the previous value, so a yielded
+// value shares its pointer pointees and big.Int words with later steps, as
+// their docs say. Strings are owned and stay.
+func TestSeqArray_yieldedValueSharesPointeesAndBigInt(t *testing.T) {
+	t.Parallel()
+	const one = `{"name":"one","user":{"a":1},"sum":11111111111111111111111111}`
+	const two = `{"name":"two","user":{"a":2},"sum":22222222222222222222222222}`
+	check := func(api string, kept []SeqShareHost) {
+		if len(kept) != 2 {
+			t.Fatalf("%s: yielded %d values, want 2", api, len(kept))
+		}
+		first := kept[0]
+		if first.Name != "one" {
+			t.Errorf("%s: kept Name = %q, want one", api, first.Name)
+		}
+		if first.User != kept[1].User || first.User.A != 2 {
+			t.Errorf("%s: kept pointee not shared with the next step: %p %p A=%d", api, first.User, kept[1].User, first.User.A)
+		}
+		if got := first.Sum.String(); got == "11111111111111111111111111" {
+			t.Errorf("%s: kept big.Int did not share its words with the next step", api)
+		}
+	}
+	var kept []SeqShareHost
+	for v, err := range ggen.NewStream(strings.NewReader(one+"\n"+two), nil).Seq[SeqShareHost]() {
+		if err != nil {
+			t.Fatal(err)
+		}
+		kept = append(kept, v)
+	}
+	check("Seq", kept)
+	kept = kept[:0]
+	for v, err := range ggen.NewStream(strings.NewReader("["+one+","+two+"]"), nil).Array[SeqShareHost]() {
+		if err != nil {
+			t.Fatal(err)
+		}
+		kept = append(kept, v)
+	}
+	check("Array", kept)
+}
 
 // Seq must keep the Stream's buffer bounded across a long run of values whose
 // generated decoders hold containers. Node has []string, map[string]string and
